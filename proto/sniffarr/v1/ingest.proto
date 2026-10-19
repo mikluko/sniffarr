@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package sniffarr.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
+
+// IngestService takes torrent metadata from crawlers.
+service IngestService {
+  // Unknown returns the infohashes the server has neither stored nor
+  // rejected. Stored torrents among them count as seen again.
+  rpc Unknown(UnknownRequest) returns (UnknownResponse);
+  // Submit stores or rejects each torrent and reports the totals when the
+  // client closes the stream.
+  rpc Submit(stream SubmitRequest) returns (SubmitResponse);
+}
+
+message UnknownRequest {
+  // Infohashes of 20 bytes each, at most 10000.
+  repeated bytes infohashes = 1;
+}
+
+message UnknownResponse {
+  repeated bytes infohashes = 1;
+}
+
+message SubmitRequest {
+  Torrent torrent = 1;
+}
+
+message SubmitResponse {
+  int64 accepted = 1;
+  int64 rejected = 2;
+  int64 duplicate = 3;
+}
+
+// Torrent is the metadata of one torrent, as its peers gave it.
+message Torrent {
+  // The BitTorrent v1 infohash, 20 bytes.
+  bytes infohash = 1;
+  string name = 2;
+  // Total size of all files in bytes.
+  int64 size = 3;
+  repeated File files = 4;
+  google.protobuf.Timestamp seen_at = 5;
+  Source source = 6;
+}
+
+message File {
+  // Path inside the torrent, components joined by "/".
+  string path = 1;
+  int64 size = 2;
+}
+
+// Source is how a crawler learned of an infohash.
+enum Source {
+  SOURCE_UNSPECIFIED = 0;
+  // A BEP 51 sample_infohashes reply.
+  SOURCE_SAMPLE = 1;
+  // An announce_peer query received by the crawler's DHT node.
+  SOURCE_ANNOUNCE = 2;
+}

@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package sniffarr.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
+
+// SearchService looks up stored torrents.
+service SearchService {
+  // Search returns releases whose name or file paths contain every word of
+  // the query, best match first; an empty query returns the most recently
+  // seen. Releases classified as adult or software are never returned.
+  rpc Search(SearchRequest) returns (SearchResponse);
+  // Get returns one release, or NOT_FOUND.
+  rpc Get(GetRequest) returns (GetResponse);
+}
+
+message SearchRequest {
+  string query = 1;
+  // Only releases of these kinds; KIND_UNSPECIFIED selects unclassified
+  // ones. Empty means any kind.
+  repeated Kind kinds = 2;
+  // Only releases whose russian_audio is at least this.
+  optional float min_russian_audio = 3;
+  // At most this many releases: 50 when unset, never more than 500.
+  int32 limit = 4;
+}
+
+message SearchResponse {
+  repeated Release releases = 1;
+}
+
+message GetRequest {
+  bytes infohash = 1;
+}
+
+message GetResponse {
+  Release release = 1;
+}
+
+// Release is a stored torrent with its classification.
+message Release {
+  bytes infohash = 1;
+  string name = 2;
+  int64 size = 3;
+  int64 file_count = 4;
+  // KIND_UNSPECIFIED until the torrent is classified.
+  Kind kind = 5;
+  // Probability of a Russian audio track. Absent when the torrent is not
+  // classified and its names carry no explicit Russian marker.
+  optional float russian_audio = 6;
+  VideoSource source = 7;
+  // The classifier's confidence in kind and source, 0 when unclassified.
+  float kind_confidence = 8;
+  float source_confidence = 9;
+  google.protobuf.Timestamp first_seen = 10;
+  google.protobuf.Timestamp last_seen = 11;
+  string magnet = 12;
+}
+
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_MOVIE = 1;
+  KIND_SERIES = 2;
+  KIND_MUSIC = 3;
+  KIND_BOOK = 4;
+  KIND_SOFTWARE = 5;
+  KIND_ADULT = 6;
+  KIND_OTHER = 7;
+}
+
+// VideoSource is the kind of copy a video release is.
+enum VideoSource {
+  VIDEO_SOURCE_UNSPECIFIED = 0;
+  VIDEO_SOURCE_DISC_IMAGE = 1;
+  VIDEO_SOURCE_REMUX = 2;
+  VIDEO_SOURCE_ENCODE = 3;
+  VIDEO_SOURCE_WEB = 4;
+  VIDEO_SOURCE_OTHER = 5;
+}
