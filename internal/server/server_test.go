@@ -235,7 +235,7 @@ func testIngestAndSearch(t *testing.T, protocol connect.ClientOption) {
 	r := found.Msg.GetReleases()[0]
 	require.Equal(t, hash(1), r.GetInfohash())
 	require.Equal(t, int64(1), r.GetFileCount())
-	require.Equal(t, sniffarrv1.Kind_KIND_UNSPECIFIED, r.GetKind())
+	require.Equal(t, sniffarrv1.Kind_KIND_MOVIE, r.GetKind(), "the name tells")
 	require.InDelta(t, 1.0, r.GetRussianAudio(), 1e-9, "the explicit rus marker")
 	require.Equal(t, "magnet:?xt=urn:btih:0100000000000000000000000000000000000000&dn=The.Thing.1982.1080p.BluRay.x264.Rus.Eng", r.GetMagnet())
 
@@ -349,4 +349,33 @@ func TestAuth(t *testing.T) {
 	require.NoError(t, err)
 	res.Body.Close()
 	require.Equal(t, http.StatusOK, res.StatusCode)
+}
+
+func TestKindLayers(t *testing.T) {
+	srv, hc := start(t, Config{Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("search")))
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3)
+	require.NoError(t, err)
+
+	f := openFetch(t, ingest)
+	f.credit(3)
+	f.expect(1, 2, 3)
+	f.torrent(1, "Heat.1995.1080p.BluRay.x264", "Heat.1995.mkv")
+	f.torrent(2, "Heat (1995) [Rus]", "Heat.avi")
+	f.torrent(3, "Unnamed Collection", "a.mkv")
+	f.finish()
+
+	res, err := search.Search(context.Background(), connect.NewRequest(&sniffarrv1.SearchRequest{}))
+	require.NoError(t, err)
+	got := map[string]*sniffarrv1.Release{}
+	for _, r := range res.Msg.GetReleases() {
+		got[r.GetName()] = r
+	}
+	require.Equal(t, sniffarrv1.Kind_KIND_MOVIE, got["Heat.1995.1080p.BluRay.x264"].GetKind())
+	require.Equal(t, sniffarrv1.Layer_LAYER_RULES, got["Heat.1995.1080p.BluRay.x264"].GetLayer())
+	require.Equal(t, sniffarrv1.Kind_KIND_MOVIE, got["Heat (1995) [Rus]"].GetKind(), "the same title's kind")
+	require.Equal(t, sniffarrv1.Layer_LAYER_REUSE, got["Heat (1995) [Rus]"].GetLayer())
+	require.Equal(t, sniffarrv1.Kind_KIND_UNSPECIFIED, got["Unnamed Collection"].GetKind())
+	require.Equal(t, sniffarrv1.Layer_LAYER_UNSPECIFIED, got["Unnamed Collection"].GetLayer())
 }

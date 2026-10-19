@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"github.com/mikluko/sniffarr/internal/database"
 )
@@ -203,4 +205,34 @@ func TestTrimByAgeAndDeadExpiry(t *testing.T) {
 	require.Equal(t, 1, tr.Aged, "2 aged meanwhile")
 	queued, _ = enqueueAt(t, q, t0.Add(26*time.Hour), Announce, 1)
 	require.Equal(t, 1, queued, "a forgotten dead hash queues again")
+}
+
+func TestTrimMetrics(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	q := open(t, Options{MaxSize: 1, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
+	enqueueAt(t, q, t0, Sample, 1, 2, 3)
+	_, err := q.Trim(context.Background(), t0)
+	require.NoError(t, err)
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	got := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			switch d := m.Data.(type) {
+			case metricdata.Sum[int64]:
+				for _, p := range d.DataPoints {
+					why, _ := p.Attributes.Value("sniffarr.queue.eviction")
+					got[m.Name+"/"+why.AsString()] += p.Value
+				}
+			case metricdata.Gauge[int64]:
+				for _, p := range d.DataPoints {
+					got[m.Name] += p.Value
+				}
+			}
+		}
+	}
+	require.EqualValues(t, 2, got["sniffarr.queue.evictions/size"])
+	require.EqualValues(t, 2, got["sniffarr.queue.dead"])
+	require.EqualValues(t, 1, got["sniffarr.queue.depth"])
 }

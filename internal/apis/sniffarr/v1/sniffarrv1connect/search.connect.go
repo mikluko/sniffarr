@@ -41,9 +41,13 @@ const (
 
 // SearchServiceClient is a client for the sniffarr.v1.SearchService service.
 type SearchServiceClient interface {
-	// Search returns releases whose name or file paths contain every word of
-	// the query, best match first; an empty query returns the most recently
-	// seen. Releases classified as adult or software are never returned.
+	// Search returns releases whose name or stored file paths contain every
+	// word of the query, best match first; an empty query returns the most
+	// recently seen. Releases classified as adult or software are never
+	// returned. Before answering, it has the classifier examine a bounded
+	// number of the candidates it has not examined yet, for as long as a
+	// short deadline allows; a slow or failing classifier leaves them as they
+	// were.
 	Search(context.Context, *connect.Request[v1.SearchRequest]) (*connect.Response[v1.SearchResponse], error)
 	// Get returns one release, or NOT_FOUND.
 	Get(context.Context, *connect.Request[v1.GetRequest]) (*connect.Response[v1.GetResponse], error)
@@ -93,9 +97,13 @@ func (c *searchServiceClient) Get(ctx context.Context, req *connect.Request[v1.G
 
 // SearchServiceHandler is an implementation of the sniffarr.v1.SearchService service.
 type SearchServiceHandler interface {
-	// Search returns releases whose name or file paths contain every word of
-	// the query, best match first; an empty query returns the most recently
-	// seen. Releases classified as adult or software are never returned.
+	// Search returns releases whose name or stored file paths contain every
+	// word of the query, best match first; an empty query returns the most
+	// recently seen. Releases classified as adult or software are never
+	// returned. Before answering, it has the classifier examine a bounded
+	// number of the candidates it has not examined yet, for as long as a
+	// short deadline allows; a slow or failing classifier leaves them as they
+	// were.
 	Search(context.Context, *connect.Request[v1.SearchRequest]) (*connect.Response[v1.SearchResponse], error)
 	// Get returns one release, or NOT_FOUND.
 	Get(context.Context, *connect.Request[v1.GetRequest]) (*connect.Response[v1.GetResponse], error)

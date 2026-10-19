@@ -87,3 +87,9 @@ func TestRussianMarker(t *testing.T) {
 		})
 	}
 }
+
+func TestCyrillic(t *testing.T) {
+	require.True(t, Cyrillic("Брат 2 (2000) DVDRip", nil))
+	require.True(t, Cyrillic("Brat.2.2000.DVDRip", []File{{Path: "Брат 2.avi"}}))
+	require.False(t, Cyrillic("Brat.2.2000.DVDRip.Rus", []File{{Path: "Brat 2.avi"}}), "a marker is not a Cyrillic letter")
+}

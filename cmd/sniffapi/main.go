@@ -21,6 +21,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/queue"
+	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/server"
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/telemetry"
@@ -37,6 +38,8 @@ type config struct {
 	queue                    queue.Options
 	store                    store.Options
 	retention                time.Duration
+	lazyMax                  int
+	lazyWait                 time.Duration
 }
 
 // defaultRetention is how long a stored torrent is kept without being seen.
@@ -67,7 +70,7 @@ func load(getenv func(string) string) (config, error) {
 	if c.concurrency, err = positive(getenv, "SNIFFARR_CLASSIFY_CONCURRENCY", 4); err != nil {
 		return c, err
 	}
-	if c.dailyTokens, err = strconv.ParseInt(or(getenv("SNIFFARR_CLASSIFY_DAILY_TOKENS"), "0"), 10, 64); err != nil || c.dailyTokens < 0 {
+	if c.dailyTokens, err = strconv.ParseInt(or(getenv("SNIFFARR_CLASSIFY_DAILY_TOKENS"), strconv.Itoa(classify.DefaultDailyTokens)), 10, 64); err != nil || c.dailyTokens < 0 {
 		return c, errors.New("SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer")
 	}
 	if c.attempts, err = positive(getenv, "SNIFFARR_FETCH_ATTEMPTS", ingest.DefaultAttempts); err != nil {
@@ -92,6 +95,12 @@ func load(getenv func(string) string) (config, error) {
 		return c, err
 	}
 	if c.retention, err = duration(getenv, "SNIFFARR_RETENTION", defaultRetention); err != nil {
+		return c, err
+	}
+	if c.lazyMax, err = positive(getenv, "SNIFFARR_SEARCH_CLASSIFY_MAX", search.DefaultLazyMax); err != nil {
+		return c, err
+	}
+	if c.lazyWait, err = duration(getenv, "SNIFFARR_SEARCH_CLASSIFY_WAIT", search.DefaultLazyWait); err != nil {
 		return c, err
 	}
 	return c, nil
@@ -151,6 +160,14 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		return fmt.Errorf("reset leases: %w", err)
 	}
 
+	var jev *classify.Jev
+	var lazy *search.Lazy
+	if cfg.typesafeKey == "" {
+		log.Warn("TYPESAFE_API_KEY is not set; torrents are classified by their names only")
+	} else {
+		jev = &classify.Jev{Store: s, Classifier: classify.New(cfg.typesafeKey), DailyTokens: cfg.dailyTokens, Log: log}
+		lazy = &search.Lazy{Classifier: jev, Max: cfg.lazyMax, Wait: cfg.lazyWait, MaxFiles: classify.MaxFiles, Log: log}
+	}
 	handler, err := server.New(server.Config{
 		Store:       s,
 		Queue:       q,
@@ -160,6 +177,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		Attempts:    cfg.attempts,
 		Backoff:     cfg.backoff,
 		Log:         log,
+		Lazy:        lazy,
 	})
 	if err != nil {
 		return err
@@ -187,17 +205,8 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.retention, log) })
 		return nil
 	})
-	if cfg.typesafeKey == "" {
-		log.Warn("TYPESAFE_API_KEY is not set; torrents stay unclassified")
-	} else {
-		w := &classify.Worker{
-			Store:       s,
-			Classifier:  classify.New(cfg.typesafeKey),
-			Concurrency: cfg.concurrency,
-			DailyTokens: cfg.dailyTokens,
-			Poll:        10 * time.Second,
-			Log:         log,
-		}
+	if jev != nil {
+		w := &classify.Worker{Store: s, Jev: jev, Concurrency: cfg.concurrency, Poll: 10 * time.Second, Log: log}
 		g.Go(func() error {
 			if err := w.Run(ctx); !errors.Is(err, context.Canceled) {
 				return err

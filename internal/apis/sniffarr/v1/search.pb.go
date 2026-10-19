@@ -22,6 +22,62 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Layer is what decided a release's kind.
+type Layer int32
+
+const (
+	Layer_LAYER_UNSPECIFIED Layer = 0
+	// Rules reading the release's name.
+	Layer_LAYER_RULES Layer = 1
+	// A release of the same title whose kind was decided.
+	Layer_LAYER_REUSE Layer = 2
+	// The classifier.
+	Layer_LAYER_CLASSIFIER Layer = 3
+)
+
+// Enum value maps for Layer.
+var (
+	Layer_name = map[int32]string{
+		0: "LAYER_UNSPECIFIED",
+		1: "LAYER_RULES",
+		2: "LAYER_REUSE",
+		3: "LAYER_CLASSIFIER",
+	}
+	Layer_value = map[string]int32{
+		"LAYER_UNSPECIFIED": 0,
+		"LAYER_RULES":       1,
+		"LAYER_REUSE":       2,
+		"LAYER_CLASSIFIER":  3,
+	}
+)
+
+func (x Layer) Enum() *Layer {
+	p := new(Layer)
+	*p = x
+	return p
+}
+
+func (x Layer) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Layer) Descriptor() protoreflect.EnumDescriptor {
+	return file_sniffarr_v1_search_proto_enumTypes[0].Descriptor()
+}
+
+func (Layer) Type() protoreflect.EnumType {
+	return &file_sniffarr_v1_search_proto_enumTypes[0]
+}
+
+func (x Layer) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Layer.Descriptor instead.
+func (Layer) EnumDescriptor() ([]byte, []int) {
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{0}
+}
+
 type Kind int32
 
 const (
@@ -70,11 +126,11 @@ func (x Kind) String() string {
 }
 
 func (Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[0].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[1].Descriptor()
 }
 
 func (Kind) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[0]
+	return &file_sniffarr_v1_search_proto_enumTypes[1]
 }
 
 func (x Kind) Number() protoreflect.EnumNumber {
@@ -83,7 +139,7 @@ func (x Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Kind.Descriptor instead.
 func (Kind) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{0}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{1}
 }
 
 // VideoSource is the kind of copy a video release is.
@@ -129,11 +185,11 @@ func (x VideoSource) String() string {
 }
 
 func (VideoSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[1].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[2].Descriptor()
 }
 
 func (VideoSource) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[1]
+	return &file_sniffarr_v1_search_proto_enumTypes[2]
 }
 
 func (x VideoSource) Number() protoreflect.EnumNumber {
@@ -142,7 +198,7 @@ func (x VideoSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VideoSource.Descriptor instead.
 func (VideoSource) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{1}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{2}
 }
 
 type SearchRequest struct {
@@ -368,8 +424,13 @@ type Release struct {
 	FirstSeen        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=first_seen,json=firstSeen,proto3" json:"first_seen,omitempty"`
 	LastSeen         *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
 	Magnet           string                 `protobuf:"bytes,12,opt,name=magnet,proto3" json:"magnet,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// What decided kind; LAYER_UNSPECIFIED while kind is unknown.
+	Layer Layer `protobuf:"varint,13,opt,name=layer,proto3,enum=sniffarr.v1.Layer" json:"layer,omitempty"`
+	// Whether the classifier has examined the release; russian_audio, beyond
+	// an explicit Russian marker, and source come from it.
+	Classified    bool `protobuf:"varint,14,opt,name=classified,proto3" json:"classified,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Release) Reset() {
@@ -486,6 +547,20 @@ func (x *Release) GetMagnet() string {
 	return ""
 }
 
+func (x *Release) GetLayer() Layer {
+	if x != nil {
+		return x.Layer
+	}
+	return Layer_LAYER_UNSPECIFIED
+}
+
+func (x *Release) GetClassified() bool {
+	if x != nil {
+		return x.Classified
+	}
+	return false
+}
+
 var File_sniffarr_v1_search_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_search_proto_rawDesc = "" +
@@ -503,7 +578,7 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"GetRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\"=\n" +
 	"\vGetResponse\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xe3\x03\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xad\x04\n" +
 	"\aRelease\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -519,8 +594,17 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"first_seen\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeen\x127\n" +
 	"\tlast_seen\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\blastSeen\x12\x16\n" +
-	"\x06magnet\x18\f \x01(\tR\x06magnetB\x10\n" +
-	"\x0e_russian_audio*\x8f\x01\n" +
+	"\x06magnet\x18\f \x01(\tR\x06magnet\x12(\n" +
+	"\x05layer\x18\r \x01(\x0e2\x12.sniffarr.v1.LayerR\x05layer\x12\x1e\n" +
+	"\n" +
+	"classified\x18\x0e \x01(\bR\n" +
+	"classifiedB\x10\n" +
+	"\x0e_russian_audio*V\n" +
+	"\x05Layer\x12\x15\n" +
+	"\x11LAYER_UNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vLAYER_RULES\x10\x01\x12\x0f\n" +
+	"\vLAYER_REUSE\x10\x02\x12\x14\n" +
+	"\x10LAYER_CLASSIFIER\x10\x03*\x8f\x01\n" +
 	"\x04Kind\x12\x14\n" +
 	"\x10KIND_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +
@@ -557,35 +641,37 @@ func file_sniffarr_v1_search_proto_rawDescGZIP() []byte {
 	return file_sniffarr_v1_search_proto_rawDescData
 }
 
-var file_sniffarr_v1_search_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_sniffarr_v1_search_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_sniffarr_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_sniffarr_v1_search_proto_goTypes = []any{
-	(Kind)(0),                     // 0: sniffarr.v1.Kind
-	(VideoSource)(0),              // 1: sniffarr.v1.VideoSource
-	(*SearchRequest)(nil),         // 2: sniffarr.v1.SearchRequest
-	(*SearchResponse)(nil),        // 3: sniffarr.v1.SearchResponse
-	(*GetRequest)(nil),            // 4: sniffarr.v1.GetRequest
-	(*GetResponse)(nil),           // 5: sniffarr.v1.GetResponse
-	(*Release)(nil),               // 6: sniffarr.v1.Release
-	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(Layer)(0),                    // 0: sniffarr.v1.Layer
+	(Kind)(0),                     // 1: sniffarr.v1.Kind
+	(VideoSource)(0),              // 2: sniffarr.v1.VideoSource
+	(*SearchRequest)(nil),         // 3: sniffarr.v1.SearchRequest
+	(*SearchResponse)(nil),        // 4: sniffarr.v1.SearchResponse
+	(*GetRequest)(nil),            // 5: sniffarr.v1.GetRequest
+	(*GetResponse)(nil),           // 6: sniffarr.v1.GetResponse
+	(*Release)(nil),               // 7: sniffarr.v1.Release
+	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
 }
 var file_sniffarr_v1_search_proto_depIdxs = []int32{
-	0, // 0: sniffarr.v1.SearchRequest.kinds:type_name -> sniffarr.v1.Kind
-	6, // 1: sniffarr.v1.SearchResponse.releases:type_name -> sniffarr.v1.Release
-	6, // 2: sniffarr.v1.GetResponse.release:type_name -> sniffarr.v1.Release
-	0, // 3: sniffarr.v1.Release.kind:type_name -> sniffarr.v1.Kind
-	1, // 4: sniffarr.v1.Release.source:type_name -> sniffarr.v1.VideoSource
-	7, // 5: sniffarr.v1.Release.first_seen:type_name -> google.protobuf.Timestamp
-	7, // 6: sniffarr.v1.Release.last_seen:type_name -> google.protobuf.Timestamp
-	2, // 7: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
-	4, // 8: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
-	3, // 9: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
-	5, // 10: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	1,  // 0: sniffarr.v1.SearchRequest.kinds:type_name -> sniffarr.v1.Kind
+	7,  // 1: sniffarr.v1.SearchResponse.releases:type_name -> sniffarr.v1.Release
+	7,  // 2: sniffarr.v1.GetResponse.release:type_name -> sniffarr.v1.Release
+	1,  // 3: sniffarr.v1.Release.kind:type_name -> sniffarr.v1.Kind
+	2,  // 4: sniffarr.v1.Release.source:type_name -> sniffarr.v1.VideoSource
+	8,  // 5: sniffarr.v1.Release.first_seen:type_name -> google.protobuf.Timestamp
+	8,  // 6: sniffarr.v1.Release.last_seen:type_name -> google.protobuf.Timestamp
+	0,  // 7: sniffarr.v1.Release.layer:type_name -> sniffarr.v1.Layer
+	3,  // 8: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
+	5,  // 9: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
+	4,  // 10: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
+	6,  // 11: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
+	10, // [10:12] is the sub-list for method output_type
+	8,  // [8:10] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_search_proto_init() }
@@ -600,7 +686,7 @@ func file_sniffarr_v1_search_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_search_proto_rawDesc), len(file_sniffarr_v1_search_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,

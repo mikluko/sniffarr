@@ -50,6 +50,8 @@ type Input struct {
 	Name  string
 	Size  int64
 	Files []rules.File
+	// AskKind asks for the kind too; otherwise Result.Kind is empty.
+	AskKind bool
 }
 
 // Result is the classifier's answer.
@@ -81,8 +83,8 @@ func retryable(status int) bool {
 	return status == http.StatusTooManyRequests || status >= 500
 }
 
-func questions() map[string]any {
-	return map[string]any{
+func questions(askKind bool) map[string]any {
+	q := map[string]any{
 		"kind": map[string]any{
 			"type":         "choice",
 			"instructions": "What is this torrent, judging by its `name` and `files`?",
@@ -119,6 +121,10 @@ func questions() map[string]any {
 			},
 		},
 	}
+	if !askKind {
+		delete(q, "kind")
+	}
+	return q
 }
 
 type answer struct {
@@ -149,14 +155,14 @@ func (c *Client) Classify(ctx context.Context, in Input) (Result, error) {
 			"size_gib": fmt.Sprintf("%.2f", float64(in.Size)/(1<<30)),
 			"files":    files,
 		},
-		"questions": questions(),
+		"questions": questions(in.AskKind),
 	})
 	if err != nil {
 		return Result{}, err
 	}
 	wait := c.Backoff
 	for attempt := 0; ; attempt++ {
-		res, err := c.post(ctx, body)
+		res, err := c.post(ctx, body, in.AskKind)
 		var apiErr *APIError
 		if err == nil || !errors.As(err, &apiErr) || !retryable(apiErr.Status) || attempt >= c.Retries {
 			return res, err
@@ -170,7 +176,7 @@ func (c *Client) Classify(ctx context.Context, in Input) (Result, error) {
 	}
 }
 
-func (c *Client) post(ctx context.Context, body []byte) (Result, error) {
+func (c *Client) post(ctx context.Context, body []byte, askKind bool) (Result, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL, bytes.NewReader(body))
 	if err != nil {
 		return Result{}, err
@@ -191,15 +197,17 @@ func (c *Client) post(ctx context.Context, body []byte) (Result, error) {
 		return Result{}, fmt.Errorf("typesafe: decode answer: %w", err)
 	}
 	kind, source, russian := r.Answers["kind"], r.Answers["source"], r.Answers["russian_audio"]
-	if kind.Choice == "" || source.Choice == "" || russian.Noul == nil {
+	if askKind && kind.Choice == "" || source.Choice == "" || russian.Noul == nil {
 		return Result{}, errors.New("typesafe: incomplete answer")
 	}
-	return Result{
-		Kind:             kind.Choice,
-		KindConfidence:   kind.Confidence,
+	out := Result{
 		Source:           source.Choice,
 		SourceConfidence: source.Confidence,
 		RussianAudio:     *russian.Noul,
 		Tokens:           r.Usage.InputTokens + r.Usage.OutputTokens,
-	}, nil
+	}
+	if askKind {
+		out.Kind, out.KindConfidence = kind.Choice, kind.Confidence
+	}
+	return out, nil
 }

@@ -31,7 +31,7 @@ const answer200 = `{
 
 type fakeTypeSafe struct {
 	*httptest.Server
-	requests atomic.Int64
+	requests, kindAsked atomic.Int64
 	// status is answered for a request whose name contains the key.
 	status map[string]int
 	// overload is how many 529 answers come before the first 200.
@@ -60,9 +60,13 @@ func newFake(t *testing.T) *fakeTypeSafe {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if req.Model != "jev-latest" || req.Questions["kind"].Type != "choice" || req.Questions["russian_audio"].Type != "noul" || req.Questions["source"].Type != "choice" {
+		kind, askKind := req.Questions["kind"]
+		if req.Model != "jev-latest" || askKind && kind.Type != "choice" || req.Questions["russian_audio"].Type != "noul" || req.Questions["source"].Type != "choice" {
 			http.Error(w, "bad questions", http.StatusUnprocessableEntity)
 			return
+		}
+		if askKind {
+			f.kindAsked.Add(1)
 		}
 		for k, code := range f.status {
 			if strings.Contains(req.State.Name, k) {
@@ -91,7 +95,7 @@ func (f *fakeTypeSafe) client() *Client {
 func TestClientClassify(t *testing.T) {
 	f := newFake(t)
 	f.overload.Store(2)
-	r, err := f.client().Classify(context.Background(), Input{Name: "Heat.1995.1080p.BluRay.REMUX", Size: 30 << 30, Files: []rules.File{{Path: "Heat.mkv", Size: 30 << 30}}})
+	r, err := f.client().Classify(context.Background(), Input{Name: "Heat.1995.1080p.BluRay.REMUX", Size: 30 << 30, Files: []rules.File{{Path: "Heat.mkv", Size: 30 << 30}}, AskKind: true})
 	require.NoError(t, err)
 	require.Equal(t, Result{Kind: "movie", KindConfidence: 0.85, Source: "remux", SourceConfidence: 0.6, RussianAudio: 0.75, Tokens: 1000}, r)
 	require.EqualValues(t, 3, f.requests.Load(), "two 529 answers are retried")
@@ -126,14 +130,16 @@ func setup(t *testing.T, names ...string) *store.Store {
 	s, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
 	for i, n := range names {
-		_, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: n, Size: 1 << 30, Files: []rules.File{{Path: n + ".mkv", Size: 1 << 30}}, Discovery: "sample", SeenAt: time.Now()})
+		_, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: n, Size: 1 << 30, Files: []rules.File{{Path: n + ".mkv", Size: 1 << 30}},
+			Discovery: "sample", SeenAt: time.Now(), RussianHint: true})
 		require.NoError(t, err)
 	}
 	return s
 }
 
 func worker(s *store.Store, c Classifier) *Worker {
-	return &Worker{Store: s, Classifier: c, Concurrency: 2, Poll: 10 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}
+	jev := &Jev{Store: s, Classifier: c, Log: slog.New(slog.DiscardHandler)}
+	return &Worker{Store: s, Jev: jev, Concurrency: 2, Poll: 10 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}
 }
 
 func TestWorker(t *testing.T) {
@@ -169,7 +175,7 @@ func TestWorkerBudget(t *testing.T) {
 	s := setup(t, "Heat.1995", "Ronin.1998", "Collateral.2004")
 	w := worker(s, f.client())
 	w.Concurrency = 1
-	w.DailyTokens = 1500
+	w.Jev.DailyTokens = 1500
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error)
 	go func() { done <- w.Run(ctx) }()
@@ -182,4 +188,37 @@ func TestWorkerBudget(t *testing.T) {
 	cancel()
 	require.ErrorIs(t, <-done, context.Canceled)
 	require.EqualValues(t, 2, f.requests.Load(), "the budget stops requests once spent")
+}
+
+func TestJevAsksKindOnlyWhenUnknown(t *testing.T) {
+	ctx := context.Background()
+	f := newFake(t)
+	s := setup(t, "Heat.1995")
+	_, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{9}, Name: "Ronin.S01E01", Size: 1 << 30, Discovery: "sample", SeenAt: time.Now(),
+		Kind: "series", KindLayer: store.LayerRules})
+	require.NoError(t, err)
+	jev := &Jev{Store: s, Classifier: f.client(), Log: slog.New(slog.DiscardHandler)}
+
+	p, err := s.Pending(ctx, []int64{1, 2}, MaxFiles)
+	require.NoError(t, err)
+	for _, p := range p {
+		require.NoError(t, jev.Classify(ctx, p))
+	}
+	require.EqualValues(t, 2, f.requests.Load())
+	require.EqualValues(t, 1, f.kindAsked.Load(), "only Heat's kind was unknown")
+
+	r, err := s.Get(ctx, store.Hash{9})
+	require.NoError(t, err)
+	require.Equal(t, "series", r.Kind, "the rules' kind stays")
+	require.Equal(t, store.LayerRules, r.KindLayer)
+	require.Equal(t, "remux", r.Source)
+	require.True(t, r.Classified)
+	r, err = s.Get(ctx, store.Hash{1})
+	require.NoError(t, err)
+	require.Equal(t, "movie", r.Kind)
+	require.Equal(t, store.LayerJev, r.KindLayer)
+
+	jev.DailyTokens = 1
+	require.ErrorIs(t, jev.Classify(ctx, store.Pending{ID: 1, Name: "Heat.1995"}), ErrBudget)
+	require.EqualValues(t, 2, f.requests.Load(), "no request once the budget is spent")
 }

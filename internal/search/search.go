@@ -32,6 +32,8 @@ var hidden = []string{"adult", "software"}
 type Service struct {
 	Store *store.Store
 	Log   *slog.Logger
+	// Lazy, when set, has Search classify candidates first; see Lazy.
+	Lazy *Lazy
 }
 
 var kinds = map[sniffarrv1.Kind]string{
@@ -43,6 +45,12 @@ var kinds = map[sniffarrv1.Kind]string{
 	sniffarrv1.Kind_KIND_SOFTWARE:    "software",
 	sniffarrv1.Kind_KIND_ADULT:       "adult",
 	sniffarrv1.Kind_KIND_OTHER:       "other",
+}
+
+var layers = map[string]sniffarrv1.Layer{
+	store.LayerRules: sniffarrv1.Layer_LAYER_RULES,
+	store.LayerReuse: sniffarrv1.Layer_LAYER_REUSE,
+	store.LayerJev:   sniffarrv1.Layer_LAYER_CLASSIFIER,
 }
 
 var sources = map[string]sniffarrv1.VideoSource{
@@ -75,9 +83,15 @@ func (s *Service) Search(ctx context.Context, req *connect.Request[sniffarrv1.Se
 		v := float64(m.GetMinRussianAudio())
 		q.MinRussianAudio = &v
 	}
-	found, err := s.Store.Search(ctx, q)
+	var found []store.Release
+	var err error
+	if s.Lazy != nil {
+		found, err = s.Lazy.search(ctx, s.Store, q)
+	} else {
+		found, err = s.Store.Search(ctx, q)
+	}
 	if err != nil {
-		s.Log.Error("search", "err", err)
+		s.Log.ErrorContext(ctx, "search", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("search failed"))
 	}
 	res := &sniffarrv1.SearchResponse{Releases: make([]*sniffarrv1.Release, len(found))}
@@ -115,6 +129,8 @@ func release(r store.Release) *sniffarrv1.Release {
 		FirstSeen:        timestamppb.New(r.FirstSeen),
 		LastSeen:         timestamppb.New(r.LastSeen),
 		Magnet:           Magnet(r.Hash, r.Name),
+		Layer:            layers[r.KindLayer],
+		Classified:       r.Classified,
 	}
 	for k, name := range kinds {
 		if name == r.Kind {

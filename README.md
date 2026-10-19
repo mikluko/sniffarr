@@ -39,9 +39,30 @@ The server passes fetched metadata through a first filter by name and file
 extensions, rejecting what is never worth classifying: adult content,
 software and games, books and comics, courses, torrents under 50 MiB, and
 torrents with neither video nor audio files. A rejected infohash is
-remembered with its reason only, so it is never queued again. Accepted
-torrents are classified for kind, Russian audio and video source; adult and
-software kinds never show in search results.
+remembered with its reason only, so it is never queued again.
+
+Accepted torrents are classified in layers, cheapest first, and every release
+records which layer decided its kind:
+
+1. Rules read the name: episode and season markers, in Latin and Cyrillic
+   (`S01E02`, `1x05`, `Season 3`, `Сезон: 1`, `Серии: 1-8 из 8`), make a
+   series; a title with a year and a quality tag makes a movie. An explicit
+   Russian marker (`Rus`, a dubbing term or studio) sets Russian audio. A name
+   that says neither leaves the kind unknown.
+2. Reuse: the rules also reduce the name to a title key, the series title or
+   the title and year. A torrent of unknown kind takes the kind of a stored
+   torrent with the same key, now or once one is classified. Only the kind is
+   shared; Russian audio and the video source belong to each release.
+3. [TypeSafe](https://typesafe.ai)'s Jev examines a torrent for Russian audio,
+   video source, and kind when it is still unknown. It does so lazily, for
+   the candidates of a search before the answer, and in the background only
+   for torrents of unknown kind whose names are Cyrillic or carry a Russian
+   marker. Both share a daily token budget, 2,000,000 tokens by default, some
+   1,500 torrents a day. A search waits for Jev for a short while at most;
+   answers that come later are recorded for the next search, and a slow or
+   failing Jev never fails a search.
+
+Adult and software kinds never show in search results.
 
 ## API
 
@@ -64,31 +85,36 @@ in the `Authorization` header; `/healthz` needs none.
 - `Fetch` is bidirectional: the client grants credit, one unit per task it can
   take, the server answers with a task per unit, and the client returns each
   task's result, metadata or a failure, on the same stream.
-- `Search` matches every word of the query against names and stored file paths, and
-  filters by kind and by the probability of Russian audio.
+- `Search` matches every word of the query against names and stored file
+  paths, and filters by kind and by the probability of Russian audio. It has
+  Jev examine a bounded number of its candidates first, so the filters apply
+  to what is known once that is done. Each release carries the layer that
+  decided its kind and whether Jev has examined it.
 - `Get` returns one release by infohash.
 
 ## Configuration
 
 ### sniffapi
 
-| Variable                         | Default   | Meaning                                                  |
-| -------------------------------- | --------- | -------------------------------------------------------- |
-| `SNIFFARR_DB`                    |           | Path of the SQLite database; required                    |
-| `SNIFFARR_INGEST_TOKEN`          |           | Bearer token of `IngestService`; required                |
-| `SNIFFARR_SEARCH_TOKEN`          |           | Bearer token of `SearchService`; required                |
-| `SNIFFARR_ADDR`                  | `:8080`   | Listen address                                           |
-| `TYPESAFE_API_KEY`               |           | TypeSafe API key; when unset, torrents stay unclassified |
-| `SNIFFARR_CLASSIFY_CONCURRENCY`  | `4`       | Classification requests at once                          |
-| `SNIFFARR_CLASSIFY_DAILY_TOKENS` | `0`       | Classifier tokens per UTC day at most; `0` is no limit   |
-| `SNIFFARR_FETCH_LEASE`           | `1m`      | How long a fetcher may hold a task                       |
-| `SNIFFARR_FETCH_ATTEMPTS`        | `3`       | Failed fetches after which an infohash is dropped        |
-| `SNIFFARR_FETCH_BACKOFF`         | `10m`     | Wait before retrying a failed task, doubled per failure  |
-| `SNIFFARR_QUEUE_MAX_SIZE`        | `1000000` | Infohashes the queue keeps                               |
-| `SNIFFARR_QUEUE_MAX_AGE`         | `24h`     | How long an infohash may wait in the queue               |
-| `SNIFFARR_QUEUE_DEAD_FOR`        | `168h`    | How long a dropped or evicted infohash stays out         |
-| `SNIFFARR_STORE_MAX_FILES`       | `20`      | Files stored per torrent, the largest ones               |
-| `SNIFFARR_RETENTION`             | `2160h`   | How long a stored torrent is kept without being seen     |
+| Variable                         | Default   | Meaning                                                     |
+| -------------------------------- | --------- | ----------------------------------------------------------- |
+| `SNIFFARR_DB`                    |           | Path of the SQLite database; required                       |
+| `SNIFFARR_INGEST_TOKEN`          |           | Bearer token of `IngestService`; required                   |
+| `SNIFFARR_SEARCH_TOKEN`          |           | Bearer token of `SearchService`; required                   |
+| `SNIFFARR_ADDR`                  | `:8080`   | Listen address                                              |
+| `TYPESAFE_API_KEY`               |           | TypeSafe API key; when unset, only rules and reuse classify |
+| `SNIFFARR_CLASSIFY_CONCURRENCY`  | `4`       | Background classification requests at once                  |
+| `SNIFFARR_CLASSIFY_DAILY_TOKENS` | `2000000` | Classifier tokens per UTC day at most; `0` is no limit      |
+| `SNIFFARR_SEARCH_CLASSIFY_MAX`   | `20`      | Candidates one search has classified at most                |
+| `SNIFFARR_SEARCH_CLASSIFY_WAIT`  | `2s`      | How long a search waits for them                            |
+| `SNIFFARR_FETCH_LEASE`           | `1m`      | How long a fetcher may hold a task                          |
+| `SNIFFARR_FETCH_ATTEMPTS`        | `3`       | Failed fetches after which an infohash is dropped           |
+| `SNIFFARR_FETCH_BACKOFF`         | `10m`     | Wait before retrying a failed task, doubled per failure     |
+| `SNIFFARR_QUEUE_MAX_SIZE`        | `1000000` | Infohashes the queue keeps                                  |
+| `SNIFFARR_QUEUE_MAX_AGE`         | `24h`     | How long an infohash may wait in the queue                  |
+| `SNIFFARR_QUEUE_DEAD_FOR`        | `168h`    | How long a dropped or evicted infohash stays out            |
+| `SNIFFARR_STORE_MAX_FILES`       | `20`      | Files stored per torrent, the largest ones                  |
+| `SNIFFARR_RETENTION`             | `2160h`   | How long a stored torrent is kept without being seen        |
 
 The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start. A torrent keeps its true file
@@ -135,32 +161,36 @@ Every RPC is traced and measured on both ends by
 stderr and carry `trace_id` and `span_id` when written inside a span. No
 BitTorrent peer address appears in spans, attributes or logs.
 
-| Binary     | Metric                               | Unit         | Attributes                 |
-| ---------- | ------------------------------------ | ------------ | -------------------------- |
-| `sniffapi` | `sniffarr.ingest.sightings`          | `{sighting}` | `sniffarr.sighting.result` |
-| `sniffapi` | `sniffarr.queue.depth`               | `{infohash}` | `sniffarr.discovery`       |
-| `sniffapi` | `sniffarr.queue.leases`              | `{lease}`    |                            |
-| `sniffapi` | `sniffarr.queue.lease_expiries`      | `{lease}`    |                            |
-| `sniffapi` | `sniffarr.queue.evictions`           | `{infohash}` | `sniffarr.queue.eviction`  |
-| `sniffapi` | `sniffarr.queue.dead`                | `{infohash}` |                            |
-| `sniffapi` | `sniffarr.store.retention.deletions` | `{torrent}`  |                            |
-| `sniffapi` | `sniffarr.ingest.results`            | `{result}`   | `sniffarr.fetch.outcome`   |
-| `sniffapi` | `sniffarr.ingest.rejections`         | `{torrent}`  | `sniffarr.rules.reason`    |
-| `sniffapi` | `sniffarr.ingest.stored`             | `{torrent}`  |                            |
-| `sniffapi` | `sniffarr.classify.classifications`  | `{torrent}`  | `sniffarr.kind`            |
-| `sniffapi` | `sniffarr.classify.tokens`           | `{token}`    |                            |
-| `sniffapi` | `sniffarr.classify.errors`           | `{error}`    | `sniffarr.classify.error`  |
-| `sniffdht` | `sniffarr.dht.nodes`                 | `{node}`     |                            |
-| `sniffdht` | `sniffarr.dht.sample_answers`        | `{answer}`   |                            |
-| `sniffdht` | `sniffarr.sniffer.sightings`         | `{infohash}` | `sniffarr.discovery`       |
-| `sniffdht` | `sniffarr.sniffer.fetch.in_flight`   | `{task}`     |                            |
-| `sniffdht` | `sniffarr.sniffer.fetch.outcomes`    | `{task}`     | `sniffarr.fetch.outcome`   |
-| `sniffdht` | `sniffarr.sniffer.fetch.duration`    | `s`          | `sniffarr.fetch.outcome`   |
+| Binary     | Metric                                 | Unit         | Attributes                                 |
+| ---------- | -------------------------------------- | ------------ | ------------------------------------------ |
+| `sniffapi` | `sniffarr.ingest.sightings`            | `{sighting}` | `sniffarr.sighting.result`                 |
+| `sniffapi` | `sniffarr.queue.depth`                 | `{infohash}` | `sniffarr.discovery`                       |
+| `sniffapi` | `sniffarr.queue.leases`                | `{lease}`    |                                            |
+| `sniffapi` | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
+| `sniffapi` | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
+| `sniffapi` | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
+| `sniffapi` | `sniffarr.store.retention.deletions`   | `{torrent}`  |                                            |
+| `sniffapi` | `sniffarr.ingest.results`              | `{result}`   | `sniffarr.fetch.outcome`                   |
+| `sniffapi` | `sniffarr.ingest.rejections`           | `{torrent}`  | `sniffarr.rules.reason`                    |
+| `sniffapi` | `sniffarr.ingest.stored`               | `{torrent}`  |                                            |
+| `sniffapi` | `sniffarr.classify.classifications`    | `{torrent}`  | `sniffarr.kind`, `sniffarr.classify.layer` |
+| `sniffapi` | `sniffarr.search.lazy.duration`        | `s`          |                                            |
+| `sniffapi` | `sniffarr.search.lazy.classifications` | `{torrent}`  | `sniffarr.search.lazy.result`              |
+| `sniffapi` | `sniffarr.classify.tokens`             | `{token}`    |                                            |
+| `sniffapi` | `sniffarr.classify.errors`             | `{error}`    | `sniffarr.classify.error`                  |
+| `sniffdht` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
+| `sniffdht` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
+| `sniffdht` | `sniffarr.sniffer.sightings`           | `{infohash}` | `sniffarr.discovery`                       |
+| `sniffdht` | `sniffarr.sniffer.fetch.in_flight`     | `{task}`     |                                            |
+| `sniffdht` | `sniffarr.sniffer.fetch.outcomes`      | `{task}`     | `sniffarr.fetch.outcome`                   |
+| `sniffdht` | `sniffarr.sniffer.fetch.duration`      | `s`          | `sniffarr.fetch.outcome`                   |
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
 `sniffarr.discovery` is `announce` or `sample`; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
-`sniffarr.queue.eviction` is `age` or `size`.
+`sniffarr.queue.eviction` is `age` or `size`; `sniffarr.classify.layer` is
+`rules`, `reuse` or `jev`; `sniffarr.search.lazy.result` is `in_time`, `late`
+or `failed`.
 
 ## Container image
 

@@ -78,4 +78,7 @@ func TestMetrics(t *testing.T) {
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "adult")))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.queue.depth", attribute.String("sniffarr.discovery", "sample")), "the failed one waits for its retry")
 	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.leases"))
+	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.dead"))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.classify.classifications",
+		attribute.String("sniffarr.classify.layer", "rules"), attribute.String("sniffarr.kind", "movie")))
 }

@@ -37,6 +37,8 @@ type Config struct {
 	// Meter records metrics; the global MeterProvider when nil. Traces go to
 	// the global TracerProvider.
 	Meter metric.MeterProvider
+	// Lazy, when set, has Search classify its candidates first.
+	Lazy *search.Lazy
 }
 
 // New returns the handler serving both APIs and /healthz.
@@ -56,7 +58,7 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewSearchServiceHandler(
-		&search.Service{Store: c.Store, Log: c.Log},
+		&search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy},
 		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

@@ -7,6 +7,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/mikluko/sniffarr/internal/rot13"
 )
@@ -126,6 +127,20 @@ func Check(name string, size int64, files []File) Reason {
 // dubbing studio.
 func RussianMarker(name string, files []File) bool {
 	return russian.MatchString(name) || anyPath(files, russian.MatchString)
+}
+
+// Cyrillic reports whether the name or a file path has a Cyrillic letter.
+func Cyrillic(name string, files []File) bool {
+	return cyrillic(name) || anyPath(files, cyrillic)
+}
+
+func cyrillic(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Cyrillic, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // Studios lists the studios RussianMarker recognizes.

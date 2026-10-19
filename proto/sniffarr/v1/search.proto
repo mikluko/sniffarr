@@ -8,9 +8,13 @@ option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniff
 
 // SearchService looks up stored torrents.
 service SearchService {
-  // Search returns releases whose name or file paths contain every word of
-  // the query, best match first; an empty query returns the most recently
-  // seen. Releases classified as adult or software are never returned.
+  // Search returns releases whose name or stored file paths contain every
+  // word of the query, best match first; an empty query returns the most
+  // recently seen. Releases classified as adult or software are never
+  // returned. Before answering, it has the classifier examine a bounded
+  // number of the candidates it has not examined yet, for as long as a
+  // short deadline allows; a slow or failing classifier leaves them as they
+  // were.
   rpc Search(SearchRequest) returns (SearchResponse);
   // Get returns one release, or NOT_FOUND.
   rpc Get(GetRequest) returns (GetResponse);
@@ -57,6 +61,22 @@ message Release {
   google.protobuf.Timestamp first_seen = 10;
   google.protobuf.Timestamp last_seen = 11;
   string magnet = 12;
+  // What decided kind; LAYER_UNSPECIFIED while kind is unknown.
+  Layer layer = 13;
+  // Whether the classifier has examined the release; russian_audio, beyond
+  // an explicit Russian marker, and source come from it.
+  bool classified = 14;
+}
+
+// Layer is what decided a release's kind.
+enum Layer {
+  LAYER_UNSPECIFIED = 0;
+  // Rules reading the release's name.
+  LAYER_RULES = 1;
+  // A release of the same title whose kind was decided.
+  LAYER_REUSE = 2;
+  // The classifier.
+  LAYER_CLASSIFIER = 3;
 }
 
 enum Kind {

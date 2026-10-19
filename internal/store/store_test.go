@@ -123,10 +123,10 @@ func TestSearch(t *testing.T) {
 		_, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
-	require.NoError(t, s.Classify(ctx, 1, Classification{Kind: "movie", KindConfidence: 0.9, Source: "encode", RussianAudio: 0.2}, t0))
-	require.NoError(t, s.Classify(ctx, 2, Classification{Kind: "movie", RussianAudio: 0.7}, t0))
-	require.NoError(t, s.Classify(ctx, 3, Classification{Kind: "movie", RussianAudio: 0.1}, t0))
-	require.NoError(t, s.Classify(ctx, 5, Classification{Kind: "adult"}, t0))
+	classify(t, s, 1, Classification{Kind: "movie", KindConfidence: 0.9, Source: "encode", RussianAudio: 0.2})
+	classify(t, s, 2, Classification{Kind: "movie", RussianAudio: 0.7})
+	classify(t, s, 3, Classification{Kind: "movie", RussianAudio: 0.1})
+	classify(t, s, 5, Classification{Kind: "adult"})
 
 	names := func(q Query) []string {
 		t.Helper()
@@ -154,8 +154,8 @@ func TestSearch(t *testing.T) {
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)
 	require.Equal(t, Release{
-		Hash: hash(1), Name: "Alien.1979.Director's.Cut.1080p.BluRay", Size: 1 << 30, FileCount: 1,
-		Kind: "movie", KindConfidence: 0.9, Source: "encode", RussianAudio: new(0.2),
+		ID: 1, Hash: hash(1), Name: "Alien.1979.Director's.Cut.1080p.BluRay", Size: 1 << 30, FileCount: 1,
+		Kind: "movie", KindLayer: LayerJev, KindConfidence: 0.9, Source: "encode", RussianAudio: new(0.2), Classified: true,
 		FirstSeen: t0.Add(time.Minute), LastSeen: t0.Add(time.Minute),
 	}, r)
 	r, err = s.Get(ctx, hash(4))
@@ -163,22 +163,85 @@ func TestSearch(t *testing.T) {
 	require.Nil(t, r.RussianAudio)
 }
 
+func classify(t *testing.T, s *Store, id int64, c Classification) int {
+	t.Helper()
+	n, err := s.Classify(context.Background(), id, c, t0)
+	require.NoError(t, err)
+	return n
+}
+
 func TestUnclassified(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	for i := byte(1); i <= 3; i++ {
-		_, err := s.Insert(ctx, torrent(i, "t", "a.mkv", "b.mkv", "c.mkv"))
+	for i := byte(1); i <= 5; i++ {
+		tr := torrent(i, "t", "a.mkv", "b.mkv", "c.mkv")
+		tr.RussianHint = i != 4
+		if i == 5 {
+			tr.Kind, tr.KindLayer = "series", LayerRules
+		}
+		_, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
-	require.NoError(t, s.Classify(ctx, 1, Classification{Kind: "movie"}, t0))
+	classify(t, s, 1, Classification{Kind: "movie"})
 	require.NoError(t, s.ClassifyFailed(ctx, 3, "422", t0))
 
 	p, err := s.Unclassified(ctx, 0, 10, 2)
 	require.NoError(t, err)
-	require.Equal(t, []Pending{{ID: 2, Name: "t", Size: 1 << 30, Files: []rules.File{{Path: "a.mkv", Size: 1 << 30}, {Path: "b.mkv", Size: 1 << 30}}}}, p)
+	require.Equal(t, []Pending{{ID: 2, Name: "t", Size: 1 << 30, Files: []rules.File{{Path: "a.mkv", Size: 1 << 30}, {Path: "b.mkv", Size: 1 << 30}}}}, p,
+		"not 4, without a Russian hint, nor 5, whose kind is known")
 	p, err = s.Unclassified(ctx, 2, 10, 2)
 	require.NoError(t, err)
 	require.Empty(t, p)
+
+	p, err = s.Pending(ctx, []int64{1, 4, 5}, 1)
+	require.NoError(t, err)
+	require.Equal(t, []Pending{
+		{ID: 4, Name: "t", Size: 1 << 30, Files: []rules.File{{Path: "a.mkv", Size: 1 << 30}}},
+		{ID: 5, Name: "t", Size: 1 << 30, Files: []rules.File{{Path: "a.mkv", Size: 1 << 30}}, KindKnown: true},
+	}, p, "1 is examined already")
+}
+
+func TestReuseByKey(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for i, k := range []string{"y:dune 2024", "y:dune 2024", "y:dune 2021", "y:arrival 2016"} {
+		tr := torrent(byte(i+1), "t")
+		tr.TitleKey = k
+		_, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	kind, err := s.KindByKey(ctx, "y:arrival 2016")
+	require.NoError(t, err)
+	require.Empty(t, kind)
+
+	require.Equal(t, 1, classify(t, s, 1, Classification{Kind: "movie"}), "copied to 2, not to 3 of another year")
+	r, err := s.Get(ctx, hash(2))
+	require.NoError(t, err)
+	require.Equal(t, "movie", r.Kind)
+	require.Equal(t, LayerReuse, r.KindLayer)
+	require.False(t, r.Classified, "only the kind is copied")
+	r, err = s.Get(ctx, hash(3))
+	require.NoError(t, err)
+	require.Empty(t, r.Kind)
+
+	require.Zero(t, classify(t, s, 2, Classification{Kind: "other", Source: "web"}), "a known kind stays")
+	r, err = s.Get(ctx, hash(2))
+	require.NoError(t, err)
+	require.Equal(t, "movie", r.Kind)
+	require.Equal(t, "web", r.Source)
+
+	kind, err = s.KindByKey(ctx, "y:dune 2024")
+	require.NoError(t, err)
+	require.NotEmpty(t, kind)
+
+	tr := torrent(9, "Arrival.2016.1080p")
+	tr.TitleKey, tr.Kind, tr.KindLayer = "y:arrival 2016", "movie", LayerRules
+	_, err = s.Insert(ctx, tr)
+	require.NoError(t, err)
+	r, err = s.Get(ctx, hash(4))
+	require.NoError(t, err)
+	require.Equal(t, "movie", r.Kind, "a later release with a known kind lends it too")
+	require.Equal(t, LayerReuse, r.KindLayer)
 }
 
 func TestTokens(t *testing.T) {
@@ -200,6 +263,7 @@ func TestMaxFiles(t *testing.T) {
 	defer db.Close()
 	s.opts.MaxFiles = 2
 	tr := torrent(1, "Collection")
+	tr.RussianHint = true
 	for i, size := range []int64{10, 30, 20, 5} {
 		tr.Files = append(tr.Files, rules.File{Path: fmt.Sprintf("f%d.mkv", i), Size: size})
 	}

@@ -9,7 +9,7 @@ import (
 const scope = "github.com/mikluko/sniffarr/internal/ingest"
 
 type metrics struct {
-	sightings, expiries, results, rejections, stored metric.Int64Counter
+	sightings, expiries, results, rejections, stored, classifications metric.Int64Counter
 }
 
 func newMetrics(mp metric.MeterProvider) *metrics {
@@ -30,7 +30,13 @@ func newMetrics(mp metric.MeterProvider) *metrics {
 		results:    counter("sniffarr.ingest.results", "{result}", "Fetch results received, by outcome."),
 		rejections: counter("sniffarr.ingest.rejections", "{torrent}", "Fetched torrents the rules rejected, by reason."),
 		stored:     counter("sniffarr.ingest.stored", "{torrent}", "Fetched torrents stored."),
+		classifications: counter("sniffarr.classify.classifications", "{torrent}",
+			"Torrents whose kind was decided, by kind and by the layer that decided it."),
 	}
+}
+
+func layerAttrs(layer, kind string) metric.AddOption {
+	return metric.WithAttributes(attribute.String("sniffarr.classify.layer", layer), attribute.String("sniffarr.kind", kind))
 }
 
 var (

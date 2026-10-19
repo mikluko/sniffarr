@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -198,20 +199,51 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 		}
 		return nil
 	}
-	stored, err := s.Store.Insert(ctx, store.Torrent{
+	marker := rules.RussianMarker(t.GetName(), files)
+	tr := store.Torrent{
 		Hash:          h,
 		Name:          t.GetName(),
 		Size:          t.GetSize(),
 		Files:         files,
 		Discovery:     d,
 		SeenAt:        now,
-		RussianMarker: rules.RussianMarker(t.GetName(), files),
-	})
+		RussianMarker: marker,
+		RussianHint:   marker || rules.Cyrillic(t.GetName(), files),
+	}
+	if err := s.kind(ctx, &tr); err != nil {
+		return err
+	}
+	stored, err := s.Store.Insert(ctx, tr)
 	if err != nil {
 		return s.internal(ctx, "insert", err)
 	}
 	if stored {
 		s.metrics().stored.Add(ctx, 1)
+		if tr.Kind != "" {
+			s.metrics().classifications.Add(ctx, 1, layerAttrs(tr.KindLayer, tr.Kind))
+		}
+	}
+	return nil
+}
+
+// kind sets the torrent's title key, and its kind when the name tells it or
+// a stored torrent of the same title key has one.
+func (s *Service) kind(ctx context.Context, t *store.Torrent) error {
+	p := names.Parse(t.Name)
+	t.TitleKey = p.Key
+	if p.Kind != "" {
+		t.Kind, t.KindLayer = p.Kind, store.LayerRules
+		return nil
+	}
+	if p.Key == "" {
+		return nil
+	}
+	k, err := s.Store.KindByKey(ctx, p.Key)
+	if err != nil {
+		return s.internal(ctx, "kind by key", err)
+	}
+	if k != "" {
+		t.Kind, t.KindLayer = k, store.LayerReuse
 	}
 	return nil
 }
