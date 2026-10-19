@@ -107,6 +107,45 @@ public address, no `announce_peer` query reached the node, and the sniffer
 still fetched metadata for about 22 torrents a second. Behind NAT it fetches
 far fewer, a few a second at most.
 
+## Telemetry
+
+Both binaries export traces and metrics with the OpenTelemetry SDK over OTLP,
+configured only by the standard variables: `OTEL_EXPORTER_OTLP_ENDPOINT` and
+the rest of `OTEL_EXPORTER_OTLP_*`, `OTEL_TRACES_EXPORTER`,
+`OTEL_METRICS_EXPORTER`, `OTEL_SERVICE_NAME` (`sniffapi` or `sniffdht` when
+unset), `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_TRACES_SAMPLER` and
+`OTEL_TRACES_SAMPLER_ARG`. Without an endpoint the exporters go to the
+specification's default on localhost. `OTEL_SDK_DISABLED=true` turns
+telemetry off: no exporter is created and nothing connects anywhere.
+
+Every RPC is traced and measured on both ends by
+[otelconnect](https://github.com/connectrpc/otelconnect-go). Logs stay JSON on
+stderr and carry `trace_id` and `span_id` when written inside a span. No
+BitTorrent peer address appears in spans, attributes or logs.
+
+| Binary     | Metric                              | Unit         | Attributes                 |
+|------------|-------------------------------------|--------------|----------------------------|
+| `sniffapi` | `sniffarr.ingest.sightings`         | `{sighting}` | `sniffarr.sighting.result` |
+| `sniffapi` | `sniffarr.queue.depth`              | `{infohash}` | `sniffarr.discovery`       |
+| `sniffapi` | `sniffarr.queue.leases`             | `{lease}`    |                            |
+| `sniffapi` | `sniffarr.queue.lease_expiries`     | `{lease}`    |                            |
+| `sniffapi` | `sniffarr.ingest.results`           | `{result}`   | `sniffarr.fetch.outcome`   |
+| `sniffapi` | `sniffarr.ingest.rejections`        | `{torrent}`  | `sniffarr.rules.reason`    |
+| `sniffapi` | `sniffarr.ingest.stored`            | `{torrent}`  |                            |
+| `sniffapi` | `sniffarr.classify.classifications` | `{torrent}`  | `sniffarr.kind`            |
+| `sniffapi` | `sniffarr.classify.tokens`          | `{token}`    |                            |
+| `sniffapi` | `sniffarr.classify.errors`          | `{error}`    | `sniffarr.classify.error`  |
+| `sniffdht` | `sniffarr.dht.nodes`                | `{node}`     |                            |
+| `sniffdht` | `sniffarr.dht.sample_answers`       | `{answer}`   |                            |
+| `sniffdht` | `sniffarr.sniffer.sightings`        | `{infohash}` | `sniffarr.discovery`       |
+| `sniffdht` | `sniffarr.sniffer.fetch.in_flight`  | `{task}`     |                            |
+| `sniffdht` | `sniffarr.sniffer.fetch.outcomes`   | `{task}`     | `sniffarr.fetch.outcome`   |
+| `sniffdht` | `sniffarr.sniffer.fetch.duration`   | `s`          | `sniffarr.fetch.outcome`   |
+
+`sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
+`sniffarr.discovery` is `announce` or `sample`; `sniffarr.sighting.result` is
+`new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`.
+
 ## Container image
 
 The image carries both binaries and starts `sniffapi`; run the sniffer by

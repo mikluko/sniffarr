@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"go.opentelemetry.io/otel/metric"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/queue"
@@ -53,9 +54,19 @@ type Service struct {
 	// besides when hashes are queued or released; DefaultPoll.
 	Poll time.Duration
 	Now  func() time.Time
+	// Meter records the service's metrics; the global MeterProvider when
+	// nil.
+	Meter metric.MeterProvider
 
-	owners atomic.Int64
-	wake   notifier
+	owners      atomic.Int64
+	wake        notifier
+	metricsOnce sync.Once
+	m           *metrics
+}
+
+func (s *Service) metrics() *metrics {
+	s.metricsOnce.Do(func() { s.m = newMetrics(s.Meter) })
+	return s.m
 }
 
 func (s *Service) now() time.Time {
@@ -85,6 +96,8 @@ func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffa
 		}
 		res.New += int64(queued)
 		res.Known += int64(known)
+		s.metrics().sightings.Add(ctx, int64(queued), resultNew)
+		s.metrics().sightings.Add(ctx, int64(known), resultKnown)
 		if queued > 0 {
 			s.wake.notify()
 		}
@@ -126,7 +139,7 @@ func (s *Service) sight(ctx context.Context, batch []queue.Sighting) (queued, kn
 	}
 	stored, err := s.Store.Known(ctx, hashes, s.now())
 	if err != nil {
-		return 0, 0, s.internal("known", err)
+		return 0, 0, s.internal(ctx, "known", err)
 	}
 	fresh := batch[:0:0]
 	for _, g := range batch {
@@ -138,7 +151,7 @@ func (s *Service) sight(ctx context.Context, batch []queue.Sighting) (queued, kn
 	}
 	queued, queuedBefore, err := s.Queue.Enqueue(ctx, fresh)
 	if err != nil {
-		return 0, 0, s.internal("enqueue", err)
+		return 0, 0, s.internal(ctx, "enqueue", err)
 	}
 	return queued, known + queuedBefore, nil
 }
@@ -154,13 +167,13 @@ func (s *Service) store(ctx context.Context, h store.Hash, t *sniffarrv1.Torrent
 		return nil
 	}
 	if err != nil {
-		return s.internal("discovery", err)
+		return s.internal(ctx, "discovery", err)
 	}
 	if err := s.keep(ctx, h, d, t); err != nil {
 		return err
 	}
 	if err := s.Queue.Complete(ctx, queue.Hash(h)); err != nil {
-		return s.internal("complete", err)
+		return s.internal(ctx, "complete", err)
 	}
 	return nil
 }
@@ -176,12 +189,16 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 	}
 	now := s.now()
 	if reason := rules.Check(t.GetName(), t.GetSize(), files); reason != rules.Accept {
-		if _, err := s.Store.Reject(ctx, h, reason, now); err != nil {
-			return s.internal("reject", err)
+		rejected, err := s.Store.Reject(ctx, h, reason, now)
+		if err != nil {
+			return s.internal(ctx, "reject", err)
+		}
+		if rejected {
+			s.metrics().rejections.Add(ctx, 1, reasonAttr(string(reason)))
 		}
 		return nil
 	}
-	_, err := s.Store.Insert(ctx, store.Torrent{
+	stored, err := s.Store.Insert(ctx, store.Torrent{
 		Hash:          h,
 		Name:          t.GetName(),
 		Size:          t.GetSize(),
@@ -191,7 +208,10 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 		RussianMarker: rules.RussianMarker(t.GetName(), files),
 	})
 	if err != nil {
-		return s.internal("insert", err)
+		return s.internal(ctx, "insert", err)
+	}
+	if stored {
+		s.metrics().stored.Add(ctx, 1)
 	}
 	return nil
 }
@@ -213,8 +233,8 @@ func hash(b []byte) (store.Hash, error) {
 	return store.Hash(b), nil
 }
 
-func (s *Service) internal(op string, err error) error {
-	s.Log.Error(op, "err", err)
+func (s *Service) internal(ctx context.Context, op string, err error) error {
+	s.Log.ErrorContext(ctx, op, "err", err)
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s failed", op))
 }
 

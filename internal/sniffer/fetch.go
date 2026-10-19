@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
@@ -27,6 +29,34 @@ type FetcherConfig struct {
 	Report time.Duration
 	// Log discards everything when nil.
 	Log *slog.Logger
+	// Meter records metrics; the global MeterProvider when nil.
+	Meter metric.MeterProvider
+}
+
+type fetchMetrics struct {
+	inFlight metric.Int64UpDownCounter
+	outcomes metric.Int64Counter
+	duration metric.Float64Histogram
+}
+
+func newFetchMetrics(mp metric.MeterProvider) fetchMetrics {
+	m := meter(mp)
+	inFlight, err := m.Int64UpDownCounter("sniffarr.sniffer.fetch.in_flight", metric.WithUnit("{task}"),
+		metric.WithDescription("Fetch tasks received and not finished."))
+	if err != nil {
+		otel.Handle(err)
+	}
+	duration, err := m.Float64Histogram("sniffarr.sniffer.fetch.duration", metric.WithUnit("s"),
+		metric.WithDescription("Time to fetch a torrent's metadata, from looking for peers to the outcome."),
+		metric.WithExplicitBucketBoundaries(0.5, 1, 2, 4, 8, 12, 16, 20, 25, 30, 60))
+	if err != nil {
+		otel.Handle(err)
+	}
+	return fetchMetrics{
+		inFlight: inFlight,
+		outcomes: counter(m, "sniffarr.sniffer.fetch.outcomes", "{task}", "Fetch tasks finished, by outcome."),
+		duration: duration,
+	}
 }
 
 // Fetcher takes tasks from the server's Fetch, gets their metadata from a
@@ -43,7 +73,8 @@ type Fetcher struct {
 	busy int // tasks received and not yet finished
 	free int // idle workers not yet granted as credit on the current stream
 
-	stats struct{ tasks, torrents, noPeers, timeouts atomic.Int64 }
+	stats   struct{ tasks, torrents, noPeers, timeouts atomic.Int64 }
+	metrics fetchMetrics
 }
 
 // NewFetcher returns a Fetcher for cfg that fetches from source.
@@ -60,6 +91,7 @@ func NewFetcher(cfg FetcherConfig, source MetadataSource) *Fetcher {
 		tasks:   make(chan Hash, cfg.Workers),
 		results: make(chan *sniffarrv1.Result, cfg.Workers),
 		kick:    make(chan struct{}, 1),
+		metrics: newFetchMetrics(cfg.Meter),
 	}
 }
 
@@ -164,6 +196,7 @@ func (f *Fetcher) receive(ctx context.Context, stream *connect.BidiStreamForClie
 			continue
 		}
 		f.stats.tasks.Add(1)
+		f.metrics.inFlight.Add(ctx, 1)
 		f.mu.Lock()
 		f.busy++
 		f.mu.Unlock()
@@ -183,12 +216,17 @@ func (f *Fetcher) work(ctx context.Context) {
 			return
 		case h = <-f.tasks:
 		}
+		start := time.Now()
 		m, err := f.source.Metadata(ctx, h)
 		if ctx.Err() != nil {
 			return
 		}
+		r, outcome := f.result(h, m, err)
+		f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))
+		f.metrics.duration.Record(ctx, time.Since(start).Seconds(), outcomeAttr(outcome))
+		f.metrics.inFlight.Add(ctx, -1)
 		select {
-		case f.results <- f.result(h, m, err):
+		case f.results <- r:
 		case <-ctx.Done():
 			return
 		}
@@ -207,7 +245,8 @@ func (f *Fetcher) signal() {
 	}
 }
 
-func (f *Fetcher) result(h Hash, m Metadata, err error) *sniffarrv1.Result {
+// result returns the task's result and the name of its outcome.
+func (f *Fetcher) result(h Hash, m Metadata, err error) (*sniffarrv1.Result, string) {
 	r := &sniffarrv1.Result{Infohash: h[:]}
 	switch {
 	case err == nil:
@@ -217,14 +256,16 @@ func (f *Fetcher) result(h Hash, m Metadata, err error) *sniffarrv1.Result {
 			t.Files[i] = &sniffarrv1.File{Path: file.Path, Size: file.Size}
 		}
 		r.Outcome = &sniffarrv1.Result_Torrent{Torrent: t}
+		return r, "torrent"
 	case errors.Is(err, ErrNoPeers):
 		f.stats.noPeers.Add(1)
 		r.Outcome = &sniffarrv1.Result_Failure{Failure: sniffarrv1.Failure_FAILURE_NO_PEERS}
+		return r, "no_peers"
 	default:
 		f.stats.timeouts.Add(1)
 		r.Outcome = &sniffarrv1.Result_Failure{Failure: sniffarrv1.Failure_FAILURE_TIMEOUT}
+		return r, "timeout"
 	}
-	return r
 }
 
 func (f *Fetcher) log(msg string) {

@@ -8,11 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/mikluko/sniffarr/internal/classify"
@@ -22,6 +24,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/server"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 type config struct {
@@ -103,6 +106,11 @@ func or(v, def string) string {
 }
 
 func run(ctx context.Context, cfg config, log *slog.Logger) error {
+	shutdown, err := telemetry.Setup(ctx, "sniffapi", log)
+	if err != nil {
+		return fmt.Errorf("telemetry: %w", err)
+	}
+	defer telemetry.Flush(ctx, shutdown, log)
 	db, err := database.Open(ctx, cfg.db)
 	if err != nil {
 		return fmt.Errorf("open %s: %w", cfg.db, err)
@@ -119,26 +127,32 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	if err := q.Reset(ctx); err != nil {
 		return fmt.Errorf("reset leases: %w", err)
 	}
+	if err := q.Observe(otel.GetMeterProvider()); err != nil {
+		return fmt.Errorf("queue metrics: %w", err)
+	}
 
-	srv := &http.Server{
-		Addr: cfg.addr,
-		Handler: server.New(server.Config{
-			Store:       s,
-			Queue:       q,
-			IngestToken: cfg.ingestToken,
-			SearchToken: cfg.searchToken,
-			Lease:       cfg.lease,
-			Attempts:    cfg.attempts,
-			Backoff:     cfg.backoff,
-			Log:         log,
-		}),
-		Protocols:         server.Protocols(),
-		ReadHeaderTimeout: 10 * time.Second,
+	handler, err := server.New(server.Config{
+		Store:       s,
+		Queue:       q,
+		IngestToken: cfg.ingestToken,
+		SearchToken: cfg.searchToken,
+		Lease:       cfg.lease,
+		Attempts:    cfg.attempts,
+		Backoff:     cfg.backoff,
+		Log:         log,
+	})
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{Handler: handler, Protocols: server.Protocols(), ReadHeaderTimeout: 10 * time.Second}
+	l, err := net.Listen("tcp", cfg.addr)
+	if err != nil {
+		return err
 	}
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		log.Info("listening", "addr", cfg.addr)
-		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		log.Info("listening", "addr", l.Addr().String())
+		if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil

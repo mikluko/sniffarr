@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"go.opentelemetry.io/otel/metric"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
@@ -30,14 +31,17 @@ type DiscovererConfig struct {
 	Report time.Duration
 	// Log discards everything when nil.
 	Log *slog.Logger
+	// Meter records metrics; the global MeterProvider when nil.
+	Meter metric.MeterProvider
 }
 
 // Discoverer streams the hashes offered to it to the server's Sight.
 type Discoverer struct {
-	cfg    DiscovererConfig
-	recent *recent[Hash]
-	offers chan *sniffarrv1.SightRequest
-	stats  struct{ offered, dropped, new, known atomic.Int64 }
+	cfg       DiscovererConfig
+	recent    *recent[Hash]
+	offers    chan *sniffarrv1.SightRequest
+	stats     struct{ offered, dropped, new, known atomic.Int64 }
+	sightings metric.Int64Counter
 }
 
 // NewDiscoverer returns a Discoverer for cfg.
@@ -51,9 +55,10 @@ func NewDiscoverer(cfg DiscovererConfig) *Discoverer {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
 	return &Discoverer{
-		cfg:    cfg,
-		recent: newRecent[Hash](cfg.Remember),
-		offers: make(chan *sniffarrv1.SightRequest, cfg.Queue),
+		cfg:       cfg,
+		recent:    newRecent[Hash](cfg.Remember),
+		offers:    make(chan *sniffarrv1.SightRequest, cfg.Queue),
+		sightings: counter(meter(cfg.Meter), "sniffarr.sniffer.sightings", "{infohash}", "Infohashes sighted and not sighted recently, by how."),
 	}
 }
 
@@ -64,6 +69,7 @@ func (d *Discoverer) Offer(h Hash, source sniffarrv1.Source) {
 		return
 	}
 	d.stats.offered.Add(1)
+	d.sightings.Add(context.Background(), 1, sourceAttr(source))
 	select {
 	case d.offers <- &sniffarrv1.SightRequest{Infohash: h[:], Source: source}:
 	default:

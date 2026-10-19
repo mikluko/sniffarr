@@ -15,6 +15,7 @@ import (
 	"github.com/anacrolix/dht/v2/krpc"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
@@ -47,6 +48,8 @@ type NetworkConfig struct {
 	// FetchTimeout is how long a fetch waits for metadata once it has peers;
 	// DefaultFetchTimeout.
 	FetchTimeout time.Duration
+	// Meter records metrics; the global MeterProvider when nil.
+	Meter metric.MeterProvider
 }
 
 func (c *NetworkConfig) defaults() {
@@ -65,6 +68,7 @@ type Network struct {
 	client  *torrent.Client
 	dht     *dht.Server
 	dataDir string
+	answers metric.Int64Counter
 }
 
 // Start starts the client and its DHT node. offer, unless nil, is called
@@ -114,7 +118,22 @@ func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, er
 		n.Close()
 		return nil, errors.New("the torrent client has no DHT node")
 	}
+	if err := n.observe(meter(cfg.Meter)); err != nil {
+		n.Close()
+		return nil, err
+	}
 	return n, nil
+}
+
+func (n *Network) observe(m metric.Meter) error {
+	n.answers = counter(m, "sniffarr.dht.sample_answers", "{answer}", "sample_infohashes queries answered.")
+	_, err := m.Int64ObservableGauge("sniffarr.dht.nodes", metric.WithUnit("{node}"),
+		metric.WithDescription("Nodes in the DHT routing table."),
+		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
+			o.Observe(int64(n.dht.NumNodes()))
+			return nil
+		}))
+	return err
 }
 
 // Bootstrap populates the DHT routing table from the bootstrap nodes.
@@ -197,6 +216,7 @@ func (n *Network) sampleNode(ctx context.Context, a krpc.NodeAddr, found func(Ha
 	if res.Err != nil || res.Reply.R == nil {
 		return
 	}
+	n.answers.Add(ctx, 1)
 	r := res.Reply.R
 	if r.Samples != nil {
 		for _, h := range *r.Samples {

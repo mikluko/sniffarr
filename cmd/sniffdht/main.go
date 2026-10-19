@@ -16,6 +16,7 @@ import (
 	"os"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/otelconnect"
 	"golang.org/x/sync/errgroup"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
@@ -24,6 +25,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/cli"
 	"github.com/mikluko/sniffarr/internal/server"
 	"github.com/mikluko/sniffarr/internal/sniffer"
+	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 type config struct {
@@ -82,8 +84,17 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 }
 
 func run(ctx context.Context, cfg config, log *slog.Logger) error {
+	shutdown, err := telemetry.Setup(ctx, "sniffdht", log)
+	if err != nil {
+		return fmt.Errorf("telemetry: %w", err)
+	}
+	defer telemetry.Flush(ctx, shutdown, log)
+	otel, err := otelconnect.NewInterceptor()
+	if err != nil {
+		return err
+	}
 	ingest := sniffarrv1connect.NewIngestServiceClient(httpClient(cfg.server), cfg.server.String(),
-		connect.WithInterceptors(auth.Client(cfg.token)),
+		connect.WithInterceptors(otel, auth.Client(cfg.token)),
 		connect.WithSendMaxBytes(server.MaxMessage),
 	)
 	var d *sniffer.Discoverer

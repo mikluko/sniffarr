@@ -1,7 +1,12 @@
 package main
 
 import (
+	"context"
+	"log/slog"
 	"maps"
+	"net"
+	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -52,5 +57,41 @@ func TestLoad(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.want, c)
 		})
+	}
+}
+
+func TestRunWithTelemetryOff(t *testing.T) {
+	t.Setenv("OTEL_SDK_DISABLED", "true")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := l.Addr().String()
+	require.NoError(t, l.Close())
+
+	cfg, err := load(func(k string) string {
+		return map[string]string{
+			"SNIFFARR_DB": filepath.Join(t.TempDir(), "sniffarr.db"), "SNIFFARR_ADDR": addr,
+			"SNIFFARR_INGEST_TOKEN": "in", "SNIFFARR_SEARCH_TOKEN": "se",
+		}[k]
+	})
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, cfg, slog.New(slog.DiscardHandler)) }()
+
+	require.Eventually(t, func() bool {
+		res, err := http.Get("http://" + addr + "/healthz")
+		if err != nil {
+			return false
+		}
+		res.Body.Close()
+		return res.StatusCode == http.StatusOK
+	}, 5*time.Second, 10*time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("run did not return after cancel")
 	}
 }

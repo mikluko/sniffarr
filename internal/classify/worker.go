@@ -7,6 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -40,11 +44,43 @@ type Worker struct {
 	Poll time.Duration
 	Log  *slog.Logger
 	Now  func() time.Time
+	// Meter records the worker's metrics; the global MeterProvider when nil.
+	Meter metric.MeterProvider
+
+	m *metrics
+}
+
+type metrics struct {
+	classifications, tokens, errors metric.Int64Counter
+}
+
+func newMetrics(mp metric.MeterProvider) *metrics {
+	if mp == nil {
+		mp = otel.GetMeterProvider()
+	}
+	m := mp.Meter("github.com/mikluko/sniffarr/internal/classify")
+	counter := func(name, unit, desc string) metric.Int64Counter {
+		c, err := m.Int64Counter(name, metric.WithUnit(unit), metric.WithDescription(desc))
+		if err != nil {
+			otel.Handle(err)
+		}
+		return c
+	}
+	return &metrics{
+		classifications: counter("sniffarr.classify.classifications", "{torrent}", "Torrents classified, by kind."),
+		tokens:          counter("sniffarr.classify.tokens", "{token}", "Classifier tokens spent."),
+		errors:          counter("sniffarr.classify.errors", "{error}", "Failed classifier requests, by whether a retry can succeed."),
+	}
+}
+
+func errorKind(k string) metric.AddOption {
+	return metric.WithAttributes(attribute.String("sniffarr.classify.error", k))
 }
 
 // Run classifies until ctx is done. A torrent the classifier rejects as
 // malformed is marked failed; one that fails otherwise is retried later.
 func (w *Worker) Run(ctx context.Context) error {
+	w.m = newMetrics(w.Meter)
 	now := w.Now
 	if now == nil {
 		now = time.Now
@@ -110,15 +146,18 @@ func (w *Worker) classify(ctx context.Context, p store.Pending, now func() time.
 	case ctx.Err() != nil:
 		return true
 	case errors.As(err, &apiErr) && apiErr.Permanent():
+		w.m.errors.Add(ctx, 1, errorKind("permanent"))
 		w.Log.Warn("classifier refused torrent", "id", p.ID, "err", err)
 		if err := w.Store.ClassifyFailed(ctx, p.ID, err.Error(), now()); err != nil {
 			w.Log.Error("mark classify failed", "id", p.ID, "err", err)
 		}
 		return true
 	case err != nil:
+		w.m.errors.Add(ctx, 1, errorKind("transient"))
 		w.Log.Warn("classify", "id", p.ID, "err", err)
 		return false
 	}
+	w.m.tokens.Add(ctx, r.Tokens)
 	if err := w.Store.AddTokens(ctx, day(now()), r.Tokens); err != nil {
 		w.Log.Error("record tokens", "err", err)
 	}
@@ -133,6 +172,7 @@ func (w *Worker) classify(ctx context.Context, p store.Pending, now func() time.
 		w.Log.Error("store classification", "id", p.ID, "err", err)
 		return false
 	}
+	w.m.classifications.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.kind", r.Kind)))
 	return true
 }
 

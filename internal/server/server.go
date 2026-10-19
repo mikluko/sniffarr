@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/otelconnect"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/auth"
@@ -32,25 +34,36 @@ type Config struct {
 	Backoff     time.Duration
 	Poll        time.Duration
 	Log         *slog.Logger
+	// Meter records metrics; the global MeterProvider when nil. Traces go to
+	// the global TracerProvider.
+	Meter metric.MeterProvider
 }
 
 // New returns the handler serving both APIs and /healthz.
-func New(c Config) http.Handler {
+func New(c Config) (http.Handler, error) {
+	var opts []otelconnect.Option
+	if c.Meter != nil {
+		opts = append(opts, otelconnect.WithMeterProvider(c.Meter))
+	}
+	otel, err := otelconnect.NewInterceptor(opts...)
+	if err != nil {
+		return nil, err
+	}
 	mux := http.NewServeMux()
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
-		&ingest.Service{Store: c.Store, Queue: c.Queue, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll},
-		connect.WithInterceptors(auth.NewBearer(c.IngestToken)),
+		&ingest.Service{Store: c.Store, Queue: c.Queue, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Meter: c.Meter},
+		connect.WithInterceptors(otel, auth.NewBearer(c.IngestToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewSearchServiceHandler(
 		&search.Service{Store: c.Store, Log: c.Log},
-		connect.WithInterceptors(auth.NewBearer(c.SearchToken)),
+		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	return mux
+	return mux, nil
 }
 
 // Protocols are the protocols the server speaks: HTTP/1.1 and HTTP/2

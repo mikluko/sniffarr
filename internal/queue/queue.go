@@ -13,6 +13,9 @@ import (
 	"slices"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/mikluko/sniffarr/internal/database"
 )
 
@@ -207,6 +210,46 @@ func (q *Queue) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 		return err
 	})
 	return dropped, err
+}
+
+// Observe registers the queue's gauges with mp: sniffarr.queue.depth by
+// discovery and sniffarr.queue.leases.
+func (q *Queue) Observe(mp metric.MeterProvider) error {
+	m := mp.Meter("github.com/mikluko/sniffarr/internal/queue")
+	depth, err := m.Int64ObservableGauge("sniffarr.queue.depth", metric.WithUnit("{infohash}"),
+		metric.WithDescription("Infohashes queued, by how they were sighted."))
+	if err != nil {
+		return err
+	}
+	leases, err := m.Int64ObservableGauge("sniffarr.queue.leases", metric.WithUnit("{lease}"),
+		metric.WithDescription("Tasks leased to fetchers."))
+	if err != nil {
+		return err
+	}
+	_, err = m.RegisterCallback(func(ctx context.Context, o metric.Observer) error {
+		rows, err := q.db.R.QueryContext(ctx, "SELECT priority, count(*), count(lease_owner) FROM queue GROUP BY priority")
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		counts := map[string]int64{Announce: 0, Sample: 0}
+		var leased int64
+		for rows.Next() {
+			var p int
+			var n, l int64
+			if err := rows.Scan(&p, &n, &l); err != nil {
+				return err
+			}
+			counts[discovery(p)] += n
+			leased += l
+		}
+		for d, n := range counts {
+			o.ObserveInt64(depth, n, metric.WithAttributes(attribute.String("sniffarr.discovery", d)))
+		}
+		o.ObserveInt64(leases, leased)
+		return rows.Err()
+	}, depth, leases)
+	return err
 }
 
 // Len returns how many hashes are queued.

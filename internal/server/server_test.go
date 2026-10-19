@@ -33,9 +33,14 @@ func start(t *testing.T, cfg Config) (*httptest.Server, *http.Client) {
 	require.NoError(t, err)
 	q, err := queue.New(ctx, db)
 	require.NoError(t, err)
+	if cfg.Meter != nil {
+		require.NoError(t, q.Observe(cfg.Meter))
+	}
 	cfg.Queue = q
 	cfg.Store, cfg.IngestToken, cfg.SearchToken, cfg.Log = s, "ingest", "search", slog.New(slog.DiscardHandler)
-	srv := httptest.NewUnstartedServer(New(cfg))
+	h, err := New(cfg)
+	require.NoError(t, err)
+	srv := httptest.NewUnstartedServer(h)
 	srv.Config.Protocols = Protocols()
 	srv.Start()
 	t.Cleanup(srv.Close)

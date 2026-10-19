@@ -11,6 +11,8 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
@@ -246,6 +248,46 @@ func TestFetcherCredit(t *testing.T) {
 	require.Equal(t, "a/b.mkv", ingest.results[hash(1)].GetTorrent().GetFiles()[0].GetPath())
 	require.Equal(t, sniffarrv1.Failure_FAILURE_NO_PEERS, ingest.results[hash(2)].GetFailure())
 	require.Equal(t, sniffarrv1.Failure_FAILURE_TIMEOUT, ingest.results[hash(3)].GetFailure())
+}
+
+func TestFetcherMetrics(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	ingest := newFake()
+	for b := byte(1); b <= 12; b++ {
+		ingest.todo = append(ingest.todo, hash(b))
+	}
+	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 3, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))}, fakeSource{})
+	run(t, f.Run)
+	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 12 }, 5*time.Second, 5*time.Millisecond)
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	outcomes := map[string]int64{}
+	var fetches uint64
+	var inFlight int64
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			switch m.Name {
+			case "sniffarr.sniffer.fetch.outcomes":
+				for _, p := range m.Data.(metricdata.Sum[int64]).DataPoints {
+					o, _ := p.Attributes.Value("sniffarr.fetch.outcome")
+					outcomes[o.AsString()] = p.Value
+				}
+			case "sniffarr.sniffer.fetch.duration":
+				require.Equal(t, "s", m.Unit)
+				for _, p := range m.Data.(metricdata.Histogram[float64]).DataPoints {
+					fetches += p.Count
+				}
+			case "sniffarr.sniffer.fetch.in_flight":
+				for _, p := range m.Data.(metricdata.Sum[int64]).DataPoints {
+					inFlight += p.Value
+				}
+			}
+		}
+	}
+	require.Equal(t, map[string]int64{"torrent": 4, "no_peers": 6, "timeout": 2}, outcomes)
+	require.EqualValues(t, 12, fetches)
+	require.Zero(t, inFlight)
 }
 
 func TestFetcherReconnects(t *testing.T) {

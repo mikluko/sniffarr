@@ -1,5 +1,6 @@
 // Package cli runs a command: it loads the configuration, logs as JSON to
-// stderr, and runs until SIGINT or SIGTERM.
+// stderr with the trace and span IDs of the context, and runs until SIGINT
+// or SIGTERM.
 package cli
 
 import (
@@ -10,11 +11,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 // Main exits with the status Status returns.
 func Main[C any](load func() (C, error), run func(context.Context, C, *slog.Logger) error) {
-	os.Exit(Status(load, run, slog.New(slog.NewJSONHandler(os.Stderr, nil))))
+	os.Exit(Status(load, run, slog.New(telemetry.Handler{Handler: slog.NewJSONHandler(os.Stderr, nil)})))
 }
 
 // Status loads the configuration and runs it until SIGINT or SIGTERM. It
