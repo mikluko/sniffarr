@@ -8,14 +8,24 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
 )
 
+func openAt(t *testing.T, path string) (*Store, *database.DB) {
+	t.Helper()
+	ctx := context.Background()
+	db, err := database.Open(ctx, path)
+	require.NoError(t, err)
+	s, err := New(ctx, db)
+	require.NoError(t, err)
+	return s, db
+}
+
 func open(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, s.Close()) })
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	return s
 }
 
@@ -38,20 +48,38 @@ func torrent(b byte, name string, paths ...string) Torrent {
 func TestReopenKeepsData(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "test.db")
-	s, err := Open(ctx, path)
+	s, db := openAt(t, path)
+	_, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
 	require.NoError(t, err)
-	_, err = s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
-	require.NoError(t, err)
-	require.NoError(t, s.Close())
+	require.NoError(t, db.Close())
 
-	s, err = Open(ctx, path)
-	require.NoError(t, err)
-	defer s.Close()
+	s, db = openAt(t, path)
+	defer db.Close()
 	_, err = s.Get(ctx, hash(1))
 	require.NoError(t, err)
 }
 
-func TestInsertRejectUnknown(t *testing.T) {
+func TestKnown(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	_, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
+	require.NoError(t, err)
+	_, err = s.Reject(ctx, hash(2), rules.Book, t0)
+	require.NoError(t, err)
+
+	known, err := s.Known(ctx, []Hash{hash(1), hash(2), hash(3)}, t0.Add(2*time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, map[Hash]bool{hash(1): true, hash(2): true}, known)
+	_, err = s.Known(ctx, []Hash{hash(1)}, t0.Add(time.Hour))
+	require.NoError(t, err)
+
+	r, err := s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Equal(t, t0, r.FirstSeen)
+	require.Equal(t, t0.Add(2*time.Hour), r.LastSeen, "an older sighting never moves last_seen back")
+}
+
+func TestInsertReject(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 
@@ -75,42 +103,8 @@ func TestInsertRejectUnknown(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok, "insert of a rejected hash")
 
-	unknown, err := s.Unknown(ctx, []Hash{hash(1), hash(2), hash(3), hash(3), hash(4)}, t0)
-	require.NoError(t, err)
-	require.Equal(t, []Hash{hash(3), hash(4)}, unknown)
-
 	_, err = s.Get(ctx, hash(2))
 	require.ErrorIs(t, err, ErrNotFound)
-}
-
-func TestLastSeen(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	_, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
-	require.NoError(t, err)
-
-	seen, err := s.Seen(ctx, hash(1), t0.Add(time.Hour))
-	require.NoError(t, err)
-	require.True(t, seen)
-	_, err = s.Unknown(ctx, []Hash{hash(1)}, t0.Add(2*time.Hour))
-	require.NoError(t, err)
-	seen, err = s.Seen(ctx, hash(1), t0.Add(time.Minute))
-	require.NoError(t, err)
-	require.True(t, seen)
-
-	r, err := s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, t0, r.FirstSeen)
-	require.Equal(t, t0.Add(2*time.Hour), r.LastSeen, "an older sighting never moves last_seen back")
-
-	_, err = s.Reject(ctx, hash(2), rules.Book, t0)
-	require.NoError(t, err)
-	seen, err = s.Seen(ctx, hash(2), t0)
-	require.NoError(t, err)
-	require.True(t, seen)
-	seen, err = s.Seen(ctx, hash(3), t0)
-	require.NoError(t, err)
-	require.False(t, seen)
 }
 
 func TestSearch(t *testing.T) {

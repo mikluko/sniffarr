@@ -1,5 +1,6 @@
-// Package ingest implements sniffarr.v1.IngestService: it filters submitted
-// torrents through the rules and stores or rejects them.
+// Package ingest implements sniffarr.v1.IngestService, the work queue between
+// sniffers: it queues sighted infohashes, leases them to fetchers, and passes
+// the metadata they return through the rules into the store.
 package ingest
 
 import (
@@ -7,23 +8,54 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"connectrpc.com/connect"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-// MaxUnknown is the most infohashes one Unknown request may carry.
-const MaxUnknown = 10000
+const (
+	DefaultLease    = time.Minute
+	DefaultAttempts = 3
+	DefaultBackoff  = 10 * time.Minute
+	DefaultPoll     = time.Second
+)
 
-// Service implements sniffarrv1connect.IngestServiceHandler.
+// sightBatch is how many sightings Sight stores in one transaction.
+const sightBatch = 500
+
+// maxCredit caps the credit one Fetch stream may hold.
+const maxCredit = 10000
+
+// Service implements sniffarrv1connect.IngestServiceHandler. Zero fields take
+// the default named in their doc.
 type Service struct {
 	Store *store.Store
+	Queue *queue.Queue
 	Log   *slog.Logger
-	Now   func() time.Time
+	// Lease is how long a fetcher holds a task before it returns to the
+	// queue; DefaultLease.
+	Lease time.Duration
+	// Attempts is how many failed fetches drop a hash from the queue;
+	// DefaultAttempts. A dropped hash is not rejected and queues again when
+	// sighted again.
+	Attempts int
+	// Backoff is the wait before a failed hash is leased again, doubled for
+	// each failure before; DefaultBackoff.
+	Backoff time.Duration
+	// Poll is how often a Fetch stream with credit looks for free tasks
+	// besides when hashes are queued or released; DefaultPoll.
+	Poll time.Duration
+	Now  func() time.Time
+
+	owners atomic.Int64
+	wake   notifier
 }
 
 func (s *Service) now() time.Time {
@@ -33,83 +65,108 @@ func (s *Service) now() time.Time {
 	return time.Now()
 }
 
-func (s *Service) Unknown(ctx context.Context, req *connect.Request[sniffarrv1.UnknownRequest]) (*connect.Response[sniffarrv1.UnknownResponse], error) {
-	in := req.Msg.GetInfohashes()
-	if len(in) > MaxUnknown {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("more than %d infohashes", MaxUnknown))
+func or[T int | time.Duration](v, d T) T {
+	if v > 0 {
+		return v
 	}
-	hashes := make([]store.Hash, len(in))
-	for i, b := range in {
-		h, err := hash(b)
-		if err != nil {
-			return nil, err
-		}
-		hashes[i] = h
-	}
-	unknown, err := s.Store.Unknown(ctx, hashes, s.now())
-	if err != nil {
-		return nil, s.internal("unknown", err)
-	}
-	out := make([][]byte, len(unknown))
-	for i, h := range unknown {
-		out[i] = h[:]
-	}
-	return connect.NewResponse(&sniffarrv1.UnknownResponse{Infohashes: out}), nil
+	return d
 }
 
-func (s *Service) Submit(ctx context.Context, stream *connect.ClientStream[sniffarrv1.SubmitRequest]) (*connect.Response[sniffarrv1.SubmitResponse], error) {
-	var res sniffarrv1.SubmitResponse
-	for stream.Receive() {
-		t := stream.Msg().GetTorrent()
-		if t == nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("no torrent"))
+func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffarrv1.SightRequest]) (*connect.Response[sniffarrv1.SightResponse], error) {
+	var res sniffarrv1.SightResponse
+	batch := make([]queue.Sighting, 0, sightBatch)
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
 		}
-		outcome, err := s.submit(ctx, t)
+		queued, known, err := s.sight(ctx, batch)
+		if err != nil {
+			return err
+		}
+		res.New += int64(queued)
+		res.Known += int64(known)
+		if queued > 0 {
+			s.wake.notify()
+		}
+		batch = batch[:0]
+		return nil
+	}
+	for stream.Receive() {
+		m := stream.Msg()
+		h, err := hash(m.GetInfohash())
 		if err != nil {
 			return nil, err
 		}
-		switch outcome {
-		case accepted:
-			res.Accepted++
-		case rejected:
-			res.Rejected++
-		case duplicate:
-			res.Duplicate++
+		d, err := discovery(m.GetSource())
+		if err != nil {
+			return nil, err
+		}
+		batch = append(batch, queue.Sighting{Hash: queue.Hash(h), Discovery: d})
+		if len(batch) == sightBatch {
+			if err := flush(); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if err := stream.Err(); err != nil {
 		return nil, err
 	}
+	if err := flush(); err != nil {
+		return nil, err
+	}
 	return connect.NewResponse(&res), nil
 }
 
-type outcome int
-
-const (
-	accepted outcome = iota
-	rejected
-	duplicate
-)
-
-func (s *Service) submit(ctx context.Context, t *sniffarrv1.Torrent) (outcome, error) {
-	h, err := hash(t.GetInfohash())
-	if err != nil {
-		return 0, err
+// sight enqueues the sightings of hashes neither stored nor rejected, and
+// returns how many it queued and how many were known.
+func (s *Service) sight(ctx context.Context, batch []queue.Sighting) (queued, known int, err error) {
+	hashes := make([]store.Hash, len(batch))
+	for i, g := range batch {
+		hashes[i] = store.Hash(g.Hash)
 	}
+	stored, err := s.Store.Known(ctx, hashes, s.now())
+	if err != nil {
+		return 0, 0, s.internal("known", err)
+	}
+	fresh := batch[:0:0]
+	for _, g := range batch {
+		if stored[store.Hash(g.Hash)] {
+			known++
+		} else {
+			fresh = append(fresh, g)
+		}
+	}
+	queued, queuedBefore, err := s.Queue.Enqueue(ctx, fresh)
+	if err != nil {
+		return 0, 0, s.internal("enqueue", err)
+	}
+	return queued, known + queuedBefore, nil
+}
+
+// store passes fetched metadata through the rules, stores or rejects it, and
+// completes its task. Metadata for a hash that is not queued is dropped.
+func (s *Service) store(ctx context.Context, h store.Hash, t *sniffarrv1.Torrent) error {
 	if t.GetName() == "" {
-		return 0, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("torrent %x has no name", h))
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("torrent %x has no name", h))
 	}
-	seen := s.now()
-	if at := t.GetSeenAt(); at != nil && at.IsValid() && at.AsTime().Before(seen) {
-		seen = at.AsTime()
+	d, err := s.Queue.Discovery(ctx, queue.Hash(h))
+	if errors.Is(err, queue.ErrNotQueued) {
+		return nil
 	}
-	known, err := s.Store.Seen(ctx, h, seen)
 	if err != nil {
-		return 0, s.internal("seen", err)
+		return s.internal("discovery", err)
 	}
-	if known {
-		return duplicate, nil
+	if err := s.keep(ctx, h, d, t); err != nil {
+		return err
 	}
+	if err := s.Queue.Complete(ctx, queue.Hash(h)); err != nil {
+		return s.internal("complete", err)
+	}
+	return nil
+}
+
+// keep stores the torrent, or rejects it when the rules say so.
+func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv1.Torrent) error {
 	files := make([]rules.File, len(t.GetFiles()))
 	for i, f := range t.GetFiles() {
 		files[i] = rules.File{Path: f.GetPath(), Size: f.GetSize()}
@@ -117,42 +174,36 @@ func (s *Service) submit(ctx context.Context, t *sniffarrv1.Torrent) (outcome, e
 	if len(files) == 0 {
 		files = []rules.File{{Path: t.GetName(), Size: t.GetSize()}}
 	}
+	now := s.now()
 	if reason := rules.Check(t.GetName(), t.GetSize(), files); reason != rules.Accept {
-		ok, err := s.Store.Reject(ctx, h, reason, seen)
-		if err != nil {
-			return 0, s.internal("reject", err)
+		if _, err := s.Store.Reject(ctx, h, reason, now); err != nil {
+			return s.internal("reject", err)
 		}
-		if !ok {
-			return duplicate, nil
-		}
-		return rejected, nil
+		return nil
 	}
-	ok, err := s.Store.Insert(ctx, store.Torrent{
+	_, err := s.Store.Insert(ctx, store.Torrent{
 		Hash:          h,
 		Name:          t.GetName(),
 		Size:          t.GetSize(),
 		Files:         files,
-		Discovery:     discovery(t.GetSource()),
-		SeenAt:        seen,
+		Discovery:     d,
+		SeenAt:        now,
 		RussianMarker: rules.RussianMarker(t.GetName(), files),
 	})
 	if err != nil {
-		return 0, s.internal("insert", err)
+		return s.internal("insert", err)
 	}
-	if !ok {
-		return duplicate, nil
-	}
-	return accepted, nil
+	return nil
 }
 
-func discovery(s sniffarrv1.Source) string {
-	switch s {
+func discovery(src sniffarrv1.Source) (string, error) {
+	switch src {
 	case sniffarrv1.Source_SOURCE_SAMPLE:
-		return "sample"
+		return queue.Sample, nil
 	case sniffarrv1.Source_SOURCE_ANNOUNCE:
-		return "announce"
+		return queue.Announce, nil
 	}
-	return ""
+	return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("source %v", src))
 }
 
 func hash(b []byte) (store.Hash, error) {
@@ -165,4 +216,29 @@ func hash(b []byte) (store.Hash, error) {
 func (s *Service) internal(op string, err error) error {
 	s.Log.Error(op, "err", err)
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s failed", op))
+}
+
+// notifier wakes every waiter at once.
+type notifier struct {
+	mu sync.Mutex
+	ch chan struct{}
+}
+
+// wait returns a channel closed by the next notify.
+func (n *notifier) wait() <-chan struct{} {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.ch == nil {
+		n.ch = make(chan struct{})
+	}
+	return n.ch
+}
+
+func (n *notifier) notify() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.ch != nil {
+		close(n.ch)
+		n.ch = nil
+	}
 }

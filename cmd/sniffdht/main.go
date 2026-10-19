@@ -1,7 +1,7 @@
-// Command sniffdht walks the BitTorrent DHT for infohashes, fetches the
-// metadata of those the sniffarr server has never seen, and submits it until
-// SIGINT or SIGTERM. It is configured by environment variables and flags;
-// see the README.
+// Command sniffdht is a sniffarr replica: it reports the infohashes it sights
+// on the BitTorrent DHT to the server, fetches metadata for the tasks the
+// server hands out, or both, until SIGINT or SIGTERM. It is configured by
+// environment variables and flags; see the README.
 package main
 
 import (
@@ -16,6 +16,7 @@ import (
 	"os"
 
 	"connectrpc.com/connect"
+	"golang.org/x/sync/errgroup"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
@@ -26,10 +27,11 @@ import (
 )
 
 type config struct {
-	server  *url.URL
-	token   string
-	network sniffer.NetworkConfig
-	walkers int
+	server          *url.URL
+	token           string
+	network         sniffer.NetworkConfig
+	walkers         int
+	discover, fetch bool
 }
 
 func main() {
@@ -42,6 +44,8 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 	var c config
 	fs := flag.NewFlagSet("sniffdht", flag.ContinueOnError)
 	fs.SetOutput(output)
+	fs.BoolVar(&c.discover, "discover", true, "walk the DHT and report the infohashes it reveals")
+	fs.BoolVar(&c.fetch, "fetch", true, "take fetch tasks from the server and return their metadata")
 	fs.IntVar(&c.network.Port, "port", sniffer.DefaultPort, "TCP and UDP port for peers and the DHT, forwarded by UPnP")
 	fs.IntVar(&c.network.Fetchers, "fetchers", sniffer.DefaultFetchers, "metadata fetches at once")
 	fs.IntVar(&c.network.Rate, "rate", sniffer.DefaultRate, "DHT queries, and new peer connections, a second")
@@ -52,6 +56,8 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 		return c, err
 	}
 	switch {
+	case !c.discover && !c.fetch:
+		return c, errors.New("-discover and -fetch are both off: nothing to do")
 	case c.network.Port < 1 || c.network.Port > 65535:
 		return c, errors.New("-port: want 1 to 65535")
 	case c.network.Fetchers < 1, c.network.Rate < 1, c.walkers < 1:
@@ -80,8 +86,13 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		connect.WithInterceptors(auth.Client(cfg.token)),
 		connect.WithSendMaxBytes(server.MaxMessage),
 	)
-	c := sniffer.New(sniffer.Config{Ingest: ingest, Fetchers: cfg.network.Fetchers, Log: log})
-	n, err := sniffer.Start(cfg.network, c.Offer)
+	var d *sniffer.Discoverer
+	var offer func(sniffer.Hash, sniffarrv1.Source)
+	if cfg.discover {
+		d = sniffer.NewDiscoverer(sniffer.DiscovererConfig{Ingest: ingest, Log: log})
+		offer = d.Offer
+	}
+	n, err := sniffer.Start(cfg.network, offer)
 	if err != nil {
 		return fmt.Errorf("start: %w", err)
 	}
@@ -89,17 +100,28 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	if err := n.Bootstrap(ctx); err != nil && ctx.Err() == nil {
 		log.Warn("bootstrap", "err", err)
 	}
-	log.Info("dht up", "port", cfg.network.Port, "nodes", n.Nodes())
+	log.Info("dht up", "port", cfg.network.Port, "nodes", n.Nodes(), "discover", cfg.discover, "fetch", cfg.fetch)
 
-	go n.Sample(ctx, cfg.walkers, func(h sniffer.Hash) { c.Offer(h, sniffarrv1.Source_SOURCE_SAMPLE) })
-	if err := c.Run(ctx, n); !errors.Is(err, context.Canceled) {
+	g, ctx := errgroup.WithContext(ctx)
+	if d != nil {
+		g.Go(func() error {
+			n.Sample(ctx, cfg.walkers, func(h sniffer.Hash) { d.Offer(h, sniffarrv1.Source_SOURCE_SAMPLE) })
+			return nil
+		})
+		g.Go(func() error { return d.Run(ctx) })
+	}
+	if cfg.fetch {
+		f := sniffer.NewFetcher(sniffer.FetcherConfig{Ingest: ingest, Workers: cfg.network.Fetchers, Log: log}, n)
+		g.Go(func() error { return f.Run(ctx) })
+	}
+	if err := g.Wait(); !errors.Is(err, context.Canceled) {
 		return err
 	}
 	return nil
 }
 
-// httpClient speaks HTTP/2 without TLS to an http:// server, so that Submit
-// streams share one connection.
+// httpClient speaks HTTP/2 to the server, which Fetch needs: without TLS to
+// an http:// URL, negotiated over TLS to an https:// one.
 func httpClient(u *url.URL) *http.Client {
 	if u.Scheme != "http" {
 		return http.DefaultClient

@@ -1,5 +1,5 @@
-// Package store keeps torrents, rejected infohashes and classifications in
-// SQLite, with full-text search over names and file paths.
+// Package store keeps torrents, rejected infohashes and classifications,
+// with full-text search over names and file paths.
 package store
 
 import (
@@ -9,14 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"slices"
 	"strings"
 	"time"
 	"unicode"
 
-	_ "modernc.org/sqlite"
-
+	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
 )
 
@@ -71,91 +69,42 @@ type Classification struct {
 	RussianAudio     float64
 }
 
-// Store is a SQLite database. It is safe for concurrent use; writes go
-// through a single connection.
+// Store keeps its tables in a shared database. It is safe for concurrent
+// use.
 type Store struct {
+	db   *database.DB
 	w, r *sql.DB
 }
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// Open opens or creates the database at path in WAL mode and applies any
-// pending migrations.
-func Open(ctx context.Context, path string) (*Store, error) {
-	q := url.Values{"_pragma": {"journal_mode(WAL)", "busy_timeout(10000)", "foreign_keys(1)", "synchronous(NORMAL)"}}
-	w, err := sql.Open("sqlite", "file:"+path+"?"+q.Encode()+"&_txlock=immediate")
+// New returns the Store in db, applying any pending migrations.
+func New(ctx context.Context, db *database.DB) (*Store, error) {
+	sub, err := fs.Sub(migrations, "migrations")
 	if err != nil {
 		return nil, err
 	}
-	w.SetMaxOpenConns(1)
-	r, err := sql.Open("sqlite", "file:"+path+"?"+q.Encode())
-	if err != nil {
-		w.Close()
-		return nil, err
-	}
-	s := &Store{w: w, r: r}
-	if err := s.migrate(ctx); err != nil {
-		s.Close()
+	if err := db.Migrate(ctx, "store", sub); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	return s, nil
-}
-
-// Close closes the database.
-func (s *Store) Close() error {
-	return errors.Join(s.r.Close(), s.w.Close())
-}
-
-func (s *Store) migrate(ctx context.Context) error {
-	names, err := fs.Glob(migrations, "migrations/*.sql")
-	if err != nil {
-		return err
-	}
-	slices.Sort(names)
-	var version int
-	if err := s.w.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
-		return err
-	}
-	for i := version; i < len(names); i++ {
-		body, err := migrations.ReadFile(names[i])
-		if err != nil {
-			return err
-		}
-		err = s.tx(ctx, func(tx *sql.Tx) error {
-			if _, err := tx.ExecContext(ctx, string(body)); err != nil {
-				return fmt.Errorf("%s: %w", names[i], err)
-			}
-			_, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1))
-			return err
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return &Store{db: db, w: db.W, r: db.R}, nil
 }
 
 func (s *Store) tx(ctx context.Context, f func(*sql.Tx) error) error {
-	tx, err := s.w.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := f(tx); err != nil {
-		return errors.Join(err, tx.Rollback())
-	}
-	return tx.Commit()
+	return s.db.Tx(ctx, f)
 }
 
-const chunk = 500
-
-// Unknown returns the hashes that are neither stored nor rejected, and moves
-// the last sighting of the stored ones to seen.
-func (s *Store) Unknown(ctx context.Context, hashes []Hash, seen time.Time) ([]Hash, error) {
+// Known returns which of the hashes are stored or rejected, and moves the
+// last sighting of the stored ones to seen.
+func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (map[Hash]bool, error) {
 	known := make(map[Hash]bool, len(hashes))
 	err := s.tx(ctx, func(tx *sql.Tx) error {
-		for c := range slices.Chunk(hashes, chunk) {
-			args := hashArgs(c)
+		for c := range slices.Chunk(hashes, 500) {
+			args := make([]any, len(c))
+			for i, h := range c {
+				args[i] = h[:]
+			}
 			in := placeholders(len(c))
 			if _, err := tx.ExecContext(ctx, "UPDATE torrents SET last_seen = max(last_seen, ?) WHERE infohash IN ("+in+")",
 				append([]any{seen.Unix()}, args...)...); err != nil {
@@ -180,39 +129,10 @@ func (s *Store) Unknown(ctx context.Context, hashes []Hash, seen time.Time) ([]H
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	var unknown []Hash
-	for _, h := range hashes {
-		if !known[h] {
-			unknown = append(unknown, h)
-			known[h] = true
-		}
-	}
-	return unknown, nil
+	return known, err
 }
 
-// Seen reports whether the hash is stored or rejected, and moves the last
-// sighting of a stored one to seen.
-func (s *Store) Seen(ctx context.Context, h Hash, seen time.Time) (bool, error) {
-	var found bool
-	err := s.tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, "UPDATE torrents SET last_seen = max(last_seen, ?) WHERE infohash = ?", seen.Unix(), h[:])
-		if err != nil {
-			return err
-		}
-		if n, err := res.RowsAffected(); err != nil || n > 0 {
-			found = n > 0
-			return err
-		}
-		err = tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM rejected WHERE infohash = ?)", h[:]).Scan(&found)
-		return err
-	})
-	return found, err
-}
-
-// Insert stores a torrent for classification. It reports false, and changes
+// Insert stores a torrent for classification. It reports false, and stores
 // nothing, when the hash is already stored or rejected.
 func (s *Store) Insert(ctx context.Context, t Torrent) (bool, error) {
 	var inserted bool
@@ -459,12 +379,4 @@ func matchExpr(text string) string {
 
 func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
-}
-
-func hashArgs(hs []Hash) []any {
-	args := make([]any, len(hs))
-	for i, h := range hs {
-		args[i] = h[:]
-	}
-	return args
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -119,9 +120,11 @@ func TestClientWrongKey(t *testing.T) {
 func setup(t *testing.T, names ...string) *store.Store {
 	t.Helper()
 	ctx := context.Background()
-	s, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { db.Close() })
+	s, err := store.New(ctx, db)
+	require.NoError(t, err)
 	for i, n := range names {
 		_, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: n, Size: 1 << 30, Files: []rules.File{{Path: n + ".mkv", Size: 1 << 30}}, Discovery: "sample", SeenAt: time.Now()})
 		require.NoError(t, err)

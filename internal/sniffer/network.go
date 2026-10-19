@@ -67,8 +67,8 @@ type Network struct {
 	dataDir string
 }
 
-// Start starts the client and its DHT node. offer is called with every
-// infohash announced to the node.
+// Start starts the client and its DHT node. offer, unless nil, is called
+// with every infohash announced to the node.
 func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, error) {
 	cfg.defaults()
 	dataDir, err := os.MkdirTemp("", "sniffdht")
@@ -91,8 +91,10 @@ func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, er
 	c.ConfigureAnacrolixDhtServer = func(sc *dht.ServerConfig) {
 		sc.SendLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
 		sc.PeerStore = nil
-		sc.OnAnnouncePeer = func(h metainfo.Hash, _ net.IP, _ int, _ bool) {
-			offer(Hash(h), sniffarrv1.Source_SOURCE_ANNOUNCE)
+		if offer != nil {
+			sc.OnAnnouncePeer = func(h metainfo.Hash, _ net.IP, _ int, _ bool) {
+				offer(Hash(h), sniffarrv1.Source_SOURCE_ANNOUNCE)
+			}
 		}
 	}
 	c.Slogger = slog.New(slog.DiscardHandler)
@@ -204,10 +206,10 @@ func (n *Network) sampleNode(ctx context.Context, a krpc.NodeAddr, found func(Ha
 	r.ForAllNodes(func(ni krpc.NodeInfo) { push(ni.Addr) })
 }
 
-// Fetch finds the torrent's peers on the DHT and gets its metadata from
-// them. The peers' addresses are dropped with the torrent before Fetch
+// Metadata finds the torrent's peers on the DHT and gets its metadata from
+// them. The peers' addresses are dropped with the torrent before Metadata
 // returns.
-func (n *Network) Fetch(ctx context.Context, h Hash) (Metadata, error) {
+func (n *Network) Metadata(ctx context.Context, h Hash) (Metadata, error) {
 	peers := n.findPeers(ctx, h)
 	if len(peers) == 0 {
 		return Metadata{}, ErrNoPeers

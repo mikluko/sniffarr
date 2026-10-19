@@ -16,174 +16,261 @@ import (
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 )
 
+func hash(b byte) Hash {
+	return Hash{b}
+}
+
+// fakeIngest is an IngestService that hands out todo as tasks, as far as each
+// stream's credit allows, and records what it is told.
 type fakeIngest struct {
-	mu        sync.Mutex
-	known     map[Hash]bool
-	asked     []Hash
-	submitted map[Hash]*sniffarrv1.Torrent
-	// failUnknown and failSubmit are how many calls fail before one succeeds.
-	failUnknown, failSubmit int
+	mu   sync.Mutex
+	cond *sync.Cond
+
+	sighted map[Hash]sniffarrv1.Source
+	// failSight is how many Sight streams fail before one succeeds.
+	failSight int
+
+	todo    []Hash
+	results map[Hash]*sniffarrv1.Result
+	// credits holds the credit messages of each Fetch stream, in order.
+	credits [][]int32
+	// outstanding is the most tasks one stream held at once.
+	outstanding int
+	// failFetchAfter ends the first Fetch stream with an error after that
+	// many results; 0 never does.
+	failFetchAfter int
 }
 
-func (f *fakeIngest) Unknown(_ context.Context, req *connect.Request[sniffarrv1.UnknownRequest]) (*connect.Response[sniffarrv1.UnknownResponse], error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.failUnknown > 0 {
-		f.failUnknown--
-		return nil, connect.NewError(connect.CodeUnavailable, errors.New("down"))
-	}
-	var out [][]byte
-	for _, b := range req.Msg.GetInfohashes() {
-		f.asked = append(f.asked, Hash(b))
-		if !f.known[Hash(b)] {
-			out = append(out, b)
-		}
-	}
-	return connect.NewResponse(&sniffarrv1.UnknownResponse{Infohashes: out}), nil
+func newFake() *fakeIngest {
+	f := &fakeIngest{sighted: map[Hash]sniffarrv1.Source{}, results: map[Hash]*sniffarrv1.Result{}}
+	f.cond = sync.NewCond(&f.mu)
+	return f
 }
 
-func (f *fakeIngest) Submit(_ context.Context, stream *connect.ClientStream[sniffarrv1.SubmitRequest]) (*connect.Response[sniffarrv1.SubmitResponse], error) {
-	var got []*sniffarrv1.Torrent
+func (f *fakeIngest) Sight(_ context.Context, stream *connect.ClientStream[sniffarrv1.SightRequest]) (*connect.Response[sniffarrv1.SightResponse], error) {
+	var got []*sniffarrv1.SightRequest
 	for stream.Receive() {
-		got = append(got, stream.Msg().GetTorrent())
+		got = append(got, stream.Msg())
 	}
 	if err := stream.Err(); err != nil {
 		return nil, err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.failSubmit > 0 {
-		f.failSubmit--
+	if f.failSight > 0 {
+		f.failSight--
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("down"))
 	}
-	var res sniffarrv1.SubmitResponse
-	for _, t := range got {
-		h := Hash(t.GetInfohash())
-		if _, dup := f.submitted[h]; dup {
-			res.Duplicate++
+	var res sniffarrv1.SightResponse
+	for _, m := range got {
+		h := Hash(m.GetInfohash())
+		if _, dup := f.sighted[h]; dup {
+			res.Known++
 			continue
 		}
-		f.submitted[h] = t
-		res.Accepted++
+		f.sighted[h] = m.GetSource()
+		res.New++
 	}
 	return connect.NewResponse(&res), nil
 }
 
-func (f *fakeIngest) count() int {
+func (f *fakeIngest) Fetch(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse]) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.submitted)
+	idx := len(f.credits)
+	f.credits = append(f.credits, nil)
+	f.mu.Unlock()
+	credit, results := 0, 0
+	leased := map[Hash]bool{}
+	defer func() {
+		f.mu.Lock()
+		for h := range leased {
+			f.todo = append(f.todo, h)
+		}
+		f.mu.Unlock()
+		f.cond.Broadcast()
+	}()
+	failed := errors.New("")
+	errc := make(chan error, 1)
+	go func() {
+		for {
+			m, err := stream.Receive()
+			if err != nil {
+				errc <- err
+				f.cond.Broadcast()
+				return
+			}
+			f.mu.Lock()
+			switch k := m.GetKind().(type) {
+			case *sniffarrv1.FetchRequest_Credit:
+				credit += int(k.Credit.GetN())
+				f.credits[idx] = append(f.credits[idx], k.Credit.GetN())
+			case *sniffarrv1.FetchRequest_Result:
+				h := Hash(k.Result.GetInfohash())
+				f.results[h] = k.Result
+				delete(leased, h)
+				results++
+				if idx == 0 && f.failFetchAfter > 0 && results == f.failFetchAfter {
+					f.mu.Unlock()
+					errc <- failed
+					f.cond.Broadcast()
+					return
+				}
+			}
+			f.mu.Unlock()
+			f.cond.Broadcast()
+		}
+	}()
+	for {
+		f.mu.Lock()
+		for (credit == 0 || len(f.todo) == 0) && len(errc) == 0 && ctx.Err() == nil {
+			f.cond.Wait()
+		}
+		if len(errc) > 0 || ctx.Err() != nil {
+			f.mu.Unlock()
+			if err := <-errc; err == failed {
+				return connect.NewError(connect.CodeUnavailable, errors.New("stream broken"))
+			}
+			return nil
+		}
+		h := f.todo[0]
+		f.todo = f.todo[1:]
+		credit--
+		leased[h] = true
+		f.outstanding = max(f.outstanding, len(leased))
+		f.mu.Unlock()
+		if err := stream.Send(&sniffarrv1.FetchResponse{Task: &sniffarrv1.Task{Infohash: h[:]}}); err != nil {
+			return err
+		}
+	}
 }
 
-type fakeFetcher struct {
-	mu      sync.Mutex
-	fetched map[Hash]int
-	noPeers map[Hash]bool
+func (f *fakeIngest) client(t *testing.T) sniffarrv1connect.IngestServiceClient {
+	mux := http.NewServeMux()
+	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(f))
+	srv := httptest.NewUnstartedServer(mux)
+	srv.Config.Protocols = new(http.Protocols)
+	srv.Config.Protocols.SetHTTP1(true)
+	srv.Config.Protocols.SetUnencryptedHTTP2(true)
+	srv.Start()
+	t.Cleanup(srv.Close)
+	var p http.Protocols
+	p.SetUnencryptedHTTP2(true)
+	return sniffarrv1connect.NewIngestServiceClient(&http.Client{Transport: &http.Transport{Protocols: &p}}, srv.URL)
 }
 
-func (f *fakeFetcher) Fetch(ctx context.Context, h Hash) (Metadata, error) {
+func (f *fakeIngest) count() (sighted, results int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.fetched[h]++
-	if f.noPeers[h] {
+	return len(f.sighted), len(f.results)
+}
+
+// fakeSource answers by the hash: even ones have no peers, multiples of three
+// time out, the rest give metadata. It holds each answer for delay.
+type fakeSource struct {
+	delay time.Duration
+}
+
+func (s fakeSource) Metadata(ctx context.Context, h Hash) (Metadata, error) {
+	if sleep(ctx, s.delay) != nil {
+		return Metadata{}, ctx.Err()
+	}
+	switch {
+	case h[0]%2 == 0:
 		return Metadata{}, ErrNoPeers
+	case h[0]%3 == 0:
+		return Metadata{}, ErrNoMetadata
 	}
 	return Metadata{Name: "torrent", Size: 1 << 30, Files: []File{{Path: "a/b.mkv", Size: 1 << 30}}}, nil
 }
 
-func hash(b byte) Hash {
-	return Hash{b}
-}
-
-func start(t *testing.T, ingest *fakeIngest, f Fetcher) (*Sniffer, context.CancelFunc, <-chan error) {
+func run(t *testing.T, f func(context.Context) error) context.CancelFunc {
 	t.Helper()
-	if ingest.known == nil {
-		ingest.known = map[Hash]bool{}
-	}
-	ingest.submitted = map[Hash]*sniffarrv1.Torrent{}
-	mux := http.NewServeMux()
-	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(ingest))
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
-	s := New(Config{
-		Ingest:    sniffarrv1connect.NewIngestServiceClient(srv.Client(), srv.URL),
-		Fetchers:  4,
-		BatchSize: 3,
-		BatchWait: 10 * time.Millisecond,
-		StreamFor: 20 * time.Millisecond,
-		Backoff:   5 * time.Millisecond,
-	})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- s.Run(ctx, f) }()
-	t.Cleanup(cancel)
-	return s, cancel, done
-}
-
-func TestSnifferFetchesOnlyUnknown(t *testing.T) {
-	ingest := &fakeIngest{known: map[Hash]bool{hash(2): true, hash(4): true}}
-	fetcher := &fakeFetcher{fetched: map[Hash]int{}, noPeers: map[Hash]bool{hash(6): true}}
-	s, cancel, done := start(t, ingest, fetcher)
-
-	for _, b := range []byte{1, 2, 3, 4, 5, 6, 1, 3} {
-		s.Offer(hash(b), sniffarrv1.Source_SOURCE_SAMPLE)
-	}
-	s.Offer(hash(7), sniffarrv1.Source_SOURCE_ANNOUNCE)
-
-	require.Eventually(t, func() bool { return ingest.count() == 4 }, 5*time.Second, 5*time.Millisecond)
-	cancel()
-	require.ErrorIs(t, <-done, context.Canceled)
-
-	require.ElementsMatch(t, []Hash{hash(1), hash(2), hash(3), hash(4), hash(5), hash(6), hash(7)}, ingest.asked, "each hash is asked about once")
-	require.Equal(t, map[Hash]int{hash(1): 1, hash(3): 1, hash(5): 1, hash(6): 1, hash(7): 1}, fetcher.fetched)
-	require.Equal(t, sniffarrv1.Source_SOURCE_ANNOUNCE, ingest.submitted[hash(7)].GetSource())
-	require.Equal(t, sniffarrv1.Source_SOURCE_SAMPLE, ingest.submitted[hash(1)].GetSource())
-	require.Equal(t, "a/b.mkv", ingest.submitted[hash(1)].GetFiles()[0].GetPath())
-	require.EqualValues(t, 4, s.stats.accepted.Load())
-}
-
-func TestSnifferRetries(t *testing.T) {
-	ingest := &fakeIngest{failUnknown: 2, failSubmit: 2}
-	fetcher := &fakeFetcher{fetched: map[Hash]int{}}
-	s, cancel, done := start(t, ingest, fetcher)
-
-	for b := range byte(5) {
-		s.Offer(hash(b), sniffarrv1.Source_SOURCE_SAMPLE)
-	}
-	require.Eventually(t, func() bool { return ingest.count() == 5 }, 5*time.Second, 5*time.Millisecond)
-	cancel()
-	require.ErrorIs(t, <-done, context.Canceled)
-	for b := range byte(5) {
-		require.Equal(t, 1, fetcher.fetched[hash(b)], "fetched once although the server failed")
-	}
-}
-
-func TestSnifferFlushesOnShutdown(t *testing.T) {
-	ingest := &fakeIngest{known: map[Hash]bool{}, submitted: map[Hash]*sniffarrv1.Torrent{}}
-	fetcher := &fakeFetcher{fetched: map[Hash]int{}}
-	mux := http.NewServeMux()
-	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(ingest))
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-	s := New(Config{
-		Ingest:    sniffarrv1connect.NewIngestServiceClient(srv.Client(), srv.URL),
-		Fetchers:  1,
-		StreamFor: time.Hour,
-		BatchWait: time.Millisecond,
+	go func() { done <- f(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			require.ErrorIs(t, err, context.Canceled)
+		case <-time.After(flushTimeout + time.Second):
+			t.Error("Run did not return after cancel")
+		}
 	})
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- s.Run(ctx, fetcher) }()
+	return cancel
+}
 
-	s.Offer(hash(1), sniffarrv1.Source_SOURCE_SAMPLE)
-	require.Eventually(t, func() bool { return s.stats.fetched.Load() == 1 }, 5*time.Second, time.Millisecond)
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(flushTimeout + time.Second):
-		t.Fatal("Run did not return after cancel")
+func TestDiscoverer(t *testing.T) {
+	ingest := newFake()
+	ingest.failSight = 2
+	d := NewDiscoverer(DiscovererConfig{Ingest: ingest.client(t), StreamFor: 20 * time.Millisecond, Backoff: 5 * time.Millisecond})
+	run(t, d.Run)
+
+	for _, b := range []byte{1, 2, 1, 3} {
+		d.Offer(hash(b), sniffarrv1.Source_SOURCE_SAMPLE)
 	}
-	require.Equal(t, 1, ingest.count(), "the open stream is closed and confirmed on shutdown")
+	d.Offer(hash(4), sniffarrv1.Source_SOURCE_ANNOUNCE)
+	d.Offer(hash(4), sniffarrv1.Source_SOURCE_SAMPLE)
+
+	require.Eventually(t, func() bool { n, _ := ingest.count(); return n == 4 }, 5*time.Second, 5*time.Millisecond)
+	require.EqualValues(t, 4, d.stats.offered.Load(), "a recently offered hash is not offered again")
+	require.Equal(t, sniffarrv1.Source_SOURCE_ANNOUNCE, ingest.sighted[hash(4)])
+	require.Equal(t, sniffarrv1.Source_SOURCE_SAMPLE, ingest.sighted[hash(1)])
+	require.Eventually(t, func() bool { return d.stats.new.Load() == 4 }, 5*time.Second, 5*time.Millisecond, "failed streams are resent")
+}
+
+func TestDiscovererFlushesOnShutdown(t *testing.T) {
+	ingest := newFake()
+	d := NewDiscoverer(DiscovererConfig{Ingest: ingest.client(t), StreamFor: time.Hour})
+	cancel := run(t, d.Run)
+	d.Offer(hash(1), sniffarrv1.Source_SOURCE_SAMPLE)
+	require.Eventually(t, func() bool { return len(d.offers) == 0 }, 5*time.Second, time.Millisecond)
+	cancel()
+	require.Eventually(t, func() bool { n, _ := ingest.count(); return n == 1 }, flushTimeout, time.Millisecond)
+}
+
+func TestFetcherCredit(t *testing.T) {
+	ingest := newFake()
+	for b := byte(1); b <= 12; b++ {
+		ingest.todo = append(ingest.todo, hash(b))
+	}
+	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 3}, fakeSource{delay: 10 * time.Millisecond})
+	run(t, f.Run)
+
+	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 12 }, 5*time.Second, 5*time.Millisecond)
+	ingest.mu.Lock()
+	defer ingest.mu.Unlock()
+	require.Equal(t, int32(3), ingest.credits[0][0], "the first credit is one per worker")
+	require.LessOrEqual(t, ingest.outstanding, 3, "never more tasks than workers")
+	require.NotNil(t, ingest.results[hash(1)].GetTorrent())
+	require.Equal(t, "a/b.mkv", ingest.results[hash(1)].GetTorrent().GetFiles()[0].GetPath())
+	require.Equal(t, sniffarrv1.Failure_FAILURE_NO_PEERS, ingest.results[hash(2)].GetFailure())
+	require.Equal(t, sniffarrv1.Failure_FAILURE_TIMEOUT, ingest.results[hash(3)].GetFailure())
+}
+
+func TestFetcherReconnects(t *testing.T) {
+	ingest := newFake()
+	ingest.failFetchAfter = 2
+	for b := byte(1); b <= 6; b++ {
+		ingest.todo = append(ingest.todo, hash(b))
+	}
+	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 2, Backoff: 5 * time.Millisecond}, fakeSource{})
+	run(t, f.Run)
+
+	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 6 }, 5*time.Second, 5*time.Millisecond, "the leases of the broken stream are fetched again")
+	ingest.mu.Lock()
+	defer ingest.mu.Unlock()
+	require.GreaterOrEqual(t, len(ingest.credits), 2, "a second stream")
+	require.LessOrEqual(t, ingest.outstanding, 2)
+}
+
+func TestFetcherStopsWithTasksInFlight(t *testing.T) {
+	ingest := newFake()
+	ingest.todo = []Hash{hash(1), hash(3)}
+	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 2}, fakeSource{delay: time.Hour})
+	cancel := run(t, f.Run)
+	require.Eventually(t, func() bool { return f.stats.tasks.Load() == 2 }, 5*time.Second, time.Millisecond)
+	cancel()
 }
 
 func TestRecent(t *testing.T) {

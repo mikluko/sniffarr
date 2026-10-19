@@ -33,20 +33,23 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// IngestServiceUnknownProcedure is the fully-qualified name of the IngestService's Unknown RPC.
-	IngestServiceUnknownProcedure = "/sniffarr.v1.IngestService/Unknown"
-	// IngestServiceSubmitProcedure is the fully-qualified name of the IngestService's Submit RPC.
-	IngestServiceSubmitProcedure = "/sniffarr.v1.IngestService/Submit"
+	// IngestServiceSightProcedure is the fully-qualified name of the IngestService's Sight RPC.
+	IngestServiceSightProcedure = "/sniffarr.v1.IngestService/Sight"
+	// IngestServiceFetchProcedure is the fully-qualified name of the IngestService's Fetch RPC.
+	IngestServiceFetchProcedure = "/sniffarr.v1.IngestService/Fetch"
 )
 
 // IngestServiceClient is a client for the sniffarr.v1.IngestService service.
 type IngestServiceClient interface {
-	// Unknown returns the infohashes the server has neither stored nor
-	// rejected. Stored torrents among them count as seen again.
-	Unknown(context.Context, *connect.Request[v1.UnknownRequest]) (*connect.Response[v1.UnknownResponse], error)
-	// Submit stores or rejects each torrent and reports the totals when the
-	// client closes the stream.
-	Submit(context.Context) *connect.ClientStreamForClient[v1.SubmitRequest, v1.SubmitResponse]
+	// Sight queues every infohash the server has neither stored, rejected nor
+	// queued, and reports the totals when the client closes the stream. A
+	// sighting of a stored torrent moves its last sighting; an announce
+	// sighting moves a queued sample ahead.
+	Sight(context.Context) *connect.ClientStreamForClient[v1.SightRequest, v1.SightResponse]
+	// Fetch leases one queued infohash per unit of credit to the stream, and
+	// takes the results back on it. A lease returns to the queue when the
+	// stream ends without its result or when the lease expires.
+	Fetch(context.Context) *connect.BidiStreamForClient[v1.FetchRequest, v1.FetchResponse]
 }
 
 // NewIngestServiceClient constructs a client for the sniffarr.v1.IngestService service. By default,
@@ -60,16 +63,16 @@ func NewIngestServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 	baseURL = strings.TrimRight(baseURL, "/")
 	ingestServiceMethods := v1.File_sniffarr_v1_ingest_proto.Services().ByName("IngestService").Methods()
 	return &ingestServiceClient{
-		unknown: connect.NewClient[v1.UnknownRequest, v1.UnknownResponse](
+		sight: connect.NewClient[v1.SightRequest, v1.SightResponse](
 			httpClient,
-			baseURL+IngestServiceUnknownProcedure,
-			connect.WithSchema(ingestServiceMethods.ByName("Unknown")),
+			baseURL+IngestServiceSightProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("Sight")),
 			connect.WithClientOptions(opts...),
 		),
-		submit: connect.NewClient[v1.SubmitRequest, v1.SubmitResponse](
+		fetch: connect.NewClient[v1.FetchRequest, v1.FetchResponse](
 			httpClient,
-			baseURL+IngestServiceSubmitProcedure,
-			connect.WithSchema(ingestServiceMethods.ByName("Submit")),
+			baseURL+IngestServiceFetchProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("Fetch")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -77,28 +80,31 @@ func NewIngestServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // ingestServiceClient implements IngestServiceClient.
 type ingestServiceClient struct {
-	unknown *connect.Client[v1.UnknownRequest, v1.UnknownResponse]
-	submit  *connect.Client[v1.SubmitRequest, v1.SubmitResponse]
+	sight *connect.Client[v1.SightRequest, v1.SightResponse]
+	fetch *connect.Client[v1.FetchRequest, v1.FetchResponse]
 }
 
-// Unknown calls sniffarr.v1.IngestService.Unknown.
-func (c *ingestServiceClient) Unknown(ctx context.Context, req *connect.Request[v1.UnknownRequest]) (*connect.Response[v1.UnknownResponse], error) {
-	return c.unknown.CallUnary(ctx, req)
+// Sight calls sniffarr.v1.IngestService.Sight.
+func (c *ingestServiceClient) Sight(ctx context.Context) *connect.ClientStreamForClient[v1.SightRequest, v1.SightResponse] {
+	return c.sight.CallClientStream(ctx)
 }
 
-// Submit calls sniffarr.v1.IngestService.Submit.
-func (c *ingestServiceClient) Submit(ctx context.Context) *connect.ClientStreamForClient[v1.SubmitRequest, v1.SubmitResponse] {
-	return c.submit.CallClientStream(ctx)
+// Fetch calls sniffarr.v1.IngestService.Fetch.
+func (c *ingestServiceClient) Fetch(ctx context.Context) *connect.BidiStreamForClient[v1.FetchRequest, v1.FetchResponse] {
+	return c.fetch.CallBidiStream(ctx)
 }
 
 // IngestServiceHandler is an implementation of the sniffarr.v1.IngestService service.
 type IngestServiceHandler interface {
-	// Unknown returns the infohashes the server has neither stored nor
-	// rejected. Stored torrents among them count as seen again.
-	Unknown(context.Context, *connect.Request[v1.UnknownRequest]) (*connect.Response[v1.UnknownResponse], error)
-	// Submit stores or rejects each torrent and reports the totals when the
-	// client closes the stream.
-	Submit(context.Context, *connect.ClientStream[v1.SubmitRequest]) (*connect.Response[v1.SubmitResponse], error)
+	// Sight queues every infohash the server has neither stored, rejected nor
+	// queued, and reports the totals when the client closes the stream. A
+	// sighting of a stored torrent moves its last sighting; an announce
+	// sighting moves a queued sample ahead.
+	Sight(context.Context, *connect.ClientStream[v1.SightRequest]) (*connect.Response[v1.SightResponse], error)
+	// Fetch leases one queued infohash per unit of credit to the stream, and
+	// takes the results back on it. A lease returns to the queue when the
+	// stream ends without its result or when the lease expires.
+	Fetch(context.Context, *connect.BidiStream[v1.FetchRequest, v1.FetchResponse]) error
 }
 
 // NewIngestServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -108,24 +114,24 @@ type IngestServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	ingestServiceMethods := v1.File_sniffarr_v1_ingest_proto.Services().ByName("IngestService").Methods()
-	ingestServiceUnknownHandler := connect.NewUnaryHandler(
-		IngestServiceUnknownProcedure,
-		svc.Unknown,
-		connect.WithSchema(ingestServiceMethods.ByName("Unknown")),
+	ingestServiceSightHandler := connect.NewClientStreamHandler(
+		IngestServiceSightProcedure,
+		svc.Sight,
+		connect.WithSchema(ingestServiceMethods.ByName("Sight")),
 		connect.WithHandlerOptions(opts...),
 	)
-	ingestServiceSubmitHandler := connect.NewClientStreamHandler(
-		IngestServiceSubmitProcedure,
-		svc.Submit,
-		connect.WithSchema(ingestServiceMethods.ByName("Submit")),
+	ingestServiceFetchHandler := connect.NewBidiStreamHandler(
+		IngestServiceFetchProcedure,
+		svc.Fetch,
+		connect.WithSchema(ingestServiceMethods.ByName("Fetch")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/sniffarr.v1.IngestService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case IngestServiceUnknownProcedure:
-			ingestServiceUnknownHandler.ServeHTTP(w, r)
-		case IngestServiceSubmitProcedure:
-			ingestServiceSubmitHandler.ServeHTTP(w, r)
+		case IngestServiceSightProcedure:
+			ingestServiceSightHandler.ServeHTTP(w, r)
+		case IngestServiceFetchProcedure:
+			ingestServiceFetchHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -135,10 +141,10 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 // UnimplementedIngestServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedIngestServiceHandler struct{}
 
-func (UnimplementedIngestServiceHandler) Unknown(context.Context, *connect.Request[v1.UnknownRequest]) (*connect.Response[v1.UnknownResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.Unknown is not implemented"))
+func (UnimplementedIngestServiceHandler) Sight(context.Context, *connect.ClientStream[v1.SightRequest]) (*connect.Response[v1.SightResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.Sight is not implemented"))
 }
 
-func (UnimplementedIngestServiceHandler) Submit(context.Context, *connect.ClientStream[v1.SubmitRequest]) (*connect.Response[v1.SubmitResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.Submit is not implemented"))
+func (UnimplementedIngestServiceHandler) Fetch(context.Context, *connect.BidiStream[v1.FetchRequest, v1.FetchResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.Fetch is not implemented"))
 }

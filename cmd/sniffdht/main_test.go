@@ -30,7 +30,14 @@ func TestLoad(t *testing.T) {
 				FetchTimeout: sniffer.DefaultFetchTimeout,
 			}, c.network)
 			require.Equal(t, sniffer.DefaultWalkers, c.walkers)
+			require.True(t, c.discover, "both roles by default")
+			require.True(t, c.fetch)
 		}},
+		{name: "fetcher only", env: env, args: []string{"-discover=false"}, want: func(t *testing.T, c config) {
+			require.False(t, c.discover)
+			require.True(t, c.fetch)
+		}},
+		{name: "no role", env: env, args: []string{"-discover=false", "-fetch=false"}, err: "-discover and -fetch are both off: nothing to do"},
 		{name: "flags", env: env, args: []string{"-port", "6881", "-fetchers", "100", "-fetch-timeout", "30s"}, want: func(t *testing.T, c config) {
 			require.Equal(t, 6881, c.network.Port)
 			require.Equal(t, 100, c.network.Fetchers)

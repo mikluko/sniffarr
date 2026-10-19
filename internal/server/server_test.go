@@ -3,29 +3,39 @@ package server
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/auth"
+	"github.com/mikluko/sniffarr/internal/database"
+	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-func start(t *testing.T) (*httptest.Server, *http.Client) {
+func start(t *testing.T, cfg Config) (*httptest.Server, *http.Client) {
 	t.Helper()
-	s, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
-	srv := httptest.NewUnstartedServer(New(Config{Store: s, IngestToken: "ingest", SearchToken: "search", Log: slog.New(slog.DiscardHandler)}))
+	t.Cleanup(func() { db.Close() })
+	s, err := store.New(ctx, db)
+	require.NoError(t, err)
+	q, err := queue.New(ctx, db)
+	require.NoError(t, err)
+	cfg.Queue = q
+	cfg.Store, cfg.IngestToken, cfg.SearchToken, cfg.Log = s, "ingest", "search", slog.New(slog.DiscardHandler)
+	srv := httptest.NewUnstartedServer(New(cfg))
 	srv.Config.Protocols = Protocols()
 	srv.Start()
 	t.Cleanup(srv.Close)
@@ -40,22 +50,40 @@ func hash(b byte) []byte {
 	return h
 }
 
-func movie(b byte, name string, ext string) *sniffarrv1.Torrent {
-	return &sniffarrv1.Torrent{
-		Infohash: hash(b),
-		Name:     name,
-		Size:     8 << 30,
-		Files:    []*sniffarrv1.File{{Path: name + "/" + name + "." + ext, Size: 8 << 30}},
-		SeenAt:   timestamppb.New(time.Now().Add(-time.Minute)),
-		Source:   sniffarrv1.Source_SOURCE_ANNOUNCE,
+func ingestClient(srv *httptest.Server, hc *http.Client, opts ...connect.ClientOption) sniffarrv1connect.IngestServiceClient {
+	return sniffarrv1connect.NewIngestServiceClient(hc, srv.URL, append(opts, connect.WithInterceptors(auth.Client("ingest")))...)
+}
+
+// droppable returns a client on connections of its own, and a func that
+// breaks them as a network failure would.
+func droppable(srv *httptest.Server) (sniffarrv1connect.IngestServiceClient, func()) {
+	var mu sync.Mutex
+	var conns []net.Conn
+	var p http.Protocols
+	p.SetUnencryptedHTTP2(true)
+	tr := &http.Transport{Protocols: &p, DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		c, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+		if err == nil {
+			mu.Lock()
+			conns = append(conns, c)
+			mu.Unlock()
+		}
+		return c, err
+	}}
+	return ingestClient(srv, &http.Client{Transport: tr}), func() {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range conns {
+			c.Close()
+		}
 	}
 }
 
-func submit(t *testing.T, c sniffarrv1connect.IngestServiceClient, ts ...*sniffarrv1.Torrent) (*sniffarrv1.SubmitResponse, error) {
+func sight(t *testing.T, c sniffarrv1connect.IngestServiceClient, src sniffarrv1.Source, bs ...byte) (*sniffarrv1.SightResponse, error) {
 	t.Helper()
-	stream := c.Submit(context.Background())
-	for _, tr := range ts {
-		if err := stream.Send(&sniffarrv1.SubmitRequest{Torrent: tr}); err != nil {
+	stream := c.Sight(context.Background())
+	for _, b := range bs {
+		if err := stream.Send(&sniffarrv1.SightRequest{Infohash: hash(b), Source: src}); err != nil {
 			break
 		}
 	}
@@ -66,44 +94,133 @@ func submit(t *testing.T, c sniffarrv1connect.IngestServiceClient, ts ...*sniffa
 	return res.Msg, nil
 }
 
+// fetchStream is one Fetch stream with its tasks pumped into a channel.
+type fetchStream struct {
+	t      *testing.T
+	stream *connect.BidiStreamForClient[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse]
+	tasks  chan []byte
+	done   chan error
+}
+
+func openFetch(t *testing.T, c sniffarrv1connect.IngestServiceClient) *fetchStream {
+	t.Helper()
+	f := &fetchStream{t: t, stream: c.Fetch(context.Background()), tasks: make(chan []byte, 100), done: make(chan error, 1)}
+	t.Cleanup(func() { _ = f.stream.CloseResponse() })
+	go func() {
+		for {
+			m, err := f.stream.Receive()
+			if err != nil {
+				f.done <- err
+				return
+			}
+			f.tasks <- m.GetTask().GetInfohash()
+		}
+	}()
+	return f
+}
+
+func (f *fetchStream) send(m *sniffarrv1.FetchRequest) {
+	f.t.Helper()
+	require.NoError(f.t, f.stream.Send(m))
+}
+
+func (f *fetchStream) credit(n int32) {
+	f.t.Helper()
+	f.send(&sniffarrv1.FetchRequest{Kind: &sniffarrv1.FetchRequest_Credit{Credit: &sniffarrv1.Credit{N: n}}})
+}
+
+func (f *fetchStream) torrent(b byte, name, file string) {
+	f.t.Helper()
+	f.send(&sniffarrv1.FetchRequest{Kind: &sniffarrv1.FetchRequest_Result{Result: &sniffarrv1.Result{
+		Infohash: hash(b),
+		Outcome: &sniffarrv1.Result_Torrent{Torrent: &sniffarrv1.Torrent{
+			Name: name, Size: 8 << 30, Files: []*sniffarrv1.File{{Path: file, Size: 8 << 30}},
+		}},
+	}}})
+}
+
+func (f *fetchStream) failure(b byte, why sniffarrv1.Failure) {
+	f.t.Helper()
+	f.send(&sniffarrv1.FetchRequest{Kind: &sniffarrv1.FetchRequest_Result{Result: &sniffarrv1.Result{
+		Infohash: hash(b), Outcome: &sniffarrv1.Result_Failure{Failure: why},
+	}}})
+}
+
+// expect waits for the next tasks and requires them to be bs, in order.
+func (f *fetchStream) expect(bs ...byte) {
+	f.t.Helper()
+	for _, b := range bs {
+		select {
+		case got := <-f.tasks:
+			require.Equal(f.t, hash(b), got)
+		case err := <-f.done:
+			f.t.Fatalf("stream ended waiting for task %d: %v", b, err)
+		case <-time.After(5 * time.Second):
+			f.t.Fatalf("no task %d", b)
+		}
+	}
+}
+
+// none requires no task to arrive for a while.
+func (f *fetchStream) none() {
+	f.t.Helper()
+	select {
+	case got := <-f.tasks:
+		f.t.Fatalf("unexpected task %x", got)
+	case <-time.After(150 * time.Millisecond):
+	}
+}
+
+// finish closes the stream's requests and waits until the server has handled
+// every one of them.
+func (f *fetchStream) finish() {
+	f.t.Helper()
+	require.NoError(f.t, f.stream.CloseRequest())
+	select {
+	case <-f.done:
+	case <-time.After(5 * time.Second):
+		f.t.Fatal("the server did not end the stream")
+	}
+}
+
 func TestIngestAndSearch(t *testing.T) {
 	t.Run("connect", func(t *testing.T) { testIngestAndSearch(t, nil) })
 	t.Run("grpc", func(t *testing.T) { testIngestAndSearch(t, connect.WithGRPC()) })
 }
 
 func testIngestAndSearch(t *testing.T, protocol connect.ClientOption) {
-	srv, hc := start(t)
+	srv, hc := start(t, Config{Poll: 20 * time.Millisecond})
 	ctx := context.Background()
-	opts := func(token string) []connect.ClientOption {
-		o := []connect.ClientOption{connect.WithInterceptors(auth.Client(token))}
-		if protocol != nil {
-			o = append(o, protocol)
-		}
-		return o
+	var opts []connect.ClientOption
+	if protocol != nil {
+		opts = append(opts, protocol)
 	}
-	ingest := sniffarrv1connect.NewIngestServiceClient(hc, srv.URL, opts("ingest")...)
-	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, opts("search")...)
+	ingest := ingestClient(srv, hc, opts...)
+	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, append(opts, connect.WithInterceptors(auth.Client("search")))...)
 
-	res, err := submit(t, ingest,
-		movie(1, "The.Thing.1982.1080p.BluRay.x264.Rus.Eng", "mkv"),
-		movie(2, rot13.String("Ovt.Cnpxntr.KKK.1080c"), "mp4"),
-		movie(3, "Some.Tool.Portable", "exe"),
-		movie(4, "Mad.Max.Fury.Road.2015.2160p.WEB-DL", "mkv"),
-	)
+	res, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3, 3)
 	require.NoError(t, err)
-	require.Equal(t, int64(2), res.GetAccepted())
-	require.Equal(t, int64(2), res.GetRejected())
-
-	res, err = submit(t, ingest, movie(1, "The.Thing.1982.1080p.BluRay.x264.Rus.Eng", "mkv"), movie(2, rot13.String("Ovt.Cnpxntr.KKK.1080c"), "mp4"))
+	require.Equal(t, int64(3), res.GetNew())
+	require.Equal(t, int64(1), res.GetKnown())
+	_, err = sight(t, ingest, sniffarrv1.Source_SOURCE_ANNOUNCE, 4)
 	require.NoError(t, err)
-	require.Equal(t, int64(2), res.GetDuplicate())
-
-	unknown, err := ingest.Unknown(ctx, connect.NewRequest(&sniffarrv1.UnknownRequest{Infohashes: [][]byte{hash(1), hash(2), hash(3), hash(5)}}))
-	require.NoError(t, err)
-	require.Equal(t, [][]byte{hash(5)}, unknown.Msg.GetInfohashes())
-
-	_, err = ingest.Unknown(ctx, connect.NewRequest(&sniffarrv1.UnknownRequest{Infohashes: [][]byte{{1, 2, 3}}}))
+	bad := ingest.Sight(ctx)
+	_ = bad.Send(&sniffarrv1.SightRequest{Infohash: []byte{1, 2, 3}, Source: sniffarrv1.Source_SOURCE_SAMPLE})
+	_, err = bad.CloseAndReceive()
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+
+	f := openFetch(t, ingest)
+	f.credit(4)
+	f.expect(4, 1, 2, 3)
+	f.torrent(1, "The.Thing.1982.1080p.BluRay.x264.Rus.Eng", "The.Thing.1982.mkv")
+	f.torrent(2, rot13.String("Ovt.Cnpxntr.KKK.1080c"), "video.mp4")
+	f.torrent(3, "Some.Tool.Portable", "tool.exe")
+	f.torrent(4, "Mad.Max.Fury.Road.2015.2160p.WEB-DL", "Mad.Max.Fury.Road.2015.2160p.WEB-DL.mkv")
+	f.finish()
+
+	res, err = sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3, 4)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), res.GetKnown(), "stored and rejected hashes are known")
 
 	found, err := search.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{Query: "the thing 1982"}))
 	require.NoError(t, err)
@@ -128,8 +245,75 @@ func testIngestAndSearch(t *testing.T, protocol connect.ClientOption) {
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(err), "rejected torrents are not stored")
 }
 
+func TestFetchCreditAndLeases(t *testing.T) {
+	srv, hc := start(t, Config{Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3)
+	require.NoError(t, err)
+
+	dropped, drop := droppable(srv)
+	a := openFetch(t, dropped)
+	a.credit(1)
+	a.expect(1)
+	a.none()
+	a.credit(1)
+	a.expect(2)
+
+	b := openFetch(t, ingest)
+	b.credit(3)
+	b.expect(3)
+	b.none()
+
+	drop()
+	b.expect(1, 2)
+
+	_, err = sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 4)
+	require.NoError(t, err)
+	b.none()
+	b.credit(1)
+	b.expect(4)
+	b.finish()
+}
+
+func TestFetchLeaseExpiry(t *testing.T) {
+	srv, hc := start(t, Config{Lease: 300 * time.Millisecond, Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+	require.NoError(t, err)
+
+	a := openFetch(t, ingest)
+	a.credit(1)
+	a.expect(1)
+	b := openFetch(t, ingest)
+	b.credit(1)
+	b.none()
+	b.expect(1)
+}
+
+func TestFetchRetryAndForget(t *testing.T) {
+	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+	require.NoError(t, err)
+
+	f := openFetch(t, ingest)
+	f.credit(1)
+	f.expect(1)
+	f.failure(1, sniffarrv1.Failure_FAILURE_NO_PEERS)
+	f.credit(1)
+	f.expect(1)
+	f.failure(1, sniffarrv1.Failure_FAILURE_TIMEOUT)
+	f.credit(1)
+	f.none()
+
+	res, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), res.GetNew(), "a forgotten hash is not rejected")
+	f.expect(1)
+}
+
 func TestAuth(t *testing.T) {
-	srv, hc := start(t)
+	srv, hc := start(t, Config{})
 	ctx := context.Background()
 	for name, token := range map[string]string{"none": "", "wrong": "nope", "other group": "search"} {
 		t.Run(name, func(t *testing.T) {
@@ -138,9 +322,11 @@ func TestAuth(t *testing.T) {
 				opts = append(opts, connect.WithInterceptors(auth.Client(token)))
 			}
 			ingest := sniffarrv1connect.NewIngestServiceClient(hc, srv.URL, opts...)
-			_, err := ingest.Unknown(ctx, connect.NewRequest(&sniffarrv1.UnknownRequest{}))
+			_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 			require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
-			_, err = submit(t, ingest, movie(1, "The.Thing.1982", "mkv"))
+			stream := ingest.Fetch(ctx)
+			_ = stream.Send(&sniffarrv1.FetchRequest{Kind: &sniffarrv1.FetchRequest_Credit{Credit: &sniffarrv1.Credit{N: 1}}})
+			_, err = stream.Receive()
 			require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
 		})
 	}
