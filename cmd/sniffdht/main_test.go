@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/crawler"
+	"github.com/mikluko/sniffarr/internal/sniffer"
 )
 
 func TestLoad(t *testing.T) {
@@ -22,14 +22,14 @@ func TestLoad(t *testing.T) {
 		{name: "defaults", env: env, want: func(t *testing.T, c config) {
 			require.Equal(t, "http://sniffapi:8080", c.server.String())
 			require.Equal(t, "secret", c.token)
-			require.Equal(t, crawler.NetworkConfig{
-				Port:         crawler.DefaultPort,
-				Rate:         crawler.DefaultRate,
-				Fetchers:     crawler.DefaultFetchers,
-				PeerWait:     crawler.DefaultPeerWait,
-				FetchTimeout: crawler.DefaultFetchTimeout,
+			require.Equal(t, sniffer.NetworkConfig{
+				Port:         sniffer.DefaultPort,
+				Rate:         sniffer.DefaultRate,
+				Fetchers:     sniffer.DefaultFetchers,
+				PeerWait:     sniffer.DefaultPeerWait,
+				FetchTimeout: sniffer.DefaultFetchTimeout,
 			}, c.network)
-			require.Equal(t, crawler.DefaultWalkers, c.walkers)
+			require.Equal(t, sniffer.DefaultWalkers, c.walkers)
 		}},
 		{name: "flags", env: env, args: []string{"-port", "6881", "-fetchers", "100", "-fetch-timeout", "30s"}, want: func(t *testing.T, c config) {
 			require.Equal(t, 6881, c.network.Port)

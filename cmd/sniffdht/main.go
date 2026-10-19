@@ -21,14 +21,14 @@ import (
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/cli"
-	"github.com/mikluko/sniffarr/internal/crawler"
 	"github.com/mikluko/sniffarr/internal/server"
+	"github.com/mikluko/sniffarr/internal/sniffer"
 )
 
 type config struct {
 	server  *url.URL
 	token   string
-	network crawler.NetworkConfig
+	network sniffer.NetworkConfig
 	walkers int
 }
 
@@ -42,12 +42,12 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 	var c config
 	fs := flag.NewFlagSet("sniffdht", flag.ContinueOnError)
 	fs.SetOutput(output)
-	fs.IntVar(&c.network.Port, "port", crawler.DefaultPort, "TCP and UDP port for peers and the DHT, forwarded by UPnP")
-	fs.IntVar(&c.network.Fetchers, "fetchers", crawler.DefaultFetchers, "metadata fetches at once")
-	fs.IntVar(&c.network.Rate, "rate", crawler.DefaultRate, "DHT queries, and new peer connections, a second")
-	fs.DurationVar(&c.network.FetchTimeout, "fetch-timeout", crawler.DefaultFetchTimeout, "how long to wait for a torrent's metadata once it has peers")
-	fs.DurationVar(&c.network.PeerWait, "peer-wait", crawler.DefaultPeerWait, "how long to look for a torrent's peers on the DHT")
-	fs.IntVar(&c.walkers, "walkers", crawler.DefaultWalkers, "sample_infohashes queries at once")
+	fs.IntVar(&c.network.Port, "port", sniffer.DefaultPort, "TCP and UDP port for peers and the DHT, forwarded by UPnP")
+	fs.IntVar(&c.network.Fetchers, "fetchers", sniffer.DefaultFetchers, "metadata fetches at once")
+	fs.IntVar(&c.network.Rate, "rate", sniffer.DefaultRate, "DHT queries, and new peer connections, a second")
+	fs.DurationVar(&c.network.FetchTimeout, "fetch-timeout", sniffer.DefaultFetchTimeout, "how long to wait for a torrent's metadata once it has peers")
+	fs.DurationVar(&c.network.PeerWait, "peer-wait", sniffer.DefaultPeerWait, "how long to look for a torrent's peers on the DHT")
+	fs.IntVar(&c.walkers, "walkers", sniffer.DefaultWalkers, "sample_infohashes queries at once")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
@@ -80,8 +80,8 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		connect.WithInterceptors(auth.Client(cfg.token)),
 		connect.WithSendMaxBytes(server.MaxMessage),
 	)
-	c := crawler.New(crawler.Config{Ingest: ingest, Fetchers: cfg.network.Fetchers, Log: log})
-	n, err := crawler.Start(cfg.network, c.Offer)
+	c := sniffer.New(sniffer.Config{Ingest: ingest, Fetchers: cfg.network.Fetchers, Log: log})
+	n, err := sniffer.Start(cfg.network, c.Offer)
 	if err != nil {
 		return fmt.Errorf("start: %w", err)
 	}
@@ -91,7 +91,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	}
 	log.Info("dht up", "port", cfg.network.Port, "nodes", n.Nodes())
 
-	go n.Sample(ctx, cfg.walkers, func(h crawler.Hash) { c.Offer(h, sniffarrv1.Source_SOURCE_SAMPLE) })
+	go n.Sample(ctx, cfg.walkers, func(h sniffer.Hash) { c.Offer(h, sniffarrv1.Source_SOURCE_SAMPLE) })
 	if err := c.Run(ctx, n); !errors.Is(err, context.Canceled) {
 		return err
 	}

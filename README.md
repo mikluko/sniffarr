@@ -5,24 +5,24 @@ discovered on the DHT, with an API to search it.
 
 The database and the API are meant to stay private: run them for yourself, not
 as a public index. Peer IP addresses are never sent to the server or stored.
-The crawler fetches metadata only: it never downloads pieces, never uploads,
+The sniffer fetches metadata only: it never downloads pieces, never uploads,
 and never announces itself into a swarm.
 
 ## Binaries
 
-- `sniffdht`, the crawler, walks the DHT for infohashes, by BEP 51
+- `sniffdht`, the sniffer, walks the DHT for infohashes, by BEP 51
   `sample_infohashes` and by the `announce_peer` queries its own DHT node
   receives. It asks the server which of them it has never seen, fetches the
   metadata of those from their peers by BEP 9, and streams the name, size and
   file list to the server. It runs until SIGINT or SIGTERM.
-- `sniffapi`, the server, stores what the crawler submits in SQLite, serves the
+- `sniffapi`, the server, stores what the sniffer submits in SQLite, serves the
   API, and classifies stored torrents with
   [TypeSafe](https://typesafe.ai)'s Jev model.
 
 On submit, the server first rejects by name and file extensions what is never
 worth classifying: adult content, software and games, books and comics,
 courses, torrents under 50 MiB, and torrents with neither video nor audio
-files. A rejected infohash is remembered with its reason only, so the crawler
+files. A rejected infohash is remembered with its reason only, so the sniffer
 is never asked to fetch it again. Accepted torrents are classified for kind,
 Russian audio and video source; adult and software kinds never show in search
 results.
@@ -81,13 +81,13 @@ The database runs in WAL mode and its schema migrates on start.
 | `-walkers`       | `16`    | `sample_infohashes` queries at once                       |
 
 Discovery rests on `sample_infohashes`: in a measured run on a server with a
-public address, no `announce_peer` query reached the node, and the crawler
+public address, no `announce_peer` query reached the node, and the sniffer
 still fetched metadata for about 22 torrents a second. Behind NAT it fetches
 far fewer, a few a second at most.
 
 ## Container image
 
-The image carries both binaries and starts `sniffapi`; run the crawler by
+The image carries both binaries and starts `sniffapi`; run the sniffer by
 overriding the entrypoint with `/sniffdht`.
 
 ```shell

@@ -1,8 +1,8 @@
-// Package crawler discovers torrents on the BitTorrent DHT, fetches their
+// Package sniffer discovers torrents on the BitTorrent DHT, fetches their
 // metadata from peers, and submits it to a sniffarr server. It never
 // downloads pieces, uploads, or announces itself, and it keeps peer
 // addresses only for the duration of a fetch.
-package crawler
+package sniffer
 
 import (
 	"context"
@@ -59,7 +59,7 @@ const (
 	DefaultReport    = 30 * time.Second
 )
 
-// Config tunes a Crawler. Zero fields take the default named in their doc.
+// Config tunes a Sniffer. Zero fields take the default named in their doc.
 type Config struct {
 	Ingest sniffarrv1connect.IngestServiceClient
 	// Fetchers is how many fetches run at once; DefaultFetchers.
@@ -90,9 +90,9 @@ type candidate struct {
 	source sniffarrv1.Source
 }
 
-// Crawler asks the server which offered hashes it has never seen, fetches
+// Sniffer asks the server which offered hashes it has never seen, fetches
 // metadata for those, and streams it to Submit.
-type Crawler struct {
+type Sniffer struct {
 	cfg       Config
 	recent    *recent[Hash]
 	offers    chan candidate
@@ -106,8 +106,8 @@ type stats struct {
 	offered, dropped, unknown, fetched, noPeers, noMetadata, accepted, rejected, duplicate atomic.Int64
 }
 
-// New returns a Crawler for cfg.
-func New(cfg Config) *Crawler {
+// New returns a Sniffer for cfg.
+func New(cfg Config) *Sniffer {
 	orDefault(&cfg.Fetchers, DefaultFetchers)
 	orDefault(&cfg.BatchSize, DefaultBatchSize)
 	orDefault(&cfg.Queue, DefaultQueue)
@@ -119,7 +119,7 @@ func New(cfg Config) *Crawler {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Crawler{
+	return &Sniffer{
 		cfg:       cfg,
 		recent:    newRecent[Hash](cfg.Remember),
 		offers:    make(chan candidate, cfg.Queue),
@@ -138,7 +138,7 @@ func orDefault[T int | time.Duration](v *T, d T) {
 
 // Offer queues a hash for the server's Unknown check unless it was offered
 // recently. It never blocks and is safe for concurrent use.
-func (s *Crawler) Offer(h Hash, source sniffarrv1.Source) {
+func (s *Sniffer) Offer(h Hash, source sniffarrv1.Source) {
 	if !s.recent.add(h) {
 		return
 	}
@@ -150,9 +150,9 @@ func (s *Crawler) Offer(h Hash, source sniffarrv1.Source) {
 	}
 }
 
-// Run crawls until ctx is done, then flushes fetched metadata to the server
+// Run sniffs until ctx is done, then flushes fetched metadata to the server
 // for at most a few seconds and returns.
-func (s *Crawler) Run(ctx context.Context, f Fetcher) error {
+func (s *Sniffer) Run(ctx context.Context, f Fetcher) error {
 	var wg sync.WaitGroup
 	var fetchers sync.WaitGroup
 	wg.Go(func() { s.batch(ctx) })
@@ -175,7 +175,7 @@ func (s *Crawler) Run(ctx context.Context, f Fetcher) error {
 
 // batch passes offered hashes through Unknown in batches and queues the
 // unknown ones for fetching, announced ones apart from sampled.
-func (s *Crawler) batch(ctx context.Context) {
+func (s *Sniffer) batch(ctx context.Context) {
 	batch := make(map[Hash]sniffarrv1.Source, s.cfg.BatchSize)
 	timer := time.NewTimer(s.cfg.BatchWait)
 	defer timer.Stop()
@@ -201,7 +201,7 @@ func (s *Crawler) batch(ctx context.Context) {
 }
 
 // ask calls Unknown with the batch until it succeeds or ctx is done.
-func (s *Crawler) ask(ctx context.Context, batch map[Hash]sniffarrv1.Source) {
+func (s *Sniffer) ask(ctx context.Context, batch map[Hash]sniffarrv1.Source) {
 	req := &sniffarrv1.UnknownRequest{Infohashes: make([][]byte, 0, len(batch))}
 	for h := range batch {
 		req.Infohashes = append(req.Infohashes, h[:])
@@ -242,7 +242,7 @@ func (s *Crawler) ask(ctx context.Context, batch map[Hash]sniffarrv1.Source) {
 }
 
 // next returns the next hash to fetch, an announced one if any is waiting.
-func (s *Crawler) next(ctx context.Context) (candidate, bool) {
+func (s *Sniffer) next(ctx context.Context) (candidate, bool) {
 	select {
 	case c := <-s.announced:
 		return c, true
@@ -258,7 +258,7 @@ func (s *Crawler) next(ctx context.Context) (candidate, bool) {
 	}
 }
 
-func (s *Crawler) fetch(ctx context.Context, f Fetcher) {
+func (s *Sniffer) fetch(ctx context.Context, f Fetcher) {
 	for {
 		c, ok := s.next(ctx)
 		if !ok {
@@ -301,7 +301,7 @@ const flushTimeout = 5 * time.Second
 // submit streams results to Submit, one stream per StreamFor. A stream that
 // fails is retried with everything sent on it, so nothing fetched is lost
 // short of shutdown; the server counts the repeats as duplicates.
-func (s *Crawler) submit(ctx context.Context) {
+func (s *Sniffer) submit(ctx context.Context) {
 	sub := submitter{s: s}
 	tick := time.NewTicker(s.cfg.StreamFor)
 	defer tick.Stop()
@@ -329,7 +329,7 @@ func (s *Crawler) submit(ctx context.Context) {
 // submitter holds one Submit stream and the torrents sent on it since it
 // opened.
 type submitter struct {
-	s       *Crawler
+	s       *Sniffer
 	stream  *connect.ClientStreamForClient[sniffarrv1.SubmitRequest, sniffarrv1.SubmitResponse]
 	cancel  context.CancelFunc
 	sent    int
@@ -389,7 +389,7 @@ func (u *submitter) drop() {
 	u.stream, u.cancel, u.sent = nil, nil, 0
 }
 
-func (s *Crawler) report(ctx context.Context) {
+func (s *Sniffer) report(ctx context.Context) {
 	tick := time.NewTicker(s.cfg.Report)
 	defer tick.Stop()
 	for {
@@ -402,7 +402,7 @@ func (s *Crawler) report(ctx context.Context) {
 	}
 }
 
-func (s *Crawler) log(msg string) {
+func (s *Sniffer) log(msg string) {
 	st := &s.stats
 	s.cfg.Log.Info(msg,
 		"offered", st.offered.Load(), "dropped", st.dropped.Load(), "unknown", st.unknown.Load(),

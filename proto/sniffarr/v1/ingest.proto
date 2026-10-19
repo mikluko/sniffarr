@@ -6,7 +6,7 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
-// IngestService takes torrent metadata from crawlers.
+// IngestService takes torrent metadata from sniffers.
 service IngestService {
   // Unknown returns the infohashes the server has neither stored nor
   // rejected. Stored torrents among them count as seen again.
@@ -53,11 +53,11 @@ message File {
   int64 size = 2;
 }
 
-// Source is how a crawler learned of an infohash.
+// Source is how a sniffer learned of an infohash.
 enum Source {
   SOURCE_UNSPECIFIED = 0;
   // A BEP 51 sample_infohashes reply.
   SOURCE_SAMPLE = 1;
-  // An announce_peer query received by the crawler's DHT node.
+  // An announce_peer query received by the sniffer's DHT node.
   SOURCE_ANNOUNCE = 2;
 }

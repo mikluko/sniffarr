@@ -22,14 +22,14 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Source is how a crawler learned of an infohash.
+// Source is how a sniffer learned of an infohash.
 type Source int32
 
 const (
 	Source_SOURCE_UNSPECIFIED Source = 0
 	// A BEP 51 sample_infohashes reply.
 	Source_SOURCE_SAMPLE Source = 1
-	// An announce_peer query received by the crawler's DHT node.
+	// An announce_peer query received by the sniffer's DHT node.
 	Source_SOURCE_ANNOUNCE Source = 2
 )
 

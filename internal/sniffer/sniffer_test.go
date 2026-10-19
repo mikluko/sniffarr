@@ -1,4 +1,4 @@
-package crawler
+package sniffer
 
 import (
 	"context"
@@ -95,7 +95,7 @@ func hash(b byte) Hash {
 	return Hash{b}
 }
 
-func start(t *testing.T, ingest *fakeIngest, f Fetcher) (*Crawler, context.CancelFunc, <-chan error) {
+func start(t *testing.T, ingest *fakeIngest, f Fetcher) (*Sniffer, context.CancelFunc, <-chan error) {
 	t.Helper()
 	if ingest.known == nil {
 		ingest.known = map[Hash]bool{}
@@ -120,7 +120,7 @@ func start(t *testing.T, ingest *fakeIngest, f Fetcher) (*Crawler, context.Cance
 	return s, cancel, done
 }
 
-func TestCrawlerFetchesOnlyUnknown(t *testing.T) {
+func TestSnifferFetchesOnlyUnknown(t *testing.T) {
 	ingest := &fakeIngest{known: map[Hash]bool{hash(2): true, hash(4): true}}
 	fetcher := &fakeFetcher{fetched: map[Hash]int{}, noPeers: map[Hash]bool{hash(6): true}}
 	s, cancel, done := start(t, ingest, fetcher)
@@ -142,7 +142,7 @@ func TestCrawlerFetchesOnlyUnknown(t *testing.T) {
 	require.EqualValues(t, 4, s.stats.accepted.Load())
 }
 
-func TestCrawlerRetries(t *testing.T) {
+func TestSnifferRetries(t *testing.T) {
 	ingest := &fakeIngest{failUnknown: 2, failSubmit: 2}
 	fetcher := &fakeFetcher{fetched: map[Hash]int{}}
 	s, cancel, done := start(t, ingest, fetcher)
@@ -158,7 +158,7 @@ func TestCrawlerRetries(t *testing.T) {
 	}
 }
 
-func TestCrawlerFlushesOnShutdown(t *testing.T) {
+func TestSnifferFlushesOnShutdown(t *testing.T) {
 	ingest := &fakeIngest{known: map[Hash]bool{}, submitted: map[Hash]*sniffarrv1.Torrent{}}
 	fetcher := &fakeFetcher{fetched: map[Hash]int{}}
 	mux := http.NewServeMux()
