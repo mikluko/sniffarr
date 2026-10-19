@@ -28,8 +28,12 @@ and never announces itself into a swarm.
 The queue serves announced infohashes before sampled ones, then the oldest
 first. It lives in the same SQLite database and survives restarts; a task
 whose fetcher goes away, or whose lease expires, goes back to the queue. A
-task that fails is retried after a backoff and forgotten after a few attempts;
-a forgotten infohash is not rejected, and a later sighting queues it again.
+task that fails is retried after a backoff and dropped after a few attempts.
+The queue is bounded: once a minute the server evicts the infohashes that have
+waited too long, then the ones beyond the size limit, sampled ones before
+announced ones and the oldest first. A dropped or evicted infohash is kept out
+of the queue for a while, then forgotten; it is not rejected, and a later
+sighting queues it again.
 
 The server passes fetched metadata through a first filter by name and file
 extensions, rejecting what is never worth classifying: adult content,
@@ -48,7 +52,7 @@ both ways and needs HTTP/2 end to end. Each group needs its own bearer token
 in the `Authorization` header; `/healthz` needs none.
 
 | Service                     | RPC      | Token                   |
-|-----------------------------|----------|-------------------------|
+| --------------------------- | -------- | ----------------------- |
 | `sniffarr.v1.IngestService` | `Sight`  | `SNIFFARR_INGEST_TOKEN` |
 | `sniffarr.v1.IngestService` | `Fetch`  | `SNIFFARR_INGEST_TOKEN` |
 | `sniffarr.v1.SearchService` | `Search` | `SNIFFARR_SEARCH_TOKEN` |
@@ -68,18 +72,21 @@ in the `Authorization` header; `/healthz` needs none.
 
 ### sniffapi
 
-| Variable                         | Default | Meaning                                                  |
-|----------------------------------|---------|----------------------------------------------------------|
-| `SNIFFARR_DB`                    |         | Path of the SQLite database; required                    |
-| `SNIFFARR_INGEST_TOKEN`          |         | Bearer token of `IngestService`; required                |
-| `SNIFFARR_SEARCH_TOKEN`          |         | Bearer token of `SearchService`; required                |
-| `SNIFFARR_ADDR`                  | `:8080` | Listen address                                           |
-| `TYPESAFE_API_KEY`               |         | TypeSafe API key; when unset, torrents stay unclassified |
-| `SNIFFARR_CLASSIFY_CONCURRENCY`  | `4`     | Classification requests at once                          |
-| `SNIFFARR_CLASSIFY_DAILY_TOKENS` | `0`     | Classifier tokens per UTC day at most; `0` is no limit   |
-| `SNIFFARR_FETCH_LEASE`           | `1m`    | How long a fetcher may hold a task                       |
-| `SNIFFARR_FETCH_ATTEMPTS`        | `3`     | Failed fetches after which an infohash is forgotten      |
-| `SNIFFARR_FETCH_BACKOFF`         | `10m`   | Wait before retrying a failed task, doubled per failure  |
+| Variable                         | Default   | Meaning                                                  |
+| -------------------------------- | --------- | -------------------------------------------------------- |
+| `SNIFFARR_DB`                    |           | Path of the SQLite database; required                    |
+| `SNIFFARR_INGEST_TOKEN`          |           | Bearer token of `IngestService`; required                |
+| `SNIFFARR_SEARCH_TOKEN`          |           | Bearer token of `SearchService`; required                |
+| `SNIFFARR_ADDR`                  | `:8080`   | Listen address                                           |
+| `TYPESAFE_API_KEY`               |           | TypeSafe API key; when unset, torrents stay unclassified |
+| `SNIFFARR_CLASSIFY_CONCURRENCY`  | `4`       | Classification requests at once                          |
+| `SNIFFARR_CLASSIFY_DAILY_TOKENS` | `0`       | Classifier tokens per UTC day at most; `0` is no limit   |
+| `SNIFFARR_FETCH_LEASE`           | `1m`      | How long a fetcher may hold a task                       |
+| `SNIFFARR_FETCH_ATTEMPTS`        | `3`       | Failed fetches after which an infohash is dropped        |
+| `SNIFFARR_FETCH_BACKOFF`         | `10m`     | Wait before retrying a failed task, doubled per failure  |
+| `SNIFFARR_QUEUE_MAX_SIZE`        | `1000000` | Infohashes the queue keeps                               |
+| `SNIFFARR_QUEUE_MAX_AGE`         | `24h`     | How long an infohash may wait in the queue               |
+| `SNIFFARR_QUEUE_DEAD_FOR`        | `168h`    | How long a dropped or evicted infohash stays out         |
 
 The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start.
@@ -87,12 +94,12 @@ over from a previous run are freed on start.
 ### sniffdht
 
 | Variable                | Meaning                                                          |
-|-------------------------|------------------------------------------------------------------|
+| ----------------------- | ---------------------------------------------------------------- |
 | `SNIFFARR_URL`          | Base URL of the server, such as `http://sniffapi:8080`; required |
 | `SNIFFARR_INGEST_TOKEN` | Bearer token of `IngestService`; required                        |
 
 | Flag             | Default | Meaning                                                   |
-|------------------|---------|-----------------------------------------------------------|
+| ---------------- | ------- | --------------------------------------------------------- |
 | `-discover`      | `true`  | Walk the DHT and report the infohashes it reveals         |
 | `-fetch`         | `true`  | Take fetch tasks from the server and return metadata      |
 | `-port`          | `42069` | TCP and UDP port for peers and the DHT, forwarded by UPnP |
@@ -124,11 +131,13 @@ stderr and carry `trace_id` and `span_id` when written inside a span. No
 BitTorrent peer address appears in spans, attributes or logs.
 
 | Binary     | Metric                              | Unit         | Attributes                 |
-|------------|-------------------------------------|--------------|----------------------------|
+| ---------- | ----------------------------------- | ------------ | -------------------------- |
 | `sniffapi` | `sniffarr.ingest.sightings`         | `{sighting}` | `sniffarr.sighting.result` |
 | `sniffapi` | `sniffarr.queue.depth`              | `{infohash}` | `sniffarr.discovery`       |
 | `sniffapi` | `sniffarr.queue.leases`             | `{lease}`    |                            |
 | `sniffapi` | `sniffarr.queue.lease_expiries`     | `{lease}`    |                            |
+| `sniffapi` | `sniffarr.queue.evictions`          | `{infohash}` | `sniffarr.queue.eviction`  |
+| `sniffapi` | `sniffarr.queue.dead`               | `{infohash}` |                            |
 | `sniffapi` | `sniffarr.ingest.results`           | `{result}`   | `sniffarr.fetch.outcome`   |
 | `sniffapi` | `sniffarr.ingest.rejections`        | `{torrent}`  | `sniffarr.rules.reason`    |
 | `sniffapi` | `sniffarr.ingest.stored`            | `{torrent}`  |                            |
@@ -144,7 +153,8 @@ BitTorrent peer address appears in spans, attributes or logs.
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
 `sniffarr.discovery` is `announce` or `sample`; `sniffarr.sighting.result` is
-`new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`.
+`new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
+`sniffarr.queue.eviction` is `age` or `size`.
 
 ## Container image
 

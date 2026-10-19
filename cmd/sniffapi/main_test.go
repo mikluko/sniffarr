@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mikluko/sniffarr/internal/ingest"
+	"github.com/mikluko/sniffarr/internal/queue"
 )
 
 func TestLoad(t *testing.T) {
@@ -31,11 +32,15 @@ func TestLoad(t *testing.T) {
 		err  string
 	}{
 		{name: "defaults", env: required, want: config{addr: ":8080", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", concurrency: 4,
-			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff}},
+			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
+			queue: queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor}}},
 		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
-			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h"),
+			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
+			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h"),
 			want: config{addr: ":9000", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", typesafeKey: "ts", concurrency: 8, dailyTokens: 1000000,
-				lease: 2 * time.Minute, attempts: 5, backoff: time.Hour}},
+				lease: 2 * time.Minute, attempts: 5, backoff: time.Hour,
+				queue: queue.Options{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour}}},
+		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
 		{name: "nothing set", env: map[string]string{}, err: "SNIFFARR_DB is not set"},
 		{name: "no ingest token", env: with("SNIFFARR_INGEST_TOKEN", ""), err: "SNIFFARR_INGEST_TOKEN is not set"},
 		{name: "no search token", env: with("SNIFFARR_SEARCH_TOKEN", ""), err: "SNIFFARR_SEARCH_TOKEN is not set"},

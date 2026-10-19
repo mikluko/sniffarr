@@ -13,15 +13,26 @@ import (
 
 var t0 = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
-func open(t *testing.T) *Queue {
+func open(t *testing.T, opts ...Options) *Queue {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	q, err := New(ctx, db)
+	var o Options
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	q, err := New(ctx, db, o)
 	require.NoError(t, err)
 	return q
+}
+
+func enqueueAt(t *testing.T, q *Queue, at time.Time, discovery string, bs ...byte) (int, int) {
+	t.Helper()
+	queued, known, err := q.Enqueue(context.Background(), sightings(discovery, bs...), at)
+	require.NoError(t, err)
+	return queued, known
 }
 
 func hash(b byte) Hash {
@@ -38,7 +49,7 @@ func sightings(discovery string, bs ...byte) []Sighting {
 
 func enqueue(t *testing.T, q *Queue, discovery string, bs ...byte) (int, int) {
 	t.Helper()
-	queued, known, err := q.Enqueue(context.Background(), sightings(discovery, bs...))
+	queued, known, err := q.Enqueue(context.Background(), sightings(discovery, bs...), t0)
 	require.NoError(t, err)
 	return queued, known
 }
@@ -128,8 +139,11 @@ func TestFail(t *testing.T) {
 	_, err = q.Discovery(ctx, hash(1))
 	require.ErrorIs(t, err, ErrNotQueued)
 
-	queued, _ := enqueue(t, q, Sample, 1)
-	require.Equal(t, 1, queued, "a dropped hash queues again")
+	queued, known := enqueueAt(t, q, t0.Add(DefaultDeadFor), Sample, 1)
+	require.Zero(t, queued, "a dropped hash stays dead")
+	require.Equal(t, 1, known)
+	queued, _ = enqueueAt(t, q, t0.Add(3*time.Minute+DefaultDeadFor), Sample, 1)
+	require.Equal(t, 1, queued, "and queues again once its time is up")
 }
 
 func TestComplete(t *testing.T) {
@@ -140,4 +154,53 @@ func TestComplete(t *testing.T) {
 	n, err := q.Len(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
+}
+
+func TestTrimBySize(t *testing.T) {
+	ctx := context.Background()
+	q := open(t, Options{MaxSize: 3})
+	enqueueAt(t, q, t0, Announce, 1)
+	enqueueAt(t, q, t0.Add(time.Second), Sample, 2, 3)
+	enqueueAt(t, q, t0.Add(2*time.Second), Announce, 4)
+	enqueueAt(t, q, t0.Add(3*time.Second), Sample, 5, 6)
+	require.Len(t, lease(t, q, 1, 1, t0), 1, "leases 1, an announced one")
+
+	tr, err := q.Trim(ctx, t0.Add(time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, Trimmed{Oversize: 3}, tr)
+	n, err := q.Len(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 3, n)
+	require.NoError(t, q.Release(ctx, 1))
+	require.Equal(t, []Hash{hash(1), hash(4), hash(6)}, lease(t, q, 2, 10, t0.Add(time.Minute)), "the oldest samples go first")
+
+	tr, err = q.Trim(ctx, t0.Add(time.Minute))
+	require.NoError(t, err)
+	require.Zero(t, tr.Oversize)
+	enqueueAt(t, q, t0.Add(time.Minute), Sample, 7, 8)
+	require.NoError(t, q.Reset(ctx))
+	_, err = q.Trim(ctx, t0.Add(time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, []Hash{hash(1), hash(4), hash(8)}, lease(t, q, 3, 10, t0.Add(time.Minute)), "announced ones stay while samples remain")
+}
+
+func TestTrimByAgeAndDeadExpiry(t *testing.T) {
+	ctx := context.Background()
+	q := open(t, Options{MaxAge: time.Hour, DeadFor: 24 * time.Hour})
+	enqueueAt(t, q, t0, Announce, 1)
+	enqueueAt(t, q, t0.Add(30*time.Minute), Sample, 2)
+
+	tr, err := q.Trim(ctx, t0.Add(time.Hour+time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, Trimmed{Aged: 1}, tr, "an old announced hash ages out too")
+	queued, known := enqueueAt(t, q, t0.Add(2*time.Hour), Announce, 1)
+	require.Zero(t, queued, "an evicted hash is dead")
+	require.Equal(t, 1, known)
+
+	tr, err = q.Trim(ctx, t0.Add(26*time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, 1, tr.Expired)
+	require.Equal(t, 1, tr.Aged, "2 aged meanwhile")
+	queued, _ = enqueueAt(t, q, t0.Add(26*time.Hour), Announce, 1)
+	require.Equal(t, 1, queued, "a forgotten dead hash queues again")
 }

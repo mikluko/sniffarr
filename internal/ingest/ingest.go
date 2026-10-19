@@ -44,8 +44,8 @@ type Service struct {
 	// queue; DefaultLease.
 	Lease time.Duration
 	// Attempts is how many failed fetches drop a hash from the queue;
-	// DefaultAttempts. A dropped hash is not rejected and queues again when
-	// sighted again.
+	// DefaultAttempts. A dropped hash is not rejected; it is dead for the
+	// queue's DeadFor.
 	Attempts int
 	// Backoff is the wait before a failed hash is leased again, doubled for
 	// each failure before; DefaultBackoff.
@@ -149,7 +149,7 @@ func (s *Service) sight(ctx context.Context, batch []queue.Sighting) (queued, kn
 			fresh = append(fresh, g)
 		}
 	}
-	queued, queuedBefore, err := s.Queue.Enqueue(ctx, fresh)
+	queued, queuedBefore, err := s.Queue.Enqueue(ctx, fresh, s.now())
 	if err != nil {
 		return 0, 0, s.internal(ctx, "enqueue", err)
 	}

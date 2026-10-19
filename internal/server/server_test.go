@@ -23,7 +23,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-func start(t *testing.T, cfg Config) (*httptest.Server, *http.Client) {
+func start(t *testing.T, cfg Config, qopts ...queue.Options) (*httptest.Server, *http.Client) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
@@ -31,11 +31,13 @@ func start(t *testing.T, cfg Config) (*httptest.Server, *http.Client) {
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db)
 	require.NoError(t, err)
-	q, err := queue.New(ctx, db)
-	require.NoError(t, err)
-	if cfg.Meter != nil {
-		require.NoError(t, q.Observe(cfg.Meter))
+	var qo queue.Options
+	if len(qopts) > 0 {
+		qo = qopts[0]
 	}
+	qo.Meter = cfg.Meter
+	q, err := queue.New(ctx, db, qo)
+	require.NoError(t, err)
 	cfg.Queue = q
 	cfg.Store, cfg.IngestToken, cfg.SearchToken, cfg.Log = s, "ingest", "search", slog.New(slog.DiscardHandler)
 	h, err := New(cfg)
@@ -296,7 +298,7 @@ func TestFetchLeaseExpiry(t *testing.T) {
 }
 
 func TestFetchRetryAndForget(t *testing.T) {
-	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, Poll: 20 * time.Millisecond})
+	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, Poll: 20 * time.Millisecond}, queue.Options{DeadFor: 300 * time.Millisecond})
 	ingest := ingestClient(srv, hc)
 	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 	require.NoError(t, err)
@@ -313,7 +315,11 @@ func TestFetchRetryAndForget(t *testing.T) {
 
 	res, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 	require.NoError(t, err)
-	require.Equal(t, int64(1), res.GetNew(), "a forgotten hash is not rejected")
+	require.Equal(t, int64(1), res.GetKnown(), "a forgotten hash stays dead for a while")
+	time.Sleep(300 * time.Millisecond)
+	res, err = sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), res.GetNew(), "then queues again: it was not rejected")
 	f.expect(1)
 }
 

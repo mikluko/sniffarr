@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/mikluko/sniffarr/internal/classify"
@@ -35,6 +34,7 @@ type config struct {
 	dailyTokens              int64
 	lease, backoff           time.Duration
 	attempts                 int
+	queue                    queue.Options
 }
 
 func main() {
@@ -69,6 +69,15 @@ func load(getenv func(string) string) (config, error) {
 		return c, err
 	}
 	if c.backoff, err = duration(getenv, "SNIFFARR_FETCH_BACKOFF", ingest.DefaultBackoff); err != nil {
+		return c, err
+	}
+	if c.queue.MaxSize, err = positive(getenv, "SNIFFARR_QUEUE_MAX_SIZE", queue.DefaultMaxSize); err != nil {
+		return c, err
+	}
+	if c.queue.MaxAge, err = duration(getenv, "SNIFFARR_QUEUE_MAX_AGE", queue.DefaultMaxAge); err != nil {
+		return c, err
+	}
+	if c.queue.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", queue.DefaultDeadFor); err != nil {
 		return c, err
 	}
 	return c, nil
@@ -120,15 +129,12 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
-	q, err := queue.New(ctx, db)
+	q, err := queue.New(ctx, db, cfg.queue)
 	if err != nil {
 		return fmt.Errorf("queue: %w", err)
 	}
 	if err := q.Reset(ctx); err != nil {
 		return fmt.Errorf("reset leases: %w", err)
-	}
-	if err := q.Observe(otel.GetMeterProvider()); err != nil {
-		return fmt.Errorf("queue metrics: %w", err)
 	}
 
 	handler, err := server.New(server.Config{
@@ -163,6 +169,19 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		defer cancel()
 		return srv.Shutdown(shutdown)
 	})
+	g.Go(func() error {
+		every(ctx, maintenance, func() {
+			t, err := q.Trim(ctx, time.Now())
+			if err != nil {
+				log.ErrorContext(ctx, "trim queue", "err", err)
+				return
+			}
+			if t != (queue.Trimmed{}) {
+				log.Info("trimmed queue", "aged", t.Aged, "oversize", t.Oversize, "dead_expired", t.Expired)
+			}
+		})
+		return nil
+	})
 	if cfg.typesafeKey == "" {
 		log.Warn("TYPESAFE_API_KEY is not set; torrents stay unclassified")
 	} else {
@@ -182,4 +201,21 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		})
 	}
 	return g.Wait()
+}
+
+// maintenance is the interval of queue trimming.
+const maintenance = time.Minute
+
+// every calls f every d until ctx is done.
+func every(ctx context.Context, d time.Duration, f func()) {
+	tick := time.NewTicker(d)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			f()
+		}
+	}
 }
