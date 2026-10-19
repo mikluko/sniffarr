@@ -6,6 +6,4 @@ plugins:
     opt: paths=source_relative
   - local: ["go", "tool", "protoc-gen-connect-go"]
     out: internal/apis
-    opt:
-      - paths=source_relative
-      - package_suffix=conn
+    opt: paths=source_relative

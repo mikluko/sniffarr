@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1conn"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 )
 
 type fakeIngest struct {
@@ -102,11 +102,11 @@ func start(t *testing.T, ingest *fakeIngest, f Fetcher) (*Crawler, context.Cance
 	}
 	ingest.submitted = map[Hash]*sniffarrv1.Torrent{}
 	mux := http.NewServeMux()
-	mux.Handle(sniffarrv1conn.NewIngestServiceHandler(ingest))
+	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(ingest))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	s := New(Config{
-		Ingest:    sniffarrv1conn.NewIngestServiceClient(srv.Client(), srv.URL),
+		Ingest:    sniffarrv1connect.NewIngestServiceClient(srv.Client(), srv.URL),
 		Fetchers:  4,
 		BatchSize: 3,
 		BatchWait: 10 * time.Millisecond,
@@ -162,11 +162,11 @@ func TestCrawlerFlushesOnShutdown(t *testing.T) {
 	ingest := &fakeIngest{known: map[Hash]bool{}, submitted: map[Hash]*sniffarrv1.Torrent{}}
 	fetcher := &fakeFetcher{fetched: map[Hash]int{}}
 	mux := http.NewServeMux()
-	mux.Handle(sniffarrv1conn.NewIngestServiceHandler(ingest))
+	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(ingest))
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	s := New(Config{
-		Ingest:    sniffarrv1conn.NewIngestServiceClient(srv.Client(), srv.URL),
+		Ingest:    sniffarrv1connect.NewIngestServiceClient(srv.Client(), srv.URL),
 		Fetchers:  1,
 		StreamFor: time.Hour,
 		BatchWait: time.Millisecond,

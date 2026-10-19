@@ -18,7 +18,7 @@ import (
 	"connectrpc.com/connect"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1conn"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/cli"
 	"github.com/mikluko/sniffarr/internal/crawler"
@@ -76,7 +76,7 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 }
 
 func run(ctx context.Context, cfg config, log *slog.Logger) error {
-	ingest := sniffarrv1conn.NewIngestServiceClient(httpClient(cfg.server), cfg.server.String(),
+	ingest := sniffarrv1connect.NewIngestServiceClient(httpClient(cfg.server), cfg.server.String(),
 		connect.WithInterceptors(auth.Client(cfg.token)),
 		connect.WithSendMaxBytes(server.MaxMessage),
 	)

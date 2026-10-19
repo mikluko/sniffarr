@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1conn"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 )
 
 // Hash is a BitTorrent v1 infohash.
@@ -61,7 +61,7 @@ const (
 
 // Config tunes a Crawler. Zero fields take the default named in their doc.
 type Config struct {
-	Ingest sniffarrv1conn.IngestServiceClient
+	Ingest sniffarrv1connect.IngestServiceClient
 	// Fetchers is how many fetches run at once; DefaultFetchers.
 	Fetchers int
 	// BatchSize is the most hashes asked about in one Unknown call;

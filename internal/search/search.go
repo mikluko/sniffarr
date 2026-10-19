@@ -28,7 +28,7 @@ const (
 // hidden are the kinds Search never returns.
 var hidden = []string{"adult", "software"}
 
-// Service implements sniffarrv1conn.SearchServiceHandler.
+// Service implements sniffarrv1connect.SearchServiceHandler.
 type Service struct {
 	Store *store.Store
 	Log   *slog.Logger

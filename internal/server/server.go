@@ -8,7 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1conn"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/search"
@@ -29,12 +29,12 @@ type Config struct {
 // New returns the handler serving both APIs and /healthz.
 func New(c Config) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(sniffarrv1conn.NewIngestServiceHandler(
+	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
 		&ingest.Service{Store: c.Store, Log: c.Log},
 		connect.WithInterceptors(auth.NewBearer(c.IngestToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
-	mux.Handle(sniffarrv1conn.NewSearchServiceHandler(
+	mux.Handle(sniffarrv1connect.NewSearchServiceHandler(
 		&search.Service{Store: c.Store, Log: c.Log},
 		connect.WithInterceptors(auth.NewBearer(c.SearchToken)),
 		connect.WithReadMaxBytes(MaxMessage),

@@ -19,7 +19,7 @@ import (
 // MaxUnknown is the most infohashes one Unknown request may carry.
 const MaxUnknown = 10000
 
-// Service implements sniffarrv1conn.IngestServiceHandler.
+// Service implements sniffarrv1connect.IngestServiceHandler.
 type Service struct {
 	Store *store.Store
 	Log   *slog.Logger

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1conn"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -51,7 +51,7 @@ func movie(b byte, name string, ext string) *sniffarrv1.Torrent {
 	}
 }
 
-func submit(t *testing.T, c sniffarrv1conn.IngestServiceClient, ts ...*sniffarrv1.Torrent) (*sniffarrv1.SubmitResponse, error) {
+func submit(t *testing.T, c sniffarrv1connect.IngestServiceClient, ts ...*sniffarrv1.Torrent) (*sniffarrv1.SubmitResponse, error) {
 	t.Helper()
 	stream := c.Submit(context.Background())
 	for _, tr := range ts {
@@ -81,8 +81,8 @@ func testIngestAndSearch(t *testing.T, protocol connect.ClientOption) {
 		}
 		return o
 	}
-	ingest := sniffarrv1conn.NewIngestServiceClient(hc, srv.URL, opts("ingest")...)
-	search := sniffarrv1conn.NewSearchServiceClient(hc, srv.URL, opts("search")...)
+	ingest := sniffarrv1connect.NewIngestServiceClient(hc, srv.URL, opts("ingest")...)
+	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, opts("search")...)
 
 	res, err := submit(t, ingest,
 		movie(1, "The.Thing.1982.1080p.BluRay.x264.Rus.Eng", "mkv"),
@@ -137,14 +137,14 @@ func TestAuth(t *testing.T) {
 			if token != "" {
 				opts = append(opts, connect.WithInterceptors(auth.Client(token)))
 			}
-			ingest := sniffarrv1conn.NewIngestServiceClient(hc, srv.URL, opts...)
+			ingest := sniffarrv1connect.NewIngestServiceClient(hc, srv.URL, opts...)
 			_, err := ingest.Unknown(ctx, connect.NewRequest(&sniffarrv1.UnknownRequest{}))
 			require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
 			_, err = submit(t, ingest, movie(1, "The.Thing.1982", "mkv"))
 			require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
 		})
 	}
-	search := sniffarrv1conn.NewSearchServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("ingest")))
+	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("ingest")))
 	_, err := search.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{}))
 	require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
 

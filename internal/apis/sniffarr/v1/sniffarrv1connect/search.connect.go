@@ -2,7 +2,7 @@
 //
 // Source: sniffarr/v1/search.proto
 
-package sniffarrv1conn
+package sniffarrv1connect
 
 import (
 	connect "connectrpc.com/connect"
