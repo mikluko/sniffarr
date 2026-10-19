@@ -10,14 +10,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/mikluko/sniffarr/internal/classify"
+	"github.com/mikluko/sniffarr/internal/cli"
 	"github.com/mikluko/sniffarr/internal/server"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -31,18 +30,7 @@ type config struct {
 }
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	cfg, err := load(os.Getenv)
-	if err != nil {
-		log.Error("config", "err", err)
-		os.Exit(2)
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	if err := run(ctx, cfg, log); err != nil {
-		log.Error("exit", "err", err)
-		os.Exit(1)
-	}
+	cli.Main(func() (config, error) { return load(os.Getenv) }, run)
 }
 
 // load reads the configuration from getenv.

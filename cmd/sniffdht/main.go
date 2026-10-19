@@ -14,14 +14,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"connectrpc.com/connect"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1conn"
 	"github.com/mikluko/sniffarr/internal/auth"
+	"github.com/mikluko/sniffarr/internal/cli"
 	"github.com/mikluko/sniffarr/internal/crawler"
 	"github.com/mikluko/sniffarr/internal/server"
 )
@@ -34,21 +33,7 @@ type config struct {
 }
 
 func main() {
-	cfg, err := load(os.Args[1:], os.Getenv, os.Stderr)
-	if errors.Is(err, flag.ErrHelp) {
-		os.Exit(0)
-	}
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	if err != nil {
-		log.Error("config", "err", err)
-		os.Exit(2)
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	if err := run(ctx, cfg, log); err != nil {
-		log.Error("exit", "err", err)
-		os.Exit(1)
-	}
+	cli.Main(func() (config, error) { return load(os.Args[1:], os.Getenv, os.Stderr) }, run)
 }
 
 // load reads the configuration from args and getenv, writing flag usage and
