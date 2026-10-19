@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func openAt(t *testing.T, path string) (*Store, *database.DB) {
 	ctx := context.Background()
 	db, err := database.Open(ctx, path)
 	require.NoError(t, err)
-	s, err := New(ctx, db)
+	s, err := New(ctx, db, Options{})
 	require.NoError(t, err)
 	return s, db
 }
@@ -191,4 +192,58 @@ func TestTokens(t *testing.T) {
 	n, err = s.TokensUsed(ctx, "2026-10-01")
 	require.NoError(t, err)
 	require.EqualValues(t, 500, n)
+}
+
+func TestMaxFiles(t *testing.T) {
+	ctx := context.Background()
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	defer db.Close()
+	s.opts.MaxFiles = 2
+	tr := torrent(1, "Collection")
+	for i, size := range []int64{10, 30, 20, 5} {
+		tr.Files = append(tr.Files, rules.File{Path: fmt.Sprintf("f%d.mkv", i), Size: size})
+	}
+	_, err := s.Insert(ctx, tr)
+	require.NoError(t, err)
+
+	r, err := s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.EqualValues(t, 4, r.FileCount, "the count stays true")
+	p, err := s.Unclassified(ctx, 0, 1, 10)
+	require.NoError(t, err)
+	require.Equal(t, []rules.File{{Path: "f1.mkv", Size: 30}, {Path: "f2.mkv", Size: 20}}, p[0].Files, "the largest, largest first")
+	got, err := s.Search(ctx, Query{Text: "f0", Limit: 10})
+	require.NoError(t, err)
+	require.Empty(t, got, "a file not stored is not searched")
+}
+
+func TestSweep(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for i := byte(1); i <= 5; i++ {
+		tr := torrent(i, fmt.Sprintf("Old.Movie.%d.1999", i), "old.mkv")
+		tr.SeenAt = t0.Add(time.Duration(i) * time.Hour)
+		_, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	_, err := s.Known(ctx, []Hash{hash(1)}, t0.Add(10*time.Hour))
+	require.NoError(t, err)
+
+	n, err := s.Sweep(ctx, t0.Add(4*time.Hour+time.Minute), 2)
+	require.NoError(t, err)
+	require.Equal(t, 3, n, "2, 3 and 4, in two batches; 1 was seen again")
+	for b, stored := range map[byte]bool{1: true, 2: false, 3: false, 4: false, 5: true} {
+		_, err := s.Get(ctx, hash(b))
+		if stored {
+			require.NoError(t, err)
+		} else {
+			require.ErrorIs(t, err, ErrNotFound)
+		}
+	}
+	got, err := s.Search(ctx, Query{Text: "old movie", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, got, 2, "swept torrents leave the search index")
+	var files int
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM files").Scan(&files))
+	require.Equal(t, 2, files, "and their files go with them")
 }

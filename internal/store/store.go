@@ -3,6 +3,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"embed"
@@ -13,6 +14,9 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
@@ -69,18 +73,38 @@ type Classification struct {
 	RussianAudio     float64
 }
 
+// DefaultMaxFiles is the default of Options.MaxFiles.
+const DefaultMaxFiles = 20
+
+// Options tune a Store. Zero fields take the default named in their doc.
+type Options struct {
+	// MaxFiles is how many files of a torrent are stored, the largest ones;
+	// DefaultMaxFiles. The file count stays true.
+	MaxFiles int
+	// Meter records the store's metrics; the global MeterProvider when nil.
+	Meter metric.MeterProvider
+}
+
 // Store keeps its tables in a shared database. It is safe for concurrent
 // use.
 type Store struct {
-	db   *database.DB
-	w, r *sql.DB
+	db      *database.DB
+	w, r    *sql.DB
+	opts    Options
+	deleted metric.Int64Counter
 }
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
 // New returns the Store in db, applying any pending migrations.
-func New(ctx context.Context, db *database.DB) (*Store, error) {
+func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
+	if opts.MaxFiles <= 0 {
+		opts.MaxFiles = DefaultMaxFiles
+	}
+	if opts.Meter == nil {
+		opts.Meter = otel.GetMeterProvider()
+	}
 	sub, err := fs.Sub(migrations, "migrations")
 	if err != nil {
 		return nil, err
@@ -88,7 +112,50 @@ func New(ctx context.Context, db *database.DB) (*Store, error) {
 	if err := db.Migrate(ctx, "store", sub); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	return &Store{db: db, w: db.W, r: db.R}, nil
+	deleted, err := opts.Meter.Meter("github.com/mikluko/sniffarr/internal/store").Int64Counter("sniffarr.store.retention.deletions",
+		metric.WithUnit("{torrent}"), metric.WithDescription("Stored torrents deleted for not being seen within the retention period."))
+	if err != nil {
+		return nil, err
+	}
+	return &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted}, nil
+}
+
+// Sweep deletes, with their files and search entries, the torrents last seen
+// before before, in transactions of at most batch torrents each, and returns
+// how many it deleted.
+func (s *Store) Sweep(ctx context.Context, before time.Time, batch int) (int, error) {
+	total := 0
+	for {
+		var n int
+		err := s.tx(ctx, func(tx *sql.Tx) error {
+			const ids = "SELECT id FROM torrents WHERE last_seen < ? ORDER BY last_seen LIMIT ?"
+			if _, err := tx.ExecContext(ctx, "DELETE FROM torrents_fts WHERE rowid IN ("+ids+")", before.Unix(), batch); err != nil {
+				return err
+			}
+			res, err := tx.ExecContext(ctx, "DELETE FROM torrents WHERE id IN ("+ids+")", before.Unix(), batch)
+			if err != nil {
+				return err
+			}
+			d, err := res.RowsAffected()
+			n = int(d)
+			return err
+		})
+		if err != nil {
+			return total, err
+		}
+		total += n
+		s.deleted.Add(ctx, int64(n))
+		if n < batch {
+			return total, nil
+		}
+	}
+}
+
+// largest returns the at most n largest files, largest first.
+func largest(files []rules.File, n int) []rules.File {
+	files = slices.Clone(files)
+	slices.SortStableFunc(files, func(a, b rules.File) int { return cmp.Compare(b.Size, a.Size) })
+	return files[:min(n, len(files))]
 }
 
 func (s *Store) tx(ctx context.Context, f func(*sql.Tx) error) error {
@@ -132,8 +199,9 @@ func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (map[H
 	return known, err
 }
 
-// Insert stores a torrent for classification. It reports false, and stores
-// nothing, when the hash is already stored or rejected.
+// Insert stores a torrent for classification, with its MaxFiles largest
+// files. It reports false, and stores nothing, when the hash is already
+// stored or rejected.
 func (s *Store) Insert(ctx context.Context, t Torrent) (bool, error) {
 	var inserted bool
 	err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -152,8 +220,9 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (bool, error) {
 			return err
 		}
 		inserted = true
-		paths := make([]string, len(t.Files))
-		for i, f := range t.Files {
+		files := largest(t.Files, s.opts.MaxFiles)
+		paths := make([]string, len(files))
+		for i, f := range files {
 			paths[i] = f.Path
 			if _, err := tx.ExecContext(ctx, "INSERT INTO files (torrent_id, idx, path, size) VALUES (?, ?, ?, ?)", id, i, f.Path, f.Size); err != nil {
 				return err

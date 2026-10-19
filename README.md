@@ -64,7 +64,7 @@ in the `Authorization` header; `/healthz` needs none.
 - `Fetch` is bidirectional: the client grants credit, one unit per task it can
   take, the server answers with a task per unit, and the client returns each
   task's result, metadata or a failure, on the same stream.
-- `Search` matches every word of the query against names and file paths, and
+- `Search` matches every word of the query against names and stored file paths, and
   filters by kind and by the probability of Russian audio.
 - `Get` returns one release by infohash.
 
@@ -87,9 +87,14 @@ in the `Authorization` header; `/healthz` needs none.
 | `SNIFFARR_QUEUE_MAX_SIZE`        | `1000000` | Infohashes the queue keeps                               |
 | `SNIFFARR_QUEUE_MAX_AGE`         | `24h`     | How long an infohash may wait in the queue               |
 | `SNIFFARR_QUEUE_DEAD_FOR`        | `168h`    | How long a dropped or evicted infohash stays out         |
+| `SNIFFARR_STORE_MAX_FILES`       | `20`      | Files stored per torrent, the largest ones               |
+| `SNIFFARR_RETENTION`             | `2160h`   | How long a stored torrent is kept without being seen     |
 
 The database runs in WAL mode and its schema migrates on start; leases left
-over from a previous run are freed on start.
+over from a previous run are freed on start. A torrent keeps its true file
+count, but only its largest files are stored and searched. Once a minute the
+server deletes, in small batches, the torrents nobody has sighted within the
+retention period; a later sighting queues them again.
 
 ### sniffdht
 
@@ -130,26 +135,27 @@ Every RPC is traced and measured on both ends by
 stderr and carry `trace_id` and `span_id` when written inside a span. No
 BitTorrent peer address appears in spans, attributes or logs.
 
-| Binary     | Metric                              | Unit         | Attributes                 |
-| ---------- | ----------------------------------- | ------------ | -------------------------- |
-| `sniffapi` | `sniffarr.ingest.sightings`         | `{sighting}` | `sniffarr.sighting.result` |
-| `sniffapi` | `sniffarr.queue.depth`              | `{infohash}` | `sniffarr.discovery`       |
-| `sniffapi` | `sniffarr.queue.leases`             | `{lease}`    |                            |
-| `sniffapi` | `sniffarr.queue.lease_expiries`     | `{lease}`    |                            |
-| `sniffapi` | `sniffarr.queue.evictions`          | `{infohash}` | `sniffarr.queue.eviction`  |
-| `sniffapi` | `sniffarr.queue.dead`               | `{infohash}` |                            |
-| `sniffapi` | `sniffarr.ingest.results`           | `{result}`   | `sniffarr.fetch.outcome`   |
-| `sniffapi` | `sniffarr.ingest.rejections`        | `{torrent}`  | `sniffarr.rules.reason`    |
-| `sniffapi` | `sniffarr.ingest.stored`            | `{torrent}`  |                            |
-| `sniffapi` | `sniffarr.classify.classifications` | `{torrent}`  | `sniffarr.kind`            |
-| `sniffapi` | `sniffarr.classify.tokens`          | `{token}`    |                            |
-| `sniffapi` | `sniffarr.classify.errors`          | `{error}`    | `sniffarr.classify.error`  |
-| `sniffdht` | `sniffarr.dht.nodes`                | `{node}`     |                            |
-| `sniffdht` | `sniffarr.dht.sample_answers`       | `{answer}`   |                            |
-| `sniffdht` | `sniffarr.sniffer.sightings`        | `{infohash}` | `sniffarr.discovery`       |
-| `sniffdht` | `sniffarr.sniffer.fetch.in_flight`  | `{task}`     |                            |
-| `sniffdht` | `sniffarr.sniffer.fetch.outcomes`   | `{task}`     | `sniffarr.fetch.outcome`   |
-| `sniffdht` | `sniffarr.sniffer.fetch.duration`   | `s`          | `sniffarr.fetch.outcome`   |
+| Binary     | Metric                               | Unit         | Attributes                 |
+| ---------- | ------------------------------------ | ------------ | -------------------------- |
+| `sniffapi` | `sniffarr.ingest.sightings`          | `{sighting}` | `sniffarr.sighting.result` |
+| `sniffapi` | `sniffarr.queue.depth`               | `{infohash}` | `sniffarr.discovery`       |
+| `sniffapi` | `sniffarr.queue.leases`              | `{lease}`    |                            |
+| `sniffapi` | `sniffarr.queue.lease_expiries`      | `{lease}`    |                            |
+| `sniffapi` | `sniffarr.queue.evictions`           | `{infohash}` | `sniffarr.queue.eviction`  |
+| `sniffapi` | `sniffarr.queue.dead`                | `{infohash}` |                            |
+| `sniffapi` | `sniffarr.store.retention.deletions` | `{torrent}`  |                            |
+| `sniffapi` | `sniffarr.ingest.results`            | `{result}`   | `sniffarr.fetch.outcome`   |
+| `sniffapi` | `sniffarr.ingest.rejections`         | `{torrent}`  | `sniffarr.rules.reason`    |
+| `sniffapi` | `sniffarr.ingest.stored`             | `{torrent}`  |                            |
+| `sniffapi` | `sniffarr.classify.classifications`  | `{torrent}`  | `sniffarr.kind`            |
+| `sniffapi` | `sniffarr.classify.tokens`           | `{token}`    |                            |
+| `sniffapi` | `sniffarr.classify.errors`           | `{error}`    | `sniffarr.classify.error`  |
+| `sniffdht` | `sniffarr.dht.nodes`                 | `{node}`     |                            |
+| `sniffdht` | `sniffarr.dht.sample_answers`        | `{answer}`   |                            |
+| `sniffdht` | `sniffarr.sniffer.sightings`         | `{infohash}` | `sniffarr.discovery`       |
+| `sniffdht` | `sniffarr.sniffer.fetch.in_flight`   | `{task}`     |                            |
+| `sniffdht` | `sniffarr.sniffer.fetch.outcomes`    | `{task}`     | `sniffarr.fetch.outcome`   |
+| `sniffdht` | `sniffarr.sniffer.fetch.duration`    | `s`          | `sniffarr.fetch.outcome`   |
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
 `sniffarr.discovery` is `announce` or `sample`; `sniffarr.sighting.result` is

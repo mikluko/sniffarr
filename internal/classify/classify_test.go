@@ -123,7 +123,7 @@ func setup(t *testing.T, names ...string) *store.Store {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db)
+	s, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
 	for i, n := range names {
 		_, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: n, Size: 1 << 30, Files: []rules.File{{Path: n + ".mkv", Size: 1 << 30}}, Discovery: "sample", SeenAt: time.Now()})

@@ -35,7 +35,15 @@ type config struct {
 	lease, backoff           time.Duration
 	attempts                 int
 	queue                    queue.Options
+	store                    store.Options
+	retention                time.Duration
 }
+
+// defaultRetention is how long a stored torrent is kept without being seen.
+const defaultRetention = 90 * 24 * time.Hour
+
+// sweepBatch is the most torrents one retention transaction deletes.
+const sweepBatch = 1000
 
 func main() {
 	cli.Main(func() (config, error) { return load(os.Getenv) }, run)
@@ -78,6 +86,12 @@ func load(getenv func(string) string) (config, error) {
 		return c, err
 	}
 	if c.queue.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", queue.DefaultDeadFor); err != nil {
+		return c, err
+	}
+	if c.store.MaxFiles, err = positive(getenv, "SNIFFARR_STORE_MAX_FILES", store.DefaultMaxFiles); err != nil {
+		return c, err
+	}
+	if c.retention, err = duration(getenv, "SNIFFARR_RETENTION", defaultRetention); err != nil {
 		return c, err
 	}
 	return c, nil
@@ -125,7 +139,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		return fmt.Errorf("open %s: %w", cfg.db, err)
 	}
 	defer db.Close()
-	s, err := store.New(ctx, db)
+	s, err := store.New(ctx, db, cfg.store)
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
@@ -170,16 +184,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		return srv.Shutdown(shutdown)
 	})
 	g.Go(func() error {
-		every(ctx, maintenance, func() {
-			t, err := q.Trim(ctx, time.Now())
-			if err != nil {
-				log.ErrorContext(ctx, "trim queue", "err", err)
-				return
-			}
-			if t != (queue.Trimmed{}) {
-				log.Info("trimmed queue", "aged", t.Aged, "oversize", t.Oversize, "dead_expired", t.Expired)
-			}
-		})
+		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.retention, log) })
 		return nil
 	})
 	if cfg.typesafeKey == "" {
@@ -203,8 +208,27 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	return g.Wait()
 }
 
-// maintenance is the interval of queue trimming.
+// maintenance is the interval of maintain.
 const maintenance = time.Minute
+
+// maintain trims the queue and deletes the torrents not seen within
+// retention.
+func maintain(ctx context.Context, q *queue.Queue, s *store.Store, retention time.Duration, log *slog.Logger) {
+	now := time.Now()
+	t, err := q.Trim(ctx, now)
+	if err != nil {
+		log.ErrorContext(ctx, "trim queue", "err", err)
+	} else if t != (queue.Trimmed{}) {
+		log.Info("trimmed queue", "aged", t.Aged, "oversize", t.Oversize, "dead_expired", t.Expired)
+	}
+	n, err := s.Sweep(ctx, now.Add(-retention), sweepBatch)
+	if err != nil {
+		log.ErrorContext(ctx, "sweep store", "err", err)
+	}
+	if n > 0 {
+		log.Info("swept store", "deleted", n)
+	}
+}
 
 // every calls f every d until ctx is done.
 func every(ctx context.Context, d time.Duration, f func()) {

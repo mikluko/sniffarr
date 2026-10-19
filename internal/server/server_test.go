@@ -29,7 +29,7 @@ func start(t *testing.T, cfg Config, qopts ...queue.Options) (*httptest.Server, 
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db)
+	s, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
 	var qo queue.Options
 	if len(qopts) > 0 {
