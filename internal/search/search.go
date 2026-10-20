@@ -53,6 +53,11 @@ var layers = map[string]sniffarrv1.Layer{
 	store.LayerJev:   sniffarrv1.Layer_LAYER_CLASSIFIER,
 }
 
+var titleLayers = map[string]sniffarrv1.TitleLayer{
+	store.LayerTMDB: sniffarrv1.TitleLayer_TITLE_LAYER_TMDB,
+	store.LayerJev:  sniffarrv1.TitleLayer_TITLE_LAYER_CLASSIFIER,
+}
+
 var sources = map[string]sniffarrv1.VideoSource{
 	"disc_image": sniffarrv1.VideoSource_VIDEO_SOURCE_DISC_IMAGE,
 	"remux":      sniffarrv1.VideoSource_VIDEO_SOURCE_REMUX,
@@ -84,6 +89,12 @@ func (s *Service) Search(ctx context.Context, req *connect.Request[sniffarrv1.Se
 			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("min_audio_probability without audio_language"))
 		}
 		q.AudioLanguage, q.MinAudioProbability = m.GetAudioLanguage(), new(float64(m.GetMinAudioProbability()))
+	}
+	if id := m.GetId(); id != nil {
+		if id.GetProvider() == "" || id.GetId() == "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("id without provider or id"))
+		}
+		q.ID = &store.ExternalID{Provider: id.GetProvider(), ID: id.GetId()}
 	}
 	var found []store.Release
 	var err error
@@ -133,6 +144,11 @@ func release(r store.Release) *sniffarrv1.Release {
 		Magnet:           Magnet(r.Hash, r.Name),
 		Layer:            layers[r.KindLayer],
 		Classified:       r.Classified,
+		TitleLayer:       titleLayers[r.Title.Layer],
+		TitleConfidence:  float32(r.Title.Confidence),
+	}
+	for _, id := range r.Title.IDs {
+		out.Ids = append(out.Ids, &sniffarrv1.ExternalId{Provider: id.Provider, Id: id.ID})
 	}
 	for k, name := range kinds {
 		if name == r.Kind {

@@ -27,12 +27,18 @@ import (
 	"github.com/mikluko/sniffarr/internal/server"
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/telemetry"
+	"github.com/mikluko/sniffarr/internal/titles"
 )
 
 type config struct {
 	addr, db                 string
 	ingestToken, searchToken string
 	typesafeKey              string
+	tmdbKey                  string
+	titlesConcurrency        int
+	titlesRate               int
+	titlesRetry              time.Duration
+	lazyTitles               int
 	concurrency              int
 	dailyTokens              int64
 	searchReserve            int
@@ -77,6 +83,7 @@ func load(lookup func(string) (string, bool)) (config, error) {
 		ingestToken: getenv("SNIFFARR_INGEST_TOKEN"),
 		searchToken: getenv("SNIFFARR_SEARCH_TOKEN"),
 		typesafeKey: getenv("TYPESAFE_API_KEY"),
+		tmdbKey:     getenv("TMDB_API_KEY"),
 	}
 	var err error
 	if c.concurrency, err = positive(getenv, "SNIFFARR_CLASSIFY_CONCURRENCY", 4); err != nil {
@@ -121,6 +128,19 @@ func load(lookup func(string) (string, bool)) (config, error) {
 	if c.lazyWait, err = duration(getenv, "SNIFFARR_SEARCH_CLASSIFY_WAIT", search.DefaultLazyWait); err != nil {
 		return c, err
 	}
+	if c.lazyTitles, err = positive(getenv, "SNIFFARR_SEARCH_TITLES_MAX", search.DefaultLazyTitles); err != nil {
+		return c, err
+	}
+	if c.titlesConcurrency, err = positive(getenv, "SNIFFARR_TITLES_CONCURRENCY", titles.DefaultConcurrency); err != nil {
+		return c, err
+	}
+	if c.titlesRate, err = positive(getenv, "SNIFFARR_TITLES_RATE", titles.DefaultRate); err != nil {
+		return c, err
+	}
+	if c.titlesRetry, err = duration(getenv, "SNIFFARR_TITLES_RETRY", titles.DefaultRetry); err != nil {
+		return c, err
+	}
+	c.store.Titles = c.tmdbKey != ""
 	if c.scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
 		return c, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
 	}
@@ -205,14 +225,25 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	}
 
 	var jev *classify.Jev
+	var matcher *titles.Matcher
 	var lazy *search.Lazy
+	if cfg.typesafeKey != "" || cfg.tmdbKey != "" {
+		lazy = &search.Lazy{Max: cfg.lazyMax, MaxTitles: cfg.lazyTitles, Wait: cfg.lazyWait, MaxFiles: classify.MaxFiles, Log: log}
+	}
 	if cfg.typesafeKey == "" {
 		log.Warn("TYPESAFE_API_KEY is not set; torrents are classified by their names only")
 	} else {
 		client := classify.New(cfg.typesafeKey)
 		client.Languages = cfg.languages
 		jev = &classify.Jev{Store: s, Classifier: client, DailyTokens: cfg.dailyTokens, Log: log}
-		lazy = &search.Lazy{Classifier: jev, Max: cfg.lazyMax, Wait: cfg.lazyWait, MaxFiles: classify.MaxFiles, Log: log}
+		lazy.Classifier = jev
+	}
+	if cfg.tmdbKey != "" {
+		matcher = &titles.Matcher{TMDB: titles.NewTMDB(cfg.tmdbKey, cfg.titlesRate), Store: s, Retry: cfg.titlesRetry, Log: log}
+		if jev != nil {
+			matcher.Chooser = jev
+		}
+		lazy.Titles = matcher
 	}
 	handler, err := server.New(server.Config{
 		Store:       s,
@@ -255,6 +286,18 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	})
 	if jev != nil {
 		w := &classify.Worker{Store: s, Jev: jev, Concurrency: cfg.concurrency, Reserve: cfg.searchReserve, Poll: 10 * time.Second, Log: log}
+		g.Go(func() error {
+			if err := w.Run(ctx); !errors.Is(err, context.Canceled) {
+				return err
+			}
+			return nil
+		})
+	}
+	if matcher != nil {
+		w := &titles.Worker{Matcher: matcher, Concurrency: cfg.titlesConcurrency, Reserve: cfg.searchReserve, Poll: 10 * time.Second, Log: log}
+		if jev != nil {
+			w.Budget = jev
+		}
 		g.Go(func() error {
 			if err := w.Run(ctx); !errors.Is(err, context.Canceled) {
 				return err

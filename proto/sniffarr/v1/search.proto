@@ -35,6 +35,8 @@ message SearchRequest {
   // Only releases whose probability of an audio track in audio_language is
   // known and at least this.
   optional float min_audio_probability = 6;
+  // Only releases of the work with this ID; query may be empty then.
+  optional ExternalId id = 7;
 }
 
 message SearchResponse {
@@ -74,6 +76,29 @@ message Release {
   // At most one entry per audio language the server is configured with, in
   // tag order; empty without audio languages.
   repeated Audio audio = 15;
+  // IDs of the work the release's title is matched to, in provider order;
+  // empty while unmatched or without title matching.
+  repeated ExternalId ids = 16;
+  // What matched the title; TITLE_LAYER_UNSPECIFIED while unmatched.
+  TitleLayer title_layer = 17;
+  // Confidence in the title match, 0 while unmatched.
+  float title_confidence = 18;
+}
+
+// ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
+// "wikidata".
+message ExternalId {
+  string provider = 1;
+  string id = 2;
+}
+
+// TitleLayer is what matched a release's title to a work.
+enum TitleLayer {
+  TITLE_LAYER_UNSPECIFIED = 0;
+  // TMDB's search, with one plausible candidate.
+  TITLE_LAYER_TMDB = 1;
+  // The classifier, choosing among several.
+  TITLE_LAYER_CLASSIFIER = 2;
 }
 
 // Audio is what is known of a release's audio track in one language.

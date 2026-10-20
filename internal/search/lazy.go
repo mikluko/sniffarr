@@ -17,6 +17,7 @@ import (
 
 const (
 	DefaultLazyMax         = 20
+	DefaultLazyTitles      = 5
 	DefaultLazyConcurrency = 8
 	DefaultLazyWait        = 2 * time.Second
 	DefaultLazyTimeout     = time.Minute
@@ -27,18 +28,32 @@ type Classifier interface {
 	Classify(ctx context.Context, p store.Pending) error
 }
 
-// Lazy has Search classify the candidates the classifier has not examined
-// before it answers. Zero fields take the default named in their doc.
+// Titles matches title keys to works.
+type Titles interface {
+	Unmatched(ctx context.Context, keys []string, limit int) ([]store.TitleKey, error)
+	Match(ctx context.Context, k store.TitleKey) error
+}
+
+// Lazy has Search classify the candidates the classifier has not examined,
+// and match their title keys, before it answers. Zero fields take the
+// default named in their doc.
 type Lazy struct {
+	// Classifier, when set, classifies candidates.
 	Classifier Classifier
 	// Max is the most candidates one Search classifies; DefaultLazyMax.
 	Max int
-	// Concurrency is how many it classifies at once; DefaultLazyConcurrency.
+	// Titles, when set, matches the title keys of candidates.
+	Titles Titles
+	// MaxTitles is the most title keys one Search matches;
+	// DefaultLazyTitles.
+	MaxTitles int
+	// Concurrency is how many classifications and matches run at once;
+	// DefaultLazyConcurrency.
 	Concurrency int
 	// Wait is how long Search waits for them; DefaultLazyWait. Those still
 	// running go on, and their answers are recorded for later searches.
 	Wait time.Duration
-	// Timeout bounds one classification, waited for or not;
+	// Timeout bounds one classification or match, waited for or not;
 	// DefaultLazyTimeout.
 	Timeout time.Duration
 	// MaxFiles is how many of a torrent's files the classifier is shown.
@@ -47,9 +62,10 @@ type Lazy struct {
 	// Meter records metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
 
-	once     sync.Once
-	duration metric.Float64Histogram
-	outcomes metric.Int64Counter
+	once          sync.Once
+	duration      metric.Float64Histogram
+	outcomes      metric.Int64Counter
+	titleOutcomes metric.Int64Counter
 }
 
 func (l *Lazy) init() {
@@ -61,7 +77,7 @@ func (l *Lazy) init() {
 		m := mp.Meter("github.com/mikluko/sniffarr/internal/search")
 		var err error
 		l.duration, err = m.Float64Histogram("sniffarr.search.lazy.duration", metric.WithUnit("s"),
-			metric.WithDescription("Time a search spent classifying its candidates."),
+			metric.WithDescription("Time a search spent classifying its candidates and matching their titles."),
 			metric.WithExplicitBucketBoundaries(0.05, 0.1, 0.25, 0.5, 1, 1.5, 2, 3, 5))
 		if err != nil {
 			otel.Handle(err)
@@ -71,8 +87,16 @@ func (l *Lazy) init() {
 		if err != nil {
 			otel.Handle(err)
 		}
+		l.titleOutcomes, err = m.Int64Counter("sniffarr.search.lazy.titles", metric.WithUnit("{title}"),
+			metric.WithDescription("Title keys a search had matched, by whether the match came in time."))
+		if err != nil {
+			otel.Handle(err)
+		}
 		if l.Max <= 0 {
 			l.Max = DefaultLazyMax
+		}
+		if l.MaxTitles <= 0 {
+			l.MaxTitles = DefaultLazyTitles
 		}
 		if l.Concurrency <= 0 {
 			l.Concurrency = DefaultLazyConcurrency
@@ -87,8 +111,9 @@ func (l *Lazy) init() {
 }
 
 // search returns the releases matching q after classifying, within Wait, up
-// to Max candidates the classifier has not examined; the filters on kind and
-// audio apply to what is known once it is done.
+// to Max candidates the classifier has not examined, and matching up to
+// MaxTitles title keys of candidates due for a match; the filters on kind
+// and audio apply to what is known once it is done.
 func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query) ([]store.Release, error) {
 	l.init()
 	limit := q.Limit
@@ -100,18 +125,11 @@ func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query) ([]sto
 	if err != nil {
 		return nil, err
 	}
-	var ids []int64
-	for _, r := range found {
-		if !r.Classified && len(ids) < l.Max {
-			ids = append(ids, r.ID)
-		}
-	}
-	if done := l.classify(ctx, s, ids); len(done) > 0 {
-		for i, r := range found {
-			if done[r.ID] {
-				if found[i], err = s.Get(ctx, r.Hash); err != nil {
-					return nil, err
-				}
+	classified, matched := l.examine(ctx, s, found)
+	for i, r := range found {
+		if classified[r.ID] || matched[r.TitleKey] {
+			if found[i], err = s.Get(ctx, r.Hash); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -124,65 +142,105 @@ func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query) ([]sto
 	return out, nil
 }
 
-// classify classifies the torrents with the IDs and returns those classified
-// within Wait.
-func (l *Lazy) classify(ctx context.Context, s *store.Store, ids []int64) map[int64]bool {
-	if len(ids) == 0 {
-		return nil
+// examine classifies the candidates and matches their title keys, and
+// returns the IDs classified and the keys matched within Wait.
+func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Release) (map[int64]bool, map[string]bool) {
+	var (
+		jobs       []func(context.Context)
+		mu         sync.Mutex
+		expired    = make(chan struct{})
+		classified = map[int64]bool{}
+		matched    = map[string]bool{}
+	)
+	var ids []int64
+	var keys []string
+	for _, r := range found {
+		if l.Classifier != nil && !r.Classified && len(ids) < l.Max {
+			ids = append(ids, r.ID)
+		}
+		if l.Titles != nil && r.TitleKey != "" && (r.Kind == "movie" || r.Kind == "series") && !slices.Contains(keys, r.TitleKey) {
+			keys = append(keys, r.TitleKey)
+		}
+	}
+	if len(ids) > 0 {
+		pending, err := s.Pending(ctx, ids, l.MaxFiles)
+		if err != nil {
+			l.Log.ErrorContext(ctx, "pending", "err", err)
+		}
+		for _, p := range pending {
+			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.Classifier.Classify(ctx, p) },
+				l.outcomes, &mu, expired, func() { classified[p.ID] = true }))
+		}
+	}
+	if len(keys) > 0 {
+		due, err := l.Titles.Unmatched(ctx, keys, l.MaxTitles)
+		if err != nil {
+			l.Log.ErrorContext(ctx, "unmatched titles", "err", err)
+		}
+		for _, k := range due {
+			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.Titles.Match(ctx, k) },
+				l.titleOutcomes, &mu, expired, func() { matched[k.Key] = true }))
+		}
+	}
+	if len(jobs) == 0 {
+		return nil, nil
 	}
 	start := time.Now()
-	pending, err := s.Pending(ctx, ids, l.MaxFiles)
-	if err != nil {
-		l.Log.ErrorContext(ctx, "pending", "err", err)
-		return nil
-	}
-	var (
-		mu   sync.Mutex
-		done = map[int64]bool{}
-		wg   sync.WaitGroup
-		sem  = make(chan struct{}, l.Concurrency)
-	)
-	deadline := time.After(l.Wait)
-	expired := make(chan struct{})
-	all := make(chan struct{})
-	go func() {
-		select {
-		case <-deadline:
-		case <-ctx.Done():
-		case <-all:
+	l.run(ctx, jobs, expired)
+	l.duration.Record(ctx, time.Since(start).Seconds())
+	mu.Lock()
+	defer mu.Unlock()
+	return maps.Clone(classified), maps.Clone(matched)
+}
+
+// job runs f under its own Timeout, counts the outcome, and, when f succeeds
+// before expired closes, calls done under mu.
+func (l *Lazy) job(f func(context.Context) error, outcomes metric.Int64Counter, mu *sync.Mutex, expired <-chan struct{}, done func()) func(context.Context) {
+	return func(ctx context.Context) {
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), l.Timeout)
+		defer cancel()
+		if err := f(cctx); err != nil {
+			outcomes.Add(ctx, 1, result("failed"))
+			return
 		}
-		close(expired)
-	}()
-	for _, p := range pending {
+		mu.Lock()
+		defer mu.Unlock()
+		select {
+		case <-expired:
+			outcomes.Add(ctx, 1, result("late"))
+		default:
+			outcomes.Add(ctx, 1, result("in_time"))
+			done()
+		}
+	}
+}
+
+// run starts the jobs, Concurrency at once, and returns after Wait, once ctx
+// is done, or once they all are, whichever is first, having closed expired.
+// The jobs still running go on.
+func (l *Lazy) run(ctx context.Context, jobs []func(context.Context), expired chan struct{}) {
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, l.Concurrency)
+	for _, j := range jobs {
 		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), l.Timeout)
-			defer cancel()
-			if err := l.Classifier.Classify(cctx, p); err != nil {
-				l.outcomes.Add(ctx, 1, result("failed"))
-				return
-			}
-			select {
-			case <-expired:
-				l.outcomes.Add(ctx, 1, result("late"))
-			default:
-				l.outcomes.Add(ctx, 1, result("in_time"))
-				mu.Lock()
-				done[p.ID] = true
-				mu.Unlock()
-			}
+			j(ctx)
 		})
 	}
+	all := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(all)
 	}()
-	<-expired
-	l.duration.Record(ctx, time.Since(start).Seconds())
-	mu.Lock()
-	defer mu.Unlock()
-	return maps.Clone(done)
+	timer := time.NewTimer(l.Wait)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+	case <-all:
+	}
+	close(expired)
 }
 
 func result(r string) metric.AddOption {

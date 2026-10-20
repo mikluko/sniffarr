@@ -64,7 +64,7 @@ func setup(t *testing.T, torrents ...store.Torrent) (*store.Store, *fakeJev) {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})
+	s, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}, Titles: true})
 	require.NoError(t, err)
 	for i, tr := range torrents {
 		tr.Hash = store.Hash{byte(i + 1)}
@@ -136,6 +136,77 @@ func TestLazyFiltersOnWhatIsKnown(t *testing.T) {
 
 	_, err := svc.Search(context.Background(), connect.NewRequest(&sniffarrv1.SearchRequest{MinAudioProbability: new(float32(0.5))}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "a probability needs its language")
+}
+
+// fakeTitles matches a key to the IDs in ids, or to nothing, after delay.
+type fakeTitles struct {
+	store *store.Store
+	delay time.Duration
+	ids   map[string][]store.ExternalID
+	mu    sync.Mutex
+	asked []string
+}
+
+func (f *fakeTitles) Unmatched(ctx context.Context, keys []string, limit int) ([]store.TitleKey, error) {
+	return f.store.UnmatchedTitles(ctx, keys, time.Now().Add(-time.Hour), limit)
+}
+
+func (f *fakeTitles) Match(ctx context.Context, k store.TitleKey) error {
+	f.mu.Lock()
+	f.asked = append(f.asked, k.Key)
+	f.mu.Unlock()
+	select {
+	case <-time.After(f.delay):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	t := store.Title{}
+	if ids, ok := f.ids[k.Key]; ok {
+		t = store.Title{Confidence: 1, Layer: store.LayerTMDB, IDs: ids}
+	}
+	return f.store.RecordTitle(ctx, k.Key, t, time.Now())
+}
+
+func TestLazyTitles(t *testing.T) {
+	s, _ := setup(t,
+		store.Torrent{Name: "Heat.1995.1080p", Kind: "movie", KindLayer: store.LayerRules, TitleKey: "y:heat 1995"},
+		store.Torrent{Name: "Heat.1995.2160p", Kind: "movie", KindLayer: store.LayerRules, TitleKey: "y:heat 1995"},
+		store.Torrent{Name: "Ronin.1998.1080p", Kind: "movie", KindLayer: store.LayerRules, TitleKey: "y:ronin 1998"},
+		store.Torrent{Name: "Moon.Safari.1998", Kind: "music", KindLayer: store.LayerRules, TitleKey: "y:moon safari 1998"},
+		store.Torrent{Name: "Thief.1981", TitleKey: "y:thief 1981"},
+	)
+	titles := &fakeTitles{store: s, ids: map[string][]store.ExternalID{"y:heat 1995": {{Provider: "tmdb", ID: "949"}, {Provider: "imdb", ID: "tt0113277"}}}}
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Titles: titles, Log: slog.New(slog.DiscardHandler)}}
+
+	got := search(t, svc, &sniffarrv1.SearchRequest{})
+	require.Len(t, got, 5)
+	heat := got["Heat.1995.2160p"]
+	require.Equal(t, sniffarrv1.TitleLayer_TITLE_LAYER_TMDB, heat.GetTitleLayer())
+	require.InDelta(t, 1, heat.GetTitleConfidence(), 1e-6)
+	require.Len(t, heat.GetIds(), 2)
+	require.Equal(t, "imdb", heat.GetIds()[0].GetProvider(), "in provider order")
+	require.Equal(t, sniffarrv1.TitleLayer_TITLE_LAYER_UNSPECIFIED, got["Ronin.1998.1080p"].GetTitleLayer())
+	require.ElementsMatch(t, []string{"y:heat 1995", "y:ronin 1998"}, titles.asked, "each key once, movies and series only, no classifier needed")
+
+	search(t, svc, &sniffarrv1.SearchRequest{})
+	require.Len(t, titles.asked, 2, "recorded matches are not looked up again")
+
+	got = search(t, svc, &sniffarrv1.SearchRequest{Id: &sniffarrv1.ExternalId{Provider: "imdb", Id: "tt0113277"}})
+	require.ElementsMatch(t, []string{"Heat.1995.1080p", "Heat.1995.2160p"}, keys(got), "every release of the work")
+	_, err := svc.Search(context.Background(), connect.NewRequest(&sniffarrv1.SearchRequest{Id: &sniffarrv1.ExternalId{Provider: "imdb"}}))
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestLazyTitlesLate(t *testing.T) {
+	s, _ := setup(t, store.Torrent{Name: "Heat.1995.1080p", Kind: "movie", KindLayer: store.LayerRules, TitleKey: "y:heat 1995"})
+	titles := &fakeTitles{store: s, delay: 300 * time.Millisecond, ids: map[string][]store.ExternalID{"y:heat 1995": {{Provider: "tmdb", ID: "949"}}}}
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Titles: titles, Wait: 50 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}}
+
+	got := search(t, svc, &sniffarrv1.SearchRequest{})
+	require.Empty(t, got["Heat.1995.1080p"].GetIds(), "not waited for")
+	require.Eventually(t, func() bool {
+		return len(search(t, svc, &sniffarrv1.SearchRequest{})["Heat.1995.1080p"].GetIds()) == 1
+	}, 5*time.Second, 50*time.Millisecond, "recorded for later searches")
 }
 
 func TestLazyBounded(t *testing.T) {

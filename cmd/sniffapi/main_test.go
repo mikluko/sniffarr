@@ -20,6 +20,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/titles"
 )
 
 func TestLoad(t *testing.T) {
@@ -42,6 +43,7 @@ func TestLoad(t *testing.T) {
 	}{
 		{name: "defaults", env: required, want: config{addr: ":8080", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", concurrency: 4,
 			dailyTokens: classify.DefaultDailyTokens, searchReserve: classify.DefaultSearchReserve, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
+			lazyTitles: search.DefaultLazyTitles, titlesConcurrency: titles.DefaultConcurrency, titlesRate: titles.DefaultRate, titlesRetry: titles.DefaultRetry,
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}},
@@ -52,17 +54,20 @@ func TestLoad(t *testing.T) {
 			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
 			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h",
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
-			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_LOG_LEVEL", "debug", "SNIFFARR_AUDIO_LANGUAGES", "ru"),
-			want: config{addr: ":9000", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", typesafeKey: "ts", concurrency: 8, dailyTokens: 1000000, searchReserve: 40,
+			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_LOG_LEVEL", "debug", "SNIFFARR_AUDIO_LANGUAGES", "ru",
+			"TMDB_API_KEY", "tm", "SNIFFARR_TITLES_CONCURRENCY", "3", "SNIFFARR_TITLES_RATE", "10", "SNIFFARR_TITLES_RETRY", "240h", "SNIFFARR_SEARCH_TITLES_MAX", "7"),
+			want: config{addr: ":9000", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", typesafeKey: "ts", tmdbKey: "tm", concurrency: 8,
+				titlesConcurrency: 3, titlesRate: 10, titlesRetry: 240 * time.Hour, lazyTitles: 7, dailyTokens: 1000000, searchReserve: 40,
 				lease: 2 * time.Minute, attempts: 5, backoff: time.Hour,
 				queue:     queue.Options{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour},
-				store:     store.Options{MaxFiles: 50, Languages: []string{"ru"}},
+				store:     store.Options{MaxFiles: 50, Languages: []string{"ru"}, Titles: true},
 				retention: 720 * time.Hour,
 				lazyMax:   5, lazyWait: 500 * time.Millisecond,
 				scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, logLevel: slog.LevelDebug,
 				languages: russian}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: config{addr: ":8080", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", concurrency: 4,
 			searchReserve: classify.DefaultSearchReserve, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
+			lazyTitles: search.DefaultLazyTitles, titlesConcurrency: titles.DefaultConcurrency, titlesRate: titles.DefaultRate, titlesRetry: titles.DefaultRetry,
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}},
@@ -81,6 +86,7 @@ func TestLoad(t *testing.T) {
 		{name: "no-peers window not a duration", env: with("SNIFFARR_QUEUE_NO_PEERS_FOR", "1d"), err: "SNIFFARR_QUEUE_NO_PEERS_FOR: want a positive duration"},
 		{name: "no reserve", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0"), want: config{addr: ":8080", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", concurrency: 4,
 			dailyTokens: classify.DefaultDailyTokens, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
+			lazyTitles: search.DefaultLazyTitles, titlesConcurrency: titles.DefaultConcurrency, titlesRate: titles.DefaultRate, titlesRetry: titles.DefaultRetry,
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}},
@@ -90,11 +96,13 @@ func TestLoad(t *testing.T) {
 		{name: "unknown script", env: with("SNIFFARR_SCRIPTS", "Latin,Elvish"), err: `SNIFFARR_SCRIPTS: unknown script "Elvish"`},
 		{name: "no audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", ""), want: config{addr: ":8080", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", concurrency: 4,
 			dailyTokens: classify.DefaultDailyTokens, searchReserve: classify.DefaultSearchReserve, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
+			lazyTitles: search.DefaultLazyTitles, titlesConcurrency: titles.DefaultConcurrency, titlesRate: titles.DefaultRate, titlesRetry: titles.DefaultRetry,
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles},
 			retention: defaultRetention, scripts: defaultScripts}},
 		{name: "unknown audio language", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru,xx"), err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},
+		{name: "zero title rate", env: with("SNIFFARR_TITLES_RATE", "0"), err: "SNIFFARR_TITLES_RATE: want a positive integer"},
 		{name: "budget not a number", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "1e6"), err: "SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer"},
 	}
 	for _, tt := range tests {

@@ -22,6 +22,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// TitleLayer is what matched a release's title to a work.
+type TitleLayer int32
+
+const (
+	TitleLayer_TITLE_LAYER_UNSPECIFIED TitleLayer = 0
+	// TMDB's search, with one plausible candidate.
+	TitleLayer_TITLE_LAYER_TMDB TitleLayer = 1
+	// The classifier, choosing among several.
+	TitleLayer_TITLE_LAYER_CLASSIFIER TitleLayer = 2
+)
+
+// Enum value maps for TitleLayer.
+var (
+	TitleLayer_name = map[int32]string{
+		0: "TITLE_LAYER_UNSPECIFIED",
+		1: "TITLE_LAYER_TMDB",
+		2: "TITLE_LAYER_CLASSIFIER",
+	}
+	TitleLayer_value = map[string]int32{
+		"TITLE_LAYER_UNSPECIFIED": 0,
+		"TITLE_LAYER_TMDB":        1,
+		"TITLE_LAYER_CLASSIFIER":  2,
+	}
+)
+
+func (x TitleLayer) Enum() *TitleLayer {
+	p := new(TitleLayer)
+	*p = x
+	return p
+}
+
+func (x TitleLayer) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TitleLayer) Descriptor() protoreflect.EnumDescriptor {
+	return file_sniffarr_v1_search_proto_enumTypes[0].Descriptor()
+}
+
+func (TitleLayer) Type() protoreflect.EnumType {
+	return &file_sniffarr_v1_search_proto_enumTypes[0]
+}
+
+func (x TitleLayer) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TitleLayer.Descriptor instead.
+func (TitleLayer) EnumDescriptor() ([]byte, []int) {
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{0}
+}
+
 // Layer is what decided a release's kind.
 type Layer int32
 
@@ -62,11 +114,11 @@ func (x Layer) String() string {
 }
 
 func (Layer) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[0].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[1].Descriptor()
 }
 
 func (Layer) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[0]
+	return &file_sniffarr_v1_search_proto_enumTypes[1]
 }
 
 func (x Layer) Number() protoreflect.EnumNumber {
@@ -75,7 +127,7 @@ func (x Layer) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Layer.Descriptor instead.
 func (Layer) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{0}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{1}
 }
 
 type Kind int32
@@ -126,11 +178,11 @@ func (x Kind) String() string {
 }
 
 func (Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[1].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[2].Descriptor()
 }
 
 func (Kind) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[1]
+	return &file_sniffarr_v1_search_proto_enumTypes[2]
 }
 
 func (x Kind) Number() protoreflect.EnumNumber {
@@ -139,7 +191,7 @@ func (x Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Kind.Descriptor instead.
 func (Kind) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{1}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{2}
 }
 
 // VideoSource is the kind of copy a video release is.
@@ -185,11 +237,11 @@ func (x VideoSource) String() string {
 }
 
 func (VideoSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[2].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[3].Descriptor()
 }
 
 func (VideoSource) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[2]
+	return &file_sniffarr_v1_search_proto_enumTypes[3]
 }
 
 func (x VideoSource) Number() protoreflect.EnumNumber {
@@ -198,7 +250,7 @@ func (x VideoSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VideoSource.Descriptor instead.
 func (VideoSource) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{2}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{3}
 }
 
 type SearchRequest struct {
@@ -215,8 +267,10 @@ type SearchRequest struct {
 	// Only releases whose probability of an audio track in audio_language is
 	// known and at least this.
 	MinAudioProbability *float32 `protobuf:"fixed32,6,opt,name=min_audio_probability,json=minAudioProbability,proto3,oneof" json:"min_audio_probability,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Only releases of the work with this ID; query may be empty then.
+	Id            *ExternalId `protobuf:"bytes,7,opt,name=id,proto3,oneof" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SearchRequest) Reset() {
@@ -282,6 +336,13 @@ func (x *SearchRequest) GetMinAudioProbability() float32 {
 		return *x.MinAudioProbability
 	}
 	return 0
+}
+
+func (x *SearchRequest) GetId() *ExternalId {
+	if x != nil {
+		return x.Id
+	}
+	return nil
 }
 
 type SearchResponse struct {
@@ -439,9 +500,16 @@ type Release struct {
 	Classified bool `protobuf:"varint,14,opt,name=classified,proto3" json:"classified,omitempty"`
 	// At most one entry per audio language the server is configured with, in
 	// tag order; empty without audio languages.
-	Audio         []*Audio `protobuf:"bytes,15,rep,name=audio,proto3" json:"audio,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Audio []*Audio `protobuf:"bytes,15,rep,name=audio,proto3" json:"audio,omitempty"`
+	// IDs of the work the release's title is matched to, in provider order;
+	// empty while unmatched or without title matching.
+	Ids []*ExternalId `protobuf:"bytes,16,rep,name=ids,proto3" json:"ids,omitempty"`
+	// What matched the title; TITLE_LAYER_UNSPECIFIED while unmatched.
+	TitleLayer TitleLayer `protobuf:"varint,17,opt,name=title_layer,json=titleLayer,proto3,enum=sniffarr.v1.TitleLayer" json:"title_layer,omitempty"`
+	// Confidence in the title match, 0 while unmatched.
+	TitleConfidence float32 `protobuf:"fixed32,18,opt,name=title_confidence,json=titleConfidence,proto3" json:"title_confidence,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Release) Reset() {
@@ -572,6 +640,81 @@ func (x *Release) GetAudio() []*Audio {
 	return nil
 }
 
+func (x *Release) GetIds() []*ExternalId {
+	if x != nil {
+		return x.Ids
+	}
+	return nil
+}
+
+func (x *Release) GetTitleLayer() TitleLayer {
+	if x != nil {
+		return x.TitleLayer
+	}
+	return TitleLayer_TITLE_LAYER_UNSPECIFIED
+}
+
+func (x *Release) GetTitleConfidence() float32 {
+	if x != nil {
+		return x.TitleConfidence
+	}
+	return 0
+}
+
+// ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
+// "wikidata".
+type ExternalId struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExternalId) Reset() {
+	*x = ExternalId{}
+	mi := &file_sniffarr_v1_search_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExternalId) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExternalId) ProtoMessage() {}
+
+func (x *ExternalId) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_search_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExternalId.ProtoReflect.Descriptor instead.
+func (*ExternalId) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ExternalId) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ExternalId) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
 // Audio is what is known of a release's audio track in one language.
 type Audio struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -590,7 +733,7 @@ type Audio struct {
 
 func (x *Audio) Reset() {
 	*x = Audio{}
-	mi := &file_sniffarr_v1_search_proto_msgTypes[5]
+	mi := &file_sniffarr_v1_search_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -602,7 +745,7 @@ func (x *Audio) String() string {
 func (*Audio) ProtoMessage() {}
 
 func (x *Audio) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_search_proto_msgTypes[5]
+	mi := &file_sniffarr_v1_search_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -615,7 +758,7 @@ func (x *Audio) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Audio.ProtoReflect.Descriptor instead.
 func (*Audio) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{5}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Audio) GetLanguage() string {
@@ -650,22 +793,24 @@ var File_sniffarr_v1_search_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\n" +
-	"\x18sniffarr/v1/search.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8f\x02\n" +
+	"\x18sniffarr/v1/search.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc4\x02\n" +
 	"\rSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12'\n" +
 	"\x05kinds\x18\x02 \x03(\x0e2\x11.sniffarr.v1.KindR\x05kinds\x12\x14\n" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12*\n" +
 	"\x0eaudio_language\x18\x05 \x01(\tH\x00R\raudioLanguage\x88\x01\x01\x127\n" +
-	"\x15min_audio_probability\x18\x06 \x01(\x02H\x01R\x13minAudioProbability\x88\x01\x01B\x11\n" +
+	"\x15min_audio_probability\x18\x06 \x01(\x02H\x01R\x13minAudioProbability\x88\x01\x01\x12,\n" +
+	"\x02id\x18\a \x01(\v2\x17.sniffarr.v1.ExternalIdH\x02R\x02id\x88\x01\x01B\x11\n" +
 	"\x0f_audio_languageB\x18\n" +
-	"\x16_min_audio_probabilityJ\x04\b\x03\x10\x04R\x11min_russian_audio\"B\n" +
+	"\x16_min_audio_probabilityB\x05\n" +
+	"\x03_idJ\x04\b\x03\x10\x04R\x11min_russian_audio\"B\n" +
 	"\x0eSearchResponse\x120\n" +
 	"\breleases\x18\x01 \x03(\v2\x14.sniffarr.v1.ReleaseR\breleases\"(\n" +
 	"\n" +
 	"GetRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\"=\n" +
 	"\vGetResponse\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xb0\x04\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xc0\x05\n" +
 	"\aRelease\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -685,14 +830,27 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\n" +
 	"classified\x18\x0e \x01(\bR\n" +
 	"classified\x12(\n" +
-	"\x05audio\x18\x0f \x03(\v2\x12.sniffarr.v1.AudioR\x05audioJ\x04\b\x06\x10\aR\rrussian_audio\"\x93\x01\n" +
+	"\x05audio\x18\x0f \x03(\v2\x12.sniffarr.v1.AudioR\x05audio\x12)\n" +
+	"\x03ids\x18\x10 \x03(\v2\x17.sniffarr.v1.ExternalIdR\x03ids\x128\n" +
+	"\vtitle_layer\x18\x11 \x01(\x0e2\x17.sniffarr.v1.TitleLayerR\n" +
+	"titleLayer\x12)\n" +
+	"\x10title_confidence\x18\x12 \x01(\x02R\x0ftitleConfidenceJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
+	"\n" +
+	"ExternalId\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"\x93\x01\n" +
 	"\x05Audio\x12\x1a\n" +
 	"\blanguage\x18\x01 \x01(\tR\blanguage\x12%\n" +
 	"\vprobability\x18\x02 \x01(\x02H\x00R\vprobability\x88\x01\x01\x12\x16\n" +
 	"\x06marker\x18\x03 \x01(\bR\x06marker\x12\x1f\n" +
 	"\vscript_hint\x18\x04 \x01(\bR\n" +
 	"scriptHintB\x0e\n" +
-	"\f_probability*V\n" +
+	"\f_probability*[\n" +
+	"\n" +
+	"TitleLayer\x12\x1b\n" +
+	"\x17TITLE_LAYER_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10TITLE_LAYER_TMDB\x10\x01\x12\x1a\n" +
+	"\x16TITLE_LAYER_CLASSIFIER\x10\x02*V\n" +
 	"\x05Layer\x12\x15\n" +
 	"\x11LAYER_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vLAYER_RULES\x10\x01\x12\x0f\n" +
@@ -734,39 +892,44 @@ func file_sniffarr_v1_search_proto_rawDescGZIP() []byte {
 	return file_sniffarr_v1_search_proto_rawDescData
 }
 
-var file_sniffarr_v1_search_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_sniffarr_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_sniffarr_v1_search_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_sniffarr_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_sniffarr_v1_search_proto_goTypes = []any{
-	(Layer)(0),                    // 0: sniffarr.v1.Layer
-	(Kind)(0),                     // 1: sniffarr.v1.Kind
-	(VideoSource)(0),              // 2: sniffarr.v1.VideoSource
-	(*SearchRequest)(nil),         // 3: sniffarr.v1.SearchRequest
-	(*SearchResponse)(nil),        // 4: sniffarr.v1.SearchResponse
-	(*GetRequest)(nil),            // 5: sniffarr.v1.GetRequest
-	(*GetResponse)(nil),           // 6: sniffarr.v1.GetResponse
-	(*Release)(nil),               // 7: sniffarr.v1.Release
-	(*Audio)(nil),                 // 8: sniffarr.v1.Audio
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(TitleLayer)(0),               // 0: sniffarr.v1.TitleLayer
+	(Layer)(0),                    // 1: sniffarr.v1.Layer
+	(Kind)(0),                     // 2: sniffarr.v1.Kind
+	(VideoSource)(0),              // 3: sniffarr.v1.VideoSource
+	(*SearchRequest)(nil),         // 4: sniffarr.v1.SearchRequest
+	(*SearchResponse)(nil),        // 5: sniffarr.v1.SearchResponse
+	(*GetRequest)(nil),            // 6: sniffarr.v1.GetRequest
+	(*GetResponse)(nil),           // 7: sniffarr.v1.GetResponse
+	(*Release)(nil),               // 8: sniffarr.v1.Release
+	(*ExternalId)(nil),            // 9: sniffarr.v1.ExternalId
+	(*Audio)(nil),                 // 10: sniffarr.v1.Audio
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
 var file_sniffarr_v1_search_proto_depIdxs = []int32{
-	1,  // 0: sniffarr.v1.SearchRequest.kinds:type_name -> sniffarr.v1.Kind
-	7,  // 1: sniffarr.v1.SearchResponse.releases:type_name -> sniffarr.v1.Release
-	7,  // 2: sniffarr.v1.GetResponse.release:type_name -> sniffarr.v1.Release
-	1,  // 3: sniffarr.v1.Release.kind:type_name -> sniffarr.v1.Kind
-	2,  // 4: sniffarr.v1.Release.source:type_name -> sniffarr.v1.VideoSource
-	9,  // 5: sniffarr.v1.Release.first_seen:type_name -> google.protobuf.Timestamp
-	9,  // 6: sniffarr.v1.Release.last_seen:type_name -> google.protobuf.Timestamp
-	0,  // 7: sniffarr.v1.Release.layer:type_name -> sniffarr.v1.Layer
-	8,  // 8: sniffarr.v1.Release.audio:type_name -> sniffarr.v1.Audio
-	3,  // 9: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
-	5,  // 10: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
-	4,  // 11: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
-	6,  // 12: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
-	11, // [11:13] is the sub-list for method output_type
-	9,  // [9:11] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	2,  // 0: sniffarr.v1.SearchRequest.kinds:type_name -> sniffarr.v1.Kind
+	9,  // 1: sniffarr.v1.SearchRequest.id:type_name -> sniffarr.v1.ExternalId
+	8,  // 2: sniffarr.v1.SearchResponse.releases:type_name -> sniffarr.v1.Release
+	8,  // 3: sniffarr.v1.GetResponse.release:type_name -> sniffarr.v1.Release
+	2,  // 4: sniffarr.v1.Release.kind:type_name -> sniffarr.v1.Kind
+	3,  // 5: sniffarr.v1.Release.source:type_name -> sniffarr.v1.VideoSource
+	11, // 6: sniffarr.v1.Release.first_seen:type_name -> google.protobuf.Timestamp
+	11, // 7: sniffarr.v1.Release.last_seen:type_name -> google.protobuf.Timestamp
+	1,  // 8: sniffarr.v1.Release.layer:type_name -> sniffarr.v1.Layer
+	10, // 9: sniffarr.v1.Release.audio:type_name -> sniffarr.v1.Audio
+	9,  // 10: sniffarr.v1.Release.ids:type_name -> sniffarr.v1.ExternalId
+	0,  // 11: sniffarr.v1.Release.title_layer:type_name -> sniffarr.v1.TitleLayer
+	4,  // 12: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
+	6,  // 13: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
+	5,  // 14: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
+	7,  // 15: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
+	14, // [14:16] is the sub-list for method output_type
+	12, // [12:14] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_search_proto_init() }
@@ -775,14 +938,14 @@ func file_sniffarr_v1_search_proto_init() {
 		return
 	}
 	file_sniffarr_v1_search_proto_msgTypes[0].OneofWrappers = []any{}
-	file_sniffarr_v1_search_proto_msgTypes[5].OneofWrappers = []any{}
+	file_sniffarr_v1_search_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_search_proto_rawDesc), len(file_sniffarr_v1_search_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   6,
+			NumEnums:      4,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
