@@ -68,6 +68,36 @@ func Parse(name string) Parsed {
 	return p
 }
 
+// Titles returns the titles a name gives, in name order: each title of a
+// "Russian / Original / ..." name, without the season, year, quality and
+// bracketed parts that follow it.
+func Titles(name string) []string {
+	if m := anime.FindStringSubmatch(name); m != nil {
+		return titles([]string{cut(m[1], seriesMarker)})
+	}
+	clean := groups.ReplaceAllString(strings.NewReplacer(".", " ", "_", " ").Replace(name), "")
+	var parts []string
+	for _, part := range strings.Split(clean, " / ") {
+		if i := strings.IndexAny(part, "[("); i >= 0 {
+			part = part[:i]
+		}
+		parts = append(parts, cut(cut(cut(part, seriesMarker), year), quality))
+	}
+	return titles(parts)
+}
+
+// titles trims the parts and keeps those with a letter or digit.
+func titles(parts []string) []string {
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimFunc(p, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsNumber(r) })
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // mainTitle returns the title part of a name: without leading [group]
 // tags, and in a "Russian / Original / ..." name the first title only.
 func mainTitle(name string) string {

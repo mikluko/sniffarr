@@ -39,3 +39,23 @@ func TestParse(t *testing.T) {
 		})
 	}
 }
+
+func TestTitles(t *testing.T) {
+	tests := []struct {
+		name string
+		want []string
+	}{
+		{"Severance.S02E01.1080p.ATVP.WEB-DL.DDP5.1.H.264-NTb", []string{"Severance"}},
+		{"Alien.1979.Directors.Cut.1080p.BluRay.x264", []string{"Alien"}},
+		{"[SubsPlease] Kuroneko to Majo no Kyoushitsu - 09 (1080p) [0F72F2B7].mkv", []string{"Kuroneko to Majo no Kyoushitsu"}},
+		{"Фоллаут / Fallout / Сезон: 1 / Серии: 1-8 из 8 (Джонатан Нолан) [2024, фантастика, WEB-DL 1080p] MVO (LostFilm)", []string{"Фоллаут", "Fallout"}},
+		{"Дюна: Часть вторая / Dune: Part Two (Дени Вильнёв) [2024, фантастика, BDRip 1080p] Dub", []string{"Дюна: Часть вторая", "Dune: Part Two"}},
+		{"Чужой / Alien (1979) BDRip 1080p", []string{"Чужой", "Alien"}},
+		{"[2024] 1080p", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, Titles(tt.name))
+		})
+	}
+}
