@@ -4,9 +4,10 @@ sniffarr is a private classification database of BitTorrent torrents
 discovered on the DHT, with an API to search it.
 
 The database and the API are meant to stay private: run them for yourself, not
-as a public index. Peer IP addresses are never sent to the server or stored.
-The sniffer fetches metadata only: it never downloads pieces, never uploads,
-and never announces itself into a swarm.
+as a public index. Peer IP addresses are never sent to the server or stored:
+peers are counted in HyperLogLog sketches of keyed hashes, from which no
+address comes back. The sniffer fetches metadata only: it never downloads
+pieces, never uploads, and never announces itself into a swarm.
 
 ## Components
 
@@ -22,10 +23,11 @@ until SIGINT or SIGTERM.
 - `-ui` serves the web UI, a client of the browse API.
 - `-sniff` walks the DHT for infohashes, by BEP 51 `sample_infohashes` and by
   the `announce_peer` queries its own DHT node receives, and reports them to
-  the ingest API.
+  the ingest API, with the announcing peers counted in sketches.
 - `-fetch` takes tasks from the ingest API, finds each torrent's peers with
   `get_peers` on its own DHT node, fetches the metadata from them by BEP 9,
-  and returns the name, size and file list.
+  and returns the name, size and file list, with the peers counted in
+  sketches.
 
 `-ui`, `-sniff` and `-fetch` are clients of the API. In a process with `-api`
 they reach it over an in-process connection, with the process's own
@@ -107,6 +109,29 @@ IMDb, TVDB (series) and Wikidata IDs; a key that matched nothing is looked up
 again after `SNIFFARR_TITLES_RETRY`, and one that matched never is. Without the
 key nothing is matched and releases carry no IDs.
 
+Peers are a third extension, always on. A peer is an `IP:port`; `-sniff` sees
+one in every `announce_peer` its node receives, `-fetch` in every `get_peers`
+answer and every connection of a fetch. Each client hashes a peer with
+SipHash-2-4 under a 128-bit key the API generated once and keeps in the store,
+and adds the hash to a HyperLogLog sketch of the infohash and the current UTC
+hour; every few minutes it sends the sketches to the API, which drops those of
+infohashes it has not stored and unions the rest into the stored sketch of the
+torrent and hour. Nothing else about a peer is kept, and a sketch gives
+nothing back but an estimate of how many distinct peers it saw, within a few
+percent. Hour sketches are kept 8 days, then unioned into day sketches kept 65
+days; every count is over a sliding window of 24 hours, 7 days or 30 days
+ending now, the 30 days by the day beyond the hours kept.
+
+The rules also reduce a name to a work key: a movie or an album is its title
+and year, a series is its title and season, so episodes and season packs of
+one season meet under one work. Every 10 minutes the API ranks, for movies,
+series and music and for each window, the 100 works whose releases the most
+distinct peers share, with the change against the window before, and again
+narrowed to the releases likely to carry an audio track in the first configured
+language, and to those with a marker of it. It refreshes each torrent's
+distinct peers over the last 7 days at the same time, so a page can sort by
+them.
+
 ## API
 
 Both API groups are [ConnectRPC](https://connectrpc.com) services, defined in
@@ -119,11 +144,16 @@ in the `Authorization` header; `/healthz` needs none.
 | --------------------------- | -------- | ----------------------- |
 | `sniffarr.v1.IngestService` | `Sight`  | `SNIFFARR_INGEST_TOKEN` |
 | `sniffarr.v1.IngestService` | `Fetch`  | `SNIFFARR_INGEST_TOKEN` |
+| `sniffarr.v1.IngestService` | `HashKey` | `SNIFFARR_INGEST_TOKEN` |
+| `sniffarr.v1.IngestService` | `Peers`  | `SNIFFARR_INGEST_TOKEN` |
 | `sniffarr.v1.SearchService` | `Search` | `SNIFFARR_SEARCH_TOKEN` |
 | `sniffarr.v1.SearchService` | `Get`    | `SNIFFARR_SEARCH_TOKEN` |
 | `sniffarr.v1.BrowseService` | `Page`   | `SNIFFARR_SEARCH_TOKEN` |
 | `sniffarr.v1.BrowseService` | `Card`   | `SNIFFARR_SEARCH_TOKEN` |
 | `sniffarr.v1.BrowseService` | `Stats`  | `SNIFFARR_SEARCH_TOKEN` |
+| `sniffarr.v1.BrowseService` | `Home`   | `SNIFFARR_SEARCH_TOKEN` |
+| `sniffarr.v1.BrowseService` | `Top`    | `SNIFFARR_SEARCH_TOKEN` |
+| `sniffarr.v1.BrowseService` | `Work`   | `SNIFFARR_SEARCH_TOKEN` |
 
 - `Sight` is client-streaming: it queues every infohash the server has neither
   stored, rejected nor queued, and returns how many were new and how many
@@ -131,6 +161,12 @@ in the `Authorization` header; `/healthz` needs none.
 - `Fetch` is bidirectional: the client grants credit, one unit per task it can
   take, the server answers with a task per unit, and the client returns each
   task's result, metadata or a failure, on the same stream.
+- `HashKey` returns the 16-byte SipHash-2-4 key peers are hashed with.
+- `Peers` is client-streaming: each message is an infohash, the start of a
+  UTC hour and a sketch in the Aggregate Knowledge storage specification
+  v1.0.0 (`log2m` 10, `regwidth` 5) of the peers seen sharing it in that
+  hour, hashed with the key; the server returns how many sketches it merged
+  and how many it dropped for an infohash it has not stored.
 - `Search` matches every word of the query against names and stored file
   paths, and filters by kind and by the probability of an audio track in one
   language. It has Jev examine a bounded number of its candidates first, so
@@ -142,11 +178,20 @@ in the `Authorization` header; `/healthz` needs none.
 - `BrowseService` reads the store as the web UI shows it and classifies
   nothing first. `Page` returns one page of releases under the UI's filters,
   kind or unknown kind, an audio language's marker or probability, source,
-  layer and size, with their total; without a kind, adult releases are left
-  out. `Card` returns one release with its discovery and every stored file.
-  `Stats` returns the store's counts: by kind, layer, source and audio
-  language, rejections by reason, the classifier's pending torrents, tokens
-  spent today and the day's limit, and new torrents per day.
+  layer and size, with their total, sorted by text match, peers over the last
+  7 days, last sighting or size; without a kind, adult releases are left out,
+  and the first page of a query carries up to 10 works its releases belong
+  to, most peers first. `Card` returns one release with its discovery, every
+  stored file, its distinct peers over the day, week and month, its work and
+  its place among the work's releases. `Stats` returns the store's counts: by
+  kind, layer, source and audio language, rejections by reason, the
+  classifier's pending torrents, tokens spent today and the day's limit, and
+  new torrents per day. `Home` returns the stored, new today and pending
+  counts. `Top` returns a page of the top 100 works of a kind over a window,
+  every release or those voiced in the first audio language, with each
+  work's rank, peers, change, releases, best audio, sources and first
+  sighting, and when the top was computed. `Work` returns one work with its
+  releases ordered by peers over the window.
 
 ## Torznab
 
@@ -261,7 +306,11 @@ The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start. A torrent keeps its true file
 count, but only its largest files are stored and searched. Once a minute the
 API deletes, in small batches, the torrents nobody has sighted within the
-retention period; a later sighting queues them again.
+retention period, with their peer sketches; a later sighting queues them
+again. Once an hour it unions the hour sketches older than 8 days into day
+sketches and deletes the day sketches older than 65 days, and every 10
+minutes, and once at start, it recomputes the tops of works and every
+torrent's peers over the last 7 days.
 
 ### `-ui`
 
@@ -293,6 +342,12 @@ With `-upnp` the node asks the gateways it finds on the local network to
 forward the port it listens on, TCP and UDP. Without `-sniff` the node is
 passive by BEP 43: it answers no DHT query and asks other nodes to keep it out
 of their routing tables.
+
+Both components count the peers they see in sketches of the current UTC hour
+and send them to the API's `Peers` every 3 minutes, and at once when 100,000
+sketches wait; a send that fails is retried, and while the API is unreachable
+the oldest unsent batch makes room for new sketches. The key comes from the
+API's `HashKey` at start, and peers seen before it arrives are not counted.
 
 Discovery rests on `sample_infohashes`: in a measured run on a server with a
 public address, no `announce_peer` query reached the node, and the sniffer
