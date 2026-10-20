@@ -39,19 +39,33 @@ const (
 	BrowseServiceCardProcedure = "/sniffarr.v1.BrowseService/Card"
 	// BrowseServiceStatsProcedure is the fully-qualified name of the BrowseService's Stats RPC.
 	BrowseServiceStatsProcedure = "/sniffarr.v1.BrowseService/Stats"
+	// BrowseServiceHomeProcedure is the fully-qualified name of the BrowseService's Home RPC.
+	BrowseServiceHomeProcedure = "/sniffarr.v1.BrowseService/Home"
+	// BrowseServiceTopProcedure is the fully-qualified name of the BrowseService's Top RPC.
+	BrowseServiceTopProcedure = "/sniffarr.v1.BrowseService/Top"
+	// BrowseServiceWorkProcedure is the fully-qualified name of the BrowseService's Work RPC.
+	BrowseServiceWorkProcedure = "/sniffarr.v1.BrowseService/Work"
 )
 
 // BrowseServiceClient is a client for the sniffarr.v1.BrowseService service.
 type BrowseServiceClient interface {
-	// Page returns one page of the releases the filters select, best text
-	// match first, or most recently seen first without a query, and how many
-	// they select in all. Without kind or unknown_kind, adult releases are
-	// left out.
+	// Page returns one page of the releases the filters select, in the order
+	// sort asks for, and how many they select in all. Without kind or
+	// unknown_kind, adult releases are left out.
 	Page(context.Context, *connect.Request[v1.PageRequest]) (*connect.Response[v1.PageResponse], error)
-	// Card returns one release with every stored file, or NOT_FOUND.
+	// Card returns one release with every stored file, its peers and its
+	// work, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
 	// Stats returns the store's counts.
 	Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error)
+	// Home returns the counts the home page shows.
+	Home(context.Context, *connect.Request[v1.HomeRequest]) (*connect.Response[v1.HomeResponse], error)
+	// Top returns one page of the 100 works of a kind with the most peers over
+	// a window, as last computed; the server recomputes every 10 minutes.
+	Top(context.Context, *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error)
+	// Work returns one work with its releases, most peers over the window
+	// first, or NOT_FOUND.
+	Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error)
 }
 
 // NewBrowseServiceClient constructs a client for the sniffarr.v1.BrowseService service. By default,
@@ -83,6 +97,24 @@ func NewBrowseServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(browseServiceMethods.ByName("Stats")),
 			connect.WithClientOptions(opts...),
 		),
+		home: connect.NewClient[v1.HomeRequest, v1.HomeResponse](
+			httpClient,
+			baseURL+BrowseServiceHomeProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("Home")),
+			connect.WithClientOptions(opts...),
+		),
+		top: connect.NewClient[v1.TopRequest, v1.TopResponse](
+			httpClient,
+			baseURL+BrowseServiceTopProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("Top")),
+			connect.WithClientOptions(opts...),
+		),
+		work: connect.NewClient[v1.WorkRequest, v1.WorkResponse](
+			httpClient,
+			baseURL+BrowseServiceWorkProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("Work")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -91,6 +123,9 @@ type browseServiceClient struct {
 	page  *connect.Client[v1.PageRequest, v1.PageResponse]
 	card  *connect.Client[v1.CardRequest, v1.CardResponse]
 	stats *connect.Client[v1.StatsRequest, v1.StatsResponse]
+	home  *connect.Client[v1.HomeRequest, v1.HomeResponse]
+	top   *connect.Client[v1.TopRequest, v1.TopResponse]
+	work  *connect.Client[v1.WorkRequest, v1.WorkResponse]
 }
 
 // Page calls sniffarr.v1.BrowseService.Page.
@@ -108,17 +143,40 @@ func (c *browseServiceClient) Stats(ctx context.Context, req *connect.Request[v1
 	return c.stats.CallUnary(ctx, req)
 }
 
+// Home calls sniffarr.v1.BrowseService.Home.
+func (c *browseServiceClient) Home(ctx context.Context, req *connect.Request[v1.HomeRequest]) (*connect.Response[v1.HomeResponse], error) {
+	return c.home.CallUnary(ctx, req)
+}
+
+// Top calls sniffarr.v1.BrowseService.Top.
+func (c *browseServiceClient) Top(ctx context.Context, req *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error) {
+	return c.top.CallUnary(ctx, req)
+}
+
+// Work calls sniffarr.v1.BrowseService.Work.
+func (c *browseServiceClient) Work(ctx context.Context, req *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error) {
+	return c.work.CallUnary(ctx, req)
+}
+
 // BrowseServiceHandler is an implementation of the sniffarr.v1.BrowseService service.
 type BrowseServiceHandler interface {
-	// Page returns one page of the releases the filters select, best text
-	// match first, or most recently seen first without a query, and how many
-	// they select in all. Without kind or unknown_kind, adult releases are
-	// left out.
+	// Page returns one page of the releases the filters select, in the order
+	// sort asks for, and how many they select in all. Without kind or
+	// unknown_kind, adult releases are left out.
 	Page(context.Context, *connect.Request[v1.PageRequest]) (*connect.Response[v1.PageResponse], error)
-	// Card returns one release with every stored file, or NOT_FOUND.
+	// Card returns one release with every stored file, its peers and its
+	// work, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
 	// Stats returns the store's counts.
 	Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error)
+	// Home returns the counts the home page shows.
+	Home(context.Context, *connect.Request[v1.HomeRequest]) (*connect.Response[v1.HomeResponse], error)
+	// Top returns one page of the 100 works of a kind with the most peers over
+	// a window, as last computed; the server recomputes every 10 minutes.
+	Top(context.Context, *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error)
+	// Work returns one work with its releases, most peers over the window
+	// first, or NOT_FOUND.
+	Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error)
 }
 
 // NewBrowseServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -146,6 +204,24 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(browseServiceMethods.ByName("Stats")),
 		connect.WithHandlerOptions(opts...),
 	)
+	browseServiceHomeHandler := connect.NewUnaryHandler(
+		BrowseServiceHomeProcedure,
+		svc.Home,
+		connect.WithSchema(browseServiceMethods.ByName("Home")),
+		connect.WithHandlerOptions(opts...),
+	)
+	browseServiceTopHandler := connect.NewUnaryHandler(
+		BrowseServiceTopProcedure,
+		svc.Top,
+		connect.WithSchema(browseServiceMethods.ByName("Top")),
+		connect.WithHandlerOptions(opts...),
+	)
+	browseServiceWorkHandler := connect.NewUnaryHandler(
+		BrowseServiceWorkProcedure,
+		svc.Work,
+		connect.WithSchema(browseServiceMethods.ByName("Work")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sniffarr.v1.BrowseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BrowseServicePageProcedure:
@@ -154,6 +230,12 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 			browseServiceCardHandler.ServeHTTP(w, r)
 		case BrowseServiceStatsProcedure:
 			browseServiceStatsHandler.ServeHTTP(w, r)
+		case BrowseServiceHomeProcedure:
+			browseServiceHomeHandler.ServeHTTP(w, r)
+		case BrowseServiceTopProcedure:
+			browseServiceTopHandler.ServeHTTP(w, r)
+		case BrowseServiceWorkProcedure:
+			browseServiceWorkHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -173,4 +255,16 @@ func (UnimplementedBrowseServiceHandler) Card(context.Context, *connect.Request[
 
 func (UnimplementedBrowseServiceHandler) Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Stats is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) Home(context.Context, *connect.Request[v1.HomeRequest]) (*connect.Response[v1.HomeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Home is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) Top(context.Context, *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Top is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Work is not implemented"))
 }
