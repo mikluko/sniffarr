@@ -151,42 +151,20 @@ func (s *socket) sample(b []byte, addr net.Addr) bool {
 		target, want = m.A.Target, m.A.Want
 	}
 	infohashes, _ := s.store.Count()
-	r := sampleReturn{
-		ID:       s.id,
-		Interval: min(int64(s.store.cfg.TTL/time.Second), sampleInterval),
-		Num:      int64(infohashes),
-		Samples:  []byte{},
-	}
-	r.Nodes, r.Nodes6 = s.closest(target, want, ap.Addr())
+	interval := min(int64(s.store.cfg.TTL/time.Second), sampleInterval)
+	num := int64(infohashes)
+	samples := krpc.CompactInfohashes{}
 	for _, h := range s.store.Sample(sampleSize) {
-		r.Samples = append(r.Samples, h[:]...)
+		samples = append(samples, h)
 	}
-	out := sampleReply{T: m.T, Y: "r", R: r}
+	r := &krpc.Return{ID: s.id, Bep51Return: krpc.Bep51Return{Interval: &interval, Num: &num, Samples: &samples}}
+	r.Nodes, r.Nodes6 = s.closest(target, want, ap.Addr())
+	out := krpc.Msg{T: m.T, Y: "r", R: r}
 	out.IP.FromAddrPort(ap)
 	if _, err := s.PacketConn.WriteTo(bencode.MustMarshal(out), addr); err == nil {
 		s.replies.Add(context.Background(), 1, queryAttr("sample_infohashes"))
 	}
 	return true
-}
-
-// sampleReply is a reply to sample_infohashes, framed as the node frames
-// its own replies. The library's krpc.Return cannot marshal samples.
-type sampleReply struct {
-	T  string        `bencode:"t"`
-	Y  string        `bencode:"y"`
-	R  sampleReturn  `bencode:"r"`
-	IP krpc.NodeAddr `bencode:"ip,omitempty"`
-}
-
-// sampleReturn is the r dictionary of a sample_infohashes reply, by
-// BEP 51; samples is present even when empty.
-type sampleReturn struct {
-	ID       krpc.ID                  `bencode:"id"`
-	Nodes    krpc.CompactIPv4NodeInfo `bencode:"nodes,omitempty"`
-	Nodes6   krpc.CompactIPv6NodeInfo `bencode:"nodes6,omitempty"`
-	Interval int64                    `bencode:"interval"`
-	Num      int64                    `bencode:"num"`
-	Samples  []byte                   `bencode:"samples"`
 }
 
 // closest returns the nodes nearest target from the routing table, up to
