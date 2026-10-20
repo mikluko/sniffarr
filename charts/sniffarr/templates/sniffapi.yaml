@@ -1,0 +1,173 @@
+{{- $v := .Values.sniffapi }}
+{{- $p := $v.persistence }}
+{{- $ls := $v.litestream }}
+{{- $name := printf "%s-sniffapi" .Release.Name }}
+{{- if not (has $p.type (list "emptyDir" "hostPath" "pvc")) }}
+{{- fail (printf "sniffapi.persistence.type: want emptyDir, hostPath or pvc, not %q" $p.type) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sniffarr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sniffapi
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "sniffarr.selector" (dict "root" . "component" "sniffapi") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sniffarr.selector" (dict "root" . "component" "sniffapi") | nindent 8 }}
+        {{- with $v.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $v.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "sniffarr.podSecurityContext" . | nindent 8 }}
+      {{- if $ls.enabled }}
+      initContainers:
+        {{- range list "restore" "replicate" }}
+        - name: {{ . }}
+          image: {{ $ls.image.repository }}:{{ $ls.image.tag }}
+          imagePullPolicy: {{ $ls.image.pullPolicy }}
+          {{- if eq . "restore" }}
+          args: [restore, -if-db-not-exists, -if-replica-exists, /data/sniffarr.db]
+          {{- else }}
+          args: [replicate]
+          restartPolicy: Always
+          {{- end }}
+          {{- with $ls.existingSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ . }}
+          {{- end }}
+          {{- with $ls.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- include "sniffarr.securityContext" $ | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: litestream-config
+              mountPath: /etc/litestream.yml
+              subPath: litestream.yml
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: sniffapi
+          image: {{ include "sniffarr.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/sniffapi]
+          env:
+            - name: SNIFFARR_DB
+              value: /data/sniffarr.db
+            {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ required "sniffapi.existingSecret is required" $v.existingSecret }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 15
+          {{- with $v.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- include "sniffarr.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: data
+          {{- if eq $p.type "hostPath" }}
+          hostPath:
+            path: {{ required "sniffapi.persistence.hostPath.path is required for type hostPath" $p.hostPath.path }}
+            type: DirectoryOrCreate
+          {{- else if eq $p.type "pvc" }}
+          persistentVolumeClaim:
+            claimName: {{ $p.existingClaim | default $name }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if $ls.enabled }}
+        - name: litestream-config
+          configMap:
+            name: {{ required "sniffapi.litestream.existingConfigMap is required when litestream is enabled" $ls.existingConfigMap }}
+        {{- end }}
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sniffarr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sniffapi
+spec:
+  selector:
+    {{- include "sniffarr.selector" (dict "root" . "component" "sniffapi") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- if and (eq $p.type "pvc") (not $p.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sniffarr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sniffapi
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $p.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $p.size }}
+{{- end }}

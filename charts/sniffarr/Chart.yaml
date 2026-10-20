@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sniffarr
+description: A BitTorrent DHT sniffer and the search API over what it finds
+type: application
+version: 0.0.0
+appVersion: 0.0.0

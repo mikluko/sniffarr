@@ -28,6 +28,13 @@ jobs:
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - run: go test ./...
+      - uses: azure/setup-helm@v4
+      - name: Chart lints and renders
+        run: |
+          for f in charts/sniffarr/ci/*.yaml; do
+            helm lint --strict charts/sniffarr -f "$f"
+            helm template sniffarr charts/sniffarr -f "$f" > /dev/null
+          done
 
   image:
     needs: test
@@ -55,3 +62,14 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  chart:
+    needs: image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+      - run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+      - run: helm package charts/sniffarr --version "${GITHUB_REF_NAME#v}" --app-version "${GITHUB_REF_NAME#v}"
+      - run: helm push "sniffarr-${GITHUB_REF_NAME#v}.tgz" oci://ghcr.io/${{ github.repository_owner }}/charts

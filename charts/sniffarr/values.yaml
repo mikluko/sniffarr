@@ -1,0 +1,90 @@
+image:
+  # Image of both binaries.
+  repository: ghcr.io/mikluko/sniffarr
+  # Image tag; the chart's appVersion when empty.
+  tag: ""
+  # Pull policy of the image.
+  pullPolicy: IfNotPresent
+
+# Image pull secrets of both pods.
+imagePullSecrets: []
+
+telemetry:
+  # When false, both containers get OTEL_SDK_DISABLED=true; when true, the chart sets no OTEL_* variable.
+  enabled: false
+
+sniffapi:
+  # Secret the container takes its environment from: SNIFFARR_INGEST_TOKEN, SNIFFARR_SEARCH_TOKEN, optionally TYPESAFE_API_KEY; required.
+  existingSecret: ""
+  # Extra environment variables, name to value.
+  env: {}
+  persistence:
+    # Volume of /data: emptyDir, hostPath or pvc.
+    type: emptyDir
+    hostPath:
+      # Host directory mounted at /data when type is hostPath.
+      path: ""
+    # Claim mounted at /data when type is pvc; the chart creates one when empty.
+    existingClaim: ""
+    # Size of the claim the chart creates.
+    size: 10Gi
+    # Storage class of the claim the chart creates; the cluster default when empty.
+    storageClass: ""
+  litestream:
+    # Restores /data/sniffarr.db from its replica before start and replicates it while running.
+    enabled: false
+    image:
+      # Image of the litestream containers.
+      repository: litestream/litestream
+      # Tag of the litestream image.
+      tag: "0.5.17"
+      # Pull policy of the litestream image.
+      pullPolicy: IfNotPresent
+    # ConfigMap whose key litestream.yml is mounted at /etc/litestream.yml; required when enabled.
+    existingConfigMap: ""
+    # Secret the litestream containers take their environment from, such as replica credentials.
+    existingSecret: ""
+    # Resources of the litestream containers.
+    resources: {}
+  # Resources of the sniffapi container.
+  resources: {}
+  # Annotations of the sniffapi pod.
+  podAnnotations: {}
+  # Labels of the sniffapi pod.
+  podLabels: {}
+  # Node selector of the sniffapi pod.
+  nodeSelector: {}
+  # Tolerations of the sniffapi pod.
+  tolerations: []
+  # Affinity of the sniffapi pod.
+  affinity: {}
+
+sniffdht:
+  # Deploys sniffdht.
+  enabled: true
+  # Replicas of sniffdht.
+  replicas: 1
+  # Runs the pod in the host's network namespace; the strategy is Recreate when true.
+  hostNetwork: true
+  # SNIFFARR_URL; the sniffapi Service of the release when empty.
+  url: ""
+  # Secret holding the ingest token; sniffapi.existingSecret when empty.
+  existingSecret: ""
+  # Key of the ingest token in that Secret.
+  secretKey: SNIFFARR_INGEST_TOKEN
+  # Command-line flags, name to value, rendered as -name=value.
+  flags: {}
+  # Extra environment variables, name to value.
+  env: {}
+  # Resources of the sniffdht container.
+  resources: {}
+  # Annotations of the sniffdht pod.
+  podAnnotations: {}
+  # Labels of the sniffdht pod.
+  podLabels: {}
+  # Node selector of the sniffdht pod.
+  nodeSelector: {}
+  # Tolerations of the sniffdht pod.
+  tolerations: []
+  # Affinity of the sniffdht pod.
+  affinity: {}

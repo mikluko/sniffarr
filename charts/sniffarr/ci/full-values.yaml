@@ -1,0 +1,28 @@
+sniffapi:
+  existingSecret: sniffarr-tokens
+  env:
+    SNIFFARR_CLASSIFY_SEARCH_RESERVE: 40
+    SNIFFARR_SCRIPTS: Latin,Cyrillic,Greek
+  persistence:
+    type: hostPath
+    hostPath:
+      path: /srv/sniffarr
+  litestream:
+    enabled: true
+    existingConfigMap: sniffarr-litestream
+    existingSecret: sniffarr-litestream
+  nodeSelector:
+    kubernetes.io/os: linux
+
+telemetry:
+  enabled: true
+
+sniffdht:
+  hostNetwork: true
+  flags:
+    port: 51000
+    fetchers: 500
+    rate: 1000
+    discover: true
+  env:
+    OTEL_SERVICE_NAME: sniffdht

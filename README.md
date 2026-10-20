@@ -207,6 +207,24 @@ overriding the entrypoint with `/sniffdht`.
 docker build -t sniffarr .
 ```
 
+## Helm
+
+Each `vX.Y.Z` tag publishes the image as `ghcr.io/mikluko/sniffarr:X.Y.Z`
+and the chart in `charts/sniffarr` at the same version, without the `v`.
+
+```shell
+helm install sniffarr oci://ghcr.io/mikluko/charts/sniffarr --version X.Y.Z \
+  --set sniffapi.existingSecret=sniffarr
+```
+
+`sniffapi.existingSecret` is required: the name of a Secret holding
+`SNIFFARR_INGEST_TOKEN` and `SNIFFARR_SEARCH_TOKEN`, and optionally
+`TYPESAFE_API_KEY`, which sniffapi takes as its environment. sniffdht reads
+its ingest token from the same Secret unless `sniffdht.existingSecret` names
+another. With `sniffapi.litestream.enabled`, `sniffapi.litestream.existingConfigMap`
+is required too. Every value is described in
+[`values.yaml`](charts/sniffarr/values.yaml).
+
 ## Generating code
 
 The generated code under `internal/apis` is committed. After changing a `.proto` file,
