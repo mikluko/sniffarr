@@ -8,22 +8,31 @@ as a public index. Peer IP addresses are never sent to the server or stored.
 The sniffer fetches metadata only: it never downloads pieces, never uploads,
 and never announces itself into a swarm.
 
-## Binaries
+## Components
 
-- `sniffapi`, the server, is the centre of a work queue. It queues the
-  infohashes sniffers sight, hands them out as fetch tasks, stores the
-  metadata that comes back in SQLite, classifies stored torrents with
-  [TypeSafe](https://typesafe.ai)'s Jev model, and serves the search API.
-- `sniffdht`, the sniffer, is a replica that plays one role or both:
-  - as a discoverer it walks the DHT for infohashes, by BEP 51
-    `sample_infohashes` and by the `announce_peer` queries its own DHT node
-    receives, and reports them to the server;
-  - as a fetcher it takes tasks from the server, finds each torrent's peers
-    with `get_peers` on its own DHT node, fetches the metadata from them by
-    BEP 9, and returns the name, size and file list.
+sniffarr is one binary whose components are switched on by flags, any number
+of them in one process; with none on, it exits with a usage error. It runs
+until SIGINT or SIGTERM.
 
-  Any number of sniffers can run against one server. It runs until SIGINT or
-  SIGTERM.
+- `-api` is the centre of a work queue. It queues the infohashes sniffers
+  sight, hands them out as fetch tasks, stores the metadata that comes back
+  in SQLite, classifies stored torrents with [TypeSafe](https://typesafe.ai)'s
+  Jev model, and serves the search API and the Torznab indexer. It is the only
+  component that touches the database.
+- `-ui` serves the web UI, a client of the browse API.
+- `-sniff` walks the DHT for infohashes, by BEP 51 `sample_infohashes` and by
+  the `announce_peer` queries its own DHT node receives, and reports them to
+  the ingest API.
+- `-fetch` takes tasks from the ingest API, finds each torrent's peers with
+  `get_peers` on its own DHT node, fetches the metadata from them by BEP 9,
+  and returns the name, size and file list.
+
+`-ui`, `-sniff` and `-fetch` are clients of the API. In a process with `-api`
+they reach it over an in-process connection, with the process's own
+`SNIFFARR_INGEST_TOKEN` and `SNIFFARR_SEARCH_TOKEN`; without `-api` they dial
+`SNIFFARR_URL` with the same tokens, and fail at startup when it is unset.
+Any number of sniffing and fetching processes can run against one API.
+`-sniff` and `-fetch` in one process share one DHT node.
 
 The queue serves announced infohashes before sampled ones, then the oldest
 first. It lives in the same SQLite database and survives restarts; a task
@@ -31,7 +40,7 @@ whose fetcher goes away, or whose lease expires, goes back to the queue. A
 task whose fetcher finds no peers, or fewer than its `-min-peers`, is dropped
 at once. A task whose metadata times out is retried after a backoff and
 dropped after a few attempts.
-The queue is bounded: once a minute the server evicts the infohashes that have
+The queue is bounded: once a minute the API evicts the infohashes that have
 waited too long, then the ones beyond the size limit, sampled ones before
 announced ones and the oldest first. A dropped or evicted infohash is kept out
 of the queue for a while, a shorter one when it had no peers, then forgotten.
@@ -175,11 +184,11 @@ In Prowlarr, add an indexer of type Generic Torznab with URL
 
 ## Web UI
 
-With `SNIFFARR_UI_ADDR` set, sniffapi also serves a web UI on that address,
-in English or Russian. The UI touches no database: it reads `BrowseService`
-with `SNIFFARR_SEARCH_TOKEN`, over an in-process connection to sniffapi's own
-API, or over the network to the API at `SNIFFARR_URL` when that is set. Its
-`SNIFFARR_AUDIO_LANGUAGES` must then be the API's.
+With `-ui`, sniffarr serves a web UI on `SNIFFARR_UI_ADDR`, in English or
+Russian. The UI touches no database: it reads `BrowseService` with
+`SNIFFARR_SEARCH_TOKEN`, in-process when `-api` is on and over the network at
+`SNIFFARR_URL` otherwise. Its `SNIFFARR_AUDIO_LANGUAGES` must then be the
+API's.
 
 | Route               | Page                                                                                                                                                                                                       |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -203,17 +212,30 @@ reachable only through that proxy.
 
 ## Configuration
 
-### sniffapi
+Each component reads its own variables, listed below, and only when it is on.
+A variable several components read, such as a token, is read once and means
+the same to each.
+
+### Every component
+
+| Flag or variable     | Default | Meaning                                                                                                             |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `-api`               | off     | Serve the API                                                                                                       |
+| `-ui`                | off     | Serve the web UI                                                                                                    |
+| `-sniff`             | off     | Walk the DHT and report infohashes                                                                                  |
+| `-fetch`             | off     | Take fetch tasks and return metadata                                                                                |
+| `-log-level`         | `info`  | Level to log at: `debug`, `info`, `warn` or `error`                                                                 |
+| `SNIFFARR_LOG_LEVEL` |         | The level when `-log-level` is not given; the flag wins when both are set                                           |
+| `SNIFFARR_URL`       |         | Base URL of the API, such as `http://sniffarr-api:8080`; required by `-ui`, `-sniff` and `-fetch` without `-api`, and must be unset with it |
+
+### `-api`
 
 | Variable                           | Default          | Meaning                                                                                                                |
 | ---------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `SNIFFARR_DB`                      |                  | Path of the SQLite database; required                                                                                  |
 | `SNIFFARR_INGEST_TOKEN`            |                  | Bearer token of `IngestService`; required                                                                              |
-| `SNIFFARR_SEARCH_TOKEN`            |                  | Bearer token of `SearchService`; required                                                                              |
+| `SNIFFARR_SEARCH_TOKEN`            |                  | Bearer token of `SearchService` and `BrowseService`; required                                                          |
 | `SNIFFARR_ADDR`                    | `:8080`          | Listen address                                                                                                         |
-| `SNIFFARR_UI_ADDR`                 |                  | Listen address of the web UI; empty serves none                                                                        |
-| `SNIFFARR_URL`                     |                  | Base URL of the API the web UI reads, such as `http://sniffapi:8080`; empty reads this process's own                   |
-| `SNIFFARR_OIDC_ISSUER`             |                  | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none                                   |
 | `TYPESAFE_API_KEY`                 |                  | TypeSafe API key; when unset, only rules and reuse classify                                                            |
 | `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |
 | `SNIFFARR_CLASSIFY_DAILY_TOKENS`   | `2000000`        | Classifier tokens per UTC day at most; `0` is no limit                                                                 |
@@ -237,25 +259,30 @@ reachable only through that proxy.
 | `SNIFFARR_TITLES_RETRY`            | `720h`           | How long a title key that matched nothing waits before it is looked up again                                           |
 | `SNIFFARR_SEARCH_TITLES_MAX`       | `5`              | Title keys one search has matched at most                                                                              |
 | `SNIFFARR_TORZNAB_TOKEN`           |                  | API key of the Torznab endpoint; when unset, there is none                                                             |
-| `SNIFFARR_LOG_LEVEL`               | `info`           | Level to log at: `debug`, `info`, `warn` or `error`                                                                    |
 
 The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start. A torrent keeps its true file
 count, but only its largest files are stored and searched. Once a minute the
-server deletes, in small batches, the torrents nobody has sighted within the
+API deletes, in small batches, the torrents nobody has sighted within the
 retention period; a later sighting queues them again.
 
-### sniffdht
+### `-ui`
 
-| Variable                | Meaning                                                          |
-| ----------------------- | ---------------------------------------------------------------- |
-| `SNIFFARR_URL`          | Base URL of the server, such as `http://sniffapi:8080`; required |
-| `SNIFFARR_INGEST_TOKEN` | Bearer token of `IngestService`; required                        |
+| Variable                   | Default | Meaning                                                                              |
+| -------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `SNIFFARR_SEARCH_TOKEN`    |         | Bearer token of `BrowseService`; required                                            |
+| `SNIFFARR_UI_ADDR`         | `:8081` | Listen address                                                                       |
+| `SNIFFARR_OIDC_ISSUER`     |         | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none |
+| `SNIFFARR_AUDIO_LANGUAGES` | `ru`    | The API's audio languages, in its order                                              |
+
+### `-sniff` and `-fetch`
+
+| Variable                | Meaning                                   |
+| ----------------------- | ----------------------------------------- |
+| `SNIFFARR_INGEST_TOKEN` | Bearer token of `IngestService`; required |
 
 | Flag             | Default | Meaning                                                |
 | ---------------- | ------- | ------------------------------------------------------ |
-| `-discover`      | `true`  | Walk the DHT and report the infohashes it reveals      |
-| `-fetch`         | `true`  | Take fetch tasks from the server and return metadata   |
 | `-port`          | `42069` | Port for peers and the DHT, TCP and UDP; `0` picks one |
 | `-upnp`          | `false` | Forward the port, TCP and UDP, by UPnP                 |
 | `-fetchers`      | `2000`  | Metadata fetches at once                               |
@@ -264,12 +291,11 @@ retention period; a later sighting queues them again.
 | `-peer-wait`     | `8s`    | How long to look for a torrent's peers on the DHT      |
 | `-min-peers`     | `1`     | Peers needed within `-peer-wait` to fetch the metadata |
 | `-walkers`       | `16`    | `sample_infohashes` queries at once                    |
-| `-log-level`     | `info`  | Level to log at: `debug`, `info`, `warn` or `error`    |
 
 With `-upnp` the node asks the gateways it finds on the local network to
-forward the port it listens on, TCP and UDP. With `-discover=false` the node
-is passive by BEP 43: it answers no DHT query and asks other nodes to keep it
-out of their routing tables.
+forward the port it listens on, TCP and UDP. Without `-sniff` the node is
+passive by BEP 43: it answers no DHT query and asks other nodes to keep it out
+of their routing tables.
 
 Discovery rests on `sample_infohashes`: in a measured run on a server with a
 public address, no `announce_peer` query reached the node, and the sniffer
@@ -278,11 +304,11 @@ far fewer, a few a second at most.
 
 ## Telemetry
 
-Both binaries export traces and metrics with the OpenTelemetry SDK over OTLP,
+sniffarr exports traces and metrics with the OpenTelemetry SDK over OTLP,
 configured only by the standard variables: `OTEL_EXPORTER_OTLP_ENDPOINT` and
 the rest of `OTEL_EXPORTER_OTLP_*`, `OTEL_TRACES_EXPORTER`,
-`OTEL_METRICS_EXPORTER`, `OTEL_SERVICE_NAME` (`sniffapi` or `sniffdht` when
-unset), `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_TRACES_SAMPLER` and
+`OTEL_METRICS_EXPORTER`, `OTEL_SERVICE_NAME` (`sniffarr` when unset),
+`OTEL_RESOURCE_ATTRIBUTES`, `OTEL_TRACES_SAMPLER` and
 `OTEL_TRACES_SAMPLER_ARG`. Without an endpoint the exporters go to the
 specification's default on localhost. `OTEL_SDK_DISABLED=true` turns
 telemetry off: no exporter is created and nothing connects anywhere.
@@ -292,32 +318,32 @@ Every RPC is traced and measured on both ends by
 stderr and carry `trace_id` and `span_id` when written inside a span. No
 BitTorrent peer address appears in spans, attributes or logs.
 
-| Binary     | Metric                                 | Unit         | Attributes                                 |
+| Component  | Metric                                 | Unit         | Attributes                                 |
 | ---------- | -------------------------------------- | ------------ | ------------------------------------------ |
-| `sniffapi` | `sniffarr.ingest.sightings`            | `{sighting}` | `sniffarr.sighting.result`                 |
-| `sniffapi` | `sniffarr.queue.depth`                 | `{infohash}` | `sniffarr.discovery`                       |
-| `sniffapi` | `sniffarr.queue.leases`                | `{lease}`    |                                            |
-| `sniffapi` | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
-| `sniffapi` | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
-| `sniffapi` | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
-| `sniffapi` | `sniffarr.store.retention.deletions`   | `{torrent}`  |                                            |
-| `sniffapi` | `sniffarr.ingest.results`              | `{result}`   | `sniffarr.fetch.outcome`                   |
-| `sniffapi` | `sniffarr.ingest.rejections`           | `{torrent}`  | `sniffarr.rules.reason`                    |
-| `sniffapi` | `sniffarr.ingest.stored`               | `{torrent}`  |                                            |
-| `sniffapi` | `sniffarr.classify.classifications`    | `{torrent}`  | `sniffarr.kind`, `sniffarr.classify.layer` |
-| `sniffapi` | `sniffarr.search.lazy.duration`        | `s`          |                                            |
-| `sniffapi` | `sniffarr.search.lazy.classifications` | `{torrent}`  | `sniffarr.search.lazy.result`              |
-| `sniffapi` | `sniffarr.classify.tokens`             | `{token}`    |                                            |
-| `sniffapi` | `sniffarr.classify.errors`             | `{error}`    | `sniffarr.classify.error`                  |
-| `sniffapi` | `sniffarr.titles.matches`              | `{title}`    | `sniffarr.titles.layer`                    |
-| `sniffapi` | `sniffarr.titles.requests`             | `{request}`  | `sniffarr.titles.status`                   |
-| `sniffapi` | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
-| `sniffdht` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
-| `sniffdht` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
-| `sniffdht` | `sniffarr.sniff.sightings`             | `{infohash}` | `sniffarr.discovery`                       |
-| `sniffdht` | `sniffarr.sniff.fetch.in_flight`       | `{task}`     |                                            |
-| `sniffdht` | `sniffarr.sniff.fetch.outcomes`        | `{task}`     | `sniffarr.fetch.outcome`                   |
-| `sniffdht` | `sniffarr.sniff.fetch.duration`        | `s`          | `sniffarr.fetch.outcome`                   |
+| `-api`     | `sniffarr.ingest.sightings`            | `{sighting}` | `sniffarr.sighting.result`                 |
+| `-api`     | `sniffarr.queue.depth`                 | `{infohash}` | `sniffarr.discovery`                       |
+| `-api`     | `sniffarr.queue.leases`                | `{lease}`    |                                            |
+| `-api`     | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
+| `-api`     | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
+| `-api`     | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
+| `-api`     | `sniffarr.store.retention.deletions`   | `{torrent}`  |                                            |
+| `-api`     | `sniffarr.ingest.results`              | `{result}`   | `sniffarr.fetch.outcome`                   |
+| `-api`     | `sniffarr.ingest.rejections`           | `{torrent}`  | `sniffarr.rules.reason`                    |
+| `-api`     | `sniffarr.ingest.stored`               | `{torrent}`  |                                            |
+| `-api`     | `sniffarr.classify.classifications`    | `{torrent}`  | `sniffarr.kind`, `sniffarr.classify.layer` |
+| `-api`     | `sniffarr.search.lazy.duration`        | `s`          |                                            |
+| `-api`     | `sniffarr.search.lazy.classifications` | `{torrent}`  | `sniffarr.search.lazy.result`              |
+| `-api`     | `sniffarr.classify.tokens`             | `{token}`    |                                            |
+| `-api`     | `sniffarr.classify.errors`             | `{error}`    | `sniffarr.classify.error`                  |
+| `-api`     | `sniffarr.titles.matches`              | `{title}`    | `sniffarr.titles.layer`                    |
+| `-api`     | `sniffarr.titles.requests`             | `{request}`  | `sniffarr.titles.status`                   |
+| `-api`     | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
+| `-sniff`, `-fetch` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
+| `-sniff`, `-fetch` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
+| `-sniff`   | `sniffarr.sniff.sightings`             | `{infohash}` | `sniffarr.discovery`                       |
+| `-fetch`   | `sniffarr.sniff.fetch.in_flight`       | `{task}`     |                                            |
+| `-fetch`   | `sniffarr.sniff.fetch.outcomes`        | `{task}`     | `sniffarr.fetch.outcome`                   |
+| `-fetch`   | `sniffarr.sniff.fetch.duration`        | `s`          | `sniffarr.fetch.outcome`                   |
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
 `sniffarr.discovery` is `announce` or `sample`; `sniffarr.sighting.result` is
@@ -330,11 +356,12 @@ the HTTP status of TMDB's answer, or `error` without one.
 
 ## Container image
 
-The image carries both binaries and starts `sniffapi`; run the sniffer by
-overriding the entrypoint with `/sniffdht`.
+The image's entrypoint is `/sniffarr`, so the container's arguments are the
+component flags.
 
 ```shell
 docker build -t sniffarr .
+docker run -e SNIFFARR_DB=/data/sniffarr.db -e SNIFFARR_INGEST_TOKEN=… -e SNIFFARR_SEARCH_TOKEN=… sniffarr -api -ui
 ```
 
 ## Helm
@@ -349,19 +376,21 @@ helm install sniffarr oci://ghcr.io/mikluko/charts/sniffarr --version X.Y.Z \
 
 `api.existingSecret` is required: the name of a Secret holding
 `SNIFFARR_INGEST_TOKEN` and `SNIFFARR_SEARCH_TOKEN`, and optionally
-`TYPESAFE_API_KEY`, which sniffapi takes as its environment. The sniffers read
-their ingest token from the same Secret unless `sniff.existingSecret` or
-`fetch.existingSecret` names another. With `api.litestream.enabled`,
-`api.litestream.existingConfigMap` is required too. Every value is described
-in [`values.yaml`](charts/sniffarr/values.yaml).
+`TYPESAFE_API_KEY`, which the api pod takes as its environment. The sniff and
+fetch pods read their ingest token from the same Secret unless
+`sniff.existingSecret` or `fetch.existingSecret` names another. With
+`api.litestream.enabled`, `api.litestream.existingConfigMap` is required too.
+Every value is described in [`values.yaml`](charts/sniffarr/values.yaml).
 
-The chart runs sniffapi as `<release>-api`, behind a Service of the same name,
-and sniffdht as two Deployments. `<release>-sniff` discovers, in the host's
-network by default so that `announce_peer` queries reach its DHT port;
-`<release>-fetch` fetches, in the pod network by default, with
-`fetch.replicas` replicas and the URL and token Secret of `sniff` unless its
-own are set. A fetcher's DHT node is passive and the fetcher dials the peers
-it fetches from, so it needs no open port.
+The chart runs three Deployments of the one image. `<release>-api` runs
+`sniffarr -api`, and `-ui` too with `api.ui.enabled`, behind a Service of the
+same name. `<release>-sniff` runs `sniffarr -sniff`, `sniff.discover` and
+`sniff.fetch` rendering `-sniff` and `-fetch`, in the host's network by default
+so that `announce_peer` queries reach its DHT port. `<release>-fetch` runs
+`sniffarr -fetch`, in the pod network by default, with `fetch.replicas`
+replicas and the URL and token Secret of `sniff` unless its own are set. A
+fetcher's DHT node is passive and the fetcher dials the peers it fetches from,
+so it needs no open port.
 
 Either Deployment reaches the DHT from the pod network through
 `<component>.service`: a Service of the component's name exposing its port,
