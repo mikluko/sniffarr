@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
-	"os"
 	"sync"
 	"time"
 
@@ -73,7 +72,6 @@ type Network struct {
 	client  *torrent.Client
 	dht     *dht.Server
 	swarm   swarm
-	dataDir string
 	answers metric.Int64Counter
 }
 
@@ -126,15 +124,12 @@ func (s clientSwarm) fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo
 }
 
 // Start starts the client and its DHT node. offer, unless nil, is called
-// with every infohash announced to the node.
+// with every infohash announced to the node. The client creates, reads and
+// writes no torrent files.
 func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, error) {
 	cfg.defaults()
-	dataDir, err := os.MkdirTemp("", "sniffdht")
-	if err != nil {
-		return nil, err
-	}
 	c := torrent.NewDefaultClientConfig()
-	c.DataDir = dataDir
+	c.DefaultStorage = noStorage{}
 	c.NoUpload = true
 	c.Seed = false
 	c.DisablePEX = true
@@ -158,10 +153,9 @@ func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, er
 	c.Slogger = slog.New(slog.DiscardHandler)
 	client, err := torrent.NewClient(c)
 	if err != nil {
-		os.RemoveAll(dataDir)
 		return nil, err
 	}
-	n := &Network{cfg: cfg, client: client, dataDir: dataDir}
+	n := &Network{cfg: cfg, client: client}
 	for _, d := range client.DhtServers() {
 		if w, ok := d.(torrent.AnacrolixDhtServerWrapper); ok {
 			n.dht = w.Server
@@ -213,7 +207,6 @@ func (n *Network) Close() {
 	case <-done:
 	case <-time.After(5 * time.Second):
 	}
-	os.RemoveAll(n.dataDir)
 }
 
 // Sample walks the DHT with BEP 51 sample_infohashes queries for random
