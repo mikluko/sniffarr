@@ -1,0 +1,143 @@
+syntax = "proto3";
+
+package sniffarr.v1;
+
+import "sniffarr/v1/ingest.proto";
+import "sniffarr/v1/search.proto";
+
+option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
+
+// BrowseService reads the store as the web UI shows it: pages of releases
+// under its filters, a release with its stored files, and counts. Unlike
+// SearchService it classifies nothing before answering.
+service BrowseService {
+  // Page returns one page of the releases the filters select, best text
+  // match first, or most recently seen first without a query, and how many
+  // they select in all. Without kind or unknown_kind, adult releases are
+  // left out.
+  rpc Page(PageRequest) returns (PageResponse);
+  // Card returns one release with every stored file, or NOT_FOUND.
+  rpc Card(CardRequest) returns (CardResponse);
+  // Stats returns the store's counts.
+  rpc Stats(StatsRequest) returns (StatsResponse);
+}
+
+message PageRequest {
+  // Words that the name or stored file paths must all contain.
+  string query = 1;
+  // Only releases of this kind; KIND_UNSPECIFIED is any.
+  Kind kind = 2;
+  // Only releases whose kind is unknown; kind must be KIND_UNSPECIFIED.
+  bool unknown_kind = 3;
+  // The language, a BCP-47 tag, that audio_marker and
+  // min_audio_probability apply to; required with either.
+  optional string audio_language = 4;
+  // Only releases with a marker of audio_language.
+  bool audio_marker = 5;
+  // Only releases whose probability of an audio track in audio_language is
+  // known and at least this.
+  optional float min_audio_probability = 6;
+  // Only releases of this source; VIDEO_SOURCE_UNSPECIFIED is any.
+  VideoSource source = 7;
+  // Only releases whose kind this layer decided; LAYER_UNSPECIFIED is any.
+  Layer layer = 8;
+  // Only releases of at least this many bytes.
+  int64 min_size = 9;
+  // Releases to skip.
+  int32 offset = 10;
+  // At most this many releases: 50 when unset, never more than 500.
+  int32 limit = 11;
+}
+
+message PageResponse {
+  repeated Release releases = 1;
+  // How many releases the filters select in all.
+  int64 total = 2;
+}
+
+message CardRequest {
+  bytes infohash = 1;
+}
+
+message CardResponse {
+  Release release = 1;
+  // How the release's infohash was first learned of.
+  Source discovery = 2;
+  // The stored files, the largest of the release's, in stored order.
+  repeated File files = 3;
+}
+
+message StatsRequest {
+  // How many 24-hour periods before now to count first sightings in, at
+  // most 3660.
+  int32 days = 1;
+}
+
+message StatsResponse {
+  // Stored releases.
+  int64 total = 1;
+  // Stored releases by kind, KIND_UNSPECIFIED for unknown; by the layer
+  // that decided the kind, LAYER_UNSPECIFIED for none; and by source,
+  // VIDEO_SOURCE_UNSPECIFIED for none. A value with no releases is absent.
+  repeated KindCount kinds = 2;
+  repeated LayerCount layers = 3;
+  repeated SourceCount sources = 4;
+  // At most one entry per audio language the server is configured with; a
+  // language no release has an entry for is absent.
+  repeated AudioCounts audio = 5;
+  // Rejected infohashes by reason.
+  repeated RejectionCount rejected = 6;
+  // Releases awaiting the background classifier.
+  int64 pending = 7;
+  // Releases first seen in each of the days asked for, the latest first.
+  repeated int64 days = 8;
+  // Classifier tokens spent on the current UTC day, and the day's limit, 0
+  // for none.
+  int64 tokens_used_day = 9;
+  int64 tokens_limit_day = 10;
+}
+
+message KindCount {
+  Kind kind = 1;
+  int64 count = 2;
+}
+
+message LayerCount {
+  Layer layer = 1;
+  int64 count = 2;
+}
+
+message SourceCount {
+  VideoSource source = 1;
+  int64 count = 2;
+}
+
+// AudioCounts are the stored releases with a marker of the language, and
+// those without one whose probability of an audio track in it is at least
+// 0.5 or below it.
+message AudioCounts {
+  string language = 1;
+  int64 marker = 2;
+  int64 likely = 3;
+  int64 unlikely = 4;
+}
+
+message RejectionCount {
+  Rejection reason = 1;
+  int64 count = 2;
+}
+
+// Rejection is why the first filter rejected a torrent.
+enum Rejection {
+  REJECTION_UNSPECIFIED = 0;
+  REJECTION_ADULT = 1;
+  REJECTION_SOFTWARE = 2;
+  REJECTION_BOOK = 3;
+  REJECTION_COURSE = 4;
+  // Under the size limit.
+  REJECTION_SMALL = 5;
+  // Neither video nor audio files.
+  REJECTION_NO_MEDIA = 6;
+  // A letter outside the allowed scripts in the name.
+  REJECTION_SCRIPT = 7;
+}
