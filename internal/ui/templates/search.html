@@ -32,23 +32,35 @@
       </select></label>
     <label>{{.T "f.minsize"}}
       <input name="min" type="text" inputmode="decimal" value="{{.Filters.MinSizeGB}}" placeholder="{{.T "unit.gb"}}" class="num"></label>
-    <a href="/" class="reset">{{.T "f.reset"}}</a>
+    <label>{{.T "f.sort"}}
+      <select name="sort">
+        {{range sorts}}<option value="{{.}}"{{if eq . $.Filters.Sort}} selected{{end}}>{{$.T (concat "sort." .)}}</option>{{end}}
+      </select></label>
+    {{if .Top}}<a href="/top" class="reset">← {{.T "nav.totop"}}</a>{{else}}<a href="/" class="reset">{{.T "f.reset"}}</a>{{end}}
   </div>
 </form>
 {{template "results" .}}
 {{end}}
 
 {{define "results"}}
-<section id="results"
-  {{- if .Results.Fresh}} hx-get="{{.Results.SelfURL}}" hx-trigger="every 15s [document.visibilityState=='visible']" hx-swap="morph:outerHTML" hx-target="this"{{end}}>
-  <p class="mu">
-    {{- if .Results.Fresh}}{{.T "results.fresh"}}{{else}}{{.T "results.found"}}{{end}}:
-    {{$.Num (int64 .Results.Shown)}} {{.T "results.of"}} {{$.Num .Results.Total}}</p>
+<section id="results">
+  {{if .Works}}
+  <div class="works">
+    <div class="mu">{{.T "results.works"}}</div>
+    <div class="workhits">
+    {{range .Works}}
+      <span><a href="/top?kind={{.Ref.Kind}}">{{$.Work .Ref}}</a>
+      <span class="mu">· {{$.T (concat "kind." .Ref.Kind)}}{{if .Ref.Rank}} · №{{.Ref.Rank}}{{end}} · {{$.Num .Peers}} {{$.T "top.peers_lc"}} · {{.Releases}} {{$.T "top.releases_lc"}}</span></span>
+    {{end}}
+    </div>
+  </div>
+  {{end}}
+  <p class="mu">{{.T "results.found"}}: {{$.Num .Results.Total}}</p>
   {{if .Results.Rows}}
   <div class="scroll">
   <table class="t">
     <thead><tr>
-      <th>{{.T "col.name"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "col.kind"}}</th>
+      <th>{{.T "col.name"}}</th>{{if .Top}}<th class="r">{{.T "col.peers7"}}</th>{{end}}<th class="r">{{.T "col.size"}}</th><th>{{.T "col.kind"}}</th>
       {{range .VoiceLangs}}<th class="r" title="{{$.T "col.voice"}}">{{.}}</th>{{end}}
       <th>{{.T "col.source"}}</th><th>{{.T "col.first"}}</th><th>{{.T "col.last"}}</th>
     </tr></thead>
@@ -56,6 +68,7 @@
     {{range .Results.Rows}}
       <tr id="t-{{.InfoHash}}">
         <td class="nm"><a href="/t/{{.InfoHash}}">{{.Name}}</a></td>
+        {{if $.Top}}<td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>{{end}}
         <td class="r">{{$.Size .Size}}</td>
         <td>{{$.T (concat "kind." .Kind)}} <span class="mu">· {{$.T (concat "layer." .Layer)}}{{if .Confidence}} {{$.Prob .Confidence}}{{end}}</span></td>
         {{range $i, $c := .Voice}}<td class="r v" data-l="{{index $.VoiceLangs $i}}">{{$.Voice $c}}</td>{{end}}
@@ -67,13 +80,13 @@
     </tbody>
   </table>
   </div>
-  {{else}}
-  <p>{{.T "results.empty"}}</p>
-  {{end}}
   <nav class="pager mu">
     {{if .Results.PrevURL}}<a href="{{.Results.PrevURL}}" hx-get="{{.Results.PrevURL}}" hx-target="#results" hx-swap="morph:outerHTML" hx-push-url="true">← {{.T "pager.prev"}}</a>{{end}}
     <span>{{add .Results.Offset 1}}–{{add .Results.Offset .Results.Shown}}</span>
     {{if .Results.NextURL}}<a href="{{.Results.NextURL}}" hx-get="{{.Results.NextURL}}" hx-target="#results" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "pager.next"}} →</a>{{end}}
   </nav>
+  {{else}}
+  <p>{{.T "results.empty"}}</p>
+  {{end}}
 </section>
 {{end}}

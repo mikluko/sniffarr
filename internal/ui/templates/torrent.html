@@ -3,7 +3,7 @@
 {{define "main"}}
 {{with .Torrent}}
 <div class="head">
-  <a href="{{if $.BackURL}}{{$.BackURL}}{{else}}/{{end}}">← {{$.T "card.back"}}</a>
+  <a href="{{if $.BackURL}}{{$.BackURL}}{{else if $.Top}}/top{{else}}/{{end}}">← {{$.T "card.back"}}</a>
   <h1>{{.Name}}</h1>
 </div>
 
@@ -15,6 +15,8 @@
     <tr><th>magnet</th><td><a href="{{.Magnet}}">{{$.T "card.open"}}</a> <button type="button" data-copy="{{.Magnet}}">{{$.T "card.copy"}}</button></td></tr>
     <tr><th>{{$.T "card.size"}}</th><td>{{$.Size .Size}}</td></tr>
     <tr><th>{{$.T "card.files"}}</th><td>{{.FileCount}}</td></tr>
+    {{if $.Top}}<tr><th>{{$.T "card.peers"}}</th><td>{{$.Num .Peers.Week}} {{$.T "win.7d_lc"}} <span class="mu">· {{$.Num .Peers.Day}} {{$.T "win.24h_lc"}} · {{$.Num .Peers.Month}} {{$.T "win.30d_lc"}}</span></td></tr>{{end}}
+    {{with .Work}}<tr><th>{{$.T "card.work"}}</th><td><a href="/top?kind={{.Kind}}">{{$.Work .}}</a> <span class="mu">{{if .Rank}}· №{{.Rank}} {{$.T (concat "card.intop." .Kind)}} {{end}}· {{$.Torrent.WorkRels}} {{$.T "top.releases_lc"}}, {{$.T "card.thisis"}}{{$.Torrent.RankInWork}}</span></td></tr>{{end}}
     <tr><th>{{$.T "col.first"}}</th><td>{{$.TimeFull .FirstSeen}}</td></tr>
     <tr><th>{{$.T "col.last"}}</th><td>{{$.TimeFull .LastSeen}}</td></tr>
     <tr><th>{{$.T "card.via"}}</th><td>{{$.T (concat "via." .DiscoveredVia)}}</td></tr>

@@ -9,26 +9,78 @@ func fp(f float64) *float64 { return &f }
 const gb = int64(1) << 30
 const mb = int64(1) << 20
 
+func SampleHome(b Base) HomePage {
+	return HomePage{Base: b, Summary: Summary{Total: 1284311, NewDay: 9506, Pending: 3412}}
+}
+
 func SampleSearch(b Base, q string) SearchPage {
 	now := b.Now
 	at := func(d time.Duration) time.Time { return now.Add(-d) }
 	v := func(explicit bool, p *float64) []VoiceCell { return []VoiceCell{{Explicit: explicit, Prob: p}} }
+	day := 24 * time.Hour
 	rows := []Row{
-		{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Name: "Дюна. Часть вторая / Dune: Part Two (2024) WEB-DL 2160p HDR | D | Atmos", Size: 26629001216, Kind: "movie", Layer: "classifier", Confidence: fp(.93), Voice: v(true, fp(.97)), Source: "web", FirstSeen: at(41 * time.Hour), LastSeen: at(3 * time.Minute)},
-		{InfoHash: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678", Name: "Severance.S02.1080p.ATVP.WEB-DL.DDP5.1.H.264-NTb", Size: 41 * gb, Kind: "series", Layer: "rules", Voice: v(false, nil), Source: "web", FirstSeen: at(7 * time.Minute), LastSeen: at(4 * time.Minute)},
-		{InfoHash: "b2c3d4e5f60718293a4b5c6d7e8f901234567890", Name: "Oppenheimer.2023.UHD.BluRay.2160p.REMUX.HEVC.DTS-HD.MA.5.1", Size: 78 * gb, Kind: "movie", Layer: "rules", Voice: v(false, fp(.71)), Source: "remux", FirstSeen: at(38 * 24 * time.Hour), LastSeen: at(5 * time.Minute)},
-		{InfoHash: "c3d4e5f60718293a4b5c6d7e8f90123456789012", Name: "Pink Floyd - The Dark Side Of The Moon (50th Anniversary) [FLAC 24-96]", Size: 2 * gb, Kind: "music", Layer: "rules", Voice: v(false, nil), Source: "other", FirstSeen: at(14 * time.Minute), LastSeen: at(5 * time.Minute)},
-		{InfoHash: "d4e5f60718293a4b5c6d7e8f9012345678901234", Name: "Shogun.2024.S01.2160p.DSNP.WEB-DL.DDP5.1.Atmos.DV.HDR", Size: 96 * gb, Kind: "series", Layer: "title_repeat", Voice: v(false, fp(.12)), Source: "web", FirstSeen: at(18 * time.Minute), LastSeen: at(6 * time.Minute)},
-		{InfoHash: "e5f60718293a4b5c6d7e8f901234567890123456", Name: "Пелевин В. - Круть (2023) FB2, EPUB", Size: 6 * mb, Kind: "book", Layer: "classifier", Confidence: fp(.91), Voice: v(false, nil), Source: "other", FirstSeen: at(32 * time.Minute), LastSeen: at(9 * time.Minute)},
-		{InfoHash: "f60718293a4b5c6d7e8f90123456789012345678", Name: "ubn2410_x7f.part03", Size: 4 * gb, Kind: "unknown", Layer: "classifier", Confidence: fp(.31), Voice: v(false, nil), Source: "other", FirstSeen: at(46 * time.Minute), LastSeen: at(12 * time.Minute)},
+		{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Name: "Дюна. Часть вторая / Dune: Part Two (2024) WEB-DL 2160p HDR | D | Atmos", Peers: 12480, Size: 26629001216, Kind: "movie", Layer: "classifier", Confidence: fp(.93), Voice: v(true, fp(.97)), Source: "web", FirstSeen: at(41 * time.Hour), LastSeen: at(3 * time.Minute)},
+		{InfoHash: "91a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4", Name: "Dune.Part.Two.2024.UHD.BluRay.2160p.REMUX.HEVC.Rus.Eng", Peers: 11020, Size: 74 * gb, Kind: "movie", Layer: "rules", Voice: v(true, fp(.95)), Source: "remux", FirstSeen: at(475 * day), LastSeen: at(4 * time.Minute)},
+		{InfoHash: "a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5", Name: "Дюна: Часть вторая (2024) BDRip 1080p | D", Peers: 9870, Size: 14 * gb, Kind: "movie", Layer: "title_repeat", Voice: v(true, fp(.98)), Source: "rip", FirstSeen: at(478 * day), LastSeen: at(6 * time.Minute)},
+		{InfoHash: "b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6", Name: "Dune.Part.Two.2024.1080p.WEB-DL.DDP5.1.H.264", Peers: 6430, Size: 10 * gb, Kind: "movie", Layer: "rules", Voice: v(false, fp(.12)), Source: "web", FirstSeen: at(524 * day), LastSeen: at(7 * time.Minute)},
+		{InfoHash: "c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7", Name: "Dune.Prophecy.S01.2160p.MAX.WEB-DL.DDP5.1.DV.HDR", Peers: 2940, Size: 41 * gb, Kind: "series", Layer: "rules", Voice: v(false, fp(.05)), Source: "web", FirstSeen: at(302 * day), LastSeen: at(11 * time.Minute)},
+		{InfoHash: "d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708", Name: "Herbert F. - Dune (1965) EPUB", Peers: 410, Size: 1 * mb, Kind: "book", Layer: "classifier", Confidence: fp(.89), Voice: v(false, nil), Source: "other", FirstSeen: at(597 * day), LastSeen: at(25 * time.Minute)},
 	}
-	r := Results{Fresh: q == "", SelfURL: "/", Shown: len(rows), Total: 1284311, NextURL: "/?o=50", Rows: rows}
-	if q != "" {
-		r.SelfURL = "/?q=" + q
-		r.Total = int64(len(rows))
-		r.NextURL = ""
+	works := []WorkHit{
+		{Ref: WorkRef{ID: "m-dune-part-two-2024", Kind: "movie", Title: "Дюна: Часть вторая", Sub: "2024", Rank: 3}, Peers: 48230, Releases: 6},
+		{Ref: WorkRef{ID: "m-dune-2021", Kind: "movie", Title: "Дюна", Sub: "2021", Rank: 41}, Peers: 9860, Releases: 7},
+		{Ref: WorkRef{ID: "s-dune-prophecy-s01", Kind: "series", Title: "Дюна: Пророчество", Sub: "S01", Rank: 37}, Peers: 4120, Releases: 5},
 	}
-	return SearchPage{Base: b, Q: q, Filters: Filters{VoiceLang: "ru", Voice: "any"}, Results: r}
+	r := Results{Shown: len(rows), Total: 23, NextURL: "/?q=" + q + "&o=50", Rows: rows}
+	return SearchPage{Base: b, Q: q, Works: works, Filters: Filters{VoiceLang: "ru", Voice: "any", Sort: "last_seen"}, Results: r}
+}
+
+func SampleTop(b Base, kind string, open string, all bool) TopPage {
+	d := func(f float64) *float64 { return &f }
+	v := func(explicit bool, p *float64) []VoiceCell { return []VoiceCell{{Explicit: explicit, Prob: p}} }
+	day := 24 * time.Hour
+	type w struct {
+		id, title, sub string
+		peers          int64
+		delta          *float64
+		rels           int
+		voice          []VoiceCell
+		src            []string
+		age            time.Duration
+	}
+	var ws []w
+	switch kind {
+	case "series":
+		ws = []w{
+			{"s-stranger-things-s05", "Очень странные дела", "S05", 88410, nil, 14, v(true, nil), []string{"web"}, 23 * day},
+			{"s-wednesday-s02", "Уэнсдей", "S02", 52930, d(-.18), 11, v(true, nil), []string{"web"}, 75 * day},
+			{"s-shogun-s01", "Сёгун", "S01", 33010, d(-.03), 9, v(false, fp(.86)), []string{"web", "remux"}, 601 * day},
+		}
+	default:
+		kind = "movie"
+		ws = []w{
+			{"m-superman-2025", "Супермен", "2025", 61240, d(.12), 9, v(true, nil), []string{"web", "rip"}, 101 * day},
+			{"m-sinners-2025", "Грешники", "2025", 54810, d(-.08), 7, v(true, nil), []string{"web", "remux", "rip"}, 151 * day},
+			{"m-dune-part-two-2024", "Дюна: Часть вторая", "2024", 48230, d(.03), 6, v(true, nil), []string{"web", "remux", "disc"}, 524 * day},
+			{"m-f1-2025", "F1", "2025", 41760, d(.41), 5, v(false, fp(.88)), []string{"web", "rip"}, 56 * day},
+			{"m-one-battle-2025", "Битва за битвой", "2025", 39410, nil, 3, v(false, fp(.62)), []string{"web"}, 6 * day},
+		}
+	}
+	p := TopPage{Base: b, Kind: kind, Window: "7d", VoiceMode: "any", Computed: b.Now.Add(-5 * time.Minute), Limit: 100, All: all}
+	for i, x := range ws {
+		wk := Work{Ref: WorkRef{ID: x.id, Kind: kind, Title: x.title, Sub: x.sub, Rank: i + 1}, Rank: i + 1,
+			Peers: x.peers, Delta: x.delta, Releases: x.rels, Voice: x.voice, Sources: x.src, FirstSeen: b.Now.Add(-x.age)}
+		if x.id == open {
+			wk.Open = true
+			wk.Items = []Release{
+				{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Name: "Дюна. Часть вторая / Dune: Part Two (2024) WEB-DL 2160p HDR | D | Atmos", Peers: 12480, Size: 26629001216, Voice: v(true, fp(.97)), Source: "web", FirstSeen: b.Now.Add(-41 * time.Hour)},
+				{InfoHash: "91a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4", Name: "Dune.Part.Two.2024.UHD.BluRay.2160p.REMUX.HEVC.Rus.Eng", Peers: 11020, Size: 74 * gb, Voice: v(true, fp(.95)), Source: "remux", FirstSeen: b.Now.Add(-475 * day)},
+				{InfoHash: "b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6", Name: "Dune.Part.Two.2024.1080p.WEB-DL.DDP5.1.H.264", Peers: 6430, Size: 10 * gb, Voice: v(false, fp(.12)), Source: "web", FirstSeen: b.Now.Add(-524 * day)},
+			}
+		}
+		p.Works = append(p.Works, wk)
+	}
+	return p
 }
 
 func SampleTorrent(b Base, all bool) TorrentPage {
@@ -46,13 +98,16 @@ func SampleTorrent(b Base, all bool) TorrentPage {
 	if !all {
 		shown = files[:8]
 	}
-	return TorrentPage{Base: b, BackURL: "/", Torrent: Torrent{
+	return TorrentPage{Base: b, BackURL: "/?q=дюна", Torrent: Torrent{
 		InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52",
 		Name:     "Дюна. Часть вторая / Dune: Part Two (2024) WEB-DL 2160p HDR | D | Atmos",
 		Magnet:   "magnet:?xt=urn:btih:8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52",
 		Size:     26629001216, FileCount: 14,
 		FirstSeen: b.Now.Add(-41 * time.Hour), LastSeen: b.Now.Add(-3 * time.Minute),
 		DiscoveredVia: "announce", TMDBQuery: "Dune Part Two 2024",
+		Peers:    PeerCounts{Day: 1960, Week: 12480, Month: 41300},
+		Work:     &WorkRef{ID: "m-dune-part-two-2024", Kind: "movie", Title: "Дюна: Часть вторая", Sub: "2024", Rank: 3},
+		WorkRels: 6, RankInWork: 1,
 		Kind:   Answer{Value: "movie", Layer: "classifier", Confidence: fp(.93)},
 		Source: Answer{Value: "web", Layer: "rules"},
 		Voice:  []VoiceDetail{{Lang: "ru", Mark: "D", ScriptHint: "cyrillic", Prob: fp(.97)}},

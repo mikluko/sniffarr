@@ -4,25 +4,39 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>{{template "title" .}} · sniffarr</title>
+<title>{{template "title" .}}{{if ne .Nav "home"}} · sniffarr{{end}}</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/vendor/htmx.min.js" defer></script>
 <script src="/static/vendor/idiomorph-ext.min.js" defer></script>
 <script src="/static/app.js" defer></script>
 </head>
 <body hx-ext="morph">
+{{if eq .Nav "home"}}
+{{template "main" .}}
+{{else}}
 <div class="wrap">
 <header class="top">
   <a href="/" class="brand">sniffarr</a>
   <nav>
-    <a href="/"{{if eq .Nav "search"}} class="on" aria-current="page"{{end}}>{{.T "nav.search"}}</a>
+    {{if .Top}}<a href="/top"{{if eq .Nav "top"}} class="on" aria-current="page"{{end}}>{{.T "nav.top"}}</a>{{end}}
     <a href="/data"{{if eq .Nav "data"}} class="on" aria-current="page"{{end}}>{{.T "nav.data"}}</a>
   </nav>
-  <span class="langs">
-    {{- range $i, $l := .Langs}}{{if $i}} · {{end}}{{if eq $l $.Lang}}<b>{{$l}}</b>{{else}}<a href="{{$.LangURL $l}}">{{$l}}</a>{{end}}{{end -}}
-  </span>
+  {{template "langs" .}}
 </header>
 {{template "main" .}}
 </div>
+{{end}}
 </body>
 </html>
+
+{{define "langs"}}<span class="langs">
+  {{- range $i, $l := .Langs}}{{if $i}} · {{end}}{{if eq $l $.Lang}}<b>{{$l}}</b>{{else}}<a href="{{$.LangURL $l}}">{{$l}}</a>{{end}}{{end -}}
+</span>{{end}}
+
+{{define "searchbar"}}
+<form class="search" action="/" method="get">
+  <label for="q" class="vh">{{.T "search.label"}}</label>
+  <input id="q" name="q" type="search" placeholder="{{.T "search.placeholder"}}" autocomplete="off" spellcheck="false">
+  <button type="submit">{{.T "search.submit"}}</button>
+</form>
+{{end}}
