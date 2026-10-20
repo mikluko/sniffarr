@@ -140,9 +140,10 @@ in English or Russian.
 
 The UI authenticates nobody: an authenticating proxy, such as oauth2-proxy,
 goes in front of it. Its language is the one picked with `?lang=ru` or
-`?lang=C`, remembered in a cookie, else the `locale` claim of the JWT in the
-`X-Forwarded-Access-Token` header, which oauth2-proxy can pass on; the token
-is read, not verified. Adult releases do not show in its search.
+`?lang=C`, remembered in a cookie, else, with `SNIFFARR_OIDC_ISSUER` set, the
+`locale` claim of the provider's userinfo for the access token in the
+`X-Forwarded-Access-Token` header, which oauth2-proxy can pass on; a locale is
+kept for 10 minutes per token. Adult releases do not show in its search.
 
 The chart serves the UI with `api.ui.enabled`, on port `ui` (8081) of the
 `<release>-api` Service. `api.extraContainers` and `api.extraVolumes` add a
@@ -159,6 +160,7 @@ proxy to the pod, and `api.ui.targetPort` points the Service port at it.
 | `SNIFFARR_SEARCH_TOKEN`            |                  | Bearer token of `SearchService`; required                                                                              |
 | `SNIFFARR_ADDR`                    | `:8080`          | Listen address                                                                                                         |
 | `SNIFFARR_UI_ADDR`                 |                  | Listen address of the web UI; empty serves none                                                                        |
+| `SNIFFARR_OIDC_ISSUER`             |                  | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none                                   |
 | `TYPESAFE_API_KEY`                 |                  | TypeSafe API key; when unset, only rules and reuse classify                                                            |
 | `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |
 | `SNIFFARR_CLASSIFY_DAILY_TOKENS`   | `2000000`        | Classifier tokens per UTC day at most; `0` is no limit                                                                 |

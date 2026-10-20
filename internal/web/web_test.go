@@ -2,8 +2,8 @@ package web
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -29,9 +29,9 @@ func hexOf(b byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-// handler serves a store holding a Russian-marked movie with ten files, a
+// handler serves, with l, a store holding a Russian-marked movie with ten files, a
 // classified series, a torrent of unknown kind and an adult one.
-func handler(t *testing.T) http.Handler {
+func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
@@ -65,7 +65,7 @@ func handler(t *testing.T) http.Handler {
 	require.NoError(t, st.AddTokens(ctx, now.Format(time.DateOnly), 250))
 	langs, err := audio.Parse("ru")
 	require.NoError(t, err)
-	h, err := New(Config{Store: st, Languages: langs, DailyTokens: 1000, Location: time.UTC, Now: func() time.Time { return now }})
+	h, err := New(Config{Store: st, Languages: langs, DailyTokens: 1000, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
 }
@@ -97,7 +97,7 @@ func page(t *testing.T, w *httptest.ResponseRecorder) string {
 }
 
 func TestSearch(t *testing.T) {
-	h := handler(t)
+	h := handler(t, nil)
 	body := page(t, get(t, h, "/", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	for _, name := range []string{"Alien.1979.Rus.1080p.BluRay", "Severance.S02.1080p.WEB-DL", "Сборник"} {
@@ -114,7 +114,7 @@ func TestSearch(t *testing.T) {
 }
 
 func TestSearchFilters(t *testing.T) {
-	h := handler(t)
+	h := handler(t, nil)
 	for _, tt := range []struct {
 		path string
 		want []string
@@ -149,7 +149,7 @@ func TestSearchURL(t *testing.T) {
 var s0 = &server{tags: []string{"ru"}}
 
 func TestTorrent(t *testing.T) {
-	h := handler(t)
+	h := handler(t, nil)
 	body := page(t, get(t, h, "/t/"+hexOf(1), "", "Referer", "http://example.com/?q=alien"))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, "magnet:?xt=urn:btih:"+hexOf(1))
@@ -167,7 +167,7 @@ func TestTorrent(t *testing.T) {
 }
 
 func TestData(t *testing.T) {
-	h := handler(t)
+	h := handler(t, nil)
 	body := page(t, get(t, h, "/data", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, `<a href="/?kind=movie">`)
@@ -177,27 +177,22 @@ func TestData(t *testing.T) {
 	require.Equal(t, http.StatusOK, get(t, h, "/static/vendor/htmx.min.js", "").Code)
 }
 
-func token(claims string) string {
-	enc := base64.RawURLEncoding.EncodeToString
-	return enc([]byte(`{"alg":"RS256"}`)) + "." + enc([]byte(claims)) + ".sig"
-}
+// locales knows the token "ru-token" as a person with the locale ru.
+type locales struct{}
 
-func TestLocale(t *testing.T) {
-	for _, tt := range []struct{ header, want string }{
-		{token(`{"locale":"ru-RU"}`), "ru-RU"},
-		{token(`{"sub":"x"}`), ""},
-		{"not a token", ""},
-		{"a.!!!.c", ""},
-		{"", ""},
-	} {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.Header.Set(TokenHeader, tt.header)
-		require.Equal(t, tt.want, Locale(req), tt.header)
+func (locales) Locale(_ context.Context, token string) (string, error) {
+	if token == "ru-token" {
+		return "ru", nil
 	}
+	return "", errors.New("unknown token")
 }
 
 func TestLanguage(t *testing.T) {
-	h := handler(t)
+	h := handler(t, nil)
+	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, "ru-token")), `<html lang="en">`, "no lookup without Locales")
+	h = handler(t, locales{})
 	require.Contains(t, page(t, get(t, h, "/data", "")), `<html lang="en">`)
-	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, token(`{"locale":"ru"}`))), `<html lang="ru">`)
+	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, "ru-token")), `<html lang="ru">`, "the person's locale")
+	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, "other")), `<html lang="en">`, "a failed lookup falls back")
+	require.Contains(t, page(t, get(t, h, "/data?lang=C", "", TokenHeader, "ru-token")), `<html lang="en">`, "the language picked wins")
 }

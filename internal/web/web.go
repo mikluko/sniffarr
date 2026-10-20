@@ -5,9 +5,8 @@ package web
 
 import (
 	"cmp"
-	"encoding/base64"
+	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"math"
@@ -43,12 +42,20 @@ type Config struct {
 	Languages []audio.Language
 	// DailyTokens is the classifier's daily token limit; 0 is none.
 	DailyTokens int64
+	// Locales tells the locale of the person an access token was issued to;
+	// when nil, the language is only the one picked on the page.
+	Locales Locales
 	// Location is the time zone of dates; time.Local when nil.
 	Location *time.Location
 	// Log discards everything when nil.
 	Log *slog.Logger
 	// Now is time.Now when nil.
 	Now func() time.Time
+}
+
+// Locales looks up locales by access token.
+type Locales interface {
+	Locale(ctx context.Context, token string) (string, error)
 }
 
 type server struct {
@@ -81,28 +88,22 @@ func New(cfg Config) (http.Handler, error) {
 	return mux, nil
 }
 
-// Locale returns the locale claim of the JWT in TokenHeader, or "". The
-// token is not verified: the proxy that sets the header is trusted.
-func Locale(req *http.Request) string {
-	parts := strings.Split(req.Header.Get(TokenHeader), ".")
-	if len(parts) != 3 {
+// locale is the locale of the person whose access token is in TokenHeader,
+// or "" when there is none or Locales is nil.
+func (s *server) locale(req *http.Request) string {
+	token := req.Header.Get(TokenHeader)
+	if s.cfg.Locales == nil || token == "" {
 		return ""
 	}
-	b, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	l, err := s.cfg.Locales.Locale(req.Context(), token)
 	if err != nil {
-		return ""
+		s.cfg.Log.WarnContext(req.Context(), "locale", "err", err)
 	}
-	var claims struct {
-		Locale string `json:"locale"`
-	}
-	if json.Unmarshal(b, &claims) != nil {
-		return ""
-	}
-	return claims.Locale
+	return l
 }
 
 func (s *server) base(w http.ResponseWriter, req *http.Request, nav string) ui.Base {
-	b := s.ui.Base(req, ui.Lang(w, req, Locale(req)), nav, s.tags, s.cfg.Location)
+	b := s.ui.Base(req, ui.Lang(w, req, s.locale(req)), nav, s.tags, s.cfg.Location)
 	b.Now = s.cfg.Now()
 	return b
 }

@@ -28,12 +28,13 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/telemetry"
 	"github.com/mikluko/sniffarr/internal/titles"
+	"github.com/mikluko/sniffarr/internal/userinfo"
 	"github.com/mikluko/sniffarr/internal/web"
 )
 
 type config struct {
 	addr, db                 string
-	uiAddr                   string
+	uiAddr, oidcIssuer       string
 	ingestToken, searchToken string
 	typesafeKey              string
 	tmdbKey                  string
@@ -87,6 +88,7 @@ func load(lookup func(string) (string, bool)) (config, error) {
 		typesafeKey: getenv("TYPESAFE_API_KEY"),
 		tmdbKey:     getenv("TMDB_API_KEY"),
 		uiAddr:      getenv("SNIFFARR_UI_ADDR"),
+		oidcIssuer:  getenv("SNIFFARR_OIDC_ISSUER"),
 	}
 	var err error
 	if c.concurrency, err = positive(getenv, "SNIFFARR_CLASSIFY_CONCURRENCY", 4); err != nil {
@@ -352,9 +354,17 @@ func every(ctx context.Context, d time.Duration, f func()) {
 	}
 }
 
+// localeTTL is how long the UI keeps a person's locale before asking the
+// provider again.
+const localeTTL = 10 * time.Minute
+
 // serveUI serves the web UI on cfg.uiAddr in g until ctx is done.
 func serveUI(ctx context.Context, g *errgroup.Group, cfg config, s *store.Store, log *slog.Logger) error {
-	h, err := web.New(web.Config{Store: s, Languages: cfg.languages, DailyTokens: cfg.dailyTokens, Log: log})
+	wc := web.Config{Store: s, Languages: cfg.languages, DailyTokens: cfg.dailyTokens, Log: log}
+	if cfg.oidcIssuer != "" {
+		wc.Locales = userinfo.New(cfg.oidcIssuer, &http.Client{Timeout: 10 * time.Second}, localeTTL)
+	}
+	h, err := web.New(wc)
 	if err != nil {
 		return err
 	}
