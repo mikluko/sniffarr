@@ -705,7 +705,9 @@ type HashKeyResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The SipHash-2-4 key, 16 bytes: k0 is the first 8 in little-endian order,
 	// k1 the last 8.
-	Key           []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Key []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// The DHT node ID of the sniffer that discovers, 20 random bytes.
+	NodeId        []byte `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -743,6 +745,13 @@ func (*HashKeyResponse) Descriptor() ([]byte, []int) {
 func (x *HashKeyResponse) GetKey() []byte {
 	if x != nil {
 		return x.Key
+	}
+	return nil
+}
+
+func (x *HashKeyResponse) GetNodeId() []byte {
+	if x != nil {
+		return x.NodeId
 	}
 	return nil
 }
@@ -902,9 +911,10 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x04task\x18\x01 \x01(\v2\x11.sniffarr.v1.TaskR\x04task\"\"\n" +
 	"\x04Task\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\"\x10\n" +
-	"\x0eHashKeyRequest\"#\n" +
+	"\x0eHashKeyRequest\"<\n" +
 	"\x0fHashKeyResponse\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\fR\x03key\"V\n" +
+	"\x03key\x18\x01 \x01(\fR\x03key\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\fR\x06nodeId\"V\n" +
 	"\fPeersRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04hour\x18\x02 \x01(\x03R\x04hour\x12\x16\n" +

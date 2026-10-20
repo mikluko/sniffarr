@@ -20,7 +20,11 @@ func (s *Service) HashKey(ctx context.Context, _ *connect.Request[sniffarrv1.Has
 	if err != nil {
 		return nil, s.internal(ctx, "hash key", err)
 	}
-	return connect.NewResponse(&sniffarrv1.HashKeyResponse{Key: k[:]}), nil
+	id, err := s.Store.NodeID(ctx)
+	if err != nil {
+		return nil, s.internal(ctx, "node id", err)
+	}
+	return connect.NewResponse(&sniffarrv1.HashKeyResponse{Key: k[:], NodeId: id[:]}), nil
 }
 
 func (s *Service) Peers(ctx context.Context, stream *connect.ClientStream[sniffarrv1.PeersRequest]) (*connect.Response[sniffarrv1.PeersResponse], error) {

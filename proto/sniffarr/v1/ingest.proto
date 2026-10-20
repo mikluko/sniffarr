@@ -18,8 +18,10 @@ service IngestService {
   // stream ends without its result or when the lease expires.
   rpc Fetch(stream FetchRequest) returns (stream FetchResponse);
   // HashKey returns the key every client hashes peers with before adding
-  // them to a sketch. The server generates it once and keeps it for the life
-  // of its store, so sketches from any client and any time merge.
+  // them to a sketch, and the ID of the sniffing DHT node. The server
+  // generates both once and keeps them for the life of its store, so
+  // sketches from any client and any time merge and the node keeps its ID
+  // across restarts.
   rpc HashKey(HashKeyRequest) returns (HashKeyResponse);
   // Peers merges each sketch of the stream into the stored sketch of its
   // torrent and hour, and reports the totals when the client closes the
@@ -112,6 +114,8 @@ message HashKeyResponse {
   // The SipHash-2-4 key, 16 bytes: k0 is the first 8 in little-endian order,
   // k1 the last 8.
   bytes key = 1;
+  // The DHT node ID of the sniffer that discovers, 20 random bytes.
+  bytes node_id = 2;
 }
 
 // PeersRequest is a sketch of the peers of one torrent seen in one hour.

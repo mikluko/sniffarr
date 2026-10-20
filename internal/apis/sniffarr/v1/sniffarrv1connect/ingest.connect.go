@@ -55,8 +55,10 @@ type IngestServiceClient interface {
 	// stream ends without its result or when the lease expires.
 	Fetch(context.Context) *connect.BidiStreamForClient[v1.FetchRequest, v1.FetchResponse]
 	// HashKey returns the key every client hashes peers with before adding
-	// them to a sketch. The server generates it once and keeps it for the life
-	// of its store, so sketches from any client and any time merge.
+	// them to a sketch, and the ID of the sniffing DHT node. The server
+	// generates both once and keeps them for the life of its store, so
+	// sketches from any client and any time merge and the node keeps its ID
+	// across restarts.
 	HashKey(context.Context, *connect.Request[v1.HashKeyRequest]) (*connect.Response[v1.HashKeyResponse], error)
 	// Peers merges each sketch of the stream into the stored sketch of its
 	// torrent and hour, and reports the totals when the client closes the
@@ -142,8 +144,10 @@ type IngestServiceHandler interface {
 	// stream ends without its result or when the lease expires.
 	Fetch(context.Context, *connect.BidiStream[v1.FetchRequest, v1.FetchResponse]) error
 	// HashKey returns the key every client hashes peers with before adding
-	// them to a sketch. The server generates it once and keeps it for the life
-	// of its store, so sketches from any client and any time merge.
+	// them to a sketch, and the ID of the sniffing DHT node. The server
+	// generates both once and keeps them for the life of its store, so
+	// sketches from any client and any time merge and the node keeps its ID
+	// across restarts.
 	HashKey(context.Context, *connect.Request[v1.HashKeyRequest]) (*connect.Response[v1.HashKeyResponse], error)
 	// Peers merges each sketch of the stream into the stored sketch of its
 	// torrent and hour, and reports the totals when the client closes the
