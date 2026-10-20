@@ -93,6 +93,9 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 	for _, w := range Windows {
 		h, d := w.since(now)
 		ph, pd := h-int64(w.Length/time.Second), d-int64(w.Length/time.Second)
+		if _, err := conn.ExecContext(ctx, "DROP TABLE IF EXISTS temp.win; DROP TABLE IF EXISTS temp.prev"); err != nil {
+			return err
+		}
 		if _, err := conn.ExecContext(ctx, `CREATE TEMP TABLE win AS SELECT torrent_id, hll_union_agg(sketch) AS sketch FROM (
 			SELECT torrent_id, sketch FROM peers_hour WHERE hour >= ?1
 			UNION ALL SELECT torrent_id, sketch FROM peers_day WHERE day >= ?2) GROUP BY torrent_id`, h, d); err != nil {
