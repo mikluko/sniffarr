@@ -31,7 +31,7 @@ func serve(t *testing.T, torrents ...stored) (*httptest.Server, *store.Store) {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db, store.Options{Titles: true})
+	s, err := store.New(ctx, db, store.Options{TMDB: true})
 	require.NoError(t, err)
 	for i, x := range torrents {
 		tr := store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: x.name, Size: int64(i+1) << 30, Discovery: "sample",

@@ -1,4 +1,4 @@
-package titles
+package tmdb
 
 import (
 	"context"

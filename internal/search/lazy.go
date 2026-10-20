@@ -17,7 +17,7 @@ import (
 
 const (
 	DefaultLazyMax         = 20
-	DefaultLazyTitles      = 5
+	DefaultLazyTMDB        = 5
 	DefaultLazyConcurrency = 8
 	DefaultLazyWait        = 2 * time.Second
 	DefaultLazyTimeout     = time.Minute
@@ -28,8 +28,8 @@ type Classifier interface {
 	Classify(ctx context.Context, p store.Pending) error
 }
 
-// Titles matches title keys to works.
-type Titles interface {
+// TMDB matches title keys to works.
+type TMDB interface {
 	Unmatched(ctx context.Context, keys []string, limit int) ([]store.TitleKey, error)
 	Match(ctx context.Context, k store.TitleKey) error
 }
@@ -42,11 +42,11 @@ type Lazy struct {
 	Classifier Classifier
 	// Max is the most candidates one Search classifies; DefaultLazyMax.
 	Max int
-	// Titles, when set, matches the title keys of candidates.
-	Titles Titles
-	// MaxTitles is the most title keys one Search matches;
-	// DefaultLazyTitles.
-	MaxTitles int
+	// TMDB, when set, matches the title keys of candidates.
+	TMDB TMDB
+	// MaxTMDB is the most title keys one Search matches;
+	// DefaultLazyTMDB.
+	MaxTMDB int
 	// Concurrency is how many classifications and matches run at once;
 	// DefaultLazyConcurrency.
 	Concurrency int
@@ -95,8 +95,8 @@ func (l *Lazy) init() {
 		if l.Max <= 0 {
 			l.Max = DefaultLazyMax
 		}
-		if l.MaxTitles <= 0 {
-			l.MaxTitles = DefaultLazyTitles
+		if l.MaxTMDB <= 0 {
+			l.MaxTMDB = DefaultLazyTMDB
 		}
 		if l.Concurrency <= 0 {
 			l.Concurrency = DefaultLazyConcurrency
@@ -112,7 +112,7 @@ func (l *Lazy) init() {
 
 // search returns the releases matching q after classifying, within Wait, up
 // to Max candidates the classifier has not examined, and matching up to
-// MaxTitles title keys of candidates due for a match; the filters on kind
+// MaxTMDB title keys of candidates due for a match; the filters on kind
 // and audio apply to what is known once it is done.
 func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query) ([]store.Release, error) {
 	l.init()
@@ -158,7 +158,7 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 		if l.Classifier != nil && !r.Classified && len(ids) < l.Max {
 			ids = append(ids, r.ID)
 		}
-		if l.Titles != nil && r.TitleKey != "" && (r.Kind == "movie" || r.Kind == "series") && !slices.Contains(keys, r.TitleKey) {
+		if l.TMDB != nil && r.TitleKey != "" && (r.Kind == "movie" || r.Kind == "series") && !slices.Contains(keys, r.TitleKey) {
 			keys = append(keys, r.TitleKey)
 		}
 	}
@@ -173,12 +173,12 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 		}
 	}
 	if len(keys) > 0 {
-		due, err := l.Titles.Unmatched(ctx, keys, l.MaxTitles)
+		due, err := l.TMDB.Unmatched(ctx, keys, l.MaxTMDB)
 		if err != nil {
 			l.Log.ErrorContext(ctx, "unmatched titles", "err", err)
 		}
 		for _, k := range due {
-			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.Titles.Match(ctx, k) },
+			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.TMDB.Match(ctx, k) },
 				l.titleOutcomes, &mu, expired, func() { matched[k.Key] = true }))
 		}
 	}

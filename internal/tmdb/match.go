@@ -1,6 +1,6 @@
-// Package titles matches title keys to works on TMDB, so that every release
+// Package tmdb matches title keys to works on TMDB, so that every release
 // of a movie or series can be found by the work's IDs.
-package titles
+package tmdb
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-const scope = "github.com/mikluko/sniffarr/internal/titles"
+const scope = "github.com/mikluko/sniffarr/internal/tmdb"
 
 // DefaultRetry is how long a key no work was found for waits before it is
 // looked up again.
@@ -49,8 +49,8 @@ type Chooser interface {
 // Matcher matches title keys to works and records the matches. It is safe
 // for concurrent use; concurrent calls for one key share a single match.
 type Matcher struct {
-	TMDB  *TMDB
-	Store Store
+	Client *Client
+	Store  Store
 	// Chooser picks among several plausible candidates; without one, a key
 	// with several stays unmatched.
 	Chooser Chooser
@@ -98,7 +98,7 @@ func (m *Matcher) Match(ctx context.Context, k store.TitleKey) error {
 
 func (m *Matcher) match(ctx context.Context, k store.TitleKey) error {
 	t, err := m.find(ctx, k)
-	var tErr *TMDBError
+	var tErr *Error
 	switch {
 	case errors.As(err, &tErr) && tErr.Permanent():
 		t = store.Title{Error: tErr.Error()}
@@ -168,7 +168,7 @@ func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Title, erro
 			return store.Title{}, err
 		}
 	}
-	ids, err := m.TMDB.ExternalIDs(ctx, w.series, pick.c.ID)
+	ids, err := m.Client.ExternalIDs(ctx, w.series, pick.c.ID)
 	if err != nil {
 		return store.Title{}, err
 	}
@@ -200,7 +200,7 @@ func (m *Matcher) search(ctx context.Context, w work) ([]candidate, error) {
 			languages = append(languages, "ru-RU")
 		}
 		for _, lang := range languages {
-			found, err := m.TMDB.Search(ctx, w.series, title, w.year, lang)
+			found, err := m.Client.Search(ctx, w.series, title, w.year, lang)
 			if err != nil {
 				return nil, err
 			}
@@ -312,11 +312,11 @@ func (m *Matcher) count(ctx context.Context, layer string) {
 			mp = otel.GetMeterProvider()
 		}
 		var err error
-		m.matches, err = mp.Meter(scope).Int64Counter("sniffarr.titles.matches", metric.WithUnit("{title}"),
+		m.matches, err = mp.Meter(scope).Int64Counter("sniffarr.tmdb.matches", metric.WithUnit("{title}"),
 			metric.WithDescription("Title keys looked up, by the layer that matched them, or none."))
 		if err != nil {
 			otel.Handle(err)
 		}
 	})
-	m.matches.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.titles.layer", layer)))
+	m.matches.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.tmdb.layer", layer)))
 }

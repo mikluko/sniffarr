@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-20
+
+### Changed
+
+- **Breaking:** The titles extension is the TMDB extension. `SNIFFARR_TITLES_CONCURRENCY`, `SNIFFARR_TITLES_RATE`, `SNIFFARR_TITLES_RETRY` and `SNIFFARR_SEARCH_TITLES_MAX` are `SNIFFARR_TMDB_CONCURRENCY`, `SNIFFARR_TMDB_RATE`, `SNIFFARR_TMDB_RETRY` and `SNIFFARR_SEARCH_TMDB_MAX`. A release carries `tmdb_layer` and `tmdb_confidence` in place of `title_layer` and `title_confidence`, and the enum is `TMDBLayer` with `TMDB_LAYER_UNSPECIFIED`, `TMDB_LAYER_SEARCH` and `TMDB_LAYER_CLASSIFIER`. The metrics `sniffarr.titles.matches` and `sniffarr.titles.requests` are `sniffarr.tmdb.matches` and `sniffarr.tmdb.requests`, with the attributes `sniffarr.tmdb.layer` and `sniffarr.tmdb.status`. The tables `titles` and `title_ids` are `tmdb_works` and `tmdb_ids`; a migration renames them.
+
 ## [0.10.0] - 2026-10-20
 
 ### Changed
@@ -163,7 +169,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/mikluko/sniffarr/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mikluko/sniffarr/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/mikluko/sniffarr/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mikluko/sniffarr/compare/v0.7.1...v0.8.0

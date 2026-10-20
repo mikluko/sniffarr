@@ -234,7 +234,7 @@ func (s *Store) Work(ctx context.Context, key string, w Window, v Voice, now tim
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return WorkView{}, err
 	}
-	if err := errors.Join(s.audio(ctx, rs), s.titles(ctx, rs)); err != nil {
+	if err := errors.Join(s.audio(ctx, rs), s.tmdb(ctx, rs)); err != nil {
 		return WorkView{}, err
 	}
 	for i := range view.Releases {

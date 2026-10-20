@@ -59,7 +59,7 @@ func (s *Store) UnmatchedTitles(ctx context.Context, keys []string, before time.
 		}
 	}
 	rows, err := s.r.QueryContext(ctx, `SELECT t.title_key, t.kind, t.name, max(t.id) FROM torrents t
-		LEFT JOIN titles ti ON ti.title_key = t.title_key WHERE `+where+`
+		LEFT JOIN tmdb_works ti ON ti.title_key = t.title_key WHERE `+where+`
 		GROUP BY t.title_key ORDER BY max(t.id) DESC LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, err
@@ -80,17 +80,17 @@ func (s *Store) UnmatchedTitles(ctx context.Context, keys []string, before time.
 // RecordTitle records the match of the title key, replacing any before it.
 func (s *Store) RecordTitle(ctx context.Context, key string, t Title, at time.Time) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO titles (title_key, year, confidence, layer, matched_at, error) VALUES (?, ?, ?, ?, ?, ?)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at, error) VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT (title_key) DO UPDATE SET year = excluded.year, confidence = excluded.confidence, layer = excluded.layer,
 			matched_at = excluded.matched_at, error = excluded.error`,
 			key, nullInt(t.Year), nullFloat(t.Layer != "", t.Confidence), null(t.Layer), at.Unix(), null(t.Error)); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM title_ids WHERE title_key = ?", key); err != nil {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM tmdb_ids WHERE title_key = ?", key); err != nil {
 			return err
 		}
 		for _, id := range t.IDs {
-			if _, err := tx.ExecContext(ctx, "INSERT INTO title_ids (title_key, provider, id) VALUES (?, ?, ?)", key, id.Provider, id.ID); err != nil {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO tmdb_ids (title_key, provider, id) VALUES (?, ?, ?)", key, id.Provider, id.ID); err != nil {
 				return err
 			}
 		}
@@ -98,9 +98,9 @@ func (s *Store) RecordTitle(ctx context.Context, key string, t Title, at time.Ti
 	})
 }
 
-// titles fills in the Title of the releases when Options.Titles is set.
-func (s *Store) titles(ctx context.Context, rs []Release) error {
-	if !s.opts.Titles {
+// tmdb fills in the Title of the releases when Options.TMDB is set.
+func (s *Store) tmdb(ctx context.Context, rs []Release) error {
+	if !s.opts.TMDB {
 		return nil
 	}
 	byKey := map[string][]int{}
@@ -117,7 +117,7 @@ func (s *Store) titles(ctx context.Context, rs []Release) error {
 		args = append(args, k)
 	}
 	in := placeholders(len(byKey))
-	rows, err := s.r.QueryContext(ctx, "SELECT title_key, coalesce(year, 0), coalesce(confidence, 0), coalesce(layer, ''), coalesce(error, '') FROM titles WHERE title_key IN ("+in+")", args...)
+	rows, err := s.r.QueryContext(ctx, "SELECT title_key, coalesce(year, 0), coalesce(confidence, 0), coalesce(layer, ''), coalesce(error, '') FROM tmdb_works WHERE title_key IN ("+in+")", args...)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (s *Store) titles(ctx context.Context, rs []Release) error {
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return err
 	}
-	rows, err = s.r.QueryContext(ctx, "SELECT title_key, provider, id FROM title_ids WHERE title_key IN ("+in+") ORDER BY title_key, provider", args...)
+	rows, err = s.r.QueryContext(ctx, "SELECT title_key, provider, id FROM tmdb_ids WHERE title_key IN ("+in+") ORDER BY title_key, provider", args...)
 	if err != nil {
 		return err
 	}

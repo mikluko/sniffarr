@@ -1,4 +1,4 @@
-package titles
+package tmdb
 
 import (
 	"context"
@@ -80,8 +80,8 @@ func newTMDB(t *testing.T) *fakeTMDB {
 	return f
 }
 
-func (f *fakeTMDB) client() *TMDB {
-	c := NewTMDB("secret", 1000)
+func (f *fakeTMDB) client() *Client {
+	c := NewClient("secret", 1000)
 	c.URL, c.Backoff = f.URL, time.Millisecond
 	c.Limiter = rate.NewLimiter(rate.Inf, 1)
 	return c
@@ -104,7 +104,7 @@ func setup(t *testing.T, torrents ...store.Torrent) *store.Store {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db, store.Options{Titles: true})
+	s, err := store.New(ctx, db, store.Options{TMDB: true})
 	require.NoError(t, err)
 	for i, tr := range torrents {
 		tr.Hash = store.Hash{byte(i + 1)}
@@ -132,7 +132,7 @@ func TestMatchOneCandidate(t *testing.T) {
 	f.ids["/3/movie/348/external_ids"] = map[string]any{"imdb_id": "tt0078748", "wikidata_id": "Q103569", "tvdb_id": nil}
 	f.throttle.Store(2)
 	s := setup(t, store.Torrent{Name: "Alien.1979.1080p.BluRay", Kind: "movie", TitleKey: "y:alien 1979"})
-	m := &Matcher{TMDB: f.client(), Store: s, Log: slog.New(slog.DiscardHandler)}
+	m := &Matcher{Client: f.client(), Store: s, Log: slog.New(slog.DiscardHandler)}
 
 	keys, err := m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
@@ -154,7 +154,7 @@ func TestMatchBothTitles(t *testing.T) {
 	f.results["/3/search/tv|Fallout|en-US|"] = []result{{ID: 106379, Name: "Fallout", OriginalName: "Fallout", FirstAirDate: "2024-04-10"}}
 	f.ids["/3/tv/106379/external_ids"] = map[string]any{"imdb_id": "tt12637874", "tvdb_id": 416744}
 	s := setup(t, store.Torrent{Name: "Фоллаут / Fallout / Сезон: 1 / Серии: 1-8 из 8 [2024, WEB-DL 1080p] MVO", Kind: "series", TitleKey: "s:фоллаут"})
-	m := &Matcher{TMDB: f.client(), Store: s, Log: slog.New(slog.DiscardHandler)}
+	m := &Matcher{Client: f.client(), Store: s, Log: slog.New(slog.DiscardHandler)}
 
 	keys, err := m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
@@ -186,7 +186,7 @@ func TestMatchSeveral(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := setup(t, store.Torrent{Name: "Dune.2021.2160p.WEB-DL", Kind: "movie", TitleKey: "y:dune 2021"})
-			m := &Matcher{TMDB: f.client(), Store: s, Log: slog.New(slog.DiscardHandler)}
+			m := &Matcher{Client: f.client(), Store: s, Log: slog.New(slog.DiscardHandler)}
 			if tt.chooser != nil {
 				m.Chooser = tt.chooser
 			}
@@ -218,7 +218,7 @@ func TestMatchNone(t *testing.T) {
 		store.Torrent{Name: "Ronin.1998.1080p.BluRay", Kind: "movie", TitleKey: "y:ronin 1998"},
 	)
 	now := time.Now()
-	m := &Matcher{TMDB: f.client(), Store: s, Retry: time.Hour, Now: func() time.Time { return now }, Log: slog.New(slog.DiscardHandler)}
+	m := &Matcher{Client: f.client(), Store: s, Retry: time.Hour, Now: func() time.Time { return now }, Log: slog.New(slog.DiscardHandler)}
 	keys, err := m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, keys, 2)
@@ -255,7 +255,7 @@ func TestWorker(t *testing.T) {
 		store.Torrent{Name: "Severance.S02E01", Kind: "series", TitleKey: "s:severance"},
 		store.Torrent{Name: "Moon.Safari.1998.FLAC", Kind: "music", TitleKey: "y:moon safari 1998"},
 	)
-	m := &Matcher{TMDB: f.client(), Store: s, Log: slog.New(slog.DiscardHandler)}
+	m := &Matcher{Client: f.client(), Store: s, Log: slog.New(slog.DiscardHandler)}
 	w := &Worker{Matcher: m, Concurrency: 2, Poll: 10 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error)
@@ -284,7 +284,7 @@ func TestMetrics(t *testing.T) {
 	)
 	c := f.client()
 	c.Meter = mp
-	m := &Matcher{TMDB: c, Store: s, Meter: mp, Log: slog.New(slog.DiscardHandler)}
+	m := &Matcher{Client: c, Store: s, Meter: mp, Log: slog.New(slog.DiscardHandler)}
 	keys, err := m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
 	for _, k := range keys {
@@ -304,9 +304,9 @@ func TestMetrics(t *testing.T) {
 		}
 	}
 	require.Equal(t, map[string]int64{
-		"sniffarr.titles.matches tmdb": 1,
-		"sniffarr.titles.matches none": 1,
-		"sniffarr.titles.requests 200": 3,
-		"sniffarr.titles.requests 429": 1,
+		"sniffarr.tmdb.matches tmdb": 1,
+		"sniffarr.tmdb.matches none": 1,
+		"sniffarr.tmdb.requests 200": 3,
+		"sniffarr.tmdb.requests 429": 1,
 	}, got)
 }
