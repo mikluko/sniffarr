@@ -1,0 +1,76 @@
+{{define "title"}}{{.Torrent.Name}}{{end}}
+
+{{define "main"}}
+{{with .Torrent}}
+<div class="head">
+  <a href="{{if $.BackURL}}{{$.BackURL}}{{else}}/{{end}}">← {{$.T "card.back"}}</a>
+  <h1>{{.Name}}</h1>
+</div>
+
+<div class="cols">
+<section class="col">
+  <h2>{{$.T "card.torrent"}}</h2>
+  <table class="kv">
+    <tr><th>infohash</th><td><span class="mono">{{.InfoHash}}</span> <button type="button" data-copy="{{.InfoHash}}">{{$.T "card.copy"}}</button></td></tr>
+    <tr><th>magnet</th><td><a href="{{.Magnet}}">{{$.T "card.open"}}</a> <button type="button" data-copy="{{.Magnet}}">{{$.T "card.copy"}}</button></td></tr>
+    <tr><th>{{$.T "card.size"}}</th><td>{{$.Size .Size}}</td></tr>
+    <tr><th>{{$.T "card.files"}}</th><td>{{.FileCount}}</td></tr>
+    <tr><th>{{$.T "col.first"}}</th><td>{{$.TimeFull .FirstSeen}}</td></tr>
+    <tr><th>{{$.T "col.last"}}</th><td>{{$.TimeFull .LastSeen}}</td></tr>
+    <tr><th>{{$.T "card.via"}}</th><td>{{$.T (concat "via." .DiscoveredVia)}}</td></tr>
+    {{if .TMDBQuery}}<tr><th>TMDB</th><td><a href="https://www.themoviedb.org/search?query={{queryEscape .TMDBQuery}}" rel="noreferrer" target="_blank">{{$.T "card.tmdb"}} «{{.TMDBQuery}}»</a></td></tr>{{end}}
+  </table>
+</section>
+
+<section class="col wide">
+  <h2>{{$.T "card.classification"}}</h2>
+  <div class="scroll">
+  <table class="t">
+    <thead><tr><th>{{$.T "cls.feature"}}</th><th>{{$.T "cls.answer"}}</th><th>{{$.T "cls.layer"}}</th><th class="r">{{$.T "cls.confidence"}}</th></tr></thead>
+    <tbody>
+      <tr><td>{{$.T "col.kind"}}</td><td>{{$.T (concat "kind." .Kind.Value)}}</td><td>{{$.T (concat "layer." .Kind.Layer)}}</td><td class="r">{{$.Prob .Kind.Confidence}}</td></tr>
+      <tr><td>{{$.T "col.source"}}</td><td>{{$.T (concat "source." .Source.Value)}}</td><td>{{$.T (concat "layer." .Source.Layer)}}</td><td class="r">{{$.Prob .Source.Confidence}}</td></tr>
+      {{range .Voice}}
+      <tr><td>{{$.T "col.voice"}} {{.Lang}}</td><td>{{if .Mark}}{{$.T "voice.mark"}}{{else}}<span class="mu">{{$.T "voice.nomark"}}</span>{{end}}</td><td>{{$.T "voice.layer_mark"}}</td><td class="r">{{if .Mark}}{{.Mark}}{{else}}—{{end}}</td></tr>
+      <tr><td></td><td class="mu">{{$.T "voice.hint"}}</td><td>{{$.T "voice.layer_script"}}</td><td class="r">{{if .ScriptHint}}{{$.T (concat "script." .ScriptHint)}}{{else}}—{{end}}</td></tr>
+      <tr><td></td><td class="mu">{{$.T "voice.prob"}}</td><td>{{$.T "layer.classifier"}}</td><td class="r">{{$.Prob .Prob}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if .Rules}}
+  <div class="rules">
+    <div class="mu">{{$.T "card.rules"}}</div>
+    {{range .Rules}}<div class="mono">{{.Rule}} ← «{{.Match}}»</div>{{end}}
+  </div>
+  {{end}}
+</section>
+</div>
+
+<section>
+  <h2>{{$.T "card.filelist"}}</h2>
+  {{template "files" $}}
+</section>
+{{end}}
+{{end}}
+
+{{define "files"}}
+{{with .Torrent.Files}}
+<div id="files">
+  <div class="scroll">
+  <table class="t">
+    <thead><tr><th>{{$.T "files.path"}}</th><th class="r">{{$.T "col.size"}}</th></tr></thead>
+    <tbody>
+    {{range .Files}}<tr><td class="mono wrapc">{{.Path}}</td><td class="r">{{$.Size .Size}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="mu">
+    {{$.T "files.shown"}} {{len .Files}} {{$.T "results.of"}} {{.Stored}}{{if lt .Stored $.Torrent.FileCount}} ({{$.T "files.top"}} {{$.Torrent.FileCount}}){{end}}
+    {{if and (not .All) (lt (len .Files) .Stored)}}
+      <a href="/t/{{.InfoHash}}?files=all#files" hx-get="/t/{{.InfoHash}}?files=all" hx-target="#files" hx-swap="morph:outerHTML">{{$.T "files.all"}}</a>
+    {{end}}
+  </p>
+</div>
+{{end}}
+{{end}}

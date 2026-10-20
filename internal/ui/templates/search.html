@@ -1,0 +1,79 @@
+{{define "title"}}{{if .Q}}{{.Q}}{{else}}{{.T "nav.search"}}{{end}}{{end}}
+
+{{define "main"}}
+<form class="search" action="/" method="get"
+      hx-get="/" hx-target="#results" hx-swap="morph:outerHTML" hx-push-url="true"
+      hx-trigger="submit, input changed delay:400ms from:#q, change">
+  <label for="q" class="vh">{{.T "search.label"}}</label>
+  <input id="q" name="q" type="search" value="{{.Q}}" placeholder="{{.T "search.placeholder"}}" autocomplete="off" spellcheck="false">
+  <button type="submit">{{.T "search.submit"}}</button>
+  <div class="filters">
+    <label>{{.T "f.kind"}}
+      <select name="kind">
+        <option value="">{{.T "f.all"}}</option>
+        {{range kinds}}<option value="{{.}}"{{if eq . $.Filters.Kind}} selected{{end}}>{{$.T (concat "kind." .)}}</option>{{end}}
+      </select></label>
+    <label>{{.T "f.voice"}}
+      <select name="vl" aria-label="{{.T "f.voice_lang"}}">
+        {{range .VoiceLangs}}<option value="{{.}}"{{if eq . $.Filters.VoiceLang}} selected{{end}}>{{.}}</option>{{end}}
+      </select>
+      <select name="voice" aria-label="{{.T "f.voice_mode"}}">
+        {{range voiceModes}}<option value="{{.}}"{{if eq . $.Filters.Voice}} selected{{end}}>{{$.T (concat "voicemode." .)}}</option>{{end}}
+      </select></label>
+    <label>{{.T "f.source"}}
+      <select name="source">
+        <option value="">{{.T "f.all"}}</option>
+        {{range sources}}<option value="{{.}}"{{if eq . $.Filters.Source}} selected{{end}}>{{$.T (concat "source." .)}}</option>{{end}}
+      </select></label>
+    <label>{{.T "f.layer"}}
+      <select name="layer">
+        <option value="">{{.T "f.all"}}</option>
+        {{range layers}}<option value="{{.}}"{{if eq . $.Filters.Layer}} selected{{end}}>{{$.T (concat "layer." .)}}</option>{{end}}
+      </select></label>
+    <label>{{.T "f.minsize"}}
+      <input name="min" type="text" inputmode="decimal" value="{{.Filters.MinSizeGB}}" placeholder="{{.T "unit.gb"}}" class="num"></label>
+    <a href="/" class="reset">{{.T "f.reset"}}</a>
+  </div>
+</form>
+{{template "results" .}}
+{{end}}
+
+{{define "results"}}
+<section id="results"
+  {{- if .Results.Fresh}} hx-get="{{.Results.SelfURL}}" hx-trigger="every 15s [document.visibilityState=='visible']" hx-swap="morph:outerHTML" hx-target="this"{{end}}>
+  <p class="mu">
+    {{- if .Results.Fresh}}{{.T "results.fresh"}}{{else}}{{.T "results.found"}}{{end}}:
+    {{$.Num (int64 .Results.Shown)}} {{.T "results.of"}} {{$.Num .Results.Total}}</p>
+  {{if .Results.Rows}}
+  <div class="scroll">
+  <table class="t">
+    <thead><tr>
+      <th>{{.T "col.name"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "col.kind"}}</th>
+      {{range .VoiceLangs}}<th class="r" title="{{$.T "col.voice"}}">{{.}}</th>{{end}}
+      <th>{{.T "col.source"}}</th><th>{{.T "col.first"}}</th><th>{{.T "col.last"}}</th>
+    </tr></thead>
+    <tbody>
+    {{range .Results.Rows}}
+      <tr id="t-{{.InfoHash}}">
+        <td class="nm"><a href="/t/{{.InfoHash}}">{{.Name}}</a></td>
+        <td class="r">{{$.Size .Size}}</td>
+        <td>{{$.T (concat "kind." .Kind)}} <span class="mu">· {{$.T (concat "layer." .Layer)}}{{if .Confidence}} {{$.Prob .Confidence}}{{end}}</span></td>
+        {{range $i, $c := .Voice}}<td class="r v" data-l="{{index $.VoiceLangs $i}}">{{$.Voice $c}}</td>{{end}}
+        <td>{{$.T (concat "source." .Source)}}</td>
+        <td class="mu fs">{{$.Time .FirstSeen}}</td>
+        <td class="mu">{{$.Time .LastSeen}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p>{{.T "results.empty"}}</p>
+  {{end}}
+  <nav class="pager mu">
+    {{if .Results.PrevURL}}<a href="{{.Results.PrevURL}}" hx-get="{{.Results.PrevURL}}" hx-target="#results" hx-swap="morph:outerHTML" hx-push-url="true">← {{.T "pager.prev"}}</a>{{end}}
+    <span>{{add .Results.Offset 1}}–{{add .Results.Offset .Results.Shown}}</span>
+    {{if .Results.NextURL}}<a href="{{.Results.NextURL}}" hx-get="{{.Results.NextURL}}" hx-target="#results" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "pager.next"}} →</a>{{end}}
+  </nav>
+</section>
+{{end}}

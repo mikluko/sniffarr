@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="{{if eq .Lang "ru"}}ru{{else}}en{{end}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{template "title" .}} · sniffarr</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/vendor/htmx.min.js" defer></script>
+<script src="/static/vendor/idiomorph-ext.min.js" defer></script>
+<script src="/static/app.js" defer></script>
+</head>
+<body hx-ext="morph">
+<div class="wrap">
+<header class="top">
+  <a href="/" class="brand">sniffarr</a>
+  <nav>
+    <a href="/"{{if eq .Nav "search"}} class="on" aria-current="page"{{end}}>{{.T "nav.search"}}</a>
+    <a href="/data"{{if eq .Nav "data"}} class="on" aria-current="page"{{end}}>{{.T "nav.data"}}</a>
+  </nav>
+  <span class="langs">
+    {{- range $i, $l := .Langs}}{{if $i}} · {{end}}{{if eq $l $.Lang}}<b>{{$l}}</b>{{else}}<a href="{{$.LangURL $l}}">{{$l}}</a>{{end}}{{end -}}
+  </span>
+</header>
+{{template "main" .}}
+</div>
+</body>
+</html>

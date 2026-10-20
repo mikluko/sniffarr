@@ -1,0 +1,76 @@
+{{define "title"}}{{.T "nav.data"}}{{end}}
+
+{{define "main"}}{{template "data" .}}{{end}}
+
+{{define "data"}}
+{{with .Stats}}
+<main id="data" hx-get="/data" hx-trigger="every 30s [document.visibilityState=='visible']" hx-swap="morph:outerHTML" hx-target="this">
+<div class="kpis">
+  <div><span class="mu">{{$.T "d.total"}}</span> <b>{{$.Num .Total}}</b></div>
+  <div><span class="mu">{{$.T "d.newday"}}</span> <b>{{$.Num .NewDay}}</b></div>
+  <div><span class="mu">{{$.T "d.newweek"}}</span> <b>{{$.Num .NewWeek}}</b></div>
+  <div><span class="mu">{{$.T "d.dropped"}}</span> <b>{{$.Num .DroppedTotal}}</b></div>
+  <div class="mu at">{{$.T "d.at"}} {{$.TimeFull .At}}</div>
+</div>
+
+<section>
+  <h2>{{$.T "d.store"}}</h2>
+  <div class="grid">
+    <div>
+      <h3>{{$.T "d.bykind"}}</h3>
+      <table class="t">{{range .ByKind}}<tr><td><a href="/?kind={{.Key}}">{{$.T (concat "kind." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+    </div>
+    <div>
+      <h3>{{$.T "d.bylayer"}}</h3>
+      <table class="t">{{range .ByLayer}}<tr><td><a href="/?layer={{.Key}}">{{$.T (concat "layer." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+      <h3 class="gap">{{$.T "d.bysource"}}</h3>
+      <table class="t">{{range .BySource}}<tr><td><a href="/?source={{.Key}}">{{$.T (concat "source." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+    </div>
+    <div>
+      <h3>{{$.T "d.voice"}}</h3>
+      <table class="t">
+        <thead><tr><th></th>{{range .Voice}}<th class="r">{{.Lang}}</th><th></th>{{end}}</tr></thead>
+        <tbody>
+        {{range $i, $band := voiceBands}}
+          <tr><td>{{$.T (concat "voiceband." $band)}}</td>
+          {{range $.Stats.Voice}}{{$n := index .Bands $i}}<td class="r">{{$.Num $n}}</td><td class="r mu">{{$.Pct $n $.Stats.Total}}</td>{{end}}</tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="grid">
+  <section>
+    <h2>{{$.T "d.droppedby"}}</h2>
+    <table class="t">
+      <tbody>{{range .Dropped}}<tr><td>{{$.T (concat "drop." .Key)}}</td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.DroppedTotal}}</td></tr>{{end}}</tbody>
+      <tfoot><tr><td>{{$.T "d.sum"}}</td><td class="r">{{$.Num .DroppedTotal}}</td><td></td></tr></tfoot>
+    </table>
+  </section>
+  <section>
+    <h2>{{$.T "d.classifier"}}</h2>
+    {{with .Classifier}}
+    <table class="t">
+      <tr><td>{{$.T "d.pending"}}</td><td class="r">{{$.Num .Pending}}</td></tr>
+      <tr><td>{{$.T "d.doneday"}}</td><td class="r">{{$.Num .DoneDay}}</td></tr>
+      <tr><td>{{$.T "d.limitday"}}</td><td class="r">{{$.Num .LimitDay}}</td></tr>
+    </table>
+    <div class="meter" role="img" aria-label="{{$.Pct .DoneDay .LimitDay}}"><div style="width: {{$.PctW .DoneDay .LimitDay | safeCSS}}"></div></div>
+    <p class="mu">{{$.Pct .DoneDay .LimitDay}} {{$.T "d.oflimit"}}</p>
+    {{end}}
+  </section>
+</div>
+
+<section>
+  <h2>{{$.T "d.inflow"}}</h2>
+  <div class="charthead"><h3>{{$.T "d.daily"}}</h3><span class="mu">{{$.T "d.max"}} {{$.Num .Daily.Max.Value}} ({{.Daily.Max.Label}}) · {{$.T "d.min"}} {{$.Num .Daily.Min.Value}} ({{.Daily.Min.Label}})</span></div>
+  {{template "chart" (chartArgs $.Base .Daily ($.T "d.daily"))}}
+  <div class="charthead"><h3>{{$.T "d.weekly"}}</h3><span class="mu">{{$.T "d.lastweek"}} {{$.Num .NewWeek}}</span></div>
+  {{template "chart" (chartArgs $.Base .Weekly ($.T "d.weekly"))}}
+  <p class="mu">{{$.T "d.grafana"}}</p>
+</section>
+</main>
+{{end}}
+{{end}}
