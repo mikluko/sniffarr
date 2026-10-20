@@ -52,24 +52,32 @@ records which layer decided its kind:
 
 1. Rules read the name: episode and season markers, in Latin and Cyrillic
    (`S01E02`, `1x05`, `Season 3`, `Сезон: 1`, `Серии: 1-8 из 8`), make a
-   series; a title with a year and a quality tag makes a movie. An explicit
-   Russian marker (`Rus`, a dubbing term or studio) sets Russian audio. A name
-   that says neither leaves the kind unknown.
+   series; a title with a year and a quality tag makes a movie. A name that
+   says neither leaves the kind unknown.
 2. Reuse: the rules also reduce the name to a title key, the series title or
    the title and year. A torrent of unknown kind takes the kind of a stored
    torrent with the same key, now or once one is classified. Only the kind is
-   shared; Russian audio and the video source belong to each release.
-3. [TypeSafe](https://typesafe.ai)'s Jev examines a torrent for Russian audio,
-   video source, and kind when it is still unknown. It does so lazily, for
-   the candidates of a search before the answer, and in the background only
-   for torrents of unknown kind whose names are Cyrillic or carry a Russian
-   marker. Both share a daily token budget, 2,000,000 tokens by default, some
-   1,500 torrents a day; the background stops at 75% of it by default, leaving
-   the rest for searches. A search waits for Jev for a short while at most;
-   answers that come later are recorded for the next search, and a slow or
-   failing Jev never fails a search.
+   shared; audio and the video source belong to each release.
+3. [TypeSafe](https://typesafe.ai)'s Jev examines a torrent for audio in each
+   audio language, video source, and kind when it is still unknown. It does
+   so lazily, for the candidates of a search before the answer, and in the
+   background only for torrents of unknown kind whose names carry a marker or
+   a script hint of an audio language. Both share a daily token budget,
+   2,000,000 tokens by default, some 1,500 torrents a day; the background stops
+   at 75% of it by default, leaving the rest for searches. A search waits for
+   Jev for a short while at most; answers that come later are recorded for the
+   next search, and a slow or failing Jev never fails a search.
 
 Adult and software kinds never show in search results.
+
+Audio is an extension over the layers, set by `SNIFFARR_AUDIO_LANGUAGES`;
+`ru` is the only language built in. For each configured language every stored
+torrent records a marker, a word or studio of the language in its name or file
+paths (`Rus`, `Дубляж`, `LostFilm` for `ru`), and a script hint, letters of
+the language's script there (Cyrillic for `ru`). A marker sets the probability
+of an audio track in the language to 1; otherwise Jev answers it, one question
+per language. Without languages nothing about audio is recorded, asked or
+returned, and the background classifier has nothing to select.
 
 ## API
 
@@ -93,10 +101,11 @@ in the `Authorization` header; `/healthz` needs none.
   take, the server answers with a task per unit, and the client returns each
   task's result, metadata or a failure, on the same stream.
 - `Search` matches every word of the query against names and stored file
-  paths, and filters by kind and by the probability of Russian audio. It has
-  Jev examine a bounded number of its candidates first, so the filters apply
-  to what is known once that is done. Each release carries the layer that
-  decided its kind and whether Jev has examined it.
+  paths, and filters by kind and by the probability of an audio track in one
+  language. It has Jev examine a bounded number of its candidates first, so
+  the filters apply to what is known once that is done. Each release carries
+  the layer that decided its kind, whether Jev has examined it, and its audio
+  entries.
 - `Get` returns one release by infohash.
 
 ## Configuration
@@ -125,6 +134,7 @@ in the `Authorization` header; `/healthz` needs none.
 | `SNIFFARR_STORE_MAX_FILES`         | `20`             | Files stored per torrent, the largest ones                                                                             |
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
+| `SNIFFARR_AUDIO_LANGUAGES`         | `ru`             | Audio languages, BCP-47 tags and comma-separated; set but empty is none. An unknown tag fails startup                  |
 | `SNIFFARR_LOG_LEVEL`               | `info`           | Level to log at: `debug`, `info`, `warn` or `error`                                                                    |
 
 The database runs in WAL mode and its schema migrates on start; leases left
@@ -140,18 +150,18 @@ retention period; a later sighting queues them again.
 | `SNIFFARR_URL`          | Base URL of the server, such as `http://sniffapi:8080`; required |
 | `SNIFFARR_INGEST_TOKEN` | Bearer token of `IngestService`; required                        |
 
-| Flag             | Default | Meaning                                                   |
-| ---------------- | ------- | --------------------------------------------------------- |
-| `-discover`      | `true`  | Walk the DHT and report the infohashes it reveals         |
-| `-fetch`         | `true`  | Take fetch tasks from the server and return metadata      |
-| `-port`          | `42069` | Port for peers and the DHT, TCP and UDP; `0` picks one    |
-| `-fetchers`      | `2000`  | Metadata fetches at once                                  |
-| `-rate`          | `2000`  | DHT queries, and new peer connections, a second           |
-| `-fetch-timeout` | `15s`   | How long to wait for metadata once a torrent has peers    |
-| `-peer-wait`     | `8s`    | How long to look for a torrent's peers on the DHT         |
-| `-min-peers`     | `1`     | Peers needed within `-peer-wait` to fetch the metadata    |
-| `-walkers`       | `16`    | `sample_infohashes` queries at once                       |
-| `-log-level`     | `info`  | Level to log at: `debug`, `info`, `warn` or `error`       |
+| Flag             | Default | Meaning                                                |
+| ---------------- | ------- | ------------------------------------------------------ |
+| `-discover`      | `true`  | Walk the DHT and report the infohashes it reveals      |
+| `-fetch`         | `true`  | Take fetch tasks from the server and return metadata   |
+| `-port`          | `42069` | Port for peers and the DHT, TCP and UDP; `0` picks one |
+| `-fetchers`      | `2000`  | Metadata fetches at once                               |
+| `-rate`          | `2000`  | DHT queries, and new peer connections, a second        |
+| `-fetch-timeout` | `15s`   | How long to wait for metadata once a torrent has peers |
+| `-peer-wait`     | `8s`    | How long to look for a torrent's peers on the DHT      |
+| `-min-peers`     | `1`     | Peers needed within `-peer-wait` to fetch the metadata |
+| `-walkers`       | `16`    | `sample_infohashes` queries at once                    |
+| `-log-level`     | `info`  | Level to log at: `debug`, `info`, `warn` or `error`    |
 
 A discovering sniffer forwards its port by UPnP. With `-discover=false` the
 node is passive by BEP 43: it forwards no port, answers no DHT query, and asks
