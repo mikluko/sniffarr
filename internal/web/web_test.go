@@ -190,6 +190,8 @@ func TestSearch(t *testing.T) {
 	require.Contains(t, frag, "Severance")
 	require.NotContains(t, frag, "Alien")
 	require.Contains(t, frag, "0.90", "a classifier's confidence")
+	require.Regexp(t, `<td class="r pe" data-l="peers">\d\d</td>`, frag, "its peers over 7 days")
+	require.Contains(t, page(t, get(t, h, "/?q=Сборник", "results")), `<td class="r pe" data-l="peers">10</td>`)
 
 	frag = page(t, get(t, h, "/?q=alien", "results"))
 	require.Contains(t, frag, `<div class="works">`)
@@ -298,6 +300,7 @@ func TestWork(t *testing.T) {
 	require.True(t, strings.HasPrefix(frag, `<tbody id="work-`+alienID+`" class="open">`), "the tbody alone: %s", frag)
 	require.Contains(t, frag, `<td class="r mu">1</td>`, "its place in the top")
 	require.Contains(t, frag, `<td class="r dl">new</td>`)
+	require.Regexp(t, `<td class="r pe" data-l="peers">\d+</td>`, frag)
 	require.Contains(t, frag, `<a href="/t/`+hexOf(1)+`">`+alien+`</a>`, "its release")
 	require.Contains(t, frag, `href="/top/w/`+alienID+`?win=7d"`, "the toggle closes")
 	require.Contains(t, frag, `aria-expanded="true"`)

@@ -314,6 +314,7 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 		row := ui.Row{
 			InfoHash:  hex.EncodeToString(r.GetInfohash()),
 			Name:      r.GetName(),
+			Peers:     r.GetPeersWeek(),
 			Size:      r.GetSize(),
 			Kind:      uiOr(kinds, r.GetKind()),
 			Layer:     uiOr(kindLayers, r.GetLayer()),
@@ -453,9 +454,8 @@ func (s *server) topWork(e *sniffarrv1.TopEntry) ui.Work {
 	return wk
 }
 
-// work serves GET /top/w/{id}: one work's row of the top, with its releases
-// when open=1. Its place and change come from the top of its kind over the
-// window; a work outside that top has none.
+// work serves GET /top/w/{id}: one work's row of the top over the window,
+// with its releases when open=1.
 func (s *server) work(w http.ResponseWriter, req *http.Request) {
 	k, ok := workKey(req.PathValue("id"))
 	if !ok {
@@ -474,18 +474,9 @@ func (s *server) work(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	wk := s.uiWork(res.Msg.GetWork())
-	wk.Peers = res.Msg.GetPeers()
-	if slices.Contains(ui.TopKinds, wk.Ref.Kind) {
-		top, err := s.cfg.Browse.Top(req.Context(), connect.NewRequest(&sniffarrv1.TopRequest{Kind: res.Msg.GetWork().GetRef().GetKind(), Window: window, Voice: v, Limit: topSize}))
-		if err != nil {
-			s.fail(w, req, "top", err)
-			return
-		}
-		for _, e := range top.Msg.GetEntries() {
-			if e.GetWork().GetRef().GetKey() == k {
-				wk = s.topWork(e)
-			}
-		}
+	wk.Rank, wk.Peers = int(res.Msg.GetRank()), res.Msg.GetPeers()
+	if res.Msg.Delta != nil {
+		wk.Delta = new(float64(res.Msg.GetDelta()))
 	}
 	if qs.Get("open") == "1" {
 		wk.Open = true
