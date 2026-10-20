@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/anacrolix/dht/v2"
+	"github.com/anacrolix/dht/v2/krpc"
+	peer_store "github.com/anacrolix/dht/v2/peer-store"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
@@ -106,7 +108,9 @@ func TestClientConfig(t *testing.T) {
 			c.ConfigureAnacrolixDhtServer(&sc)
 			require.Equal(t, tt.cfg.Passive, sc.Passive)
 			require.Equal(t, tt.announce, sc.OnAnnouncePeer != nil)
-			require.Nil(t, sc.PeerStore)
+			require.NotNil(t, sc.PeerStore, "a store is what has the node issue get_peers tokens")
+			sc.PeerStore.AddPeer(peer_store.InfoHash{1}, krpc.NodeAddr{IP: net.IPv4(127, 0, 0, 1), Port: 6881})
+			require.Nil(t, sc.PeerStore.GetPeers(peer_store.InfoHash{1}), "and it keeps no peer")
 		})
 	}
 }
