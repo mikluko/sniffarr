@@ -151,9 +151,11 @@ type Store struct {
 	opts    Options
 	deleted metric.Int64Counter
 
-	keyMu  sync.Mutex
-	key    sketch.Key
-	keySet bool
+	keyMu     sync.Mutex
+	key       sketch.Key
+	keySet    bool
+	nodeID    [20]byte
+	nodeIDSet bool
 }
 
 //go:embed migrations/*.sql
