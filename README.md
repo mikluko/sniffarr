@@ -91,7 +91,7 @@ of an audio track in the language to 1; otherwise Jev answers it, one question
 per language. Without languages nothing about audio is recorded, asked or
 returned, and the background classifier has nothing to select.
 
-Titles are a second extension, on by default with the
+TMDB is a second extension, on by default with the
 [TMDB](https://www.themoviedb.org) read access token sniffarr ships with;
 `TMDB_API_KEY` replaces it with a v3 API key or a read access token of your
 own, and set empty turns the extension off. It matches title keys,
@@ -107,7 +107,7 @@ is the key's or one off. One fit is the match; among several, Jev picks one or
 none, within the classifier's daily budget and its search reserve. Without
 `TYPESAFE_API_KEY` several fits match nothing. A match records the work's TMDB,
 IMDb, TVDB (series) and Wikidata IDs; a key that matched nothing is looked up
-again after `SNIFFARR_TITLES_RETRY`, and one that matched never is. Without the
+again after `SNIFFARR_TMDB_RETRY`, and one that matched never is. Without the
 key nothing is matched and releases carry no IDs.
 
 Peers are a third extension, always on. A peer is an `IP:port`; `-sniff` sees
@@ -306,10 +306,10 @@ the same to each.
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
 | `SNIFFARR_AUDIO_LANGUAGES`         | `ru`             | Audio languages, BCP-47 tags and comma-separated; set but empty is none. An unknown tag fails startup                  |
 | `TMDB_API_KEY`                     | built-in token   | TMDB API key or read access token; set empty, no titles are matched                                                    |
-| `SNIFFARR_TITLES_CONCURRENCY`      | `2`              | Background title matches at once                                                                                       |
-| `SNIFFARR_TITLES_RATE`             | `20`             | TMDB requests a second at most                                                                                         |
-| `SNIFFARR_TITLES_RETRY`            | `720h`           | How long a title key that matched nothing waits before it is looked up again                                           |
-| `SNIFFARR_SEARCH_TITLES_MAX`       | `5`              | Title keys one search has matched at most                                                                              |
+| `SNIFFARR_TMDB_CONCURRENCY`        | `2`              | Background title matches at once                                                                                       |
+| `SNIFFARR_TMDB_RATE`               | `20`             | TMDB requests a second at most                                                                                         |
+| `SNIFFARR_TMDB_RETRY`              | `720h`           | How long a title key that matched nothing waits before it is looked up again                                           |
+| `SNIFFARR_SEARCH_TMDB_MAX`         | `5`              | Title keys one search has matched at most                                                                              |
 | `SNIFFARR_TORZNAB_TOKEN`           |                  | API key of the Torznab endpoint; when unset, there is none                                                             |
 
 The database runs in WAL mode and its schema migrates on start; leases left
@@ -426,8 +426,8 @@ BitTorrent peer address appears in spans, attributes or logs.
 | `-api`     | `sniffarr.search.lazy.classifications` | `{torrent}`  | `sniffarr.search.lazy.result`              |
 | `-api`     | `sniffarr.classify.tokens`             | `{token}`    |                                            |
 | `-api`     | `sniffarr.classify.errors`             | `{error}`    | `sniffarr.classify.error`                  |
-| `-api`     | `sniffarr.titles.matches`              | `{title}`    | `sniffarr.titles.layer`                    |
-| `-api`     | `sniffarr.titles.requests`             | `{request}`  | `sniffarr.titles.status`                   |
+| `-api`     | `sniffarr.tmdb.matches`                | `{title}`    | `sniffarr.tmdb.layer`                      |
+| `-api`     | `sniffarr.tmdb.requests`               | `{request}`  | `sniffarr.tmdb.status`                     |
 | `-api`     | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
 | `-sniff`, `-fetch` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
@@ -446,7 +446,7 @@ BitTorrent peer address appears in spans, attributes or logs.
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
 `sniffarr.classify.layer` is `rules`, `reuse` or `jev`;
 `sniffarr.search.lazy.result` is `in_time`, `late` or `failed`;
-`sniffarr.titles.layer` is `tmdb`, `jev` or `none`; `sniffarr.titles.status` is
+`sniffarr.tmdb.layer` is `tmdb`, `jev` or `none`; `sniffarr.tmdb.status` is
 the HTTP status of TMDB's answer, or `error` without one.
 
 ## Container image

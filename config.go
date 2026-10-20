@@ -26,7 +26,7 @@ import (
 	sniffer "github.com/mikluko/sniffarr/internal/sniff"
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/stun"
-	"github.com/mikluko/sniffarr/internal/titles"
+	"github.com/mikluko/sniffarr/internal/tmdb"
 )
 
 // components are the flags that switch each component on.
@@ -70,7 +70,7 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	var c config
 	fs := flag.NewFlagSet("sniffarr", flag.ContinueOnError)
 	fs.SetOutput(output)
-	fs.BoolVar(&c.on.api, "api", false, "serve the API over the SQLite store, with Torznab and the classify and titles workers")
+	fs.BoolVar(&c.on.api, "api", false, "serve the API over the SQLite store, with Torznab and the classify and TMDB workers")
 	fs.BoolVar(&c.on.ui, "ui", false, "serve the web UI, a client of the browse API")
 	fs.BoolVar(&c.on.sniff, "sniff", false, "walk the DHT and report the infohashes it reveals to the ingest API")
 	fs.BoolVar(&c.on.fetch, "fetch", false, "take fetch tasks from the ingest API and return their metadata")
@@ -243,16 +243,16 @@ func loadAPI(lookup func(string) (string, bool), langs []audio.Language) (api.Co
 	if a.LazyWait, err = duration(getenv, "SNIFFARR_SEARCH_CLASSIFY_WAIT", search.DefaultLazyWait); err != nil {
 		return a, d, err
 	}
-	if a.LazyTitles, err = positive(getenv, "SNIFFARR_SEARCH_TITLES_MAX", search.DefaultLazyTitles); err != nil {
+	if a.LazyTMDB, err = positive(getenv, "SNIFFARR_SEARCH_TMDB_MAX", search.DefaultLazyTMDB); err != nil {
 		return a, d, err
 	}
-	if a.TitlesConcurrency, err = positive(getenv, "SNIFFARR_TITLES_CONCURRENCY", titles.DefaultConcurrency); err != nil {
+	if a.TMDBConcurrency, err = positive(getenv, "SNIFFARR_TMDB_CONCURRENCY", tmdb.DefaultConcurrency); err != nil {
 		return a, d, err
 	}
-	if a.TitlesRate, err = positive(getenv, "SNIFFARR_TITLES_RATE", titles.DefaultRate); err != nil {
+	if a.TMDBRate, err = positive(getenv, "SNIFFARR_TMDB_RATE", tmdb.DefaultRate); err != nil {
 		return a, d, err
 	}
-	if a.TitlesRetry, err = duration(getenv, "SNIFFARR_TITLES_RETRY", titles.DefaultRetry); err != nil {
+	if a.TMDBRetry, err = duration(getenv, "SNIFFARR_TMDB_RETRY", tmdb.DefaultRetry); err != nil {
 		return a, d, err
 	}
 	if a.Scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
@@ -261,9 +261,9 @@ func loadAPI(lookup func(string) (string, bool), langs []audio.Language) (api.Co
 	if key, ok := lookup("TMDB_API_KEY"); ok {
 		a.TMDBKey = key
 	} else {
-		a.TMDBKey = titles.DefaultKey
+		a.TMDBKey = tmdb.DefaultKey
 	}
-	d.Store.Titles = a.TMDBKey != ""
+	d.Store.TMDB = a.TMDBKey != ""
 	d.Store.Languages = audio.Tags(langs)
 	return a, d, nil
 }

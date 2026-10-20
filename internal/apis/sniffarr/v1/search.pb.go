@@ -22,55 +22,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// TitleLayer is what matched a release's title to a work.
-type TitleLayer int32
+// TMDBLayer is what matched a release's title to a work.
+type TMDBLayer int32
 
 const (
-	TitleLayer_TITLE_LAYER_UNSPECIFIED TitleLayer = 0
+	TMDBLayer_TMDB_LAYER_UNSPECIFIED TMDBLayer = 0
 	// TMDB's search, with one plausible candidate.
-	TitleLayer_TITLE_LAYER_TMDB TitleLayer = 1
+	TMDBLayer_TMDB_LAYER_SEARCH TMDBLayer = 1
 	// The classifier, choosing among several.
-	TitleLayer_TITLE_LAYER_CLASSIFIER TitleLayer = 2
+	TMDBLayer_TMDB_LAYER_CLASSIFIER TMDBLayer = 2
 )
 
-// Enum value maps for TitleLayer.
+// Enum value maps for TMDBLayer.
 var (
-	TitleLayer_name = map[int32]string{
-		0: "TITLE_LAYER_UNSPECIFIED",
-		1: "TITLE_LAYER_TMDB",
-		2: "TITLE_LAYER_CLASSIFIER",
+	TMDBLayer_name = map[int32]string{
+		0: "TMDB_LAYER_UNSPECIFIED",
+		1: "TMDB_LAYER_SEARCH",
+		2: "TMDB_LAYER_CLASSIFIER",
 	}
-	TitleLayer_value = map[string]int32{
-		"TITLE_LAYER_UNSPECIFIED": 0,
-		"TITLE_LAYER_TMDB":        1,
-		"TITLE_LAYER_CLASSIFIER":  2,
+	TMDBLayer_value = map[string]int32{
+		"TMDB_LAYER_UNSPECIFIED": 0,
+		"TMDB_LAYER_SEARCH":      1,
+		"TMDB_LAYER_CLASSIFIER":  2,
 	}
 )
 
-func (x TitleLayer) Enum() *TitleLayer {
-	p := new(TitleLayer)
+func (x TMDBLayer) Enum() *TMDBLayer {
+	p := new(TMDBLayer)
 	*p = x
 	return p
 }
 
-func (x TitleLayer) String() string {
+func (x TMDBLayer) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (TitleLayer) Descriptor() protoreflect.EnumDescriptor {
+func (TMDBLayer) Descriptor() protoreflect.EnumDescriptor {
 	return file_sniffarr_v1_search_proto_enumTypes[0].Descriptor()
 }
 
-func (TitleLayer) Type() protoreflect.EnumType {
+func (TMDBLayer) Type() protoreflect.EnumType {
 	return &file_sniffarr_v1_search_proto_enumTypes[0]
 }
 
-func (x TitleLayer) Number() protoreflect.EnumNumber {
+func (x TMDBLayer) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use TitleLayer.Descriptor instead.
-func (TitleLayer) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use TMDBLayer.Descriptor instead.
+func (TMDBLayer) EnumDescriptor() ([]byte, []int) {
 	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{0}
 }
 
@@ -504,10 +504,10 @@ type Release struct {
 	// IDs of the work the release's title is matched to, in provider order;
 	// empty while unmatched or without title matching.
 	Ids []*ExternalId `protobuf:"bytes,16,rep,name=ids,proto3" json:"ids,omitempty"`
-	// What matched the title; TITLE_LAYER_UNSPECIFIED while unmatched.
-	TitleLayer TitleLayer `protobuf:"varint,17,opt,name=title_layer,json=titleLayer,proto3,enum=sniffarr.v1.TitleLayer" json:"title_layer,omitempty"`
+	// What matched the title; TMDB_LAYER_UNSPECIFIED while unmatched.
+	TmdbLayer TMDBLayer `protobuf:"varint,17,opt,name=tmdb_layer,json=tmdbLayer,proto3,enum=sniffarr.v1.TMDBLayer" json:"tmdb_layer,omitempty"`
 	// Confidence in the title match, 0 while unmatched.
-	TitleConfidence float32 `protobuf:"fixed32,18,opt,name=title_confidence,json=titleConfidence,proto3" json:"title_confidence,omitempty"`
+	TmdbConfidence float32 `protobuf:"fixed32,18,opt,name=tmdb_confidence,json=tmdbConfidence,proto3" json:"tmdb_confidence,omitempty"`
 	// Distinct peers of the release over the last 7 days, as last computed by
 	// the server; what SORT_PEERS orders by.
 	PeersWeek     int64 `protobuf:"varint,19,opt,name=peers_week,json=peersWeek,proto3" json:"peers_week,omitempty"`
@@ -650,16 +650,16 @@ func (x *Release) GetIds() []*ExternalId {
 	return nil
 }
 
-func (x *Release) GetTitleLayer() TitleLayer {
+func (x *Release) GetTmdbLayer() TMDBLayer {
 	if x != nil {
-		return x.TitleLayer
+		return x.TmdbLayer
 	}
-	return TitleLayer_TITLE_LAYER_UNSPECIFIED
+	return TMDBLayer_TMDB_LAYER_UNSPECIFIED
 }
 
-func (x *Release) GetTitleConfidence() float32 {
+func (x *Release) GetTmdbConfidence() float32 {
 	if x != nil {
-		return x.TitleConfidence
+		return x.TmdbConfidence
 	}
 	return 0
 }
@@ -820,7 +820,7 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"GetRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\"=\n" +
 	"\vGetResponse\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xdf\x05\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xda\x05\n" +
 	"\aRelease\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -841,10 +841,10 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"classified\x18\x0e \x01(\bR\n" +
 	"classified\x12(\n" +
 	"\x05audio\x18\x0f \x03(\v2\x12.sniffarr.v1.AudioR\x05audio\x12)\n" +
-	"\x03ids\x18\x10 \x03(\v2\x17.sniffarr.v1.ExternalIdR\x03ids\x128\n" +
-	"\vtitle_layer\x18\x11 \x01(\x0e2\x17.sniffarr.v1.TitleLayerR\n" +
-	"titleLayer\x12)\n" +
-	"\x10title_confidence\x18\x12 \x01(\x02R\x0ftitleConfidence\x12\x1d\n" +
+	"\x03ids\x18\x10 \x03(\v2\x17.sniffarr.v1.ExternalIdR\x03ids\x125\n" +
+	"\n" +
+	"tmdb_layer\x18\x11 \x01(\x0e2\x16.sniffarr.v1.TMDBLayerR\ttmdbLayer\x12'\n" +
+	"\x0ftmdb_confidence\x18\x12 \x01(\x02R\x0etmdbConfidence\x12\x1d\n" +
 	"\n" +
 	"peers_week\x18\x13 \x01(\x03R\tpeersWeekJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
 	"\n" +
@@ -857,12 +857,11 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\x06marker\x18\x03 \x01(\bR\x06marker\x12\x1f\n" +
 	"\vscript_hint\x18\x04 \x01(\bR\n" +
 	"scriptHintB\x0e\n" +
-	"\f_probability*[\n" +
-	"\n" +
-	"TitleLayer\x12\x1b\n" +
-	"\x17TITLE_LAYER_UNSPECIFIED\x10\x00\x12\x14\n" +
-	"\x10TITLE_LAYER_TMDB\x10\x01\x12\x1a\n" +
-	"\x16TITLE_LAYER_CLASSIFIER\x10\x02*V\n" +
+	"\f_probability*Y\n" +
+	"\tTMDBLayer\x12\x1a\n" +
+	"\x16TMDB_LAYER_UNSPECIFIED\x10\x00\x12\x15\n" +
+	"\x11TMDB_LAYER_SEARCH\x10\x01\x12\x19\n" +
+	"\x15TMDB_LAYER_CLASSIFIER\x10\x02*V\n" +
 	"\x05Layer\x12\x15\n" +
 	"\x11LAYER_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vLAYER_RULES\x10\x01\x12\x0f\n" +
@@ -907,7 +906,7 @@ func file_sniffarr_v1_search_proto_rawDescGZIP() []byte {
 var file_sniffarr_v1_search_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_sniffarr_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_sniffarr_v1_search_proto_goTypes = []any{
-	(TitleLayer)(0),               // 0: sniffarr.v1.TitleLayer
+	(TMDBLayer)(0),                // 0: sniffarr.v1.TMDBLayer
 	(Layer)(0),                    // 1: sniffarr.v1.Layer
 	(Kind)(0),                     // 2: sniffarr.v1.Kind
 	(VideoSource)(0),              // 3: sniffarr.v1.VideoSource
@@ -932,7 +931,7 @@ var file_sniffarr_v1_search_proto_depIdxs = []int32{
 	1,  // 8: sniffarr.v1.Release.layer:type_name -> sniffarr.v1.Layer
 	10, // 9: sniffarr.v1.Release.audio:type_name -> sniffarr.v1.Audio
 	9,  // 10: sniffarr.v1.Release.ids:type_name -> sniffarr.v1.ExternalId
-	0,  // 11: sniffarr.v1.Release.title_layer:type_name -> sniffarr.v1.TitleLayer
+	0,  // 11: sniffarr.v1.Release.tmdb_layer:type_name -> sniffarr.v1.TMDBLayer
 	4,  // 12: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
 	6,  // 13: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
 	5,  // 14: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse

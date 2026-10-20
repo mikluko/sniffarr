@@ -26,7 +26,7 @@ import (
 	sniffer "github.com/mikluko/sniffarr/internal/sniff"
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/stun"
-	"github.com/mikluko/sniffarr/internal/titles"
+	"github.com/mikluko/sniffarr/internal/tmdb"
 )
 
 // env is a lookup over kv pairs.
@@ -150,14 +150,14 @@ func TestLoadAPI(t *testing.T) {
 	required := []string{"SNIFFARR_DB", "/data/sniffarr.db", "SNIFFARR_INGEST_TOKEN", "in", "SNIFFARR_SEARCH_TOKEN", "se"}
 	with := func(kv ...string) []string { return append(append([]string{}, required...), kv...) }
 	defaults := func() (api.Config, db.Config) {
-		return api.Config{Addr: ":8080", IngestToken: "in", SearchToken: "se", TMDBKey: titles.DefaultKey, ClassifyConcurrency: 4,
+		return api.Config{Addr: ":8080", IngestToken: "in", SearchToken: "se", TMDBKey: tmdb.DefaultKey, ClassifyConcurrency: 4,
 				DailyTokens: classify.DefaultDailyTokens, SearchReserve: classify.DefaultSearchReserve, LazyMax: search.DefaultLazyMax, LazyWait: search.DefaultLazyWait,
-				LazyTitles: search.DefaultLazyTitles, TitlesConcurrency: titles.DefaultConcurrency, TitlesRate: titles.DefaultRate, TitlesRetry: titles.DefaultRetry,
+				LazyTMDB: search.DefaultLazyTMDB, TMDBConcurrency: tmdb.DefaultConcurrency, TMDBRate: tmdb.DefaultRate, TMDBRetry: tmdb.DefaultRetry,
 				Lease: ingest.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff,
 				Retention: defaultRetention, Scripts: defaultScripts, Languages: russian},
 			db.Config{Path: "/data/sniffarr.db",
 				Queue: queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
-				Store: store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}, Titles: true}}
+				Store: store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}, TMDB: true}}
 	}
 	tests := []struct {
 		name string
@@ -166,7 +166,7 @@ func TestLoadAPI(t *testing.T) {
 		err  string
 	}{
 		{name: "defaults", env: required, want: func(*api.Config, *db.Config) {}},
-		{name: "titles off", env: with("TMDB_API_KEY", ""), want: func(a *api.Config, d *db.Config) { a.TMDBKey, d.Store.Titles = "", false }},
+		{name: "tmdb off", env: with("TMDB_API_KEY", ""), want: func(a *api.Config, d *db.Config) { a.TMDBKey, d.Store.TMDB = "", false }},
 		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
@@ -174,14 +174,14 @@ func TestLoadAPI(t *testing.T) {
 			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h",
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
 			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_AUDIO_LANGUAGES", "ru",
-			"TMDB_API_KEY", "tm", "SNIFFARR_TORZNAB_TOKEN", "tz", "SNIFFARR_TITLES_CONCURRENCY", "3", "SNIFFARR_TITLES_RATE", "10", "SNIFFARR_TITLES_RETRY", "240h", "SNIFFARR_SEARCH_TITLES_MAX", "7"),
+			"TMDB_API_KEY", "tm", "SNIFFARR_TORZNAB_TOKEN", "tz", "SNIFFARR_TMDB_CONCURRENCY", "3", "SNIFFARR_TMDB_RATE", "10", "SNIFFARR_TMDB_RETRY", "240h", "SNIFFARR_SEARCH_TMDB_MAX", "7"),
 			want: func(a *api.Config, d *db.Config) {
 				*a = api.Config{Addr: ":9000", IngestToken: "in", SearchToken: "se", TypesafeKey: "ts", TMDBKey: "tm", TorznabToken: "tz", ClassifyConcurrency: 8,
-					TitlesConcurrency: 3, TitlesRate: 10, TitlesRetry: 240 * time.Hour, LazyTitles: 7, DailyTokens: 1000000, SearchReserve: 40,
+					TMDBConcurrency: 3, TMDBRate: 10, TMDBRetry: 240 * time.Hour, LazyTMDB: 7, DailyTokens: 1000000, SearchReserve: 40,
 					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, LazyMax: 5, LazyWait: 500 * time.Millisecond,
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian}
 				d.Queue = queue.Options{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour}
-				d.Store = store.Options{MaxFiles: 50, Languages: []string{"ru"}, Titles: true}
+				d.Store = store.Options{MaxFiles: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: func(a *api.Config, _ *db.Config) { a.DailyTokens = 0 }},
 		{name: "no reserve", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0"), want: func(a *api.Config, _ *db.Config) { a.SearchReserve = 0 }},
@@ -201,7 +201,7 @@ func TestLoadAPI(t *testing.T) {
 		{name: "reserve over 100", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "101"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
 		{name: "reserve a fraction", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0.25"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
 		{name: "unknown script", env: with("SNIFFARR_SCRIPTS", "Latin,Elvish"), err: `SNIFFARR_SCRIPTS: unknown script "Elvish"`},
-		{name: "zero title rate", env: with("SNIFFARR_TITLES_RATE", "0"), err: "SNIFFARR_TITLES_RATE: want a positive integer"},
+		{name: "zero tmdb rate", env: with("SNIFFARR_TMDB_RATE", "0"), err: "SNIFFARR_TMDB_RATE: want a positive integer"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

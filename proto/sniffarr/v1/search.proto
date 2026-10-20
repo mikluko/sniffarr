@@ -79,10 +79,10 @@ message Release {
   // IDs of the work the release's title is matched to, in provider order;
   // empty while unmatched or without title matching.
   repeated ExternalId ids = 16;
-  // What matched the title; TITLE_LAYER_UNSPECIFIED while unmatched.
-  TitleLayer title_layer = 17;
+  // What matched the title; TMDB_LAYER_UNSPECIFIED while unmatched.
+  TMDBLayer tmdb_layer = 17;
   // Confidence in the title match, 0 while unmatched.
-  float title_confidence = 18;
+  float tmdb_confidence = 18;
   // Distinct peers of the release over the last 7 days, as last computed by
   // the server; what SORT_PEERS orders by.
   int64 peers_week = 19;
@@ -95,13 +95,13 @@ message ExternalId {
   string id = 2;
 }
 
-// TitleLayer is what matched a release's title to a work.
-enum TitleLayer {
-  TITLE_LAYER_UNSPECIFIED = 0;
+// TMDBLayer is what matched a release's title to a work.
+enum TMDBLayer {
+  TMDB_LAYER_UNSPECIFIED = 0;
   // TMDB's search, with one plausible candidate.
-  TITLE_LAYER_TMDB = 1;
+  TMDB_LAYER_SEARCH = 1;
   // The classifier, choosing among several.
-  TITLE_LAYER_CLASSIFIER = 2;
+  TMDB_LAYER_CLASSIFIER = 2;
 }
 
 // Audio is what is known of a release's audio track in one language.

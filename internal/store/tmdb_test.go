@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTitles(t *testing.T) {
+func TestTMDB(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	for _, tr := range []struct {
@@ -56,8 +56,8 @@ func TestTitles(t *testing.T) {
 
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)
-	require.Equal(t, Title{}, r.Title, "without Options.Titles")
-	s.opts.Titles = true
+	require.Equal(t, Title{}, r.Title, "without Options.TMDB")
+	s.opts.TMDB = true
 	r, err = s.Get(ctx, hash(1))
 	require.NoError(t, err)
 	require.Equal(t, "y:alien 1979", r.TitleKey)
@@ -79,11 +79,14 @@ func TestTitles(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []ExternalID{{ProviderTMDB, "8077"}}, r.Title.IDs, "a match replaces the one before")
 
-	_, err = s.w.ExecContext(ctx, "DELETE FROM titles WHERE title_key = 'y:alien 1979'")
+	_, err = s.w.ExecContext(ctx, "DELETE FROM tmdb_works WHERE title_key = 'y:alien 1979'")
 	require.NoError(t, err)
 	var ids int
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM title_ids").Scan(&ids))
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_ids").Scan(&ids))
 	require.Zero(t, ids, "IDs go with their key")
+	var ddl string
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE name = 'tmdb_ids'").Scan(&ddl))
+	require.Contains(t, ddl, `REFERENCES "tmdb_works"`, "the foreign key follows the renamed table")
 }
 
 func titleKeys(ks []TitleKey) []string {

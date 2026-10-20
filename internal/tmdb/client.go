@@ -1,4 +1,4 @@
-package titles
+package tmdb
 
 import (
 	"context"
@@ -19,14 +19,14 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// DefaultTMDBURL is the base URL of the TMDB API.
-const DefaultTMDBURL = "https://api.themoviedb.org"
+// DefaultURL is the base URL of the TMDB API.
+const DefaultURL = "https://api.themoviedb.org"
 
 // DefaultRate is the default of TMDB requests a second.
 const DefaultRate = 20
 
-// TMDB is a client of the TMDB API v3. Its errors never carry the key.
-type TMDB struct {
+// Client is a client of the TMDB API v3. Its errors never carry the key.
+type Client struct {
 	// Key is a v3 API key, or an API read access token.
 	Key  string
 	URL  string
@@ -49,12 +49,12 @@ type TMDB struct {
 // overrides it, and an empty one turns matching off.
 const DefaultKey = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlMGMwZjVhNmI1ZTU5NTc3Mjg3NTQ5ZDI0NzlmYWEwYSIsIm5iZiI6MTc5MjQ3NTcwOC45MTkwMDAxLCJzdWIiOiI2YWQ3MDIzYzg4YzI5ODYwNTNiZWQ5YzMiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.GzOo3vXlML2qXMF6DydhMkag0X9LGg7Ydk5e733IS9I"
 
-// NewTMDB returns a client of the production API for the key, at most rps
+// NewClient returns a client of the production API for the key, at most rps
 // requests a second.
-func NewTMDB(key string, rps int) *TMDB {
-	return &TMDB{
+func NewClient(key string, rps int) *Client {
+	return &Client{
 		Key:     key,
-		URL:     DefaultTMDBURL,
+		URL:     DefaultURL,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 		Limiter: rate.NewLimiter(rate.Limit(rps), max(rps/4, 1)),
 		Retries: 4,
@@ -62,18 +62,18 @@ func NewTMDB(key string, rps int) *TMDB {
 	}
 }
 
-// TMDBError is a non-200 answer from TMDB.
-type TMDBError struct {
+// Error is a non-200 answer from TMDB.
+type Error struct {
 	Status int
 	Path   string
 }
 
-func (e *TMDBError) Error() string {
+func (e *Error) Error() string {
 	return fmt.Sprintf("tmdb %s: %d %s", e.Path, e.Status, http.StatusText(e.Status))
 }
 
 // Permanent reports whether repeating the same request cannot succeed.
-func (e *TMDBError) Permanent() bool {
+func (e *Error) Permanent() bool {
 	return e.Status >= 400 && e.Status < 500 && e.Status != http.StatusTooManyRequests && e.Status != http.StatusUnauthorized
 }
 
@@ -89,7 +89,7 @@ type Candidate struct {
 
 // Search searches movies, or series when series is set, by title in the
 // language; year, unless 0, narrows a movie search.
-func (c *TMDB) Search(ctx context.Context, series bool, query string, year int, language string) ([]Candidate, error) {
+func (c *Client) Search(ctx context.Context, series bool, query string, year int, language string) ([]Candidate, error) {
 	q := url.Values{"query": {query}, "language": {language}}
 	path := "/3/search/movie"
 	if series {
@@ -122,7 +122,7 @@ func (c *TMDB) Search(ctx context.Context, series bool, query string, year int, 
 
 // ExternalIDs returns the IMDb, TVDB and Wikidata IDs of the movie, or the
 // series when series is set, by provider; absent IDs are left out.
-func (c *TMDB) ExternalIDs(ctx context.Context, series bool, id int) (map[string]string, error) {
+func (c *Client) ExternalIDs(ctx context.Context, series bool, id int) (map[string]string, error) {
 	path := "/3/movie/" + strconv.Itoa(id) + "/external_ids"
 	if series {
 		path = "/3/tv/" + strconv.Itoa(id) + "/external_ids"
@@ -158,11 +158,11 @@ func yearOf(date string) int {
 
 // get fetches path and decodes the answer into v, retrying 429 and 5xx
 // answers.
-func (c *TMDB) get(ctx context.Context, path string, q url.Values, v any) error {
+func (c *Client) get(ctx context.Context, path string, q url.Values, v any) error {
 	wait := c.Backoff
 	for attempt := 0; ; attempt++ {
 		retryAfter, err := c.try(ctx, path, q, v)
-		var tErr *TMDBError
+		var tErr *Error
 		if err == nil || !errors.As(err, &tErr) || !(tErr.Status == http.StatusTooManyRequests || tErr.Status >= 500) || attempt >= c.Retries {
 			return err
 		}
@@ -180,7 +180,7 @@ func (c *TMDB) get(ctx context.Context, path string, q url.Values, v any) error 
 }
 
 // try makes one request; on a 429 it returns the wait the answer asks for.
-func (c *TMDB) try(ctx context.Context, path string, q url.Values, v any) (time.Duration, error) {
+func (c *Client) try(ctx context.Context, path string, q url.Values, v any) (time.Duration, error) {
 	if err := c.Limiter.Wait(ctx); err != nil {
 		return 0, err
 	}
@@ -210,7 +210,7 @@ func (c *TMDB) try(ctx context.Context, path string, q url.Values, v any) (time.
 	if res.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<16))
 		secs, _ := strconv.Atoi(res.Header.Get("Retry-After"))
-		return time.Duration(secs) * time.Second, &TMDBError{Status: res.StatusCode, Path: path}
+		return time.Duration(secs) * time.Second, &Error{Status: res.StatusCode, Path: path}
 	}
 	if err := json.NewDecoder(res.Body).Decode(v); err != nil {
 		return 0, fmt.Errorf("tmdb %s: decode answer: %w", path, err)
@@ -218,18 +218,18 @@ func (c *TMDB) try(ctx context.Context, path string, q url.Values, v any) (time.
 	return 0, nil
 }
 
-func (c *TMDB) count(ctx context.Context, status string) {
+func (c *Client) count(ctx context.Context, status string) {
 	c.once.Do(func() {
 		mp := c.Meter
 		if mp == nil {
 			mp = otel.GetMeterProvider()
 		}
 		var err error
-		c.requests, err = mp.Meter(scope).Int64Counter("sniffarr.titles.requests", metric.WithUnit("{request}"),
+		c.requests, err = mp.Meter(scope).Int64Counter("sniffarr.tmdb.requests", metric.WithUnit("{request}"),
 			metric.WithDescription("Requests to TMDB, by response status or error."))
 		if err != nil {
 			otel.Handle(err)
 		}
 	})
-	c.requests.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.titles.status", status)))
+	c.requests.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.tmdb.status", status)))
 }

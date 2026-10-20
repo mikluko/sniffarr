@@ -1,5 +1,5 @@
 // Package api is the API component: the ingest, search and browse services
-// and the Torznab indexer over the store, with the classify and titles
+// and the Torznab indexer over the store, with the classify and TMDB
 // workers, the store's maintenance, the rollup of peer sketches and the tops
 // of works.
 package api
@@ -22,7 +22,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/server"
 	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/titles"
+	"github.com/mikluko/sniffarr/internal/tmdb"
 )
 
 // Config is what Module needs; the tokens must be set.
@@ -53,14 +53,14 @@ type Config struct {
 	Backoff  time.Duration
 	// Retention is how long a stored torrent is kept without being seen.
 	Retention time.Duration
-	// LazyMax, LazyWait and LazyTitles are those of search.Lazy.
-	LazyMax    int
-	LazyWait   time.Duration
-	LazyTitles int
-	// TitlesConcurrency, TitlesRate and TitlesRetry tune the title matcher.
-	TitlesConcurrency int
-	TitlesRate        int
-	TitlesRetry       time.Duration
+	// LazyMax, LazyWait and LazyTMDB are those of search.Lazy.
+	LazyMax  int
+	LazyWait time.Duration
+	LazyTMDB int
+	// TMDBConcurrency, TMDBRate and TMDBRetry tune the TMDB matcher.
+	TMDBConcurrency int
+	TMDBRate        int
+	TMDBRetry       time.Duration
 	// Scripts are the writing systems a torrent's name may have letters of.
 	Scripts rules.Scripts
 	// Languages are the audio languages every stored torrent gets an entry
@@ -95,7 +95,7 @@ const workerPoll = 10 * time.Second
 // key.
 type classifiers struct {
 	jev     *classify.Jev
-	matcher *titles.Matcher
+	matcher *tmdb.Matcher
 	lazy    *search.Lazy
 }
 
@@ -105,7 +105,7 @@ func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 		log.Info("TYPESAFE_API_KEY and TMDB_API_KEY are not set: torrents are classified by their names only")
 		return c
 	}
-	c.lazy = &search.Lazy{Max: cfg.LazyMax, MaxTitles: cfg.LazyTitles, Wait: cfg.LazyWait, MaxFiles: classify.MaxFiles, Log: log}
+	c.lazy = &search.Lazy{Max: cfg.LazyMax, MaxTMDB: cfg.LazyTMDB, Wait: cfg.LazyWait, MaxFiles: classify.MaxFiles, Log: log}
 	if cfg.TypesafeKey == "" {
 		log.Info("TYPESAFE_API_KEY is not set: torrents are classified by their names only")
 	} else {
@@ -115,11 +115,11 @@ func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 		c.lazy.Classifier = c.jev
 	}
 	if cfg.TMDBKey != "" {
-		c.matcher = &titles.Matcher{TMDB: titles.NewTMDB(cfg.TMDBKey, cfg.TitlesRate), Store: s, Retry: cfg.TitlesRetry, Log: log}
+		c.matcher = &tmdb.Matcher{Client: tmdb.NewClient(cfg.TMDBKey, cfg.TMDBRate), Store: s, Retry: cfg.TMDBRetry, Log: log}
 		if c.jev != nil {
 			c.matcher.Chooser = c.jev
 		}
-		c.lazy.Titles = c.matcher
+		c.lazy.TMDB = c.matcher
 	}
 	return c
 }
@@ -167,11 +167,11 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *st
 		app.Go(lc, sd, log, "classify worker", w.Run)
 	}
 	if c.matcher != nil {
-		w := &titles.Worker{Matcher: c.matcher, Concurrency: cfg.TitlesConcurrency, Reserve: cfg.SearchReserve, Poll: workerPoll, Log: log}
+		w := &tmdb.Worker{Matcher: c.matcher, Concurrency: cfg.TMDBConcurrency, Reserve: cfg.SearchReserve, Poll: workerPoll, Log: log}
 		if c.jev != nil {
 			w.Budget = c.jev
 		}
-		app.Go(lc, sd, log, "titles worker", w.Run)
+		app.Go(lc, sd, log, "tmdb worker", w.Run)
 	}
 }
 

@@ -90,7 +90,7 @@ type Release struct {
 	// Audio holds the entries of Options.Languages, in tag order.
 	Audio    []Audio
 	TitleKey string
-	// Title is the match of TitleKey when Options.Titles is set.
+	// Title is the match of TitleKey when Options.TMDB is set.
 	Title   Title
 	WorkKey string
 	Year    int
@@ -137,8 +137,8 @@ type Options struct {
 	// Languages are the audio languages Release.Audio holds and Unclassified
 	// selects by; none leaves both without audio.
 	Languages []string
-	// Titles has Release.Title read.
-	Titles bool
+	// TMDB has Release.Title read.
+	TMDB bool
 	// Meter records the store's metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
 }
@@ -471,7 +471,7 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 		where = append(where, cond)
 	}
 	if q.ID != nil {
-		where = append(where, "t.title_key IN (SELECT i.title_key FROM title_ids i WHERE i.provider = ? AND i.id = ?)")
+		where = append(where, "t.title_key IN (SELECT i.title_key FROM tmdb_ids i WHERE i.provider = ? AND i.id = ?)")
 		args = append(args, q.ID.Provider, q.ID.ID)
 	}
 	stmt := "SELECT " + releaseColumns + " FROM " + from
@@ -499,7 +499,7 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 	if err := s.audio(ctx, out); err != nil {
 		return nil, err
 	}
-	return out, s.titles(ctx, out)
+	return out, s.tmdb(ctx, out)
 }
 
 // Get returns the stored release with the hash, or ErrNotFound.
@@ -512,7 +512,7 @@ func (s *Store) Get(ctx context.Context, h Hash) (Release, error) {
 		return Release{}, err
 	}
 	rs := []Release{r}
-	if err := errors.Join(s.audio(ctx, rs), s.titles(ctx, rs)); err != nil {
+	if err := errors.Join(s.audio(ctx, rs), s.tmdb(ctx, rs)); err != nil {
 		return Release{}, err
 	}
 	return rs[0], nil

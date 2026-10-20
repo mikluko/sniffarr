@@ -54,9 +54,9 @@ var layers = map[string]sniffarrv1.Layer{
 	store.LayerJev:   sniffarrv1.Layer_LAYER_CLASSIFIER,
 }
 
-var titleLayers = map[string]sniffarrv1.TitleLayer{
-	store.LayerTMDB: sniffarrv1.TitleLayer_TITLE_LAYER_TMDB,
-	store.LayerJev:  sniffarrv1.TitleLayer_TITLE_LAYER_CLASSIFIER,
+var tmdbLayers = map[string]sniffarrv1.TMDBLayer{
+	store.LayerTMDB: sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH,
+	store.LayerJev:  sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER,
 }
 
 var sources = map[string]sniffarrv1.VideoSource{
@@ -145,8 +145,8 @@ func release(r store.Release) *sniffarrv1.Release {
 		Magnet:           Magnet(r.Hash, r.Name),
 		Layer:            layers[r.KindLayer],
 		Classified:       r.Classified,
-		TitleLayer:       titleLayers[r.Title.Layer],
-		TitleConfidence:  float32(r.Title.Confidence),
+		TmdbLayer:        tmdbLayers[r.Title.Layer],
+		TmdbConfidence:   float32(r.Title.Confidence),
 		PeersWeek:        r.PeersWeek,
 	}
 	for _, id := range r.Title.IDs {
