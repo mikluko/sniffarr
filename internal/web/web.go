@@ -1,13 +1,12 @@
-// Package web serves the web UI over the store: search, a release's card,
-// and the store's counts. It authenticates nobody; that is left to a proxy
-// in front of it.
+// Package web serves the web UI as a client of the browse API: search, a
+// release's card, and the store's counts. It authenticates nobody; that is
+// left to a proxy in front of it.
 package web
 
 import (
 	"cmp"
 	"context"
 	"encoding/hex"
-	"errors"
 	"log/slog"
 	"math"
 	"net/http"
@@ -17,10 +16,13 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
+
+	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/rules"
-	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/ui"
 )
 
@@ -34,14 +36,16 @@ const PageSize = 50
 // cardFiles is how many files a card lists until all are asked for.
 const cardFiles = 8
 
+// infohashLen is the length of a BitTorrent v1 infohash in bytes.
+const infohashLen = 20
+
 // Config is what New needs.
 type Config struct {
-	Store *store.Store
+	// Browse is the API every page is read from, with its token.
+	Browse sniffarrv1connect.BrowseServiceClient
 	// Languages are the configured audio languages, in their configured
-	// order.
+	// order; they must be the API's.
 	Languages []audio.Language
-	// DailyTokens is the classifier's daily token limit; 0 is none.
-	DailyTokens int64
 	// Locales tells the locale of the person an access token was issued to;
 	// when nil, the language is only the one picked on the page.
 	Locales Locales
@@ -119,31 +123,29 @@ func (s *server) fail(w http.ResponseWriter, req *http.Request, op string, err e
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
+// The UI's keys of the API's enumerations; a value absent here is "none".
 var (
-	kindLayers = map[string]string{store.LayerRules: "rules", store.LayerReuse: "title_repeat", store.LayerJev: "classifier"}
-	sources    = map[string]string{"disc_image": "disc", "remux": "remux", "encode": "rip", "web": "web", "other": "other"}
-	drops      = map[rules.Reason]string{rules.Adult: "adult", rules.Software: "software", rules.Book: "book", rules.Course: "course",
-		rules.Script: "script", rules.NoMedia: "filetype", rules.Small: "size"}
-	hidden = []string{"adult"}
+	kinds = map[sniffarrv1.Kind]string{sniffarrv1.Kind_KIND_UNSPECIFIED: "unknown", sniffarrv1.Kind_KIND_MOVIE: "movie", sniffarrv1.Kind_KIND_SERIES: "series",
+		sniffarrv1.Kind_KIND_MUSIC: "music", sniffarrv1.Kind_KIND_BOOK: "book", sniffarrv1.Kind_KIND_SOFTWARE: "software", sniffarrv1.Kind_KIND_ADULT: "adult",
+		sniffarrv1.Kind_KIND_OTHER: "other"}
+	kindLayers = map[sniffarrv1.Layer]string{sniffarrv1.Layer_LAYER_RULES: "rules", sniffarrv1.Layer_LAYER_REUSE: "title_repeat", sniffarrv1.Layer_LAYER_CLASSIFIER: "classifier"}
+	sources    = map[sniffarrv1.VideoSource]string{sniffarrv1.VideoSource_VIDEO_SOURCE_DISC_IMAGE: "disc", sniffarrv1.VideoSource_VIDEO_SOURCE_REMUX: "remux",
+		sniffarrv1.VideoSource_VIDEO_SOURCE_ENCODE: "rip", sniffarrv1.VideoSource_VIDEO_SOURCE_WEB: "web", sniffarrv1.VideoSource_VIDEO_SOURCE_OTHER: "other"}
+	drops = map[sniffarrv1.Rejection]string{sniffarrv1.Rejection_REJECTION_ADULT: "adult", sniffarrv1.Rejection_REJECTION_SOFTWARE: "software",
+		sniffarrv1.Rejection_REJECTION_BOOK: "book", sniffarrv1.Rejection_REJECTION_COURSE: "course", sniffarrv1.Rejection_REJECTION_SCRIPT: "script",
+		sniffarrv1.Rejection_REJECTION_NO_MEDIA: "filetype", sniffarrv1.Rejection_REJECTION_SMALL: "size"}
+	discoveries = map[sniffarrv1.Source]string{sniffarrv1.Source_SOURCE_ANNOUNCE: "announce", sniffarrv1.Source_SOURCE_SAMPLE: "sample"}
 )
 
-// uiKind is the UI's key of a stored kind.
-func uiKind(k string) string {
-	if k == "" {
-		return "unknown"
-	}
-	return k
-}
-
 // uiOr returns m's value for k, or "none".
-func uiOr(m map[string]string, k string) string {
+func uiOr[K comparable](m map[K]string, k K) string {
 	if v, ok := m[k]; ok {
 		return v
 	}
 	return "none"
 }
 
-// key returns the key of m whose value is v, or "".
+// key returns the key of m whose value is v, or the zero key.
 func key[K comparable](m map[K]string, v string) (K, bool) {
 	for k, x := range m {
 		if x == v {
@@ -220,34 +222,34 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 	if err != nil || offset < 0 {
 		offset = 0
 	}
-	b := store.Browse{Text: q, AudioLanguage: f.VoiceLang, MinSize: minSize(f.MinSizeGB), Offset: offset, Limit: PageSize}
+	b := &sniffarrv1.PageRequest{Query: q, MinSize: minSize(f.MinSizeGB), Offset: int32(offset), Limit: PageSize}
 	switch f.Kind {
 	case "":
-		b.Exclude = hidden
 	case "unknown":
 		b.UnknownKind = true
 	default:
-		b.Kind = f.Kind
+		b.Kind, _ = key(kinds, f.Kind)
 	}
 	if f.VoiceLang != "" {
 		switch f.Voice {
 		case "p50":
-			b.MinAudioProbability = new(0.5)
+			b.AudioLanguage, b.MinAudioProbability = &f.VoiceLang, new(float32(0.5))
 		case "explicit":
-			b.AudioMarker = true
+			b.AudioLanguage, b.AudioMarker = &f.VoiceLang, true
 		}
 	}
 	if f.Source != "" {
 		b.Source, _ = key(sources, f.Source)
 	}
 	if f.Layer != "" {
-		b.KindLayer, _ = key(kindLayers, f.Layer)
+		b.Layer, _ = key(kindLayers, f.Layer)
 	}
-	releases, total, err := s.cfg.Store.Page(req.Context(), b)
+	page, err := s.cfg.Browse.Page(req.Context(), connect.NewRequest(b))
 	if err != nil {
 		s.fail(w, req, "search", err)
 		return
 	}
+	releases, total := page.Msg.GetReleases(), page.Msg.GetTotal()
 	voiceDefault := ""
 	if len(s.tags) > 0 {
 		voiceDefault = s.tags[0]
@@ -267,24 +269,24 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 	}
 	for _, r := range releases {
 		row := ui.Row{
-			InfoHash:  hex.EncodeToString(r.Hash[:]),
-			Name:      r.Name,
-			Size:      r.Size,
-			Kind:      uiKind(r.Kind),
-			Layer:     uiOr(kindLayers, r.KindLayer),
-			Source:    uiOr(sources, r.Source),
-			FirstSeen: r.FirstSeen,
-			LastSeen:  r.LastSeen,
+			InfoHash:  hex.EncodeToString(r.GetInfohash()),
+			Name:      r.GetName(),
+			Size:      r.GetSize(),
+			Kind:      uiOr(kinds, r.GetKind()),
+			Layer:     uiOr(kindLayers, r.GetLayer()),
+			Source:    uiOr(sources, r.GetSource()),
+			FirstSeen: r.GetFirstSeen().AsTime(),
+			LastSeen:  r.GetLastSeen().AsTime(),
 		}
-		if r.KindLayer == store.LayerJev {
-			row.Confidence = new(r.KindConfidence)
+		if r.GetLayer() == sniffarrv1.Layer_LAYER_CLASSIFIER {
+			row.Confidence = new(float64(r.GetKindConfidence()))
 		}
 		for _, tag := range s.tags {
 			var c ui.VoiceCell
-			if a, ok := audioOf(r, tag); ok {
-				c.Explicit = a.Marker
-				if !a.Marker {
-					c.Prob = a.Probability
+			if a := audioOf(r, tag); a != nil {
+				c.Explicit = a.GetMarker()
+				if !a.GetMarker() {
+					c.Prob = probability(a)
 				}
 			}
 			row.Voice = append(row.Voice, c)
@@ -294,23 +296,33 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 	s.render(w, req, "search", ui.SearchPage{Base: s.base(w, req, "search"), Q: q, Filters: f, Results: res})
 }
 
-func audioOf(r store.Release, tag string) (store.Audio, bool) {
-	for _, a := range r.Audio {
-		if a.Language == tag {
-			return a, true
+// audioOf is r's audio entry for the language, or nil.
+func audioOf(r *sniffarrv1.Release, tag string) *sniffarrv1.Audio {
+	for _, a := range r.GetAudio() {
+		if a.GetLanguage() == tag {
+			return a
 		}
 	}
-	return store.Audio{}, false
+	return nil
+}
+
+// probability is the classifier's probability of an audio track, or nil
+// while unknown.
+func probability(a *sniffarrv1.Audio) *float64 {
+	if a.Probability == nil {
+		return nil
+	}
+	return new(float64(a.GetProbability()))
 }
 
 func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	raw, err := hex.DecodeString(req.PathValue("infohash"))
-	if err != nil || len(raw) != len(store.Hash{}) {
+	if err != nil || len(raw) != infohashLen {
 		http.NotFound(w, req)
 		return
 	}
-	c, err := s.cfg.Store.Card(req.Context(), store.Hash(raw), math.MaxInt32)
-	if errors.Is(err, store.ErrNotFound) {
+	card, err := s.cfg.Browse.Card(req.Context(), connect.NewRequest(&sniffarrv1.CardRequest{Infohash: raw}))
+	if connect.CodeOf(err) == connect.CodeNotFound {
 		http.NotFound(w, req)
 		return
 	}
@@ -318,48 +330,51 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		s.fail(w, req, "card", err)
 		return
 	}
+	c, r := card.Msg, card.Msg.GetRelease()
 	h := hex.EncodeToString(raw)
 	t := ui.Torrent{
 		InfoHash:      h,
-		Name:          c.Name,
+		Name:          r.GetName(),
 		Magnet:        "magnet:?xt=urn:btih:" + h,
-		Size:          c.Size,
-		FileCount:     int(c.FileCount),
-		FirstSeen:     c.FirstSeen,
-		LastSeen:      c.LastSeen,
-		DiscoveredVia: c.Discovery,
-		TMDBQuery:     title(c.Name),
-		Kind:          ui.Answer{Value: uiKind(c.Kind), Layer: uiOr(kindLayers, c.KindLayer)},
-		Source:        ui.Answer{Value: uiOr(sources, c.Source), Layer: "none"},
+		Size:          r.GetSize(),
+		FileCount:     int(r.GetFileCount()),
+		FirstSeen:     r.GetFirstSeen().AsTime(),
+		LastSeen:      r.GetLastSeen().AsTime(),
+		DiscoveredVia: discoveries[c.GetDiscovery()],
+		TMDBQuery:     title(r.GetName()),
+		Kind:          ui.Answer{Value: uiOr(kinds, r.GetKind()), Layer: uiOr(kindLayers, r.GetLayer())},
+		Source:        ui.Answer{Value: uiOr(sources, r.GetSource()), Layer: "none"},
 	}
-	if c.KindLayer == store.LayerJev {
-		t.Kind.Confidence = new(c.KindConfidence)
+	if r.GetLayer() == sniffarrv1.Layer_LAYER_CLASSIFIER {
+		t.Kind.Confidence = new(float64(r.GetKindConfidence()))
 	}
-	if c.Source != "" {
+	if r.GetSource() != sniffarrv1.VideoSource_VIDEO_SOURCE_UNSPECIFIED {
 		t.Source.Layer = "classifier"
-		t.Source.Confidence = new(c.SourceConfidence)
+		t.Source.Confidence = new(float64(r.GetSourceConfidence()))
+	}
+	files := make([]rules.File, len(c.GetFiles()))
+	for i, f := range c.GetFiles() {
+		files[i] = rules.File{Path: f.GetPath(), Size: f.GetSize()}
 	}
 	for _, l := range s.cfg.Languages {
 		d := ui.VoiceDetail{Lang: l.Tag}
-		if a, ok := audioOf(c.Release, l.Tag); ok {
-			if a.Marker {
-				d.Mark = l.Mark(c.Name, c.Files)
+		if a := audioOf(r, l.Tag); a != nil {
+			if a.GetMarker() {
+				d.Mark = l.Mark(r.GetName(), files)
+			} else {
+				d.Prob = probability(a)
 			}
-			if a.ScriptHint && len(l.Scripts) > 0 {
+			if a.GetScriptHint() && len(l.Scripts) > 0 {
 				d.ScriptHint = strings.ToLower(l.Scripts[0])
-			}
-			if a.Layer == store.LayerJev {
-				d.Prob = a.Probability
 			}
 		}
 		t.Voice = append(t.Voice, d)
 	}
 	all := req.URL.Query().Get("files") == "all"
-	files := c.Files
+	t.Files = ui.FileList{InfoHash: h, Stored: len(files), All: all}
 	if !all && len(files) > cardFiles {
 		files = files[:cardFiles]
 	}
-	t.Files = ui.FileList{InfoHash: h, Stored: c.Stored, All: all}
 	for _, f := range files {
 		t.Files.Files = append(t.Files.Files, ui.File{Path: f.Path, Size: f.Size})
 	}
@@ -388,58 +403,67 @@ func backURL(req *http.Request) string {
 const statDays = 26 * 7
 
 func (s *server) data(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
 	now := s.cfg.Now()
-	st, err := s.cfg.Store.Stats(ctx, now, statDays)
+	res, err := s.cfg.Browse.Stats(req.Context(), connect.NewRequest(&sniffarrv1.StatsRequest{Days: statDays}))
 	if err != nil {
 		s.fail(w, req, "stats", err)
 		return
 	}
-	used, err := s.cfg.Store.TokensUsed(ctx, now.UTC().Format(time.DateOnly))
-	if err != nil {
-		s.fail(w, req, "tokens used", err)
-		return
+	st := res.Msg
+	days := st.GetDays()
+	if len(days) < statDays {
+		days = append(days, make([]int64, statDays-len(days))...)
 	}
 	out := ui.Stats{
 		At:         now,
-		Total:      st.Total,
-		NewDay:     st.Days[0],
-		Classifier: ui.ClassifierStats{Pending: st.Pending, DoneDay: used, LimitDay: s.cfg.DailyTokens},
+		Total:      st.GetTotal(),
+		NewDay:     days[0],
+		Classifier: ui.ClassifierStats{Pending: st.GetPending(), DoneDay: st.GetTokensUsedDay(), LimitDay: st.GetTokensLimitDay()},
 	}
-	for _, n := range st.Days[:7] {
+	for _, n := range days[:7] {
 		out.NewWeek += n
 	}
+	byKind := map[string]int64{}
+	for _, c := range st.GetKinds() {
+		byKind[uiOr(kinds, c.GetKind())] += c.GetCount()
+	}
 	for _, k := range ui.Kinds {
-		stored := k
-		if k == "unknown" {
-			stored = ""
-		}
-		out.ByKind = append(out.ByKind, ui.Count{Key: k, N: st.Kinds[stored]})
+		out.ByKind = append(out.ByKind, ui.Count{Key: k, N: byKind[k]})
+	}
+	byLayer := map[string]int64{}
+	for _, c := range st.GetLayers() {
+		byLayer[uiOr(kindLayers, c.GetLayer())] += c.GetCount()
 	}
 	for _, k := range ui.Layers {
-		stored, _ := key(kindLayers, k)
-		out.ByLayer = append(out.ByLayer, ui.Count{Key: k, N: st.Layers[stored]})
+		out.ByLayer = append(out.ByLayer, ui.Count{Key: k, N: byLayer[k]})
+	}
+	bySource := map[string]int64{}
+	for _, c := range st.GetSources() {
+		bySource[uiOr(sources, c.GetSource())] += c.GetCount()
 	}
 	for _, k := range ui.Sources {
-		stored, _ := key(sources, k)
-		out.BySource = append(out.BySource, ui.Count{Key: k, N: st.Sources[stored]})
+		out.BySource = append(out.BySource, ui.Count{Key: k, N: bySource[k]})
+	}
+	audio := map[string]*sniffarrv1.AudioCounts{}
+	for _, a := range st.GetAudio() {
+		audio[a.GetLanguage()] = a
 	}
 	for _, tag := range s.tags {
-		a := st.Audio[tag]
-		out.Voice = append(out.Voice, ui.VoiceStats{Lang: tag, Bands: [4]int64{a.Marker, a.Likely, a.Unlikely, st.Total - a.Marker - a.Likely - a.Unlikely}})
+		a := audio[tag]
+		out.Voice = append(out.Voice, ui.VoiceStats{Lang: tag, Bands: [4]int64{a.GetMarker(), a.GetLikely(), a.GetUnlikely(), st.GetTotal() - a.GetMarker() - a.GetLikely() - a.GetUnlikely()}})
 	}
-	for reason, n := range st.Rejected {
-		k, ok := drops[rules.Reason(reason)]
+	for _, c := range st.GetRejected() {
+		k, ok := drops[c.GetReason()]
 		if !ok {
 			continue
 		}
-		out.Dropped = append(out.Dropped, ui.Count{Key: k, N: n})
-		out.DroppedTotal += n
+		out.Dropped = append(out.Dropped, ui.Count{Key: k, N: c.GetCount()})
+		out.DroppedTotal += c.GetCount()
 	}
 	slices.SortStableFunc(out.Dropped, func(a, b ui.Count) int {
 		return cmp.Or(cmp.Compare(b.N, a.N), cmp.Compare(slices.Index(ui.DropReasons, a.Key), slices.Index(ui.DropReasons, b.Key)))
 	})
-	out.Daily, out.Weekly = s.charts(now, st.Days)
+	out.Daily, out.Weekly = s.charts(now, days)
 	s.render(w, req, "data", ui.DataPage{Base: s.base(w, req, "data"), Stats: out})
 }
 
