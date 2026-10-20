@@ -130,7 +130,7 @@ func setup(t *testing.T, names ...string) *store.Store {
 	s, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
 	for i, n := range names {
-		_, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: n, Size: 1 << 30, Files: []rules.File{{Path: n + ".mkv", Size: 1 << 30}},
+		_, _, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: n, Size: 1 << 30, Files: []rules.File{{Path: n + ".mkv", Size: 1 << 30}},
 			Discovery: "sample", SeenAt: time.Now(), RussianHint: true})
 		require.NoError(t, err)
 	}
@@ -194,7 +194,7 @@ func TestJevAsksKindOnlyWhenUnknown(t *testing.T) {
 	ctx := context.Background()
 	f := newFake(t)
 	s := setup(t, "Heat.1995")
-	_, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{9}, Name: "Ronin.S01E01", Size: 1 << 30, Discovery: "sample", SeenAt: time.Now(),
+	_, _, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{9}, Name: "Ronin.S01E01", Size: 1 << 30, Discovery: "sample", SeenAt: time.Now(),
 		Kind: "series", KindLayer: store.LayerRules})
 	require.NoError(t, err)
 	jev := &Jev{Store: s, Classifier: f.client(), Log: slog.New(slog.DiscardHandler)}

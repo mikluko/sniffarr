@@ -82,3 +82,28 @@ func TestMetrics(t *testing.T) {
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.classify.classifications",
 		attribute.String("sniffarr.classify.layer", "rules"), attribute.String("sniffarr.kind", "movie")))
 }
+
+func TestReuseMetrics(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	srv, hc := start(t, Config{Meter: mp, Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3)
+	require.NoError(t, err)
+	f := openFetch(t, ingest)
+	f.credit(3)
+	f.expect(1, 2, 3)
+	f.torrent(1, "Heat (1995) [Rus]", "Heat.avi")
+	f.torrent(2, "Heat (1995) [Eng]", "Heat.mkv")
+	f.torrent(3, "Heat.1995.1080p.BluRay.x264", "Heat.1995.mkv")
+	f.finish()
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	layer := func(v string) attribute.KeyValue { return attribute.String("sniffarr.classify.layer", v) }
+	movie := attribute.String("sniffarr.kind", "movie")
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.classify.classifications", layer("rules"), movie))
+	require.EqualValues(t, 2, value(t, rm, "sniffarr.classify.classifications", layer("reuse"), movie),
+		"the kind 3 lends to 1 and 2")
+}

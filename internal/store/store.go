@@ -222,11 +222,11 @@ func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (map[H
 
 // Insert stores a torrent for classification, with its MaxFiles largest
 // files, and copies its kind, if it has one, to the stored torrents of the
-// same title key whose kind is unknown. It reports false, and stores
-// nothing, when the hash is already stored or rejected.
-func (s *Store) Insert(ctx context.Context, t Torrent) (bool, error) {
-	var inserted bool
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+// same title key whose kind is unknown; it returns whether it stored the
+// torrent and how many it copied the kind to. It stores nothing when the hash
+// is already stored or rejected.
+func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied int, err error) {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var rejected bool
 		if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM rejected WHERE infohash = ?)", t.Hash[:]).Scan(&rejected); err != nil || rejected {
 			return err
@@ -258,10 +258,15 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (bool, error) {
 		if t.Kind == "" || t.TitleKey == "" {
 			return nil
 		}
-		_, err = tx.ExecContext(ctx, "UPDATE torrents SET kind = ?, kind_layer = ? WHERE title_key = ? AND kind IS NULL", t.Kind, LayerReuse, t.TitleKey)
+		res, err := tx.ExecContext(ctx, "UPDATE torrents SET kind = ?, kind_layer = ? WHERE title_key = ? AND kind IS NULL", t.Kind, LayerReuse, t.TitleKey)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		copied = int(n)
 		return err
 	})
-	return inserted, err
+	return inserted, copied, err
 }
 
 // Reject remembers a hash as rejected for reason. It reports false when the

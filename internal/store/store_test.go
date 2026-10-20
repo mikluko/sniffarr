@@ -50,7 +50,7 @@ func TestReopenKeepsData(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "test.db")
 	s, db := openAt(t, path)
-	_, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
+	_, _, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
@@ -63,7 +63,7 @@ func TestReopenKeepsData(t *testing.T) {
 func TestKnown(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	_, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
+	_, _, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
 	require.NoError(t, err)
 	_, err = s.Reject(ctx, hash(2), rules.Book, t0)
 	require.NoError(t, err)
@@ -84,10 +84,10 @@ func TestInsertReject(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 
-	ok, err := s.Insert(ctx, torrent(1, "Alien.1979.1080p.BluRay", "Alien.1979.1080p.BluRay.mkv"))
+	ok, _, err := s.Insert(ctx, torrent(1, "Alien.1979.1080p.BluRay", "Alien.1979.1080p.BluRay.mkv"))
 	require.NoError(t, err)
 	require.True(t, ok)
-	ok, err = s.Insert(ctx, torrent(1, "Alien.1979.1080p.BluRay"))
+	ok, _, err = s.Insert(ctx, torrent(1, "Alien.1979.1080p.BluRay"))
 	require.NoError(t, err)
 	require.False(t, ok, "second insert")
 
@@ -100,7 +100,7 @@ func TestInsertReject(t *testing.T) {
 	ok, err = s.Reject(ctx, hash(1), rules.Small, t0)
 	require.NoError(t, err)
 	require.False(t, ok, "reject of a stored hash")
-	ok, err = s.Insert(ctx, torrent(2, "x"))
+	ok, _, err = s.Insert(ctx, torrent(2, "x"))
 	require.NoError(t, err)
 	require.False(t, ok, "insert of a rejected hash")
 
@@ -120,7 +120,7 @@ func TestSearch(t *testing.T) {
 	} {
 		tr.RussianMarker = tr.Hash == hash(3)
 		tr.SeenAt = t0.Add(time.Duration(tr.Hash[0]) * time.Minute)
-		_, err := s.Insert(ctx, tr)
+		_, _, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
 	classify(t, s, 1, Classification{Kind: "movie", KindConfidence: 0.9, Source: "encode", RussianAudio: 0.2})
@@ -179,7 +179,7 @@ func TestUnclassified(t *testing.T) {
 		if i == 5 {
 			tr.Kind, tr.KindLayer = "series", LayerRules
 		}
-		_, err := s.Insert(ctx, tr)
+		_, _, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
 	classify(t, s, 1, Classification{Kind: "movie"})
@@ -207,7 +207,7 @@ func TestReuseByKey(t *testing.T) {
 	for i, k := range []string{"y:dune 2024", "y:dune 2024", "y:dune 2021", "y:arrival 2016"} {
 		tr := torrent(byte(i+1), "t")
 		tr.TitleKey = k
-		_, err := s.Insert(ctx, tr)
+		_, _, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
 	kind, err := s.KindByKey(ctx, "y:arrival 2016")
@@ -236,8 +236,9 @@ func TestReuseByKey(t *testing.T) {
 
 	tr := torrent(9, "Arrival.2016.1080p")
 	tr.TitleKey, tr.Kind, tr.KindLayer = "y:arrival 2016", "movie", LayerRules
-	_, err = s.Insert(ctx, tr)
+	_, copied, err := s.Insert(ctx, tr)
 	require.NoError(t, err)
+	require.Equal(t, 1, copied)
 	r, err = s.Get(ctx, hash(4))
 	require.NoError(t, err)
 	require.Equal(t, "movie", r.Kind, "a later release with a known kind lends it too")
@@ -267,7 +268,7 @@ func TestMaxFiles(t *testing.T) {
 	for i, size := range []int64{10, 30, 20, 5} {
 		tr.Files = append(tr.Files, rules.File{Path: fmt.Sprintf("f%d.mkv", i), Size: size})
 	}
-	_, err := s.Insert(ctx, tr)
+	_, _, err := s.Insert(ctx, tr)
 	require.NoError(t, err)
 
 	r, err := s.Get(ctx, hash(1))
@@ -287,7 +288,7 @@ func TestSweep(t *testing.T) {
 	for i := byte(1); i <= 5; i++ {
 		tr := torrent(i, fmt.Sprintf("Old.Movie.%d.1999", i), "old.mkv")
 		tr.SeenAt = t0.Add(time.Duration(i) * time.Hour)
-		_, err := s.Insert(ctx, tr)
+		_, _, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
 	_, err := s.Known(ctx, []Hash{hash(1)}, t0.Add(10*time.Hour))

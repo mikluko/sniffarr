@@ -70,7 +70,7 @@ func setup(t *testing.T, torrents ...store.Torrent) (*store.Store, *fakeJev) {
 		tr.Hash = store.Hash{byte(i + 1)}
 		tr.Size, tr.Discovery, tr.SeenAt = 1<<30, "sample", time.Now().Add(time.Duration(i)*time.Second)
 		tr.Files = []rules.File{{Path: tr.Name + ".mkv", Size: 1 << 30}}
-		_, err := s.Insert(ctx, tr)
+		_, _, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
 	return s, &fakeJev{store: s, calls: map[int64]int{}, answers: map[string]store.Classification{}}

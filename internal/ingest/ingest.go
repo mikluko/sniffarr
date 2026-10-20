@@ -213,7 +213,7 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 	if err := s.kind(ctx, &tr); err != nil {
 		return err
 	}
-	stored, err := s.Store.Insert(ctx, tr)
+	stored, copied, err := s.Store.Insert(ctx, tr)
 	if err != nil {
 		return s.internal(ctx, "insert", err)
 	}
@@ -221,6 +221,7 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 		s.metrics().stored.Add(ctx, 1)
 		if tr.Kind != "" {
 			s.metrics().classifications.Add(ctx, 1, layerAttrs(tr.KindLayer, tr.Kind))
+			s.metrics().classifications.Add(ctx, int64(copied), layerAttrs(store.LayerReuse, tr.Kind))
 		}
 	}
 	return nil
