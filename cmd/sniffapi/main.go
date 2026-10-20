@@ -97,6 +97,9 @@ func load(getenv func(string) string) (config, error) {
 	if c.queue.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", queue.DefaultDeadFor); err != nil {
 		return c, err
 	}
+	if c.queue.NoPeersFor, err = duration(getenv, "SNIFFARR_QUEUE_NO_PEERS_FOR", queue.DefaultNoPeersFor); err != nil {
+		return c, err
+	}
 	if c.store.MaxFiles, err = positive(getenv, "SNIFFARR_STORE_MAX_FILES", store.DefaultMaxFiles); err != nil {
 		return c, err
 	}

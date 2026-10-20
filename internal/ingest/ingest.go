@@ -44,12 +44,12 @@ type Service struct {
 	// Lease is how long a fetcher holds a task before it returns to the
 	// queue; DefaultLease.
 	Lease time.Duration
-	// Attempts is how many failed fetches drop a hash from the queue;
+	// Attempts is how many timed-out fetches drop a hash from the queue;
 	// DefaultAttempts. A dropped hash is not rejected; it is dead for the
-	// queue's DeadFor.
+	// queue's DeadFor. A fetch that finds no peers drops its hash at once.
 	Attempts int
-	// Backoff is the wait before a failed hash is leased again, doubled for
-	// each failure before; DefaultBackoff.
+	// Backoff is the wait before a timed-out hash is leased again, doubled
+	// for each timeout before; DefaultBackoff.
 	Backoff time.Duration
 	// Poll is how often a Fetch stream with credit looks for free tasks
 	// besides when hashes are queued or released; DefaultPoll.

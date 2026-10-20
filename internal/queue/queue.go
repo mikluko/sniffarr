@@ -40,9 +40,10 @@ type Sighting struct {
 }
 
 const (
-	DefaultMaxSize = 1000000
-	DefaultMaxAge  = 24 * time.Hour
-	DefaultDeadFor = 7 * 24 * time.Hour
+	DefaultMaxSize    = 1000000
+	DefaultMaxAge     = 24 * time.Hour
+	DefaultDeadFor    = 7 * 24 * time.Hour
+	DefaultNoPeersFor = 24 * time.Hour
 )
 
 // Options bound a Queue. Zero fields take the default named in their doc.
@@ -52,9 +53,12 @@ type Options struct {
 	// MaxAge is how long a hash may wait in the queue before Trim evicts it;
 	// DefaultMaxAge.
 	MaxAge time.Duration
-	// DeadFor is how long an evicted hash, or one dropped after its last
+	// DeadFor is how long a hash Trim evicts, or one dropped after its last
 	// failed attempt, is kept out of the queue; DefaultDeadFor.
 	DeadFor time.Duration
+	// NoPeersFor is how long a hash dropped by NoPeers is kept out of the
+	// queue; DefaultNoPeersFor.
+	NoPeersFor time.Duration
 	// Meter records the queue's metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
 }
@@ -79,6 +83,9 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Queue, error) {
 	}
 	if opts.DeadFor <= 0 {
 		opts.DeadFor = DefaultDeadFor
+	}
+	if opts.NoPeersFor <= 0 {
+		opts.NoPeersFor = DefaultNoPeersFor
 	}
 	if opts.Meter == nil {
 		opts.Meter = otel.GetMeterProvider()
@@ -111,10 +118,10 @@ func discovery(priority int) string {
 	return Sample
 }
 
-// Enqueue queues every sighted hash neither queued nor dead, and returns how
-// many it queued and how many it knew. A queued sample sighted by announce
-// moves ahead to the announce queue. The queue may outgrow MaxSize until the
-// next Trim.
+// Enqueue queues every sighted hash not yet queued, and returns how many it
+// queued and how many it knew. A dead hash is queued only when sighted by
+// announce, which revives it. A queued sample sighted by announce moves ahead
+// to the announce queue. The queue may outgrow MaxSize until the next Trim.
 func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time) (queued, known int, err error) {
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
 		for _, g := range sightings {
@@ -123,8 +130,13 @@ func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 				return err
 			}
 			if dead {
-				known++
-				continue
+				if g.Discovery != Announce {
+					known++
+					continue
+				}
+				if _, err := tx.ExecContext(ctx, "DELETE FROM dead WHERE infohash = ?", g.Hash[:]); err != nil {
+					return err
+				}
 			}
 			res, err := tx.ExecContext(ctx, "UPDATE queue SET priority = min(priority, ?) WHERE infohash = ?", priority(g.Discovery), g.Hash[:])
 			if err != nil {
@@ -192,9 +204,13 @@ func (q *Queue) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 	if err != nil {
 		return Trimmed{}, err
 	}
-	q.evictions.Add(ctx, int64(t.Aged), metric.WithAttributes(attribute.String("sniffarr.queue.eviction", "age")))
-	q.evictions.Add(ctx, int64(t.Oversize), metric.WithAttributes(attribute.String("sniffarr.queue.eviction", "size")))
+	q.evictions.Add(ctx, int64(t.Aged), evictionAttr("age"))
+	q.evictions.Add(ctx, int64(t.Oversize), evictionAttr("size"))
 	return t, nil
+}
+
+func evictionAttr(why string) metric.AddOption {
+	return metric.WithAttributes(attribute.String("sniffarr.queue.eviction", why))
 }
 
 // evict moves the queued hashes whose ids selectIDs returns into the dead set
@@ -323,6 +339,23 @@ func (q *Queue) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 		return err
 	})
 	return dropped, err
+}
+
+// NoPeers drops the hash leased to owner, which nobody was found sharing,
+// from the queue at once and keeps it dead for NoPeersFor. A hash not leased
+// to owner is left as is.
+func (q *Queue) NoPeers(ctx context.Context, h Hash, owner int64, now time.Time) error {
+	var n int
+	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
+		var err error
+		n, err = evict(ctx, tx, "SELECT id FROM queue WHERE infohash = ? AND lease_owner = ?", now.Add(q.opts.NoPeersFor).UnixMilli(), h[:], owner)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	q.evictions.Add(ctx, int64(n), evictionAttr("no_peers"))
+	return nil
 }
 
 func (q *Queue) observe(mp metric.MeterProvider) error {

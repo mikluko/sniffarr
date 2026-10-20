@@ -28,12 +28,14 @@ and never announces itself into a swarm.
 The queue serves announced infohashes before sampled ones, then the oldest
 first. It lives in the same SQLite database and survives restarts; a task
 whose fetcher goes away, or whose lease expires, goes back to the queue. A
-task that fails is retried after a backoff and dropped after a few attempts.
+task whose torrent has no peers is dropped at once. A task whose metadata
+times out is retried after a backoff and dropped after a few attempts.
 The queue is bounded: once a minute the server evicts the infohashes that have
 waited too long, then the ones beyond the size limit, sampled ones before
 announced ones and the oldest first. A dropped or evicted infohash is kept out
-of the queue for a while, then forgotten; it is not rejected, and a later
-sighting queues it again.
+of the queue for a while, a shorter one when it had no peers, then forgotten.
+It is not rejected: an announce queues it again at once, and a sample once it
+is forgotten.
 
 The server passes fetched metadata through a first filter by name and file
 extensions, rejecting what is never worth classifying: adult content,
@@ -113,11 +115,12 @@ in the `Authorization` header; `/healthz` needs none.
 | `SNIFFARR_SEARCH_CLASSIFY_MAX`     | `20`             | Candidates one search has classified at most                                                                           |
 | `SNIFFARR_SEARCH_CLASSIFY_WAIT`    | `2s`             | How long a search waits for them                                                                                       |
 | `SNIFFARR_FETCH_LEASE`             | `1m`             | How long a fetcher may hold a task                                                                                     |
-| `SNIFFARR_FETCH_ATTEMPTS`          | `3`              | Failed fetches after which an infohash is dropped                                                                      |
-| `SNIFFARR_FETCH_BACKOFF`           | `10m`            | Wait before retrying a failed task, doubled per failure                                                                |
+| `SNIFFARR_FETCH_ATTEMPTS`          | `3`              | Timed-out fetches after which an infohash is dropped                                                                   |
+| `SNIFFARR_FETCH_BACKOFF`           | `10m`            | Wait before retrying a timed-out task, doubled per timeout                                                             |
 | `SNIFFARR_QUEUE_MAX_SIZE`          | `1000000`        | Infohashes the queue keeps                                                                                             |
 | `SNIFFARR_QUEUE_MAX_AGE`           | `24h`            | How long an infohash may wait in the queue                                                                             |
-| `SNIFFARR_QUEUE_DEAD_FOR`          | `168h`           | How long a dropped or evicted infohash stays out                                                                       |
+| `SNIFFARR_QUEUE_DEAD_FOR`          | `168h`           | How long an evicted infohash, or one dropped after its last attempt, stays out                                         |
+| `SNIFFARR_QUEUE_NO_PEERS_FOR`      | `24h`            | How long an infohash dropped for having no peers stays out                                                             |
 | `SNIFFARR_STORE_MAX_FILES`         | `20`             | Files stored per torrent, the largest ones                                                                             |
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
@@ -194,9 +197,9 @@ BitTorrent peer address appears in spans, attributes or logs.
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
 `sniffarr.discovery` is `announce` or `sample`; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
-`sniffarr.queue.eviction` is `age` or `size`; `sniffarr.classify.layer` is
-`rules`, `reuse` or `jev`; `sniffarr.search.lazy.result` is `in_time`, `late`
-or `failed`.
+`sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
+`sniffarr.classify.layer` is `rules`, `reuse` or `jev`;
+`sniffarr.search.lazy.result` is `in_time`, `late` or `failed`.
 
 ## Container image
 

@@ -153,15 +153,18 @@ func (s *Service) result(ctx context.Context, owner int64, r *sniffarrv1.Result)
 		switch o.Failure {
 		case sniffarrv1.Failure_FAILURE_NO_PEERS:
 			s.metrics().results.Add(ctx, 1, outcome("no_peers"))
+			if err := s.Queue.NoPeers(ctx, queue.Hash(h), owner, s.now()); err != nil {
+				return s.internal(ctx, "no peers", err)
+			}
+			return nil
 		case sniffarrv1.Failure_FAILURE_TIMEOUT:
 			s.metrics().results.Add(ctx, 1, outcome("timeout"))
-		default:
-			return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("failure %v", o.Failure))
+			if _, err := s.Queue.Fail(ctx, queue.Hash(h), owner, s.now(), or(s.Attempts, DefaultAttempts), or(s.Backoff, DefaultBackoff)); err != nil {
+				return s.internal(ctx, "fail", err)
+			}
+			return nil
 		}
-		if _, err := s.Queue.Fail(ctx, queue.Hash(h), owner, s.now(), or(s.Attempts, DefaultAttempts), or(s.Backoff, DefaultBackoff)); err != nil {
-			return s.internal(ctx, "fail", err)
-		}
-		return nil
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("failure %v", o.Failure))
 	}
 	return connect.NewError(connect.CodeInvalidArgument, errors.New("result without outcome"))
 }

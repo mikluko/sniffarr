@@ -50,5 +50,33 @@ func TestResultOutlivesStream(t *testing.T) {
 	require.NoError(t, q.Release(ctx, 1))
 	again, _, err := q.Lease(ctx, 2, 2, now, time.Minute)
 	require.NoError(t, err)
-	require.Empty(t, again, "the failure's backoff holds 1, and 2 is done")
+	require.Empty(t, again, "1 is dead for having no peers, and 2 is done")
+}
+
+func TestResultFailures(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	q, err := queue.New(ctx, db, queue.Options{})
+	require.NoError(t, err)
+	now := time.Now()
+	s := &Service{Queue: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	_, _, err = q.Enqueue(ctx, []queue.Sighting{{Hash: queue.Hash{1}, Discovery: queue.Sample}, {Hash: queue.Hash{2}, Discovery: queue.Sample}}, now)
+	require.NoError(t, err)
+	_, _, err = q.Lease(ctx, 1, 2, now, time.Minute)
+	require.NoError(t, err)
+
+	require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(1),
+		Outcome: &sniffarrv1.Result_Failure{Failure: sniffarrv1.Failure_FAILURE_NO_PEERS}}))
+	require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(2),
+		Outcome: &sniffarrv1.Result_Failure{Failure: sniffarrv1.Failure_FAILURE_TIMEOUT}}))
+
+	_, err = q.Discovery(ctx, queue.Hash{1})
+	require.ErrorIs(t, err, queue.ErrNotQueued, "no peers drops the hash at once")
+	_, err = q.Discovery(ctx, queue.Hash{2})
+	require.NoError(t, err, "a timeout is retried")
+	again, _, err := q.Lease(ctx, 2, 2, now.Add(DefaultBackoff), time.Minute)
+	require.NoError(t, err)
+	require.Equal(t, []queue.Hash{{2}}, again)
 }

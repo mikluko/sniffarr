@@ -306,7 +306,7 @@ func TestFetchRetryAndForget(t *testing.T) {
 	f := openFetch(t, ingest)
 	f.credit(1)
 	f.expect(1)
-	f.failure(1, sniffarrv1.Failure_FAILURE_NO_PEERS)
+	f.failure(1, sniffarrv1.Failure_FAILURE_TIMEOUT)
 	f.credit(1)
 	f.expect(1)
 	f.failure(1, sniffarrv1.Failure_FAILURE_TIMEOUT)
@@ -320,6 +320,28 @@ func TestFetchRetryAndForget(t *testing.T) {
 	res, err = sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), res.GetNew(), "then queues again: it was not rejected")
+	f.expect(1)
+}
+
+func TestFetchNoPeers(t *testing.T) {
+	srv, hc := start(t, Config{Attempts: 2, Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+	require.NoError(t, err)
+
+	f := openFetch(t, ingest)
+	f.credit(1)
+	f.expect(1)
+	f.failure(1, sniffarrv1.Failure_FAILURE_NO_PEERS)
+	f.credit(1)
+	f.none()
+
+	res, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), res.GetKnown(), "dropped at the first report, and a sample leaves it dead")
+	res, err = sight(t, ingest, sniffarrv1.Source_SOURCE_ANNOUNCE, 1)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), res.GetNew(), "an announce revives it")
 	f.expect(1)
 }
 
