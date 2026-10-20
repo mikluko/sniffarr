@@ -12,6 +12,7 @@ import (
 
 	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/dht/v2/krpc"
+	peer_store "github.com/anacrolix/dht/v2/peer-store"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"go.opentelemetry.io/otel/metric"
@@ -184,7 +185,7 @@ func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers 
 	c.DialRateLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
 	c.ConfigureAnacrolixDhtServer = func(sc *dht.ServerConfig) {
 		sc.SendLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
-		sc.PeerStore = nil
+		sc.PeerStore = noPeers{}
 		sc.Passive = cfg.Passive
 		if offer != nil {
 			sc.OnAnnouncePeer = func(h metainfo.Hash, ip net.IP, port int, portOk bool) {
@@ -198,6 +199,15 @@ func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers 
 	c.Slogger = slog.New(slog.DiscardHandler)
 	return c
 }
+
+// noPeers is the DHT node's peer store: the node issues get_peers tokens,
+// and so receives announce_peer, only with a store set, and this one keeps
+// no peer and serves none.
+type noPeers struct{}
+
+func (noPeers) AddPeer(peer_store.InfoHash, krpc.NodeAddr) {}
+
+func (noPeers) GetPeers(peer_store.InfoHash) []krpc.NodeAddr { return nil }
 
 func (n *Network) observe(m metric.Meter) error {
 	n.answers = counter(m, "sniffarr.dht.sample_answers", "{answer}", "sample_infohashes queries answered.")
