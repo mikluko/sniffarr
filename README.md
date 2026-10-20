@@ -79,6 +79,23 @@ of an audio track in the language to 1; otherwise Jev answers it, one question
 per language. Without languages nothing about audio is recorded, asked or
 returned, and the background classifier has nothing to select.
 
+Titles are a second extension, set by `TMDB_API_KEY`: a v3 API key or an API
+read access token of [TMDB](https://www.themoviedb.org). It matches title keys,
+not torrents, to works, so every release under a key shares its match. A
+background matcher walks the keys of movies and series without a match, newest
+torrents first, and a search matches the unmatched keys of its candidates
+within the same wait as its classification. Each title of the newest torrent's
+name, both in a `Русское / Original` name, is searched on TMDB as a movie or a
+series after the torrent's kind, in English and, when it has Cyrillic letters,
+in Russian too. A candidate fits when one of its titles equals one of the
+name's, ignoring case and punctuation, and, when the key has a year, its year
+is the key's or one off. One fit is the match; among several, Jev picks one or
+none, within the classifier's daily budget and its search reserve. Without
+`TYPESAFE_API_KEY` several fits match nothing. A match records the work's TMDB,
+IMDb, TVDB (series) and Wikidata IDs; a key that matched nothing is looked up
+again after `SNIFFARR_TITLES_RETRY`, and one that matched never is. Without the
+key nothing is matched and releases carry no IDs.
+
 ## API
 
 Both API groups are [ConnectRPC](https://connectrpc.com) services, defined in
@@ -104,8 +121,9 @@ in the `Authorization` header; `/healthz` needs none.
   paths, and filters by kind and by the probability of an audio track in one
   language. It has Jev examine a bounded number of its candidates first, so
   the filters apply to what is known once that is done. Each release carries
-  the layer that decided its kind, whether Jev has examined it, and its audio
-  entries.
+  the layer that decided its kind, whether Jev has examined it, its audio
+  entries, and its work's IDs; given one ID, `Search` returns the releases of
+  that work.
 - `Get` returns one release by infohash.
 
 ## Configuration
@@ -135,6 +153,11 @@ in the `Authorization` header; `/healthz` needs none.
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
 | `SNIFFARR_AUDIO_LANGUAGES`         | `ru`             | Audio languages, BCP-47 tags and comma-separated; set but empty is none. An unknown tag fails startup                  |
+| `TMDB_API_KEY`                     |                  | TMDB API key or read access token; when unset, no titles are matched                                                   |
+| `SNIFFARR_TITLES_CONCURRENCY`      | `2`              | Background title matches at once                                                                                       |
+| `SNIFFARR_TITLES_RATE`             | `20`             | TMDB requests a second at most                                                                                         |
+| `SNIFFARR_TITLES_RETRY`            | `720h`           | How long a title key that matched nothing waits before it is looked up again                                           |
+| `SNIFFARR_SEARCH_TITLES_MAX`       | `5`              | Title keys one search has matched at most                                                                              |
 | `SNIFFARR_LOG_LEVEL`               | `info`           | Level to log at: `debug`, `info`, `warn` or `error`                                                                    |
 
 The database runs in WAL mode and its schema migrates on start; leases left
@@ -205,6 +228,9 @@ BitTorrent peer address appears in spans, attributes or logs.
 | `sniffapi` | `sniffarr.search.lazy.classifications` | `{torrent}`  | `sniffarr.search.lazy.result`              |
 | `sniffapi` | `sniffarr.classify.tokens`             | `{token}`    |                                            |
 | `sniffapi` | `sniffarr.classify.errors`             | `{error}`    | `sniffarr.classify.error`                  |
+| `sniffapi` | `sniffarr.titles.matches`              | `{title}`    | `sniffarr.titles.layer`                    |
+| `sniffapi` | `sniffarr.titles.requests`             | `{request}`  | `sniffarr.titles.status`                   |
+| `sniffapi` | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
 | `sniffdht` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
 | `sniffdht` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
 | `sniffdht` | `sniffarr.sniff.sightings`             | `{infohash}` | `sniffarr.discovery`                       |
@@ -217,7 +243,9 @@ BitTorrent peer address appears in spans, attributes or logs.
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
 `sniffarr.classify.layer` is `rules`, `reuse` or `jev`;
-`sniffarr.search.lazy.result` is `in_time`, `late` or `failed`.
+`sniffarr.search.lazy.result` is `in_time`, `late` or `failed`;
+`sniffarr.titles.layer` is `tmdb`, `jev` or `none`; `sniffarr.titles.status` is
+the HTTP status of TMDB's answer, or `error` without one.
 
 ## Container image
 
