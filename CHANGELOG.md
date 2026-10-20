@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-20
+
+### Fixed
+
+- A torrent stored by `-api` gets its `work_key`, `year` and `season` at insertion; a stored torrent that has none takes them at the next start.
+- The DHT node of `-sniff` puts a token in its `get_peers` replies, so it receives `announce_peer`: torrents are discovered with `SOURCE_ANNOUNCE` and their announcing peers are counted. It still serves no peers.
+
 ## [0.7.0] - 2026-10-20
 
 ### Added
@@ -130,7 +137,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/mikluko/sniffarr/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/mikluko/sniffarr/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mikluko/sniffarr/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mikluko/sniffarr/compare/v0.4.0...v0.5.0
