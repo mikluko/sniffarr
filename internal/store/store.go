@@ -79,7 +79,10 @@ type Release struct {
 	Source           string
 	SourceConfidence float64
 	// Audio holds the entries of Options.Languages, in tag order.
-	Audio []Audio
+	Audio    []Audio
+	TitleKey string
+	// Title is the match of TitleKey when Options.Titles is set.
+	Title Title
 	// Classified reports whether the classifier has examined the torrent.
 	Classified bool
 	FirstSeen  time.Time
@@ -119,6 +122,8 @@ type Options struct {
 	// Languages are the audio languages Release.Audio holds and Unclassified
 	// selects by; none leaves both without audio.
 	Languages []string
+	// Titles has Release.Title read.
+	Titles bool
 	// Meter records the store's metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
 }
@@ -329,12 +334,14 @@ type Query struct {
 	// releases the classifier has not examined whose kind or audio
 	// probability is unknown.
 	Unexamined bool
-	Limit      int
+	// ID, when set, selects releases whose title key is matched to it.
+	ID    *ExternalID
+	Limit int
 }
 
 const releaseColumns = `t.id, t.infohash, t.name, t.size, t.file_count, coalesce(t.kind, ''), coalesce(t.kind_layer, ''),
 	coalesce(t.kind_confidence, 0), coalesce(t.source, ''), coalesce(t.source_confidence, 0),
-	t.classified_at IS NOT NULL, t.first_seen, t.last_seen`
+	t.classified_at IS NOT NULL, t.first_seen, t.last_seen, coalesce(t.title_key, '')`
 
 // Search returns releases matching q, best text match first, or most
 // recently seen first when q has no text.
@@ -384,6 +391,10 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 		}
 		where = append(where, cond)
 	}
+	if q.ID != nil {
+		where = append(where, "t.title_key IN (SELECT i.title_key FROM title_ids i WHERE i.provider = ? AND i.id = ?)")
+		args = append(args, q.ID.Provider, q.ID.ID)
+	}
 	stmt := "SELECT " + releaseColumns + " FROM " + from
 	if len(where) > 0 {
 		stmt += " WHERE " + strings.Join(where, " AND ")
@@ -406,7 +417,10 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return nil, err
 	}
-	return out, s.audio(ctx, out)
+	if err := s.audio(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, s.titles(ctx, out)
 }
 
 // Get returns the stored release with the hash, or ErrNotFound.
@@ -419,7 +433,7 @@ func (s *Store) Get(ctx context.Context, h Hash) (Release, error) {
 		return Release{}, err
 	}
 	rs := []Release{r}
-	if err := s.audio(ctx, rs); err != nil {
+	if err := errors.Join(s.audio(ctx, rs), s.titles(ctx, rs)); err != nil {
 		return Release{}, err
 	}
 	return rs[0], nil
@@ -466,7 +480,7 @@ func scanRelease(row interface{ Scan(...any) error }) (Release, error) {
 	var hash []byte
 	var first, last int64
 	err := row.Scan(&r.ID, &hash, &r.Name, &r.Size, &r.FileCount, &r.Kind, &r.KindLayer, &r.KindConfidence, &r.Source, &r.SourceConfidence,
-		&r.Classified, &first, &last)
+		&r.Classified, &first, &last, &r.TitleKey)
 	if err != nil {
 		return Release{}, err
 	}
