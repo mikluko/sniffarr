@@ -18,7 +18,6 @@ import (
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/names"
-	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -40,7 +39,7 @@ const maxCredit = 10000
 // the default named in their doc.
 type Service struct {
 	Store *store.Store
-	Queue *queue.Queue
+	Queue *store.Queue
 	Log   *slog.Logger
 	// Lease is how long a fetcher holds a task before it returns to the
 	// queue; DefaultLease.
@@ -92,7 +91,7 @@ func or[T int | time.Duration](v, d T) T {
 
 func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffarrv1.SightRequest]) (*connect.Response[sniffarrv1.SightResponse], error) {
 	var res sniffarrv1.SightResponse
-	batch := make([]queue.Sighting, 0, sightBatch)
+	batch := make([]store.Sighting, 0, sightBatch)
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
@@ -122,7 +121,7 @@ func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffa
 		if err != nil {
 			return nil, err
 		}
-		batch = append(batch, queue.Sighting{Hash: queue.Hash(h), Discovery: d})
+		batch = append(batch, store.Sighting{Hash: store.Hash(h), Discovery: d})
 		if len(batch) == sightBatch {
 			if err := flush(); err != nil {
 				return nil, err
@@ -141,7 +140,7 @@ func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffa
 // sight enqueues the sightings of hashes neither stored nor rejected, and
 // returns how many it queued, how many were known, and, per sighting in
 // order, whether its hash is a stored torrent.
-func (s *Service) sight(ctx context.Context, batch []queue.Sighting) (queued, known int, stored []bool, err error) {
+func (s *Service) sight(ctx context.Context, batch []store.Sighting) (queued, known int, stored []bool, err error) {
 	hashes := make([]store.Hash, len(batch))
 	for i, g := range batch {
 		hashes[i] = store.Hash(g.Hash)
@@ -174,8 +173,8 @@ func (s *Service) store(ctx context.Context, h store.Hash, t *sniffarrv1.Torrent
 	if t.GetName() == "" {
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("torrent %x has no name", h))
 	}
-	d, err := s.Queue.Discovery(ctx, queue.Hash(h))
-	if errors.Is(err, queue.ErrNotQueued) {
+	d, err := s.Queue.Discovery(ctx, store.Hash(h))
+	if errors.Is(err, store.ErrNotQueued) {
 		return nil
 	}
 	if err != nil {
@@ -184,7 +183,7 @@ func (s *Service) store(ctx context.Context, h store.Hash, t *sniffarrv1.Torrent
 	if err := s.keep(ctx, h, d, t); err != nil {
 		return err
 	}
-	if err := s.Queue.Complete(ctx, queue.Hash(h)); err != nil {
+	if err := s.Queue.Complete(ctx, store.Hash(h)); err != nil {
 		return s.internal(ctx, "complete", err)
 	}
 	return nil
@@ -278,9 +277,9 @@ func audioEntries(langs []audio.Language, name string, files []rules.File) []sto
 func discovery(src sniffarrv1.Source) (string, error) {
 	switch src {
 	case sniffarrv1.Source_SOURCE_SAMPLE:
-		return queue.Sample, nil
+		return store.Sample, nil
 	case sniffarrv1.Source_SOURCE_ANNOUNCE:
-		return queue.Announce, nil
+		return store.Announce, nil
 	}
 	return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("source %v", src))
 }

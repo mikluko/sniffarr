@@ -10,7 +10,7 @@ import (
 	"connectrpc.com/connect"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/queue"
+	"github.com/mikluko/sniffarr/internal/store"
 )
 
 // releaseTimeout bounds freeing a finished stream's leases.
@@ -153,13 +153,13 @@ func (s *Service) result(ctx context.Context, owner int64, r *sniffarrv1.Result)
 		switch o.Failure {
 		case sniffarrv1.Failure_FAILURE_NO_PEERS:
 			s.metrics().results.Add(ctx, 1, outcome("no_peers"))
-			if err := s.Queue.NoPeers(ctx, queue.Hash(h), owner, s.now()); err != nil {
+			if err := s.Queue.NoPeers(ctx, store.Hash(h), owner, s.now()); err != nil {
 				return s.internal(ctx, "no peers", err)
 			}
 			return nil
 		case sniffarrv1.Failure_FAILURE_TIMEOUT:
 			s.metrics().results.Add(ctx, 1, outcome("timeout"))
-			if _, err := s.Queue.Fail(ctx, queue.Hash(h), owner, s.now(), or(s.Attempts, DefaultAttempts), or(s.Backoff, DefaultBackoff)); err != nil {
+			if _, err := s.Queue.Fail(ctx, store.Hash(h), owner, s.now(), or(s.Attempts, DefaultAttempts), or(s.Backoff, DefaultBackoff)); err != nil {
 				return s.internal(ctx, "fail", err)
 			}
 			return nil

@@ -1,4 +1,4 @@
-package queue
+package store
 
 import (
 	"context"
@@ -13,19 +13,17 @@ import (
 	"github.com/mikluko/sniffarr/internal/database"
 )
 
-var t0 = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
-
-func open(t *testing.T, opts ...Options) *Queue {
+func openQueue(t *testing.T, opts ...QueueOptions) *Queue {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	var o Options
+	var o QueueOptions
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	q, err := New(ctx, db, o)
+	q, err := NewQueue(ctx, db, o)
 	require.NoError(t, err)
 	return q
 }
@@ -35,10 +33,6 @@ func enqueueAt(t *testing.T, q *Queue, at time.Time, discovery string, bs ...byt
 	queued, known, err := q.Enqueue(context.Background(), sightings(discovery, bs...), at)
 	require.NoError(t, err)
 	return queued, known
-}
-
-func hash(b byte) Hash {
-	return Hash{b}
 }
 
 func sightings(discovery string, bs ...byte) []Sighting {
@@ -64,7 +58,7 @@ func lease(t *testing.T, q *Queue, owner int64, n int, at time.Time) []Hash {
 }
 
 func TestEnqueue(t *testing.T) {
-	q := open(t)
+	q := openQueue(t)
 	queued, known := enqueue(t, q, Sample, 1, 2, 2)
 	require.Equal(t, 2, queued)
 	require.Equal(t, 1, known)
@@ -80,7 +74,7 @@ func TestEnqueue(t *testing.T) {
 }
 
 func TestLeaseOrder(t *testing.T) {
-	q := open(t)
+	q := openQueue(t)
 	enqueue(t, q, Sample, 1, 2)
 	enqueue(t, q, Announce, 3)
 	enqueue(t, q, Sample, 4)
@@ -93,7 +87,7 @@ func TestLeaseOrder(t *testing.T) {
 
 func TestLeaseExpiryAndRelease(t *testing.T) {
 	ctx := context.Background()
-	q := open(t)
+	q := openQueue(t)
 	enqueue(t, q, Sample, 1, 2)
 	require.Len(t, lease(t, q, 1, 2, t0), 2)
 
@@ -114,7 +108,7 @@ func TestLeaseExpiryAndRelease(t *testing.T) {
 
 func TestFail(t *testing.T) {
 	ctx := context.Background()
-	q := open(t)
+	q := openQueue(t)
 	enqueue(t, q, Sample, 1)
 	require.Len(t, lease(t, q, 1, 1, t0), 1)
 
@@ -150,7 +144,7 @@ func TestFail(t *testing.T) {
 
 func TestComplete(t *testing.T) {
 	ctx := context.Background()
-	q := open(t)
+	q := openQueue(t)
 	enqueue(t, q, Sample, 1, 2)
 	require.NoError(t, q.Complete(ctx, hash(1)))
 	n, err := q.Len(ctx)
@@ -160,7 +154,7 @@ func TestComplete(t *testing.T) {
 
 func TestTrimBySize(t *testing.T) {
 	ctx := context.Background()
-	q := open(t, Options{MaxSize: 3})
+	q := openQueue(t, QueueOptions{MaxSize: 3})
 	enqueueAt(t, q, t0, Announce, 1)
 	enqueueAt(t, q, t0.Add(time.Second), Sample, 2, 3)
 	enqueueAt(t, q, t0.Add(2*time.Second), Announce, 4)
@@ -188,7 +182,7 @@ func TestTrimBySize(t *testing.T) {
 
 func TestTrimByAgeAndDeadExpiry(t *testing.T) {
 	ctx := context.Background()
-	q := open(t, Options{MaxAge: time.Hour, DeadFor: 24 * time.Hour})
+	q := openQueue(t, QueueOptions{MaxAge: time.Hour, DeadFor: 24 * time.Hour})
 	enqueueAt(t, q, t0, Announce, 1)
 	enqueueAt(t, q, t0.Add(30*time.Minute), Sample, 2)
 
@@ -209,7 +203,7 @@ func TestTrimByAgeAndDeadExpiry(t *testing.T) {
 
 func TestTrimMetrics(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
-	q := open(t, Options{MaxSize: 1, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
+	q := openQueue(t, QueueOptions{MaxSize: 1, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
 	enqueueAt(t, q, t0, Sample, 1, 2, 3)
 	_, err := q.Trim(context.Background(), t0)
 	require.NoError(t, err)
@@ -235,65 +229,4 @@ func TestTrimMetrics(t *testing.T) {
 	require.EqualValues(t, 2, got["sniffarr.queue.evictions/size"])
 	require.EqualValues(t, 2, got["sniffarr.queue.dead"])
 	require.EqualValues(t, 1, got["sniffarr.queue.depth"])
-}
-
-func evictions(t *testing.T, reader *sdkmetric.ManualReader) map[string]int64 {
-	t.Helper()
-	var rm metricdata.ResourceMetrics
-	require.NoError(t, reader.Collect(context.Background(), &rm))
-	got := map[string]int64{}
-	for _, sm := range rm.ScopeMetrics {
-		for _, m := range sm.Metrics {
-			if m.Name != "sniffarr.queue.evictions" {
-				continue
-			}
-			for _, p := range m.Data.(metricdata.Sum[int64]).DataPoints {
-				why, _ := p.Attributes.Value("sniffarr.queue.eviction")
-				got[why.AsString()] += p.Value
-			}
-		}
-	}
-	return got
-}
-
-func TestNoPeers(t *testing.T) {
-	ctx := context.Background()
-	reader := sdkmetric.NewManualReader()
-	q := open(t, Options{NoPeersFor: time.Hour, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
-	enqueue(t, q, Sample, 1)
-	require.Len(t, lease(t, q, 1, 1, t0), 1)
-
-	require.NoError(t, q.NoPeers(ctx, hash(1), 2, t0))
-	_, err := q.Discovery(ctx, hash(1))
-	require.NoError(t, err, "a report from another owner is ignored")
-
-	require.NoError(t, q.NoPeers(ctx, hash(1), 1, t0))
-	_, err = q.Discovery(ctx, hash(1))
-	require.ErrorIs(t, err, ErrNotQueued, "dropped at the first report")
-	require.EqualValues(t, 1, evictions(t, reader)["no_peers"])
-
-	queued, known := enqueueAt(t, q, t0.Add(59*time.Minute), Sample, 1)
-	require.Zero(t, queued, "a sample leaves it dead")
-	require.Equal(t, 1, known)
-	queued, _ = enqueueAt(t, q, t0.Add(time.Hour), Sample, 1)
-	require.Equal(t, 1, queued, "for NoPeersFor, not DeadFor")
-}
-
-func TestAnnounceRevives(t *testing.T) {
-	ctx := context.Background()
-	q := open(t)
-	enqueue(t, q, Sample, 1, 2)
-	require.Len(t, lease(t, q, 1, 2, t0), 2)
-	require.NoError(t, q.NoPeers(ctx, hash(1), 1, t0))
-	dropped, err := q.Fail(ctx, hash(2), 1, t0, 1, time.Minute)
-	require.NoError(t, err)
-	require.True(t, dropped)
-
-	queued, known := enqueueAt(t, q, t0.Add(time.Minute), Announce, 1, 2)
-	require.Equal(t, 2, queued, "an announce revives any dead hash")
-	require.Zero(t, known)
-	d, err := q.Discovery(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, Announce, d)
-	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, 2, 2, t0.Add(time.Minute)), "revived with no attempts behind it")
 }

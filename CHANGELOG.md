@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-20
+
+### Changed
+
+- The tables are named after their module: `torrents` → `torrent_releases`, `torrents_fts` → `torrent_releases_fts`, `files` → `torrent_files`, `audio` → `torrent_audio`, `queue` → `ingest_queue`, `dead` → `ingest_dead`, `rejected` → `ingest_rejected`, `token_usage` → `ingest_token_usage`, `peers_hour` → `stat_peers_by_hour`, `peers_day` → `stat_peers_by_day`, `top` → `stat_top`; `tmdb_works`, `tmdb_ids`, `settings` and `schema_migrations` keep their names. A migration renames them with their indexes, and the index `title_ids_id` becomes `tmdb_ids_id`. The queue metrics report the instrumentation scope `github.com/mikluko/sniffarr/internal/store`.
+
 ## [0.11.0] - 2026-10-20
 
 ### Changed
@@ -169,7 +175,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/mikluko/sniffarr/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/mikluko/sniffarr/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mikluko/sniffarr/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/mikluko/sniffarr/compare/v0.8.0...v0.9.0

@@ -16,7 +16,6 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/ingest"
-	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -30,7 +29,7 @@ const MaxMessage = 32 << 20
 // those of ingest.Service.
 type Config struct {
 	Store       *store.Store
-	Queue       *queue.Queue
+	Queue       *store.Queue
 	IngestToken string
 	SearchToken string
 	Lease       time.Duration

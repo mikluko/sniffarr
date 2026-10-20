@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"net/netip"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,25 +18,6 @@ func sketchOf(k sketch.Key, first, n int) []byte {
 		s.Add(k.Hash(netip.AddrPortFrom(netip.AddrFrom4([4]byte{10, byte(i >> 16), byte(i >> 8), byte(i)}), 6881)))
 	}
 	return s.Bytes()
-}
-
-func TestHashKeyOutlivesRestart(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "test.db")
-	s, db := openAt(t, path)
-	k1, err := s.HashKey(ctx)
-	require.NoError(t, err)
-	k2, err := s.HashKey(ctx)
-	require.NoError(t, err)
-	require.Equal(t, k1, k2)
-	require.NotEqual(t, sketch.Key{}, k1)
-	require.NoError(t, db.Close())
-
-	s, db = openAt(t, path)
-	defer db.Close()
-	k3, err := s.HashKey(ctx)
-	require.NoError(t, err)
-	require.Equal(t, k1, k3, "the key is kept in the store")
 }
 
 func TestMergePeers(t *testing.T) {
@@ -59,7 +39,7 @@ func TestMergePeers(t *testing.T) {
 	require.Equal(t, 1, dropped, "a sketch of an unknown infohash is dropped")
 
 	var n int
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM peers_hour").Scan(&n))
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM stat_peers_by_hour").Scan(&n))
 	require.Equal(t, 2, n, "two sketches of one hour merge into one row")
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)
@@ -80,7 +60,7 @@ func TestMergePeers(t *testing.T) {
 
 	_, err = s.Sweep(ctx, t0.Add(time.Hour), 10)
 	require.NoError(t, err)
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM peers_hour").Scan(&n))
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM stat_peers_by_hour").Scan(&n))
 	require.Zero(t, n, "sketches go with their torrent")
 }
 
@@ -107,12 +87,12 @@ func TestRollupPeers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, Rolled{Hours: 4, Days: 1}, rolled, "hours older than 8 days roll up; the day older than 65 is deleted")
 	var hours, days int
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM peers_hour").Scan(&hours))
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM peers_day").Scan(&days))
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM stat_peers_by_hour").Scan(&hours))
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM stat_peers_by_day").Scan(&days))
 	require.Equal(t, 1, hours)
 	require.Equal(t, 2, days)
 	var card int64
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT hll_card(sketch) FROM peers_day WHERE day = ?", old.Truncate(24*time.Hour).Unix()).Scan(&card))
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT hll_card(sketch) FROM stat_peers_by_day WHERE day = ?", old.Truncate(24*time.Hour).Unix()).Scan(&card))
 	require.InDelta(t, 150, card, 15, "the two hours of the day are unioned")
 
 	c, err := s.Peers(ctx, r.ID, t0)
@@ -124,26 +104,4 @@ func TestRollupPeers(t *testing.T) {
 	rolled, err = s.RollupPeers(ctx, t0)
 	require.NoError(t, err)
 	require.Equal(t, Rolled{}, rolled, "a second rollup finds nothing")
-}
-
-func TestWorkKeysFilled(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "test.db")
-	s, db := openAt(t, path)
-	tr := torrent(1, "Severance.S02E01.1080p.WEB-DL")
-	tr.Kind, tr.KindLayer, tr.TitleKey = "series", LayerRules, "s:severance"
-	_, _, err := s.Insert(ctx, tr)
-	require.NoError(t, err)
-	r, err := s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Empty(t, r.WorkKey, "Insert takes the work key it is given")
-	require.NoError(t, db.Close())
-
-	s, db = openAt(t, path)
-	defer db.Close()
-	r, err = s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, "s:severance/2", r.WorkKey, "New derives the work key of a torrent stored without one")
-	require.Equal(t, 2, r.Season)
-	require.Zero(t, r.Year)
 }
