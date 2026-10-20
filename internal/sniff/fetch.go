@@ -2,6 +2,7 @@ package sniff
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"strings"
@@ -222,7 +223,7 @@ func (f *Fetcher) work(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		r, outcome := f.result(h, m, err)
+		r, outcome := f.result(ctx, h, m, err)
 		f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))
 		f.metrics.duration.Record(ctx, time.Since(start).Seconds(), outcomeAttr(outcome))
 		f.metrics.inFlight.Add(ctx, -1)
@@ -246,10 +247,12 @@ func (f *Fetcher) signal() {
 	}
 }
 
-// result returns the task's result and the name of its outcome. Invalid UTF-8
-// in the name and paths is replaced by U+FFFD, which a proto string requires.
-func (f *Fetcher) result(h Hash, m Metadata, err error) (*sniffarrv1.Result, string) {
+// result returns the task's result and the name of its outcome, and logs
+// the outcome at Debug. Invalid UTF-8 in the name and paths is replaced by U+FFFD,
+// which a proto string requires.
+func (f *Fetcher) result(ctx context.Context, h Hash, m Metadata, err error) (*sniffarrv1.Result, string) {
 	r := &sniffarrv1.Result{Infohash: h[:]}
+	infohash := slog.String("infohash", hex.EncodeToString(h[:]))
 	switch {
 	case err == nil:
 		f.stats.torrents.Add(1)
@@ -258,14 +261,17 @@ func (f *Fetcher) result(h Hash, m Metadata, err error) (*sniffarrv1.Result, str
 			t.Files[i] = &sniffarrv1.File{Path: strings.ToValidUTF8(file.Path, "\uFFFD"), Size: file.Size}
 		}
 		r.Outcome = &sniffarrv1.Result_Torrent{Torrent: t}
+		f.cfg.Log.DebugContext(ctx, "fetched", infohash, "outcome", "torrent", "name", t.Name, "size", t.Size, "files", len(t.Files))
 		return r, "torrent"
 	case errors.Is(err, ErrNoPeers):
 		f.stats.noPeers.Add(1)
 		r.Outcome = &sniffarrv1.Result_Failure{Failure: sniffarrv1.Failure_FAILURE_NO_PEERS}
+		f.cfg.Log.DebugContext(ctx, "fetched", infohash, "outcome", "no_peers")
 		return r, "no_peers"
 	default:
 		f.stats.timeouts.Add(1)
 		r.Outcome = &sniffarrv1.Result_Failure{Failure: sniffarrv1.Failure_FAILURE_TIMEOUT}
+		f.cfg.Log.DebugContext(ctx, "fetched", infohash, "outcome", "timeout")
 		return r, "timeout"
 	}
 }

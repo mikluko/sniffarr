@@ -34,7 +34,10 @@ type config struct {
 	network         sniff.NetworkConfig
 	walkers         int
 	discover, fetch bool
+	logLevel        slog.Level
 }
+
+func (c config) LogLevel() slog.Level { return c.logLevel }
 
 func main() {
 	cli.Main(func() (config, error) { return load(os.Args[1:], os.Getenv, os.Stderr) }, run)
@@ -55,6 +58,7 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 	fs.DurationVar(&c.network.PeerWait, "peer-wait", sniff.DefaultPeerWait, "how long to look for a torrent's peers on the DHT")
 	fs.IntVar(&c.network.MinPeers, "min-peers", sniff.DefaultMinPeers, "peers a torrent needs within -peer-wait to have its metadata fetched")
 	fs.IntVar(&c.walkers, "walkers", sniff.DefaultWalkers, "sample_infohashes queries at once")
+	fs.TextVar(&c.logLevel, "log-level", slog.LevelInfo, "level to log at: debug, info, warn or error")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}

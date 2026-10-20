@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ func TestLoad(t *testing.T) {
 				FetchTimeout: sniff.DefaultFetchTimeout,
 			}, c.network)
 			require.Equal(t, sniff.DefaultWalkers, c.walkers)
+			require.Equal(t, slog.LevelInfo, c.logLevel)
 			require.True(t, c.discover, "both roles by default")
 			require.True(t, c.fetch)
 		}},
@@ -39,11 +41,12 @@ func TestLoad(t *testing.T) {
 			require.True(t, c.fetch)
 		}},
 		{name: "no role", env: env, args: []string{"-discover=false", "-fetch=false"}, err: "-discover and -fetch are both off: nothing to do"},
-		{name: "flags", env: env, args: []string{"-port", "6881", "-fetchers", "100", "-fetch-timeout", "30s", "-min-peers", "3"}, want: func(t *testing.T, c config) {
+		{name: "flags", env: env, args: []string{"-port", "6881", "-fetchers", "100", "-fetch-timeout", "30s", "-min-peers", "3", "-log-level", "debug"}, want: func(t *testing.T, c config) {
 			require.Equal(t, 6881, c.network.Port)
 			require.Equal(t, 100, c.network.Fetchers)
 			require.Equal(t, 30*time.Second, c.network.FetchTimeout)
 			require.Equal(t, 3, c.network.MinPeers)
+			require.Equal(t, slog.LevelDebug, c.logLevel)
 		}},
 		{name: "no URL", env: map[string]string{"SNIFFARR_INGEST_TOKEN": "secret"}, err: "SNIFFARR_URL is not set"},
 		{name: "no token", env: map[string]string{"SNIFFARR_URL": "http://sniffapi:8080"}, err: "SNIFFARR_INGEST_TOKEN is not set"},
@@ -51,6 +54,7 @@ func TestLoad(t *testing.T) {
 		{name: "bad scheme", env: map[string]string{"SNIFFARR_URL": "sniffapi:8080", "SNIFFARR_INGEST_TOKEN": "secret"}, err: "SNIFFARR_URL: want an http or https URL"},
 		{name: "not a number", env: env, args: []string{"-fetchers", "many"}, err: `invalid value "many" for flag -fetchers`},
 		{name: "zero rate", env: env, args: []string{"-rate", "0"}, err: "-fetchers, -rate, -walkers and -min-peers: want positive integers"},
+		{name: "unknown level", env: env, args: []string{"-log-level", "loud"}, err: `invalid value "loud" for flag -log-level`},
 		{name: "zero peers", env: env, args: []string{"-min-peers", "0"}, err: "-fetchers, -rate, -walkers and -min-peers: want positive integers"},
 		{name: "port out of range", env: env, args: []string{"-port", "70000"}, err: "-port: want 1 to 65535"},
 		{name: "negative wait", env: env, args: []string{"-peer-wait", "-1s"}, err: "-fetch-timeout and -peer-wait: want positive durations"},

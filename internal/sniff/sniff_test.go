@@ -3,6 +3,7 @@ package sniff
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -251,6 +252,49 @@ func TestFetcherCredit(t *testing.T) {
 	require.Equal(t, "a/b.mkv", ingest.results[hash(1)].GetTorrent().GetFiles()[0].GetPath())
 	require.Equal(t, sniffarrv1.Failure_FAILURE_NO_PEERS, ingest.results[hash(2)].GetFailure())
 	require.Equal(t, sniffarrv1.Failure_FAILURE_TIMEOUT, ingest.results[hash(3)].GetFailure())
+}
+
+// recorder is a slog.Handler that keeps the records of the fetch outcomes.
+type recorder struct {
+	mu      sync.Mutex
+	fetched []map[string]any
+}
+
+func (r *recorder) Enabled(context.Context, slog.Level) bool { return true }
+
+func (r *recorder) Handle(_ context.Context, rec slog.Record) error {
+	if rec.Message != "fetched" || rec.Level != slog.LevelDebug {
+		return nil
+	}
+	attrs := map[string]any{}
+	rec.Attrs(func(a slog.Attr) bool {
+		attrs[a.Key] = a.Value.Any()
+		return true
+	})
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.fetched = append(r.fetched, attrs)
+	return nil
+}
+
+func (r *recorder) WithAttrs([]slog.Attr) slog.Handler { return r }
+func (r *recorder) WithGroup(string) slog.Handler      { return r }
+
+func TestFetcherDebugLog(t *testing.T) {
+	ingest := newFake()
+	ingest.todo = []Hash{hash(1), hash(2), hash(3)}
+	rec := &recorder{}
+	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 1, Log: slog.New(rec)}, fakeSource{})
+	run(t, f.Run)
+
+	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 3 }, 5*time.Second, 5*time.Millisecond)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	require.Equal(t, []map[string]any{
+		{"infohash": "0100000000000000000000000000000000000000", "outcome": "torrent", "name": "torrent", "size": int64(1 << 30), "files": int64(1)},
+		{"infohash": "0200000000000000000000000000000000000000", "outcome": "no_peers"},
+		{"infohash": "0300000000000000000000000000000000000000", "outcome": "timeout"},
+	}, rec.fetched)
 }
 
 // fixedSource gives every hash the same metadata.

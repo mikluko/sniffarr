@@ -43,7 +43,10 @@ type config struct {
 	lazyMax                  int
 	lazyWait                 time.Duration
 	scripts                  rules.Scripts
+	logLevel                 slog.Level
 }
+
+func (c config) LogLevel() slog.Level { return c.logLevel }
 
 // defaultRetention is how long a stored torrent is kept without being seen.
 const defaultRetention = 90 * 24 * time.Hour
@@ -114,6 +117,9 @@ func load(getenv func(string) string) (config, error) {
 	}
 	if c.scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
 		return c, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
+	}
+	if err := c.logLevel.UnmarshalText([]byte(or(getenv("SNIFFARR_LOG_LEVEL"), "info"))); err != nil {
+		return c, errors.New("SNIFFARR_LOG_LEVEL: want debug, info, warn or error")
 	}
 	return c, nil
 }

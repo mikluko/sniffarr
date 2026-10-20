@@ -125,6 +125,7 @@ in the `Authorization` header; `/healthz` needs none.
 | `SNIFFARR_STORE_MAX_FILES`         | `20`             | Files stored per torrent, the largest ones                                                                             |
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
+| `SNIFFARR_LOG_LEVEL`               | `info`           | Level to log at: `debug`, `info`, `warn` or `error`                                                                    |
 
 The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start. A torrent keeps its true file
@@ -150,6 +151,7 @@ retention period; a later sighting queues them again.
 | `-peer-wait`     | `8s`    | How long to look for a torrent's peers on the DHT         |
 | `-min-peers`     | `1`     | Peers needed within `-peer-wait` to fetch the metadata    |
 | `-walkers`       | `16`    | `sample_infohashes` queries at once                       |
+| `-log-level`     | `info`  | Level to log at: `debug`, `info`, `warn` or `error`       |
 
 Discovery rests on `sample_infohashes`: in a measured run on a server with a
 public address, no `announce_peer` query reached the node, and the sniffer

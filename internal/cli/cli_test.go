@@ -21,3 +21,18 @@ func TestStatus(t *testing.T) {
 	require.Equal(t, 2, Status(func() (int, error) { return 0, errors.New("bad") }, ok, log))
 	require.Equal(t, 0, Status(func() (int, error) { return 0, flag.ErrHelp }, fail, log))
 }
+
+type config slog.Level
+
+func (c config) LogLevel() slog.Level { return slog.Level(c) }
+
+func TestLeveled(t *testing.T) {
+	var level slog.LevelVar
+	_, err := leveled(func() (config, error) { return config(slog.LevelDebug), nil }, &level)()
+	require.NoError(t, err)
+	require.Equal(t, slog.LevelDebug, level.Level())
+
+	_, err = leveled(func() (config, error) { return config(slog.LevelError), errors.New("bad") }, &level)()
+	require.Error(t, err)
+	require.Equal(t, slog.LevelDebug, level.Level(), "a configuration that does not load sets no level")
+}
