@@ -1,5 +1,6 @@
-// Package store keeps torrents, rejected infohashes and classifications,
-// with full-text search over names and file paths.
+// Package store keeps torrents, rejected infohashes, classifications and
+// peer sketches, with full-text search over names and file paths and the
+// tops of works by peers.
 package store
 
 import (
@@ -13,6 +14,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -20,7 +22,9 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/mikluko/sniffarr/internal/database"
+	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/rules"
+	"github.com/mikluko/sniffarr/internal/sketch"
 )
 
 // ErrNotFound is returned for an infohash that is not stored.
@@ -48,6 +52,11 @@ type Torrent struct {
 	Kind      string
 	KindLayer string
 	TitleKey  string
+	// WorkKey, Year and Season are what names.Parse gives; a torrent without
+	// a work key is in no top.
+	WorkKey string
+	Year    int
+	Season  int
 	// Audio holds one entry per language, at most.
 	Audio []Audio
 }
@@ -82,7 +91,13 @@ type Release struct {
 	Audio    []Audio
 	TitleKey string
 	// Title is the match of TitleKey when Options.Titles is set.
-	Title Title
+	Title   Title
+	WorkKey string
+	Year    int
+	Season  int
+	// PeersWeek is the torrent's distinct peers over the last 7 days, as
+	// ComputeTop last counted them.
+	PeersWeek int64
 	// Classified reports whether the classifier has examined the torrent.
 	Classified bool
 	FirstSeen  time.Time
@@ -135,12 +150,17 @@ type Store struct {
 	w, r    *sql.DB
 	opts    Options
 	deleted metric.Int64Counter
+
+	keyMu  sync.Mutex
+	key    sketch.Key
+	keySet bool
 }
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// New returns the Store in db, applying any pending migrations.
+// New returns the Store in db, applying any pending migrations and deriving
+// the work keys of torrents stored without one.
 func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if opts.MaxFiles <= 0 {
 		opts.MaxFiles = DefaultMaxFiles
@@ -160,7 +180,58 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted}, nil
+	s := &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted}
+	if err := s.fillWorkKeys(ctx); err != nil {
+		return nil, fmt.Errorf("work keys: %w", err)
+	}
+	return s, nil
+}
+
+// fillWorkKeys derives work_key, year and season from the names of the
+// torrents that have a title key and no work key, in batches; a name whose
+// work key is empty takes its title key.
+func (s *Store) fillWorkKeys(ctx context.Context) error {
+	for {
+		rows, err := s.r.QueryContext(ctx, "SELECT id, name, title_key FROM torrents WHERE work_key IS NULL AND title_key IS NOT NULL LIMIT 1000")
+		if err != nil {
+			return err
+		}
+		type row struct {
+			id   int64
+			p    names.Parsed
+			work string
+		}
+		var batch []row
+		for rows.Next() {
+			var r row
+			var name string
+			if err := rows.Scan(&r.id, &name, &r.work); err != nil {
+				rows.Close()
+				return err
+			}
+			r.p = names.Parse(name)
+			if r.p.Work != "" {
+				r.work = r.p.Work
+			}
+			batch = append(batch, r)
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return err
+		}
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := s.tx(ctx, func(tx *sql.Tx) error {
+			for _, r := range batch {
+				if _, err := tx.ExecContext(ctx, "UPDATE torrents SET work_key = ?, year = ?, season = ? WHERE id = ?", r.work, nullInt(r.p.Year), nullInt(r.p.Season), r.id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
 }
 
 // Sweep deletes, with their files and search entries, the torrents last seen
@@ -255,10 +326,10 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 		}
 		var id int64
 		err := tx.QueryRowContext(ctx, `INSERT INTO torrents (infohash, name, size, file_count, discovery, first_seen, last_seen,
-				kind, kind_layer, title_key)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (infohash) DO NOTHING RETURNING id`,
+				kind, kind_layer, title_key, work_key, year, season)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (infohash) DO NOTHING RETURNING id`,
 			t.Hash[:], t.Name, t.Size, len(t.Files), t.Discovery, t.SeenAt.Unix(), t.SeenAt.Unix(),
-			null(t.Kind), null(t.KindLayer), null(t.TitleKey)).Scan(&id)
+			null(t.Kind), null(t.KindLayer), null(t.TitleKey), null(t.WorkKey), nullInt(t.Year), nullInt(t.Season)).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -341,7 +412,8 @@ type Query struct {
 
 const releaseColumns = `t.id, t.infohash, t.name, t.size, t.file_count, coalesce(t.kind, ''), coalesce(t.kind_layer, ''),
 	coalesce(t.kind_confidence, 0), coalesce(t.source, ''), coalesce(t.source_confidence, 0),
-	t.classified_at IS NOT NULL, t.first_seen, t.last_seen, coalesce(t.title_key, '')`
+	t.classified_at IS NOT NULL, t.first_seen, t.last_seen, coalesce(t.title_key, ''),
+	coalesce(t.work_key, ''), coalesce(t.year, 0), coalesce(t.season, 0), t.peers_week`
 
 // Search returns releases matching q, best text match first, or most
 // recently seen first when q has no text.
@@ -480,7 +552,7 @@ func scanRelease(row interface{ Scan(...any) error }) (Release, error) {
 	var hash []byte
 	var first, last int64
 	err := row.Scan(&r.ID, &hash, &r.Name, &r.Size, &r.FileCount, &r.Kind, &r.KindLayer, &r.KindConfidence, &r.Source, &r.SourceConfidence,
-		&r.Classified, &first, &last, &r.TitleKey)
+		&r.Classified, &first, &last, &r.TitleKey, &r.WorkKey, &r.Year, &r.Season, &r.PeersWeek)
 	if err != nil {
 		return Release{}, err
 	}

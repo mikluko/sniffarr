@@ -93,12 +93,12 @@ func TestCard(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	fill(t, s)
-	c, err := s.Card(ctx, hash(1), 1)
+	c, err := s.Card(ctx, hash(1), 1, t0)
 	require.NoError(t, err)
 	require.Equal(t, "announce", c.Discovery)
 	require.Equal(t, 2, c.Stored)
 	require.Equal(t, []rules.File{{Path: "Alien.mkv", Size: 8 << 30}}, c.Files)
-	_, err = s.Card(ctx, hash(9), 8)
+	_, err = s.Card(ctx, hash(9), 8, t0)
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
