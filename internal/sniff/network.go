@@ -25,6 +25,7 @@ const (
 	DefaultPort         = 42069
 	DefaultRate         = 2000
 	DefaultPeerWait     = 8 * time.Second
+	DefaultMinPeers     = 1
 	DefaultFetchTimeout = 15 * time.Second
 	DefaultWalkers      = 16
 )
@@ -45,6 +46,9 @@ type NetworkConfig struct {
 	// PeerWait is how long a fetch looks for peers on the DHT;
 	// DefaultPeerWait.
 	PeerWait time.Duration
+	// MinPeers is how many distinct peers a fetch must find within PeerWait
+	// to ask them for metadata, or it fails with ErrNoPeers; DefaultMinPeers.
+	MinPeers int
 	// FetchTimeout is how long a fetch waits for metadata once it has peers;
 	// DefaultFetchTimeout.
 	FetchTimeout time.Duration
@@ -57,6 +61,7 @@ func (c *NetworkConfig) defaults() {
 	orDefault(&c.Rate, DefaultRate)
 	orDefault(&c.Fetchers, DefaultFetchers)
 	orDefault(&c.PeerWait, DefaultPeerWait)
+	orDefault(&c.MinPeers, DefaultMinPeers)
 	orDefault(&c.FetchTimeout, DefaultFetchTimeout)
 }
 
@@ -67,8 +72,57 @@ type Network struct {
 	cfg     NetworkConfig
 	client  *torrent.Client
 	dht     *dht.Server
+	swarm   swarm
 	dataDir string
 	answers metric.Int64Counter
+}
+
+// swarm reaches the peers of a torrent.
+type swarm interface {
+	// lookup starts looking for the peers of h, which arrive on peers until
+	// stop is called.
+	lookup(h Hash) (peers <-chan dht.PeersValues, stop func(), err error)
+	// fetch gets the metadata of h from peers, or fails with ErrNoMetadata.
+	// It forgets the peers before it returns.
+	fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo) (Metadata, error)
+}
+
+// clientSwarm is the swarm of a torrent client and its DHT node.
+type clientSwarm struct {
+	client  *torrent.Client
+	dht     *dht.Server
+	timeout time.Duration
+}
+
+// lookup sends get_peers only, never announce_peer.
+func (s clientSwarm) lookup(h Hash) (<-chan dht.PeersValues, func(), error) {
+	a, err := s.dht.AnnounceTraversal(h)
+	if err != nil {
+		return nil, nil, err
+	}
+	return a.Peers, a.Close, nil
+}
+
+// fetch waits for the metadata for timeout at most.
+func (s clientSwarm) fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo) (Metadata, error) {
+	t, _ := s.client.AddTorrentInfoHash(metainfo.Hash(h))
+	defer t.Drop()
+	t.AddPeers(peers)
+	timer := time.NewTimer(s.timeout)
+	defer timer.Stop()
+	select {
+	case <-t.GotInfo():
+	case <-timer.C:
+		return Metadata{}, ErrNoMetadata
+	case <-ctx.Done():
+		return Metadata{}, ctx.Err()
+	}
+	info := t.Info()
+	m := Metadata{Name: info.BestName(), Size: info.TotalLength()}
+	for _, f := range info.UpvertedFiles() {
+		m.Files = append(m.Files, File{Path: f.DisplayPath(info), Size: f.Length})
+	}
+	return m, nil
 }
 
 // Start starts the client and its DHT node. offer, unless nil, is called
@@ -118,6 +172,7 @@ func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, er
 		n.Close()
 		return nil, errors.New("the torrent client has no DHT node")
 	}
+	n.swarm = clientSwarm{client: client, dht: n.dht, timeout: cfg.FetchTimeout}
 	if err := n.observe(meter(cfg.Meter)); err != nil {
 		n.Close()
 		return nil, err
@@ -227,47 +282,35 @@ func (n *Network) sampleNode(ctx context.Context, a krpc.NodeAddr, found func(Ha
 }
 
 // Metadata finds the torrent's peers on the DHT and gets its metadata from
-// them. The peers' addresses are dropped with the torrent before Metadata
-// returns.
+// them, failing with ErrNoPeers when it finds fewer than MinPeers. The peers'
+// addresses are dropped with the torrent before Metadata returns.
 func (n *Network) Metadata(ctx context.Context, h Hash) (Metadata, error) {
 	peers := n.findPeers(ctx, h)
-	if len(peers) == 0 {
+	if len(peers) < n.cfg.MinPeers {
 		return Metadata{}, ErrNoPeers
 	}
-	t, _ := n.client.AddTorrentInfoHash(metainfo.Hash(h))
-	defer t.Drop()
-	t.AddPeers(peers)
-	timer := time.NewTimer(n.cfg.FetchTimeout)
-	defer timer.Stop()
-	select {
-	case <-t.GotInfo():
-	case <-timer.C:
-		return Metadata{}, ErrNoMetadata
-	case <-ctx.Done():
-		return Metadata{}, ctx.Err()
-	}
-	info := t.Info()
-	m := Metadata{Name: info.BestName(), Size: info.TotalLength()}
-	for _, f := range info.UpvertedFiles() {
-		m.Files = append(m.Files, File{Path: f.DisplayPath(info), Size: f.Length})
-	}
-	return m, nil
+	return n.swarm.fetch(ctx, h, peers)
 }
 
-// findPeers asks the DHT for peers of the torrent, for at most PeerWait and
-// at most 20 peers. It sends get_peers only, never announce_peer.
+// enoughPeers is how many peers findPeers looks for when MinPeers is fewer.
+const enoughPeers = 20
+
+// findPeers looks for distinct peers of the torrent for at most PeerWait,
+// and until it has max(MinPeers, enoughPeers).
 func (n *Network) findPeers(ctx context.Context, h Hash) []torrent.PeerInfo {
-	a, err := n.dht.AnnounceTraversal(h)
+	batches, stop, err := n.swarm.lookup(h)
 	if err != nil {
 		return nil
 	}
-	defer a.Close()
+	defer stop()
+	want := max(n.cfg.MinPeers, enoughPeers)
 	var peers []torrent.PeerInfo
+	seen := map[netip.AddrPort]bool{}
 	timer := time.NewTimer(n.cfg.PeerWait)
 	defer timer.Stop()
 	for {
 		select {
-		case v, ok := <-a.Peers:
+		case v, ok := <-batches:
 			if !ok {
 				return peers
 			}
@@ -276,9 +319,14 @@ func (n *Network) findPeers(ctx context.Context, h Hash) []torrent.PeerInfo {
 				if !ok {
 					continue
 				}
-				peers = append(peers, torrent.PeerInfo{Addr: netip.AddrPortFrom(ip.Unmap(), uint16(p.Port)), Source: torrent.PeerSourceDhtGetPeers})
+				addr := netip.AddrPortFrom(ip.Unmap(), uint16(p.Port))
+				if seen[addr] {
+					continue
+				}
+				seen[addr] = true
+				peers = append(peers, torrent.PeerInfo{Addr: addr, Source: torrent.PeerSourceDhtGetPeers})
 			}
-			if len(peers) >= 20 {
+			if len(peers) >= want {
 				return peers
 			}
 		case <-timer.C:

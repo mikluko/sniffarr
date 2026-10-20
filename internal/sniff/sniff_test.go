@@ -3,6 +3,7 @@ package sniff
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/anacrolix/dht/v2"
+	"github.com/anacrolix/torrent"
 	"github.com/stretchr/testify/require"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -336,6 +339,109 @@ func TestFetcherStopsWithTasksInFlight(t *testing.T) {
 	cancel := run(t, f.Run)
 	require.Eventually(t, func() bool { return f.stats.tasks.Load() == 2 }, 5*time.Second, time.Millisecond)
 	cancel()
+}
+
+// fakeSwarm answers a lookup with the batches of peers it holds for the hash,
+// each delay after the one before, and gives metadata to any fetch.
+type fakeSwarm struct {
+	batches map[Hash][]dht.PeersValues
+	delay   time.Duration
+
+	mu sync.Mutex
+	// fetched is how many peers each fetch was given, by hash.
+	fetched map[Hash]int
+}
+
+// batch is a get_peers answer naming peers on the given ports of one address.
+func batch(ports ...int) dht.PeersValues {
+	var v dht.PeersValues
+	for _, p := range ports {
+		v.Peers = append(v.Peers, dht.Peer{IP: net.IPv4(192, 0, 2, 1), Port: p})
+	}
+	return v
+}
+
+func (s *fakeSwarm) lookup(h Hash) (<-chan dht.PeersValues, func(), error) {
+	c := make(chan dht.PeersValues)
+	done := make(chan struct{})
+	go func() {
+		for _, b := range s.batches[h] {
+			select {
+			case <-time.After(s.delay):
+			case <-done:
+				return
+			}
+			select {
+			case c <- b:
+			case <-done:
+				return
+			}
+		}
+	}()
+	return c, sync.OnceFunc(func() { close(done) }), nil
+}
+
+func (s *fakeSwarm) fetch(_ context.Context, h Hash, peers []torrent.PeerInfo) (Metadata, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.fetched[h] = len(peers)
+	return Metadata{Name: "torrent", Size: 1 << 30}, nil
+}
+
+func fakeNetwork(cfg NetworkConfig, s *fakeSwarm) *Network {
+	cfg.defaults()
+	s.fetched = map[Hash]int{}
+	return &Network{cfg: cfg, swarm: s}
+}
+
+func TestFetcherMinPeers(t *testing.T) {
+	ingest := newFake()
+	ingest.todo = []Hash{hash(1), hash(2), hash(3)}
+	s := &fakeSwarm{batches: map[Hash][]dht.PeersValues{
+		hash(1): {batch(1, 2)},
+		hash(2): {batch(1, 2), batch(3)},
+		hash(3): {batch(1, 1), batch(2, 2)},
+	}}
+	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 3}, fakeNetwork(NetworkConfig{MinPeers: 3, PeerWait: 100 * time.Millisecond}, s))
+	run(t, f.Run)
+
+	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 3 }, 5*time.Second, 5*time.Millisecond)
+	ingest.mu.Lock()
+	defer ingest.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	require.Equal(t, sniffarrv1.Failure_FAILURE_NO_PEERS, ingest.results[hash(1)].GetFailure(), "below MinPeers")
+	require.NotNil(t, ingest.results[hash(2)].GetTorrent(), "at MinPeers")
+	require.Equal(t, sniffarrv1.Failure_FAILURE_NO_PEERS, ingest.results[hash(3)].GetFailure(), "a peer named twice counts once")
+	require.Equal(t, map[Hash]int{hash(2): 3}, s.fetched, "no fetch below MinPeers")
+}
+
+func TestFindPeersWaitsForMinPeers(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		minPeers int
+		want     int
+	}{
+		{name: "default", want: enoughPeers},
+		{name: "above enough", minPeers: enoughPeers + 5, want: enoughPeers + 5},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ports := make([]int, enoughPeers+5)
+			for i := range ports {
+				ports[i] = 1000 + i
+			}
+			ingest := newFake()
+			ingest.todo = []Hash{hash(1)}
+			s := &fakeSwarm{batches: map[Hash][]dht.PeersValues{hash(1): {batch(ports[:enoughPeers]...), batch(ports[enoughPeers:]...)}}, delay: 20 * time.Millisecond}
+			f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 1}, fakeNetwork(NetworkConfig{MinPeers: tt.minPeers, PeerWait: time.Minute}, s))
+			run(t, f.Run)
+
+			require.Eventually(t, func() bool { _, n := ingest.count(); return n == 1 }, 5*time.Second, 5*time.Millisecond, "the search ends once it has its peers")
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			require.Equal(t, tt.want, s.fetched[hash(1)])
+		})
+	}
 }
 
 func TestRecent(t *testing.T) {

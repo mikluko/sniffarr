@@ -53,6 +53,7 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 	fs.IntVar(&c.network.Rate, "rate", sniff.DefaultRate, "DHT queries, and new peer connections, a second")
 	fs.DurationVar(&c.network.FetchTimeout, "fetch-timeout", sniff.DefaultFetchTimeout, "how long to wait for a torrent's metadata once it has peers")
 	fs.DurationVar(&c.network.PeerWait, "peer-wait", sniff.DefaultPeerWait, "how long to look for a torrent's peers on the DHT")
+	fs.IntVar(&c.network.MinPeers, "min-peers", sniff.DefaultMinPeers, "peers a torrent needs within -peer-wait to have its metadata fetched")
 	fs.IntVar(&c.walkers, "walkers", sniff.DefaultWalkers, "sample_infohashes queries at once")
 	if err := fs.Parse(args); err != nil {
 		return c, err
@@ -62,8 +63,8 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 		return c, errors.New("-discover and -fetch are both off: nothing to do")
 	case c.network.Port < 1 || c.network.Port > 65535:
 		return c, errors.New("-port: want 1 to 65535")
-	case c.network.Fetchers < 1, c.network.Rate < 1, c.walkers < 1:
-		return c, errors.New("-fetchers, -rate and -walkers: want positive integers")
+	case c.network.Fetchers < 1, c.network.Rate < 1, c.walkers < 1, c.network.MinPeers < 1:
+		return c, errors.New("-fetchers, -rate, -walkers and -min-peers: want positive integers")
 	case c.network.FetchTimeout <= 0, c.network.PeerWait <= 0:
 		return c, errors.New("-fetch-timeout and -peer-wait: want positive durations")
 	}

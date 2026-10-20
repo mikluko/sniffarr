@@ -28,8 +28,9 @@ and never announces itself into a swarm.
 The queue serves announced infohashes before sampled ones, then the oldest
 first. It lives in the same SQLite database and survives restarts; a task
 whose fetcher goes away, or whose lease expires, goes back to the queue. A
-task whose torrent has no peers is dropped at once. A task whose metadata
-times out is retried after a backoff and dropped after a few attempts.
+task whose fetcher finds no peers, or fewer than its `-min-peers`, is dropped
+at once. A task whose metadata times out is retried after a backoff and
+dropped after a few attempts.
 The queue is bounded: once a minute the server evicts the infohashes that have
 waited too long, then the ones beyond the size limit, sampled ones before
 announced ones and the oldest first. A dropped or evicted infohash is kept out
@@ -147,6 +148,7 @@ retention period; a later sighting queues them again.
 | `-rate`          | `2000`  | DHT queries, and new peer connections, a second           |
 | `-fetch-timeout` | `15s`   | How long to wait for metadata once a torrent has peers    |
 | `-peer-wait`     | `8s`    | How long to look for a torrent's peers on the DHT         |
+| `-min-peers`     | `1`     | Peers needed within `-peer-wait` to fetch the metadata    |
 | `-walkers`       | `16`    | `sample_infohashes` queries at once                       |
 
 Discovery rests on `sample_infohashes`: in a measured run on a server with a
