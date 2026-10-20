@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-20
+
+### Added
+
+- `BrowseService`, behind the search token: `Page` lists releases with the UI's filters, `Card` gives one release with its files, `Stats` gives the counts of the data page.
+- The chart's `ui` component: Deployment and Service `<release>-ui` running `sniffarr -ui`, with `ui.service.targetPort` naming a port of a proxy in `ui.extraContainers` and `SNIFFARR_OIDC_ISSUER` set through `ui.env`.
+- The chart's `single.enabled`: one Deployment `<release>` running `-api` with every enabled component of `ui`, `sniff` and `fetch`, with `single.replicas` fixed at 1.
+
+### Changed
+
+- **Breaking:** one binary, `sniffarr`, whose components are the flags `-api`, `-ui`, `-sniff` and `-fetch`; `sniffapi` and `sniffdht` are gone, and the image's entrypoint is `sniffarr`. Every environment variable and DHT flag keeps its name.
+- **Breaking:** `-discover` is `-sniff`; the web UI is served by `-ui`, and `SNIFFARR_UI_ADDR` defaults to `:8081`.
+- The web UI reads through `BrowseService`: in a process with `-api` over an in-memory connection, else at `SNIFFARR_URL` with `SNIFFARR_SEARCH_TOKEN`. `SNIFFARR_URL` set in a process with `-api` is refused.
+- `-log-level` given wins over `SNIFFARR_LOG_LEVEL`.
+- Every component reports telemetry as the service `sniffarr` unless `OTEL_SERVICE_NAME` says otherwise.
+- The chart's containers are named `api`, `sniff` and `fetch`.
+
+### Removed
+
+- **Breaking:** the chart's `api.ui`; `ui` replaces it, and a values file still setting `api.ui` fails to render.
+
 ## [0.5.0] - 2026-10-20
 
 ### Added
@@ -92,7 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/mikluko/sniffarr/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mikluko/sniffarr/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mikluko/sniffarr/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mikluko/sniffarr/compare/v0.2.0...v0.3.0
