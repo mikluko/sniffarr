@@ -15,6 +15,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/queue"
+	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -33,7 +34,10 @@ type Config struct {
 	Attempts    int
 	Backoff     time.Duration
 	Poll        time.Duration
-	Log         *slog.Logger
+	// Scripts are the writing systems a torrent's name may have letters of;
+	// rules.DefaultScripts when nil.
+	Scripts rules.Scripts
+	Log     *slog.Logger
 	// Meter records metrics; the global MeterProvider when nil. Traces go to
 	// the global TracerProvider.
 	Meter metric.MeterProvider
@@ -53,7 +57,7 @@ func New(c Config) (http.Handler, error) {
 	}
 	mux := http.NewServeMux()
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
-		&ingest.Service{Store: c.Store, Queue: c.Queue, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Meter: c.Meter},
+		&ingest.Service{Store: c.Store, Queue: c.Queue, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Meter: c.Meter},
 		connect.WithInterceptors(otel, auth.NewBearer(c.IngestToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

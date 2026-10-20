@@ -12,6 +12,7 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/rot13"
+	"github.com/mikluko/sniffarr/internal/rules"
 )
 
 // value returns the int64 data point of the named metric whose attributes
@@ -56,26 +57,28 @@ func TestMetrics(t *testing.T) {
 	srv, hc := start(t, Config{Meter: mp, Poll: 20 * time.Millisecond})
 	ingest := ingestClient(srv, hc)
 
-	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3, 1)
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3, 4, 1)
 	require.NoError(t, err)
 	f := openFetch(t, ingest)
-	f.credit(3)
-	f.expect(1, 2, 3)
+	f.credit(4)
+	f.expect(1, 2, 3, 4)
 	f.torrent(1, "The.Thing.1982.1080p.BluRay.x264", "The.Thing.1982.mkv")
 	f.torrent(2, rot13.String("Ovt.Cnpxntr.KKK.1080c"), "video.mp4")
 	f.failure(3, sniffarrv1.Failure_FAILURE_NO_PEERS)
+	f.torrent(4, "進撃の巨人 S04", "video.mkv")
 	f.finish()
 
 	var rm metricdata.ResourceMetrics
 	require.NoError(t, reader.Collect(context.Background(), &rm))
 	result := func(v string) attribute.KeyValue { return attribute.String("sniffarr.sighting.result", v) }
 	outcome := func(v string) attribute.KeyValue { return attribute.String("sniffarr.fetch.outcome", v) }
-	require.EqualValues(t, 3, value(t, rm, "sniffarr.ingest.sightings", result("new")))
+	require.EqualValues(t, 4, value(t, rm, "sniffarr.ingest.sightings", result("new")))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.sightings", result("known")))
-	require.EqualValues(t, 2, value(t, rm, "sniffarr.ingest.results", outcome("torrent")))
+	require.EqualValues(t, 3, value(t, rm, "sniffarr.ingest.results", outcome("torrent")))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.results", outcome("no_peers")))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.stored"))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "adult")))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "script")))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.queue.depth", attribute.String("sniffarr.discovery", "sample")), "the failed one waits for its retry")
 	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.leases"))
 	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.dead"))
@@ -106,4 +109,28 @@ func TestReuseMetrics(t *testing.T) {
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.classify.classifications", layer("rules"), movie))
 	require.EqualValues(t, 2, value(t, rm, "sniffarr.classify.classifications", layer("reuse"), movie),
 		"the kind 3 lends to 1 and 2")
+}
+
+func TestScripts(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	scripts, err := rules.ParseScripts("Latin,Greek")
+	require.NoError(t, err)
+	srv, hc := start(t, Config{Meter: mp, Poll: 20 * time.Millisecond, Scripts: scripts})
+	ingest := ingestClient(srv, hc)
+
+	_, err = sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2)
+	require.NoError(t, err)
+	f := openFetch(t, ingest)
+	f.credit(2)
+	f.expect(1, 2)
+	f.torrent(1, "Ελληνικά.2020.1080p", "video.mkv")
+	f.torrent(2, "Мандалорец.S03.WEB-DL.Rus", "video.mkv")
+	f.finish()
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.stored"))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "script")),
+		"Cyrillic is not among the configured scripts")
 }

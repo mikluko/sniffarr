@@ -2,6 +2,7 @@ package rules
 
 import (
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/require"
 
@@ -59,9 +60,45 @@ func TestCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, Check(tt.name, tt.size, tt.files))
+			require.Equal(t, tt.want, Check(tt.name, tt.size, tt.files, nil))
 		})
 	}
+}
+
+func TestCheckScripts(t *testing.T) {
+	greek, err := ParseScripts("Latin,Cyrillic,Greek")
+	require.NoError(t, err)
+	tests := []struct {
+		name    string
+		scripts Scripts
+		want    Reason
+	}{
+		{"Мандалорец.S03.WEB-DL.Rus", nil, Accept},
+		{"Amélie.2001.BDRip", nil, Accept},
+		{"【4K】Movie.2020", nil, Accept},
+		{"Movie.2020 🎬 ★", nil, Accept},
+		{"進撃の巨人 S04", nil, Script},
+		{"مسلسل.الحلقة.5", nil, Script},
+		{"Ελληνικά", nil, Script},
+		{"Ελληνικά", greek, Accept},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := []File{{"Sample/外国語.srt", mib}, {"video.mkv", gib}}
+			require.Equal(t, tt.want, Check(tt.name, gib, files, tt.scripts))
+		})
+	}
+}
+
+func TestParseScripts(t *testing.T) {
+	s, err := ParseScripts("")
+	require.NoError(t, err)
+	require.Equal(t, Scripts{unicode.Latin, unicode.Cyrillic}, s, "the empty list is DefaultScripts")
+	s, err = ParseScripts("Latin, Greek")
+	require.NoError(t, err)
+	require.Equal(t, Scripts{unicode.Latin, unicode.Greek}, s)
+	_, err = ParseScripts("Latin,Klingon")
+	require.EqualError(t, err, `unknown script "Klingon"`)
 }
 
 func TestRussianMarker(t *testing.T) {

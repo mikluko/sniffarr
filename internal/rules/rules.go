@@ -4,6 +4,7 @@
 package rules
 
 import (
+	"fmt"
 	"path"
 	"regexp"
 	"strings"
@@ -26,7 +27,44 @@ const (
 	Course   Reason = "course"
 	Small    Reason = "small"
 	NoMedia  Reason = "nomedia"
+	Script   Reason = "script"
 )
+
+// DefaultScripts is the list ParseScripts reads from an empty one.
+const DefaultScripts = "Latin,Cyrillic"
+
+// Scripts are the writing systems whose letters a torrent's name may have.
+type Scripts []*unicode.RangeTable
+
+var defaultScripts, _ = ParseScripts(DefaultScripts)
+
+// ParseScripts returns the scripts of a comma-separated list of
+// unicode.Scripts names, or of DefaultScripts when the list is empty.
+func ParseScripts(list string) (Scripts, error) {
+	if strings.TrimSpace(list) == "" {
+		list = DefaultScripts
+	}
+	var out Scripts
+	for name := range strings.SplitSeq(list, ",") {
+		t, ok := unicode.Scripts[strings.TrimSpace(name)]
+		if !ok {
+			return nil, fmt.Errorf("unknown script %q", strings.TrimSpace(name))
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// allows reports whether every letter of s is of the scripts, or of the
+// Common or Inherited script.
+func (sc Scripts) allows(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) && !unicode.In(r, unicode.Common, unicode.Inherited) && !unicode.In(r, sc...) {
+			return false
+		}
+	}
+	return true
+}
 
 // File is one file of a torrent.
 type File struct {
@@ -81,8 +119,9 @@ func words(alternatives string) *regexp.Regexp {
 // Check returns why the torrent should be rejected, or Accept. A torrent
 // without files is judged as a single file named name of the given size. An
 // .iso counts as video when the torrent or file name names a DVD or Blu-ray
-// copy, and as software otherwise.
-func Check(name string, size int64, files []File) Reason {
+// copy, and as software otherwise. Only the name is judged by scripts; nil
+// scripts are those of DefaultScripts.
+func Check(name string, size int64, files []File, scripts Scripts) Reason {
 	if len(files) == 0 {
 		files = []File{{Path: name, Size: size}}
 	}
@@ -94,6 +133,12 @@ func Check(name string, size int64, files []File) Reason {
 	}
 	if course.MatchString(name) {
 		return Course
+	}
+	if scripts == nil {
+		scripts = defaultScripts
+	}
+	if !scripts.allows(name) {
+		return Script
 	}
 	var bytes [software + 1]int64
 	hasMedia := false

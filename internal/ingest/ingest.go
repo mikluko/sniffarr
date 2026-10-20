@@ -54,7 +54,10 @@ type Service struct {
 	// Poll is how often a Fetch stream with credit looks for free tasks
 	// besides when hashes are queued or released; DefaultPoll.
 	Poll time.Duration
-	Now  func() time.Time
+	// Scripts are the writing systems a torrent's name may have letters of;
+	// rules.DefaultScripts when nil.
+	Scripts rules.Scripts
+	Now     func() time.Time
 	// Meter records the service's metrics; the global MeterProvider when
 	// nil.
 	Meter metric.MeterProvider
@@ -189,7 +192,7 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 		files = []rules.File{{Path: t.GetName(), Size: t.GetSize()}}
 	}
 	now := s.now()
-	if reason := rules.Check(t.GetName(), t.GetSize(), files); reason != rules.Accept {
+	if reason := rules.Check(t.GetName(), t.GetSize(), files, s.Scripts); reason != rules.Accept {
 		rejected, err := s.Store.Reject(ctx, h, reason, now)
 		if err != nil {
 			return s.internal(ctx, "reject", err)

@@ -9,17 +9,20 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/queue"
+	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
 func TestLoad(t *testing.T) {
+	defaultScripts := rules.Scripts{unicode.Latin, unicode.Cyrillic}
 	required := map[string]string{"SNIFFARR_DB": "/data/sniffarr.db", "SNIFFARR_INGEST_TOKEN": "in", "SNIFFARR_SEARCH_TOKEN": "se"}
 	with := func(kv ...string) map[string]string {
 		env := maps.Clone(required)
@@ -39,25 +42,27 @@ func TestLoad(t *testing.T) {
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor},
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles},
-			retention: defaultRetention}},
+			retention: defaultRetention, scripts: defaultScripts}},
 		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
 			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h",
 			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h",
-			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms"),
+			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
+			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek"),
 			want: config{addr: ":9000", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", typesafeKey: "ts", concurrency: 8, dailyTokens: 1000000, searchReserve: 40,
 				lease: 2 * time.Minute, attempts: 5, backoff: time.Hour,
 				queue:     queue.Options{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour},
 				store:     store.Options{MaxFiles: 50},
 				retention: 720 * time.Hour,
-				lazyMax:   5, lazyWait: 500 * time.Millisecond}},
+				lazyMax:   5, lazyWait: 500 * time.Millisecond,
+				scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: config{addr: ":8080", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", concurrency: 4,
 			searchReserve: classify.DefaultSearchReserve, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor},
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles},
-			retention: defaultRetention}},
+			retention: defaultRetention, scripts: defaultScripts}},
 		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
 		{name: "nothing set", env: map[string]string{}, err: "SNIFFARR_DB is not set"},
 		{name: "no ingest token", env: with("SNIFFARR_INGEST_TOKEN", ""), err: "SNIFFARR_INGEST_TOKEN is not set"},
@@ -73,9 +78,10 @@ func TestLoad(t *testing.T) {
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor},
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles},
-			retention: defaultRetention}},
+			retention: defaultRetention, scripts: defaultScripts}},
 		{name: "reserve over 100", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "101"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
 		{name: "reserve a fraction", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0.25"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
+		{name: "unknown script", env: with("SNIFFARR_SCRIPTS", "Latin,Elvish"), err: `SNIFFARR_SCRIPTS: unknown script "Elvish"`},
 		{name: "budget not a number", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "1e6"), err: "SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer"},
 	}
 	for _, tt := range tests {

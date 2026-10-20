@@ -21,6 +21,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/queue"
+	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/server"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -41,6 +42,7 @@ type config struct {
 	retention                time.Duration
 	lazyMax                  int
 	lazyWait                 time.Duration
+	scripts                  rules.Scripts
 }
 
 // defaultRetention is how long a stored torrent is kept without being seen.
@@ -106,6 +108,9 @@ func load(getenv func(string) string) (config, error) {
 	}
 	if c.lazyWait, err = duration(getenv, "SNIFFARR_SEARCH_CLASSIFY_WAIT", search.DefaultLazyWait); err != nil {
 		return c, err
+	}
+	if c.scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
+		return c, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
 	}
 	return c, nil
 }
@@ -192,6 +197,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		Lease:       cfg.lease,
 		Attempts:    cfg.attempts,
 		Backoff:     cfg.backoff,
+		Scripts:     cfg.scripts,
 		Log:         log,
 		Lazy:        lazy,
 	})
