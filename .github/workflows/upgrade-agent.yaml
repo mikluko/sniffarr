@@ -1,0 +1,78 @@
+name: Upgrade agent
+
+# Lands the open Renovate PRs as one stack once a day, with a release on top
+# when they change what ships. The agent is goose on Kimi K3; its procedure is
+# .github/upgrade-agent.md.
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Open the stack's PRs without merging
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upgrade-agent
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app.outputs.token }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: 1.73.0
+          setup_only: true
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.1
+      - name: Identify as the app
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          id=$(gh api "/users/${SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "${SLUG}[bot]"
+          git config user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
+      - name: Install gh stack
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: gh extension install github/gh-stack --pin v0.1.1
+      # Installs an aaif-goose/goose release after verifying its attestation;
+      # the third-party action is pinned to the commit of v1.0.10.
+      - uses: clouatre-labs/setup-goose-action@017d90271b50e0130dd915840135fed34aa7de36
+        with:
+          version: 1.53.0
+      - name: Run the agent
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          GOOSE_PROVIDER: moonshot
+          GOOSE_MODEL: k3
+          # A Kimi Code key. The moonshot provider speaks the OpenAI-compatible
+          # protocol Kimi Code serves under /coding; without MOONSHOT_BASE_URL it
+          # calls api.moonshot.cn.
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+          MOONSHOT_BASE_URL: https://api.kimi.ai/coding
+          GOOSE_MODE: auto
+          GOOSE_DISABLE_KEYRING: "1"
+          GOOSE_TELEMETRY_ENABLED: "false"
+          GOOSE_MAX_TURNS: "200"
+        run: goose run --no-session -i .github/upgrade-agent.md
