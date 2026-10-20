@@ -148,6 +148,8 @@ kept for 10 minutes per token. Adult releases do not show in its search.
 The chart serves the UI with `api.ui.enabled`, on port `ui` (8081) of the
 `<release>-api` Service. `api.extraContainers` and `api.extraVolumes` add a
 proxy to the pod, and `api.ui.targetPort` points the Service port at it.
+With `api.ui.addr` on a loopback address, such as `127.0.0.1:8081`, the UI is
+reachable only through that proxy.
 
 ## Configuration
 

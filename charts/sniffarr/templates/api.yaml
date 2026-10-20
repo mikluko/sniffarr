@@ -2,6 +2,7 @@
 {{- $p := $v.persistence }}
 {{- $ls := $v.litestream }}
 {{- $name := printf "%s-api" .Release.Name }}
+{{- $uiLoopback := or (hasPrefix "127." $v.ui.addr) (hasPrefix "localhost" $v.ui.addr) (hasPrefix "[::1]" $v.ui.addr) }}
 {{- if not (has $p.type (list "emptyDir" "hostPath" "pvc")) }}
 {{- fail (printf "api.persistence.type: want emptyDir, hostPath or pvc, not %q" $p.type) }}
 {{- end }}
@@ -80,7 +81,7 @@ spec:
               value: /data/sniffarr.db
             {{- if $v.ui.enabled }}
             - name: SNIFFARR_UI_ADDR
-              value: ":8081"
+              value: {{ $v.ui.addr | quote }}
             {{- end }}
             {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}
             {{- . | nindent 12 }}
@@ -91,9 +92,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-            {{- if $v.ui.enabled }}
+            {{- if and $v.ui.enabled (not $uiLoopback) }}
             - name: ui
-              containerPort: 8081
+              containerPort: {{ splitList ":" $v.ui.addr | last | atoi }}
             {{- end }}
           readinessProbe:
             httpGet:
