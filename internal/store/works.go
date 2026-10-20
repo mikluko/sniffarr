@@ -46,6 +46,19 @@ type WorkRelease struct {
 	Peers int64
 }
 
+// WorkView is a work as Work returns it for one window and voice.
+type WorkView struct {
+	Work Work
+	// Peers are the distinct peers of the admitted releases over the window.
+	Peers int64
+	// Rank and Delta are the work's TopEntry in the top of its kind for the
+	// window and voice; Rank is 0 and Delta nil when it is not in it.
+	Rank  int
+	Delta *float64
+	// Releases are the admitted releases, most Peers first.
+	Releases []WorkRelease
+}
+
 // sourceOrder is the order of Work.Sources.
 var sourceOrder = []string{"disc_image", "remux", "encode", "web", "other"}
 
@@ -150,32 +163,42 @@ func (s *Store) workKind(ctx context.Context, key string) (string, error) {
 	return kind, err
 }
 
-// Work returns the work with the key, its distinct peers over the window
-// ending at now, and the releases v admits, most peers first; it returns
-// ErrNotFound when no torrent has the key.
-func (s *Store) Work(ctx context.Context, key string, w Window, v Voice, now time.Time) (Work, int64, []WorkRelease, error) {
+// Work returns the work with the key over the window ending at now, with
+// the releases v admits; it returns ErrNotFound when no torrent has the key.
+func (s *Store) Work(ctx context.Context, key string, w Window, v Voice, now time.Time) (WorkView, error) {
 	var exists bool
 	if err := s.r.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM torrents WHERE work_key = ?)", key).Scan(&exists); err != nil {
-		return Work{}, 0, nil, err
+		return WorkView{}, err
 	}
 	if !exists {
-		return Work{}, 0, nil, ErrNotFound
+		return WorkView{}, ErrNotFound
 	}
 	kind, err := s.workKind(ctx, key)
 	if err != nil {
-		return Work{}, 0, nil, err
+		return WorkView{}, err
 	}
 	works, err := s.works(ctx, kind, []string{key}, v)
 	if err != nil {
-		return Work{}, 0, nil, err
+		return WorkView{}, err
 	}
 	work, ok := works[key]
 	if !ok {
 		work = Work{Key: key, Kind: kind}
 		if all, err := s.works(ctx, kind, []string{key}, VoiceAny); err != nil {
-			return Work{}, 0, nil, err
+			return WorkView{}, err
 		} else if w, ok := all[key]; ok {
 			work.Title, work.Year, work.Season, work.Rank = w.Title, w.Year, w.Season, w.Rank
+		}
+	}
+	view := WorkView{Work: work}
+	if kind != "" {
+		var delta sql.NullFloat64
+		err := s.r.QueryRowContext(ctx, "SELECT rank, delta FROM top WHERE kind = ? AND window = ? AND voice = ? AND work_key = ?", kind, w.Name, string(v), key).Scan(&view.Rank, &delta)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return WorkView{}, err
+		}
+		if delta.Valid {
+			view.Delta = &delta.Float64
 		}
 	}
 	cond, cargs := s.voiceCond(v, "t")
@@ -186,40 +209,38 @@ func (s *Store) Work(ctx context.Context, key string, w Window, v Voice, now tim
 		args = append(args, kind)
 	}
 	h, d := w.since(now)
-	var peers int64
 	if err := s.r.QueryRowContext(ctx, `SELECT coalesce(hll_card(hll_union_agg(sketch)), 0) FROM (
 			SELECT p.sketch FROM peers_hour p JOIN torrents t ON t.id = p.torrent_id`+where+` AND p.hour >= ?
 			UNION ALL SELECT p.sketch FROM peers_day p JOIN torrents t ON t.id = p.torrent_id`+where+` AND p.day >= ?)`,
-		slices.Concat(args, []any{h}, args, []any{d})...).Scan(&peers); err != nil {
-		return Work{}, 0, nil, err
+		slices.Concat(args, []any{h}, args, []any{d})...).Scan(&view.Peers); err != nil {
+		return WorkView{}, err
 	}
 	rows, err := s.r.QueryContext(ctx, "SELECT "+releaseColumns+", "+peersOf+" AS peers FROM torrents t"+where+" ORDER BY peers DESC, t.id DESC",
 		slices.Concat([]any{h, d}, args)...)
 	if err != nil {
-		return Work{}, 0, nil, err
+		return WorkView{}, err
 	}
-	var out []WorkRelease
 	var rs []Release
 	for rows.Next() {
 		var r WorkRelease
 		var err error
 		if r.Release, r.Peers, err = scanReleasePeers(rows); err != nil {
 			rows.Close()
-			return Work{}, 0, nil, err
+			return WorkView{}, err
 		}
-		out = append(out, r)
+		view.Releases = append(view.Releases, r)
 		rs = append(rs, r.Release)
 	}
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
-		return Work{}, 0, nil, err
+		return WorkView{}, err
 	}
 	if err := errors.Join(s.audio(ctx, rs), s.titles(ctx, rs)); err != nil {
-		return Work{}, 0, nil, err
+		return WorkView{}, err
 	}
-	for i := range out {
-		out[i].Release = rs[i]
+	for i := range view.Releases {
+		view.Releases[i].Release = rs[i]
 	}
-	return work, peers, out, nil
+	return view, nil
 }
 
 // scanReleasePeers scans releaseColumns followed by a peer count.

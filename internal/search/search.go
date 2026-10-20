@@ -147,6 +147,7 @@ func release(r store.Release) *sniffarrv1.Release {
 		Classified:       r.Classified,
 		TitleLayer:       titleLayers[r.Title.Layer],
 		TitleConfidence:  float32(r.Title.Confidence),
+		PeersWeek:        r.PeersWeek,
 	}
 	for _, id := range r.Title.IDs {
 		out.Ids = append(out.Ids, &sniffarrv1.ExternalId{Provider: id.Provider, Id: id.ID})

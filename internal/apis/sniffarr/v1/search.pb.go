@@ -508,8 +508,11 @@ type Release struct {
 	TitleLayer TitleLayer `protobuf:"varint,17,opt,name=title_layer,json=titleLayer,proto3,enum=sniffarr.v1.TitleLayer" json:"title_layer,omitempty"`
 	// Confidence in the title match, 0 while unmatched.
 	TitleConfidence float32 `protobuf:"fixed32,18,opt,name=title_confidence,json=titleConfidence,proto3" json:"title_confidence,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Distinct peers of the release over the last 7 days, as last computed by
+	// the server; what SORT_PEERS orders by.
+	PeersWeek     int64 `protobuf:"varint,19,opt,name=peers_week,json=peersWeek,proto3" json:"peers_week,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Release) Reset() {
@@ -657,6 +660,13 @@ func (x *Release) GetTitleLayer() TitleLayer {
 func (x *Release) GetTitleConfidence() float32 {
 	if x != nil {
 		return x.TitleConfidence
+	}
+	return 0
+}
+
+func (x *Release) GetPeersWeek() int64 {
+	if x != nil {
+		return x.PeersWeek
 	}
 	return 0
 }
@@ -810,7 +820,7 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"GetRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\"=\n" +
 	"\vGetResponse\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xc0\x05\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xdf\x05\n" +
 	"\aRelease\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -834,7 +844,9 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\x03ids\x18\x10 \x03(\v2\x17.sniffarr.v1.ExternalIdR\x03ids\x128\n" +
 	"\vtitle_layer\x18\x11 \x01(\x0e2\x17.sniffarr.v1.TitleLayerR\n" +
 	"titleLayer\x12)\n" +
-	"\x10title_confidence\x18\x12 \x01(\x02R\x0ftitleConfidenceJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
+	"\x10title_confidence\x18\x12 \x01(\x02R\x0ftitleConfidence\x12\x1d\n" +
+	"\n" +
+	"peers_week\x18\x13 \x01(\x03R\tpeersWeekJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
 	"\n" +
 	"ExternalId\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x0e\n" +

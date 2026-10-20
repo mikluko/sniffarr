@@ -145,8 +145,11 @@ func TestComputeTop(t *testing.T) {
 func TestWork(t *testing.T) {
 	ctx := context.Background()
 	s := seeded(t)
-	w, peers, rs, err := s.Work(ctx, "y:dune part two 2024", WindowDay, VoiceAny, t0)
+	v, err := s.Work(ctx, "y:dune part two 2024", WindowDay, VoiceAny, t0)
 	require.NoError(t, err)
+	w, peers, rs := v.Work, v.Peers, v.Releases
+	require.Equal(t, 1, v.Rank)
+	require.Nil(t, v.Delta)
 	require.Equal(t, "movie", w.Kind)
 	require.Equal(t, "Dune Part Two", w.Title)
 	require.Equal(t, 1, w.Rank)
@@ -157,14 +160,21 @@ func TestWork(t *testing.T) {
 	require.InDelta(t, 100, rs[1].Peers, 10)
 	require.Len(t, rs[0].Audio, 1)
 
-	w, peers, rs, err = s.Work(ctx, "y:interstellar 2014", WindowDay, VoiceMarker, t0)
+	v, err = s.Work(ctx, "y:interstellar 2014", WindowDay, VoiceAny, t0)
 	require.NoError(t, err)
+	require.Equal(t, 2, v.Rank, "the place in the top of the window and voice asked for")
+	require.NotNil(t, v.Delta)
+	v, err = s.Work(ctx, "y:interstellar 2014", WindowDay, VoiceMarker, t0)
+	require.NoError(t, err)
+	w, peers, rs = v.Work, v.Peers, v.Releases
+	require.Zero(t, v.Rank, "outside the explicit top")
+	require.Nil(t, v.Delta)
 	require.Equal(t, "Interstellar", w.Title, "the work is named even when the voice admits no release")
 	require.Zero(t, w.Releases)
 	require.Zero(t, peers)
 	require.Empty(t, rs)
 
-	_, _, _, err = s.Work(ctx, "y:nothing 2000", WindowDay, VoiceAny, t0)
+	_, err = s.Work(ctx, "y:nothing 2000", WindowDay, VoiceAny, t0)
 	require.ErrorIs(t, err, ErrNotFound)
 }
 

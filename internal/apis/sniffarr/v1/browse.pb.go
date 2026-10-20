@@ -1293,7 +1293,13 @@ type WorkResponse struct {
 	// Distinct peers of the releases the voice admits over the window.
 	Peers int64 `protobuf:"varint,2,opt,name=peers,proto3" json:"peers,omitempty"`
 	// The releases the voice admits, most peers over the window first.
-	Releases      []*WorkRelease `protobuf:"bytes,3,rep,name=releases,proto3" json:"releases,omitempty"`
+	Releases []*WorkRelease `protobuf:"bytes,3,rep,name=releases,proto3" json:"releases,omitempty"`
+	// The work's place in the top of its kind for the window and voice, 1
+	// first; 0 when it is not in it.
+	Rank int32 `protobuf:"varint,4,opt,name=rank,proto3" json:"rank,omitempty"`
+	// TopEntry.delta of that place; absent when the work is not in the top or
+	// had no peers the window before.
+	Delta         *float32 `protobuf:"fixed32,5,opt,name=delta,proto3,oneof" json:"delta,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1347,6 +1353,20 @@ func (x *WorkResponse) GetReleases() []*WorkRelease {
 		return x.Releases
 	}
 	return nil
+}
+
+func (x *WorkResponse) GetRank() int32 {
+	if x != nil {
+		return x.Rank
+	}
+	return 0
+}
+
+func (x *WorkResponse) GetDelta() float32 {
+	if x != nil && x.Delta != nil {
+		return *x.Delta
+	}
+	return 0
 }
 
 // WorkRelease is a release of a work with its peers.
@@ -1939,11 +1959,14 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\vWorkRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
 	"\x06window\x18\x02 \x01(\x0e2\x13.sniffarr.v1.WindowR\x06window\x12(\n" +
-	"\x05voice\x18\x03 \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\"\x81\x01\n" +
+	"\x05voice\x18\x03 \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\"\xba\x01\n" +
 	"\fWorkResponse\x12%\n" +
 	"\x04work\x18\x01 \x01(\v2\x11.sniffarr.v1.WorkR\x04work\x12\x14\n" +
 	"\x05peers\x18\x02 \x01(\x03R\x05peers\x124\n" +
-	"\breleases\x18\x03 \x03(\v2\x18.sniffarr.v1.WorkReleaseR\breleases\"S\n" +
+	"\breleases\x18\x03 \x03(\v2\x18.sniffarr.v1.WorkReleaseR\breleases\x12\x12\n" +
+	"\x04rank\x18\x04 \x01(\x05R\x04rank\x12\x19\n" +
+	"\x05delta\x18\x05 \x01(\x02H\x00R\x05delta\x88\x01\x01B\b\n" +
+	"\x06_delta\"S\n" +
 	"\vWorkRelease\x12.\n" +
 	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\x12\x14\n" +
 	"\x05peers\x18\x02 \x01(\x03R\x05peers\"\"\n" +
@@ -2129,6 +2152,7 @@ func file_sniffarr_v1_browse_proto_init() {
 	file_sniffarr_v1_search_proto_init()
 	file_sniffarr_v1_browse_proto_msgTypes[0].OneofWrappers = []any{}
 	file_sniffarr_v1_browse_proto_msgTypes[12].OneofWrappers = []any{}
+	file_sniffarr_v1_browse_proto_msgTypes[14].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
