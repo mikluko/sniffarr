@@ -27,7 +27,7 @@ const scope = "github.com/mikluko/sniffarr/internal/tmdb"
 
 // DefaultRetry is how long a key no work was found for waits before it is
 // looked up again.
-const DefaultRetry = 30 * 24 * time.Hour
+const DefaultRetry = 7 * 24 * time.Hour
 
 // maxChoices is the most candidates the Chooser is shown.
 const maxChoices = 8
@@ -229,6 +229,9 @@ func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Title, int,
 	case len(fits) == 1:
 		pick = fits[0]
 		pick.layer = store.LayerTMDB
+	case dominant(fits) >= 0:
+		pick = fits[dominant(fits)]
+		pick.confidence, pick.layer = dominantConfidence, store.LayerTMDB
 	case m.Chooser == nil:
 		return store.Title{}, 0, nil
 	default:
@@ -276,6 +279,35 @@ func (m *Matcher) search(ctx context.Context, w work) ([]candidate, error) {
 		}
 	}
 	return out, nil
+}
+
+// A fit is dominant when its popularity is at least dominantRatio times
+// every other fit's and at least dominantFloor; it is taken without the
+// Chooser, at dominantConfidence.
+const (
+	dominantRatio      = 10
+	dominantFloor      = 20
+	dominantConfidence = 0.8
+)
+
+// dominant returns the index of the dominant fit, or -1 when none is.
+func dominant(fits []fit) int {
+	best, second := -1, 0.0
+	for i, f := range fits {
+		switch {
+		case best < 0 || f.c.Popularity > fits[best].c.Popularity:
+			if best >= 0 {
+				second = fits[best].c.Popularity
+			}
+			best = i
+		case f.c.Popularity > second:
+			second = f.c.Popularity
+		}
+	}
+	if best < 0 || fits[best].c.Popularity < dominantFloor || fits[best].c.Popularity < dominantRatio*second {
+		return -1
+	}
+	return best
 }
 
 // fit is a plausible candidate, how sure the fit is, and what decided it.
@@ -354,6 +386,22 @@ func describe(c Candidate) string {
 	}
 	if c.Year != 0 {
 		s += ", " + strconv.Itoa(c.Year)
+	}
+	var facts []string
+	if c.Language != "" {
+		facts = append(facts, "language "+c.Language)
+	}
+	if len(c.Countries) > 0 {
+		facts = append(facts, "from "+strings.Join(c.Countries, ", "))
+	}
+	if c.Popularity > 0 {
+		facts = append(facts, "popularity "+strconv.FormatFloat(c.Popularity, 'f', 1, 64))
+	}
+	if c.Votes > 0 {
+		facts = append(facts, strconv.Itoa(c.Votes)+" votes")
+	}
+	if len(facts) > 0 {
+		s += " [" + strings.Join(facts, "; ") + "]"
 	}
 	overview, _, _ := strings.Cut(c.Overview, ". ")
 	if r := []rune(overview); len(r) > 200 {

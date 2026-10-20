@@ -25,14 +25,18 @@ import (
 )
 
 type result struct {
-	ID            int    `json:"id"`
-	Title         string `json:"title,omitempty"`
-	OriginalTitle string `json:"original_title,omitempty"`
-	ReleaseDate   string `json:"release_date,omitempty"`
-	Name          string `json:"name,omitempty"`
-	OriginalName  string `json:"original_name,omitempty"`
-	FirstAirDate  string `json:"first_air_date,omitempty"`
-	Overview      string `json:"overview"`
+	ID            int      `json:"id"`
+	Title         string   `json:"title,omitempty"`
+	OriginalTitle string   `json:"original_title,omitempty"`
+	ReleaseDate   string   `json:"release_date,omitempty"`
+	Name          string   `json:"name,omitempty"`
+	OriginalName  string   `json:"original_name,omitempty"`
+	FirstAirDate  string   `json:"first_air_date,omitempty"`
+	Overview      string   `json:"overview"`
+	Popularity    float64  `json:"popularity,omitempty"`
+	VoteCount     int      `json:"vote_count,omitempty"`
+	Language      string   `json:"original_language,omitempty"`
+	Countries     []string `json:"origin_country,omitempty"`
 }
 
 // fakeTMDB answers searches from results, keyed by path, query and
@@ -310,6 +314,41 @@ func TestMatchSeveral(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMatchDominant(t *testing.T) {
+	ctx := context.Background()
+	f := newTMDB(t)
+	f.results["/3/search/movie|Runner|en-US|2026"] = []result{
+		{ID: 1477049, Title: "Runner", OriginalTitle: "Corredora", ReleaseDate: "2026-05-29", Popularity: 3.2, VoteCount: 4, Language: "es"},
+		{ID: 1377237, Title: "Runner", OriginalTitle: "Runner", ReleaseDate: "2026-09-07", Popularity: 207.8, VoteCount: 61, Language: "en", Overview: "A run. Then another."},
+		{ID: 1712475, Title: "RUNNER", OriginalTitle: "RUNNER", ReleaseDate: "2026-10-23", Popularity: 1.1},
+	}
+	for _, lang := range []string{"en-US", "ru-RU"} {
+		f.details["/3/movie/1377237|"+lang] = map[string]any{"id": 1377237, "title": "Runner", "original_title": "Runner", "external_ids": map[string]any{"imdb_id": "tt31349844"}}
+	}
+	s := setup(t, store.Torrent{Name: "Runner.2026.VOSTFR.1080p.WEBRip.x265-GL0P.mkv", Kind: "movie", TitleKey: "y:runner 2026"})
+	m := matcher(f, s)
+	keys, err := m.Unmatched(ctx, nil, 10)
+	require.NoError(t, err)
+	require.NoError(t, m.Match(ctx, keys[0]))
+	require.Equal(t, store.Title{Year: 2026, Confidence: 0.8, Layer: store.LayerTMDB, MatchedAt: now,
+		IDs:     []store.ExternalID{{Provider: "imdb", ID: "tt31349844"}, {Provider: "tmdb", ID: "1377237"}},
+		Details: &store.Details{Type: "movie", OriginalTitle: "Runner", Texts: map[string]store.Text{"en": {Title: "Runner"}, "ru": {Title: "Runner"}}}},
+		title(t, s, 1), "the far more popular fit is taken without a Chooser")
+
+	f.results["/3/search/movie|Runner|en-US|2026"][1].Popularity = 30
+	s = setup(t, store.Torrent{Name: "Runner.2026.VOSTFR.1080p.WEBRip.x265-GL0P.mkv", Kind: "movie", TitleKey: "y:runner 2026"})
+	m = matcher(f, s)
+	chooser := &fakeChooser{choice: "none"}
+	m.Chooser = chooser
+	keys, err = m.Unmatched(ctx, nil, 10)
+	require.NoError(t, err)
+	require.NoError(t, m.Match(ctx, keys[0]))
+	require.Equal(t, store.Title{MatchedAt: now}, title(t, s, 1), "ten times the next is the bar")
+	require.Equal(t, "Runner, 2026 [language en; popularity 30.0; 61 votes]: A run", chooser.options["2"])
+	require.Equal(t, "Runner (Corredora), 2026 [language es; popularity 3.2; 4 votes]", chooser.options["1"])
+	require.Equal(t, "RUNNER, 2026 [popularity 1.1]", chooser.options["3"])
 }
 
 func TestMatchNone(t *testing.T) {
