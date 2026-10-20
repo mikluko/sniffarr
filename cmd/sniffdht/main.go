@@ -51,7 +51,7 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 	fs.SetOutput(output)
 	fs.BoolVar(&c.discover, "discover", true, "walk the DHT and report the infohashes it reveals")
 	fs.BoolVar(&c.fetch, "fetch", true, "take fetch tasks from the server and return their metadata")
-	fs.IntVar(&c.network.Port, "port", sniff.DefaultPort, "TCP and UDP port for peers and the DHT, forwarded by UPnP")
+	fs.IntVar(&c.network.Port, "port", sniff.DefaultPort, "TCP and UDP port for peers and the DHT, forwarded by UPnP when discovering; 0 picks a free one")
 	fs.IntVar(&c.network.Fetchers, "fetchers", sniff.DefaultFetchers, "metadata fetches at once")
 	fs.IntVar(&c.network.Rate, "rate", sniff.DefaultRate, "DHT queries, and new peer connections, a second")
 	fs.DurationVar(&c.network.FetchTimeout, "fetch-timeout", sniff.DefaultFetchTimeout, "how long to wait for a torrent's metadata once it has peers")
@@ -65,13 +65,14 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 	switch {
 	case !c.discover && !c.fetch:
 		return c, errors.New("-discover and -fetch are both off: nothing to do")
-	case c.network.Port < 1 || c.network.Port > 65535:
-		return c, errors.New("-port: want 1 to 65535")
+	case c.network.Port < 0 || c.network.Port > 65535:
+		return c, errors.New("-port: want 0 to 65535")
 	case c.network.Fetchers < 1, c.network.Rate < 1, c.walkers < 1, c.network.MinPeers < 1:
 		return c, errors.New("-fetchers, -rate, -walkers and -min-peers: want positive integers")
 	case c.network.FetchTimeout <= 0, c.network.PeerWait <= 0:
 		return c, errors.New("-fetch-timeout and -peer-wait: want positive durations")
 	}
+	c.network.Passive = !c.discover
 	for _, name := range []string{"SNIFFARR_URL", "SNIFFARR_INGEST_TOKEN"} {
 		if getenv(name) == "" {
 			return c, fmt.Errorf("%s is not set", name)
@@ -116,7 +117,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	if err := n.Bootstrap(ctx); err != nil && ctx.Err() == nil {
 		log.Warn("bootstrap", "err", err)
 	}
-	log.Info("dht up", "port", cfg.network.Port, "nodes", n.Nodes(), "discover", cfg.discover, "fetch", cfg.fetch)
+	log.Info("dht up", "port", n.Port(), "nodes", n.Nodes(), "discover", cfg.discover, "fetch", cfg.fetch)
 
 	g, ctx := errgroup.WithContext(ctx)
 	if d != nil {

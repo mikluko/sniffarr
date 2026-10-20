@@ -9,10 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anacrolix/dht/v2"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/stretchr/testify/require"
+
+	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 )
 
 // seed starts a client without DHT that serves the info's metadata on
@@ -79,4 +82,36 @@ func TestMetadataTouchesNoFiles(t *testing.T) {
 	for _, e := range wd {
 		require.NotEqual(t, "Collection", e.Name(), "nor under the working directory")
 	}
+}
+
+func TestClientConfig(t *testing.T) {
+	offer := func(Hash, sniffarrv1.Source) {}
+	for _, tt := range []struct {
+		name     string
+		cfg      NetworkConfig
+		offer    func(Hash, sniffarrv1.Source)
+		announce bool
+	}{
+		{name: "discovering", cfg: NetworkConfig{Port: 6881}, offer: offer, announce: true},
+		{name: "passive", cfg: NetworkConfig{Port: 6881, Passive: true}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.cfg.defaults()
+			c := clientConfig(tt.cfg, tt.offer)
+			require.Equal(t, 6881, c.ListenPort)
+			require.Equal(t, tt.cfg.Passive, c.NoDefaultPortForwarding, "a passive node forwards no port")
+			var sc dht.ServerConfig
+			c.ConfigureAnacrolixDhtServer(&sc)
+			require.Equal(t, tt.cfg.Passive, sc.Passive)
+			require.Equal(t, tt.announce, sc.OnAnnouncePeer != nil)
+			require.Nil(t, sc.PeerStore)
+		})
+	}
+}
+
+func TestStartPassiveOnAnyPort(t *testing.T) {
+	n, err := Start(NetworkConfig{Passive: true}, nil)
+	require.NoError(t, err)
+	t.Cleanup(n.Close)
+	require.Positive(t, n.Port(), "port 0 has the system pick one")
 }

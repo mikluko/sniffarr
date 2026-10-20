@@ -32,9 +32,13 @@ const (
 // NetworkConfig tunes the DHT node and the metadata fetches. Zero fields
 // take the default named in their doc.
 type NetworkConfig struct {
-	// Port is the TCP and UDP port for peers and the DHT, forwarded by UPnP;
-	// DefaultPort.
+	// Port is the TCP and UDP port for peers and the DHT, forwarded by UPnP
+	// unless Passive; 0 has the system pick a free one.
 	Port int
+	// Passive makes the DHT node answer no query and ask other nodes to keep
+	// it out of their routing tables, by BEP 43, and skips port forwarding.
+	// A passive node receives no announce_peer.
+	Passive bool
 	// Rate caps both DHT queries and new peer connections per second;
 	// DefaultRate. The libraries' own limits, 250 queries and 10 connections
 	// a second, starve thousands of concurrent fetches.
@@ -56,7 +60,6 @@ type NetworkConfig struct {
 }
 
 func (c *NetworkConfig) defaults() {
-	orDefault(&c.Port, DefaultPort)
 	orDefault(&c.Rate, DefaultRate)
 	orDefault(&c.Fetchers, DefaultFetchers)
 	orDefault(&c.PeerWait, DefaultPeerWait)
@@ -128,30 +131,7 @@ func (s clientSwarm) fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo
 // writes no torrent files.
 func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, error) {
 	cfg.defaults()
-	c := torrent.NewDefaultClientConfig()
-	c.DefaultStorage = noStorage{}
-	c.NoUpload = true
-	c.Seed = false
-	c.DisablePEX = true
-	c.DisableTrackers = true
-	c.DisableWebseeds = true
-	c.DisableWebtorrent = true
-	c.ListenPort = cfg.Port
-	c.NoDefaultPortForwarding = false
-	c.PeriodicallyAnnounceTorrentsToDht = false
-	c.TotalHalfOpenConns = 4 * cfg.Fetchers
-	c.DialRateLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
-	c.ConfigureAnacrolixDhtServer = func(sc *dht.ServerConfig) {
-		sc.SendLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
-		sc.PeerStore = nil
-		if offer != nil {
-			sc.OnAnnouncePeer = func(h metainfo.Hash, _ net.IP, _ int, _ bool) {
-				offer(Hash(h), sniffarrv1.Source_SOURCE_ANNOUNCE)
-			}
-		}
-	}
-	c.Slogger = slog.New(slog.DiscardHandler)
-	client, err := torrent.NewClient(c)
+	client, err := torrent.NewClient(clientConfig(cfg, offer))
 	if err != nil {
 		return nil, err
 	}
@@ -174,6 +154,36 @@ func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, er
 	return n, nil
 }
 
+// clientConfig is the configuration of the torrent client and its DHT node
+// that Start starts for cfg and offer.
+func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) *torrent.ClientConfig {
+	c := torrent.NewDefaultClientConfig()
+	c.DefaultStorage = noStorage{}
+	c.NoUpload = true
+	c.Seed = false
+	c.DisablePEX = true
+	c.DisableTrackers = true
+	c.DisableWebseeds = true
+	c.DisableWebtorrent = true
+	c.ListenPort = cfg.Port
+	c.NoDefaultPortForwarding = cfg.Passive
+	c.PeriodicallyAnnounceTorrentsToDht = false
+	c.TotalHalfOpenConns = 4 * cfg.Fetchers
+	c.DialRateLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
+	c.ConfigureAnacrolixDhtServer = func(sc *dht.ServerConfig) {
+		sc.SendLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
+		sc.PeerStore = nil
+		sc.Passive = cfg.Passive
+		if offer != nil {
+			sc.OnAnnouncePeer = func(h metainfo.Hash, _ net.IP, _ int, _ bool) {
+				offer(Hash(h), sniffarrv1.Source_SOURCE_ANNOUNCE)
+			}
+		}
+	}
+	c.Slogger = slog.New(slog.DiscardHandler)
+	return c
+}
+
 func (n *Network) observe(m metric.Meter) error {
 	n.answers = counter(m, "sniffarr.dht.sample_answers", "{answer}", "sample_infohashes queries answered.")
 	_, err := m.Int64ObservableGauge("sniffarr.dht.nodes", metric.WithUnit("{node}"),
@@ -189,6 +199,11 @@ func (n *Network) observe(m metric.Meter) error {
 func (n *Network) Bootstrap(ctx context.Context) error {
 	_, err := n.dht.BootstrapContext(ctx)
 	return err
+}
+
+// Port returns the port the client listens on.
+func (n *Network) Port() int {
+	return n.client.LocalPort()
 }
 
 // Nodes returns how many DHT nodes the node knows.

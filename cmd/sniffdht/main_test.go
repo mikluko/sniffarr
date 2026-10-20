@@ -36,9 +36,16 @@ func TestLoad(t *testing.T) {
 			require.True(t, c.discover, "both roles by default")
 			require.True(t, c.fetch)
 		}},
-		{name: "fetcher only", env: env, args: []string{"-discover=false"}, want: func(t *testing.T, c config) {
+		{name: "fetcher only", env: env, args: []string{"-discover=false", "-port", "0"}, want: func(t *testing.T, c config) {
 			require.False(t, c.discover)
 			require.True(t, c.fetch)
+			require.True(t, c.network.Passive, "a node that does not discover is passive")
+			require.Zero(t, c.network.Port)
+		}},
+		{name: "discoverer only", env: env, args: []string{"-fetch=false"}, want: func(t *testing.T, c config) {
+			require.True(t, c.discover)
+			require.False(t, c.fetch)
+			require.False(t, c.network.Passive)
 		}},
 		{name: "no role", env: env, args: []string{"-discover=false", "-fetch=false"}, err: "-discover and -fetch are both off: nothing to do"},
 		{name: "flags", env: env, args: []string{"-port", "6881", "-fetchers", "100", "-fetch-timeout", "30s", "-min-peers", "3", "-log-level", "debug"}, want: func(t *testing.T, c config) {
@@ -56,7 +63,8 @@ func TestLoad(t *testing.T) {
 		{name: "zero rate", env: env, args: []string{"-rate", "0"}, err: "-fetchers, -rate, -walkers and -min-peers: want positive integers"},
 		{name: "unknown level", env: env, args: []string{"-log-level", "loud"}, err: `invalid value "loud" for flag -log-level`},
 		{name: "zero peers", env: env, args: []string{"-min-peers", "0"}, err: "-fetchers, -rate, -walkers and -min-peers: want positive integers"},
-		{name: "port out of range", env: env, args: []string{"-port", "70000"}, err: "-port: want 1 to 65535"},
+		{name: "port out of range", env: env, args: []string{"-port", "70000"}, err: "-port: want 0 to 65535"},
+		{name: "negative port", env: env, args: []string{"-port", "-1"}, err: "-port: want 0 to 65535"},
 		{name: "negative wait", env: env, args: []string{"-peer-wait", "-1s"}, err: "-fetch-timeout and -peer-wait: want positive durations"},
 	}
 	for _, tt := range tests {

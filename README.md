@@ -144,7 +144,7 @@ retention period; a later sighting queues them again.
 | ---------------- | ------- | --------------------------------------------------------- |
 | `-discover`      | `true`  | Walk the DHT and report the infohashes it reveals         |
 | `-fetch`         | `true`  | Take fetch tasks from the server and return metadata      |
-| `-port`          | `42069` | TCP and UDP port for peers and the DHT, forwarded by UPnP |
+| `-port`          | `42069` | Port for peers and the DHT, TCP and UDP; `0` picks one    |
 | `-fetchers`      | `2000`  | Metadata fetches at once                                  |
 | `-rate`          | `2000`  | DHT queries, and new peer connections, a second           |
 | `-fetch-timeout` | `15s`   | How long to wait for metadata once a torrent has peers    |
@@ -152,6 +152,10 @@ retention period; a later sighting queues them again.
 | `-min-peers`     | `1`     | Peers needed within `-peer-wait` to fetch the metadata    |
 | `-walkers`       | `16`    | `sample_infohashes` queries at once                       |
 | `-log-level`     | `info`  | Level to log at: `debug`, `info`, `warn` or `error`       |
+
+A discovering sniffer forwards its port by UPnP. With `-discover=false` the
+node is passive by BEP 43: it forwards no port, answers no DHT query, and asks
+other nodes to keep it out of their routing tables.
 
 Discovery rests on `sample_infohashes`: in a measured run on a server with a
 public address, no `announce_peer` query reached the node, and the sniffer
