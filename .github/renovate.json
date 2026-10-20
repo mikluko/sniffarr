@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["bot"],
+  "automerge": false,
+  "minimumReleaseAge": "3 days",
+  "postUpdateOptions": ["gomodTidy"],
+  "osvVulnerabilityAlerts": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "buf, which bufbuild/buf-action installs at a version",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.yaml$/"],
+      "matchStrings": ["uses: bufbuild/buf-action@\\S+\\s+with:\\s+version: (?<currentValue>\\S+)"],
+      "depNameTemplate": "bufbuild/buf",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "helm, which azure/setup-helm installs at a version",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.yaml$/"],
+      "matchStrings": ["uses: azure/setup-helm@\\S+\\s+with:\\s+version: (?<currentValue>v\\S+)"],
+      "depNameTemplate": "helm/helm",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "renovate, whose config validator ci runs at a version",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yaml$/"],
+      "matchStrings": ["--package renovate@(?<currentValue>\\S+)"],
+      "depNameTemplate": "renovate",
+      "datasourceTemplate": "npm"
+    }
+  ]
+}
