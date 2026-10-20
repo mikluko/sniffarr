@@ -17,7 +17,8 @@ const MaxFiles = 100
 const DefaultSearchReserve = 25
 
 // Worker classifies in the background the stored torrents Store.Unclassified
-// returns: those of unknown kind whose names hint at Russian audio.
+// returns: those of unknown kind whose names hint at an audio track in one of
+// the audio languages.
 type Worker struct {
 	Store       Store
 	Jev         *Jev

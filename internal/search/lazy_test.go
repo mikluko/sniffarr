@@ -64,7 +64,7 @@ func setup(t *testing.T, torrents ...store.Torrent) (*store.Store, *fakeJev) {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db, store.Options{})
+	s, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
 	for i, tr := range torrents {
 		tr.Hash = store.Hash{byte(i + 1)}
@@ -92,8 +92,8 @@ func TestLazyClassifiesAndCaches(t *testing.T) {
 		store.Torrent{Name: "Heat 1995"},
 		store.Torrent{Name: "Ronin S01E01", Kind: "series", KindLayer: store.LayerRules},
 	)
-	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux", RussianAudio: 0.8}
-	jev.answers["Ronin S01E01"] = store.Classification{Kind: "movie", Source: "web", RussianAudio: 0.1}
+	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux", Audio: map[string]float64{"ru": 0.8}}
+	jev.answers["Ronin S01E01"] = store.Classification{Kind: "movie", Source: "web", Audio: map[string]float64{"ru": 0.1}}
 	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: jev, Log: slog.New(slog.DiscardHandler)}}
 
 	got := search(t, svc, &sniffarrv1.SearchRequest{})
@@ -120,16 +120,22 @@ func TestLazyFiltersOnWhatIsKnown(t *testing.T) {
 		store.Torrent{Name: "Thief 1981"},
 		store.Torrent{Name: "Collateral 2004", Kind: "movie", KindLayer: store.LayerRules},
 	)
-	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", RussianAudio: 0.9}
-	jev.answers["Ronin 1998"] = store.Classification{Kind: "music", RussianAudio: 0.9}
-	jev.answers["Collateral 2004"] = store.Classification{RussianAudio: 0.2}
+	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Audio: map[string]float64{"ru": 0.9}}
+	jev.answers["Ronin 1998"] = store.Classification{Kind: "music", Audio: map[string]float64{"ru": 0.9}}
+	jev.answers["Collateral 2004"] = store.Classification{Audio: map[string]float64{"ru": 0.2}}
 	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: jev, Log: slog.New(slog.DiscardHandler)}}
 
 	got := search(t, svc, &sniffarrv1.SearchRequest{Kinds: []sniffarrv1.Kind{sniffarrv1.Kind_KIND_MOVIE}})
 	require.ElementsMatch(t, []string{"Heat 1995", "Collateral 2004"}, keys(got), "Ronin turned out music; Thief failed and stays unknown")
 
-	got = search(t, svc, &sniffarrv1.SearchRequest{MinRussianAudio: new(float32(0.5))})
+	got = search(t, svc, &sniffarrv1.SearchRequest{AudioLanguage: new("ru"), MinAudioProbability: new(float32(0.5))})
 	require.ElementsMatch(t, []string{"Heat 1995", "Ronin 1998"}, keys(got))
+	require.Len(t, got["Heat 1995"].GetAudio(), 1)
+	require.Equal(t, "ru", got["Heat 1995"].GetAudio()[0].GetLanguage())
+	require.InDelta(t, 0.9, got["Heat 1995"].GetAudio()[0].GetProbability(), 1e-6)
+
+	_, err := svc.Search(context.Background(), connect.NewRequest(&sniffarrv1.SearchRequest{MinAudioProbability: new(float32(0.5))}))
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "a probability needs its language")
 }
 
 func TestLazyBounded(t *testing.T) {
@@ -145,7 +151,7 @@ func TestLazyBounded(t *testing.T) {
 
 func TestLazySlowClassifierDoesNotFailSearch(t *testing.T) {
 	s, jev := setup(t, store.Torrent{Name: "Heat 1995"})
-	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux", RussianAudio: 0.8}
+	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux", Audio: map[string]float64{"ru": 0.8}}
 	jev.delay = 300 * time.Millisecond
 	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: jev, Wait: 20 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}}
 

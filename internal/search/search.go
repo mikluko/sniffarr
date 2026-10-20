@@ -79,9 +79,11 @@ func (s *Service) Search(ctx context.Context, req *connect.Request[sniffarrv1.Se
 		}
 		q.Kinds = append(q.Kinds, name)
 	}
-	if m.MinRussianAudio != nil {
-		v := float64(m.GetMinRussianAudio())
-		q.MinRussianAudio = &v
+	if m.MinAudioProbability != nil {
+		if m.GetAudioLanguage() == "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("min_audio_probability without audio_language"))
+		}
+		q.AudioLanguage, q.MinAudioProbability = m.GetAudioLanguage(), new(float64(m.GetMinAudioProbability()))
 	}
 	var found []store.Release
 	var err error
@@ -137,9 +139,12 @@ func release(r store.Release) *sniffarrv1.Release {
 			out.Kind = k
 		}
 	}
-	if r.RussianAudio != nil {
-		v := float32(*r.RussianAudio)
-		out.RussianAudio = &v
+	for _, a := range r.Audio {
+		pa := &sniffarrv1.Audio{Language: a.Language, Marker: a.Marker, ScriptHint: a.ScriptHint}
+		if a.Probability != nil {
+			pa.Probability = new(float32(*a.Probability))
+		}
+		out.Audio = append(out.Audio, pa)
 	}
 	return out
 }

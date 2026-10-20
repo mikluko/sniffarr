@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/queue"
@@ -23,6 +24,8 @@ import (
 
 func TestLoad(t *testing.T) {
 	defaultScripts := rules.Scripts{unicode.Latin, unicode.Cyrillic}
+	russian, err := audio.Parse("ru")
+	require.NoError(t, err)
 	required := map[string]string{"SNIFFARR_DB": "/data/sniffarr.db", "SNIFFARR_INGEST_TOKEN": "in", "SNIFFARR_SEARCH_TOKEN": "se"}
 	with := func(kv ...string) map[string]string {
 		env := maps.Clone(required)
@@ -41,28 +44,29 @@ func TestLoad(t *testing.T) {
 			dailyTokens: classify.DefaultDailyTokens, searchReserve: classify.DefaultSearchReserve, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
-			store:     store.Options{MaxFiles: store.DefaultMaxFiles},
-			retention: defaultRetention, scripts: defaultScripts}},
+			store:     store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}},
+			retention: defaultRetention, scripts: defaultScripts, languages: russian}},
 		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
 			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
 			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h",
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
-			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_LOG_LEVEL", "debug"),
+			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_LOG_LEVEL", "debug", "SNIFFARR_AUDIO_LANGUAGES", "ru"),
 			want: config{addr: ":9000", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", typesafeKey: "ts", concurrency: 8, dailyTokens: 1000000, searchReserve: 40,
 				lease: 2 * time.Minute, attempts: 5, backoff: time.Hour,
 				queue:     queue.Options{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour},
-				store:     store.Options{MaxFiles: 50},
+				store:     store.Options{MaxFiles: 50, Languages: []string{"ru"}},
 				retention: 720 * time.Hour,
 				lazyMax:   5, lazyWait: 500 * time.Millisecond,
-				scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, logLevel: slog.LevelDebug}},
+				scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, logLevel: slog.LevelDebug,
+				languages: russian}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: config{addr: ":8080", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", concurrency: 4,
 			searchReserve: classify.DefaultSearchReserve, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
-			store:     store.Options{MaxFiles: store.DefaultMaxFiles},
-			retention: defaultRetention, scripts: defaultScripts}},
+			store:     store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}},
+			retention: defaultRetention, scripts: defaultScripts, languages: russian}},
 		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
 		{name: "nothing set", env: map[string]string{}, err: "SNIFFARR_DB is not set"},
 		{name: "no ingest token", env: with("SNIFFARR_INGEST_TOKEN", ""), err: "SNIFFARR_INGEST_TOKEN is not set"},
@@ -79,16 +83,23 @@ func TestLoad(t *testing.T) {
 			dailyTokens: classify.DefaultDailyTokens, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
 			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
-			store:     store.Options{MaxFiles: store.DefaultMaxFiles},
-			retention: defaultRetention, scripts: defaultScripts}},
+			store:     store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}},
+			retention: defaultRetention, scripts: defaultScripts, languages: russian}},
 		{name: "reserve over 100", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "101"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
 		{name: "reserve a fraction", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0.25"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
 		{name: "unknown script", env: with("SNIFFARR_SCRIPTS", "Latin,Elvish"), err: `SNIFFARR_SCRIPTS: unknown script "Elvish"`},
+		{name: "no audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", ""), want: config{addr: ":8080", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", concurrency: 4,
+			dailyTokens: classify.DefaultDailyTokens, searchReserve: classify.DefaultSearchReserve, lazyMax: search.DefaultLazyMax, lazyWait: search.DefaultLazyWait,
+			lease: ingest.DefaultLease, attempts: ingest.DefaultAttempts, backoff: ingest.DefaultBackoff,
+			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
+			store:     store.Options{MaxFiles: store.DefaultMaxFiles},
+			retention: defaultRetention, scripts: defaultScripts}},
+		{name: "unknown audio language", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru,xx"), err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},
 		{name: "budget not a number", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "1e6"), err: "SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := load(func(k string) string { return tt.env[k] })
+			c, err := load(func(k string) (string, bool) { v, ok := tt.env[k]; return v, ok })
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
 				return
@@ -107,12 +118,11 @@ func TestRunWithTelemetryOff(t *testing.T) {
 	addr := l.Addr().String()
 	require.NoError(t, l.Close())
 
-	cfg, err := load(func(k string) string {
-		return map[string]string{
-			"SNIFFARR_DB": filepath.Join(t.TempDir(), "sniffarr.db"), "SNIFFARR_ADDR": addr,
-			"SNIFFARR_INGEST_TOKEN": "in", "SNIFFARR_SEARCH_TOKEN": "se",
-		}[k]
-	})
+	env := map[string]string{
+		"SNIFFARR_DB": filepath.Join(t.TempDir(), "sniffarr.db"), "SNIFFARR_ADDR": addr,
+		"SNIFFARR_INGEST_TOKEN": "in", "SNIFFARR_SEARCH_TOKEN": "se",
+	}
+	cfg, err := load(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

@@ -88,11 +88,11 @@ func (l *Lazy) init() {
 
 // search returns the releases matching q after classifying, within Wait, up
 // to Max candidates the classifier has not examined; the filters on kind and
-// Russian audio apply to what is known once it is done.
+// audio apply to what is known once it is done.
 func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query) ([]store.Release, error) {
 	l.init()
 	limit := q.Limit
-	if len(q.Kinds) > 0 || q.MinRussianAudio != nil {
+	if len(q.Kinds) > 0 || q.MinAudioProbability != nil {
 		q.Limit = min(3*limit, 3*MaxLimit)
 	}
 	q.Unexamined = true
@@ -189,7 +189,7 @@ func result(r string) metric.AddOption {
 	return metric.WithAttributes(attribute.String("sniffarr.search.lazy.result", r))
 }
 
-// matches reports whether r passes the kind and Russian audio filters of q,
+// matches reports whether r passes the kind and audio filters of q,
 // which leave out what is still unknown.
 func matches(r store.Release, q store.Query) bool {
 	if slices.Contains(hidden, r.Kind) {
@@ -198,8 +198,11 @@ func matches(r store.Release, q store.Query) bool {
 	if len(q.Kinds) > 0 && !slices.Contains(q.Kinds, r.Kind) {
 		return false
 	}
-	if q.MinRussianAudio != nil && (r.RussianAudio == nil || *r.RussianAudio < *q.MinRussianAudio) {
-		return false
+	if q.MinAudioProbability != nil {
+		i := slices.IndexFunc(r.Audio, func(a store.Audio) bool { return a.Language == q.AudioLanguage })
+		if i < 0 || r.Audio[i].Probability == nil || *r.Audio[i].Probability < *q.MinAudioProbability {
+			return false
+		}
 	}
 	return true
 }

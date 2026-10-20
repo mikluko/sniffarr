@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -23,11 +26,33 @@ const answer200 = `{
   "model": "jev-1.13.0",
   "answers": {
     "kind": {"type": "choice", "choice": "movie", "probabilities": {"movie": 0.9, "series": 0.1}, "confidence": 0.85},
-    "russian_audio": {"type": "noul", "noul": 0.75},
+    "audio_ru": {"type": "noul", "noul": 0.75},
     "source": {"type": "choice", "choice": "remux", "probabilities": {"remux": 0.7, "encode": 0.3}, "confidence": 0.6}
   },
   "usage": {"input_tokens": 900, "output_tokens": 100}
 }`
+
+var russian, _ = audio.Parse("ru")
+
+func TestQuestions(t *testing.T) {
+	q := questions(true, russian)
+	require.ElementsMatch(t, []string{"kind", "source", "audio_ru"}, slices.Collect(maps.Keys(q)))
+	require.Equal(t, map[string]any{
+		"type":         "noul",
+		"instructions": "Does this release carry a Russian-language audio track (dubbing, voice-over, or Russian original), judging by its `name` and `files`?",
+		"criteria": map[string]any{
+			"true": map[string]any{
+				"signs": "Russian audio is named or clearly implied: Rus, RUS, rus in a file or folder name, Дубляж, Dub, MVO, DVO, AVO, ПМ, " +
+					"a separate Rus*.ac3/.mka/.aac track, a Russian-language title of a video release",
+				"studios": "A Russian dubbing or voice-over studio or release group: lostfilm, newstudio, jaskier, hdrezka, кубик в кубе, alexfilm, " +
+					"baibako, coldfilm, tvshows, novamedia, amedia, кураж-бамбей, red head sound, rhs, гоблин, anilibria, anidub, shiza, anistar, " +
+					"dream cast, selezen, exkinoray, scarabey, hellywood, generalfilm",
+			},
+			"false": "No sign of Russian audio, or not a video release",
+		},
+	}, q["audio_ru"])
+	require.ElementsMatch(t, []string{"source"}, slices.Collect(maps.Keys(questions(false, nil))), "no audio language, no audio question")
+}
 
 type fakeTypeSafe struct {
 	*httptest.Server
@@ -61,7 +86,7 @@ func newFake(t *testing.T) *fakeTypeSafe {
 			return
 		}
 		kind, askKind := req.Questions["kind"]
-		if req.Model != "jev-latest" || askKind && kind.Type != "choice" || req.Questions["russian_audio"].Type != "noul" || req.Questions["source"].Type != "choice" {
+		if req.Model != "jev-latest" || askKind && kind.Type != "choice" || req.Questions["audio_ru"].Type != "noul" || req.Questions["source"].Type != "choice" {
 			http.Error(w, "bad questions", http.StatusUnprocessableEntity)
 			return
 		}
@@ -87,6 +112,7 @@ func newFake(t *testing.T) *fakeTypeSafe {
 
 func (f *fakeTypeSafe) client() *Client {
 	c := New("key")
+	c.Languages = russian
 	c.URL = f.URL + "/v1/systemone"
 	c.Backoff = time.Millisecond
 	return c
@@ -97,7 +123,7 @@ func TestClientClassify(t *testing.T) {
 	f.overload.Store(2)
 	r, err := f.client().Classify(context.Background(), Input{Name: "Heat.1995.1080p.BluRay.REMUX", Size: 30 << 30, Files: []rules.File{{Path: "Heat.mkv", Size: 30 << 30}}, AskKind: true})
 	require.NoError(t, err)
-	require.Equal(t, Result{Kind: "movie", KindConfidence: 0.85, Source: "remux", SourceConfidence: 0.6, RussianAudio: 0.75, Tokens: 1000}, r)
+	require.Equal(t, Result{Kind: "movie", KindConfidence: 0.85, Source: "remux", SourceConfidence: 0.6, Audio: map[string]float64{"ru": 0.75}, Tokens: 1000}, r)
 	require.EqualValues(t, 3, f.requests.Load(), "two 529 answers are retried")
 }
 
@@ -127,11 +153,11 @@ func setup(t *testing.T, names ...string) *store.Store {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db, store.Options{})
+	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(russian)})
 	require.NoError(t, err)
 	for i, n := range names {
 		_, _, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: n, Size: 1 << 30, Files: []rules.File{{Path: n + ".mkv", Size: 1 << 30}},
-			Discovery: "sample", SeenAt: time.Now(), RussianHint: true})
+			Discovery: "sample", SeenAt: time.Now(), Audio: []store.Audio{{Language: "ru", ScriptHint: true}}})
 		require.NoError(t, err)
 	}
 	return s
@@ -161,7 +187,8 @@ func TestWorker(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "movie", r.Kind)
 	require.Equal(t, "remux", r.Source)
-	require.InDelta(t, 0.75, *r.RussianAudio, 1e-9)
+	require.Len(t, r.Audio, 1)
+	require.InDelta(t, 0.75, *r.Audio[0].Probability, 1e-9)
 	r, err = s.Get(context.Background(), store.Hash{3})
 	require.NoError(t, err)
 	require.Empty(t, r.Kind, "a refused torrent stays without a kind")

@@ -100,33 +100,3 @@ func TestParseScripts(t *testing.T) {
 	_, err = ParseScripts("Latin,Klingon")
 	require.EqualError(t, err, `unknown script "Klingon"`)
 }
-
-func TestRussianMarker(t *testing.T) {
-	tests := []struct {
-		name  string
-		files []File
-		want  bool
-	}{
-		{"Oppenheimer.2023.BDRip.1080p.Rus.Eng", nil, true},
-		{"Fallout.S01.1080p.AMZN.WEB-DL", []File{{"Fallout.S01E01.mkv", 1}, {"Audio/RUS/Fallout.S01E01.LostFilm.mka", 1}}, true},
-		{"Severance.S02.WEB-DL.1080p", []File{{"Severance.S02E01.mkv", 1}, {"Rus_Sound/Severance.S02E01.ac3", 1}}, true},
-		{"Дюна: Часть вторая (2024) BDRip 1080p | Дубляж", nil, true},
-		{"The Boys S04 [HDRezka Studio]", nil, true},
-		{"Cyberpunk Edgerunners [AniLibria]", nil, true},
-		{"Шерлок (2010) Кураж-Бамбей", nil, true},
-		{"Russian.Doll.S01.1080p.NF.WEB-DL", nil, false},
-		{"Brusnika.2020.WEB-DL", nil, false},
-		{"Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX", []File{{"Dune.mkv", 1}}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, RussianMarker(tt.name, tt.files))
-		})
-	}
-}
-
-func TestCyrillic(t *testing.T) {
-	require.True(t, Cyrillic("Брат 2 (2000) DVDRip", nil))
-	require.True(t, Cyrillic("Brat.2.2000.DVDRip", []File{{Path: "Брат 2.avi"}}))
-	require.False(t, Cyrillic("Brat.2.2000.DVDRip.Rus", []File{{Path: "Brat 2.avi"}}), "a marker is not a Cyrillic letter")
-}

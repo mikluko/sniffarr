@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -28,7 +29,7 @@ var ErrNotFound = errors.New("not found")
 // Hash is a BitTorrent v1 infohash.
 type Hash [20]byte
 
-// Layers name what decided a torrent's kind.
+// Layers name what decided a torrent's kind or audio probability.
 const (
 	LayerRules = "rules"
 	LayerReuse = "reuse"
@@ -37,20 +38,32 @@ const (
 
 // Torrent is a torrent to store.
 type Torrent struct {
-	Hash          Hash
-	Name          string
-	Size          int64
-	Files         []rules.File
-	Discovery     string
-	SeenAt        time.Time
-	RussianMarker bool
-	// RussianHint marks a torrent whose names are Cyrillic or carry a
-	// Russian marker.
-	RussianHint bool
+	Hash      Hash
+	Name      string
+	Size      int64
+	Files     []rules.File
+	Discovery string
+	SeenAt    time.Time
 	// Kind, when set, was decided by KindLayer.
 	Kind      string
 	KindLayer string
 	TitleKey  string
+	// Audio holds one entry per language, at most.
+	Audio []Audio
+}
+
+// Audio is what is known of a torrent's audio track in one language.
+type Audio struct {
+	Language string
+	// Marker reports a word or studio of the language in the torrent's
+	// names.
+	Marker bool
+	// ScriptHint reports letters of the language's script in the torrent's
+	// names.
+	ScriptHint bool
+	// Probability is nil while unknown; Layer decided it.
+	Probability *float64
+	Layer       string
 }
 
 // Release is a stored torrent with its classification.
@@ -65,9 +78,8 @@ type Release struct {
 	KindConfidence   float64
 	Source           string
 	SourceConfidence float64
-	// RussianAudio is 1 for a torrent with an explicit Russian marker, else
-	// the classifier's probability, else nil.
-	RussianAudio *float64
+	// Audio holds the entries of Options.Languages, in tag order.
+	Audio []Audio
 	// Classified reports whether the classifier has examined the torrent.
 	Classified bool
 	FirstSeen  time.Time
@@ -91,7 +103,9 @@ type Classification struct {
 	KindConfidence   float64
 	Source           string
 	SourceConfidence float64
-	RussianAudio     float64
+	// Audio maps languages to the probability of an audio track in each; a
+	// probability decided by rules stays.
+	Audio map[string]float64
 }
 
 // DefaultMaxFiles is the default of Options.MaxFiles.
@@ -102,6 +116,9 @@ type Options struct {
 	// MaxFiles is how many files of a torrent are stored, the largest ones;
 	// DefaultMaxFiles. The file count stays true.
 	MaxFiles int
+	// Languages are the audio languages Release.Audio holds and Unclassified
+	// selects by; none leaves both without audio.
+	Languages []string
 	// Meter records the store's metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
 }
@@ -233,10 +250,10 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 		}
 		var id int64
 		err := tx.QueryRowContext(ctx, `INSERT INTO torrents (infohash, name, size, file_count, discovery, first_seen, last_seen,
-				russian_marker, russian_hint, kind, kind_layer, title_key)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (infohash) DO NOTHING RETURNING id`,
+				kind, kind_layer, title_key)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (infohash) DO NOTHING RETURNING id`,
 			t.Hash[:], t.Name, t.Size, len(t.Files), t.Discovery, t.SeenAt.Unix(), t.SeenAt.Unix(),
-			t.RussianMarker, t.RussianHint, null(t.Kind), null(t.KindLayer), null(t.TitleKey)).Scan(&id)
+			null(t.Kind), null(t.KindLayer), null(t.TitleKey)).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -254,6 +271,12 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 		}
 		if _, err := tx.ExecContext(ctx, "INSERT INTO torrents_fts (rowid, name, paths) VALUES (?, ?, ?)", id, t.Name, strings.Join(paths, "\n")); err != nil {
 			return err
+		}
+		for _, a := range t.Audio {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO audio (torrent_id, language, marker, script_hint, probability, layer) VALUES (?, ?, ?, ?, ?, ?)",
+				id, a.Language, a.Marker, a.ScriptHint, a.Probability, null(a.Layer)); err != nil {
+				return err
+			}
 		}
 		if t.Kind == "" || t.TitleKey == "" {
 			return nil
@@ -298,19 +321,20 @@ type Query struct {
 	Kinds []string
 	// Exclude drops releases of these kinds.
 	Exclude []string
-	// MinRussianAudio, when set, drops releases with a lower or absent
-	// RussianAudio.
-	MinRussianAudio *float64
-	// Unexamined admits, past the Kinds and MinRussianAudio filters, the
-	// releases the classifier has not examined whose kind or RussianAudio is
-	// unknown.
+	// MinAudioProbability, when set, drops releases whose probability of an
+	// audio track in AudioLanguage is lower or unknown.
+	MinAudioProbability *float64
+	AudioLanguage       string
+	// Unexamined admits, past the Kinds and MinAudioProbability filters, the
+	// releases the classifier has not examined whose kind or audio
+	// probability is unknown.
 	Unexamined bool
 	Limit      int
 }
 
 const releaseColumns = `t.id, t.infohash, t.name, t.size, t.file_count, coalesce(t.kind, ''), coalesce(t.kind_layer, ''),
 	coalesce(t.kind_confidence, 0), coalesce(t.source, ''), coalesce(t.source_confidence, 0),
-	CASE WHEN t.russian_marker THEN 1.0 ELSE t.russian_audio END, t.classified_at IS NOT NULL, t.first_seen, t.last_seen`
+	t.classified_at IS NOT NULL, t.first_seen, t.last_seen`
 
 // Search returns releases matching q, best text match first, or most
 // recently seen first when q has no text.
@@ -350,13 +374,15 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 			args = append(args, k)
 		}
 	}
-	if q.MinRussianAudio != nil {
-		cond := "CASE WHEN t.russian_marker THEN 1.0 ELSE t.russian_audio END >= ?"
+	if q.MinAudioProbability != nil {
+		const probability = "(SELECT a.probability FROM audio a WHERE a.torrent_id = t.id AND a.language = ?)"
+		cond := probability + " >= ?"
+		args = append(args, q.AudioLanguage, *q.MinAudioProbability)
 		if q.Unexamined {
-			cond = "(" + cond + " OR t.classified_at IS NULL AND NOT t.russian_marker)"
+			cond = "(" + cond + " OR t.classified_at IS NULL AND " + probability + " IS NULL)"
+			args = append(args, q.AudioLanguage)
 		}
 		where = append(where, cond)
-		args = append(args, *q.MinRussianAudio)
 	}
 	stmt := "SELECT " + releaseColumns + " FROM " + from
 	if len(where) > 0 {
@@ -377,7 +403,10 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	return out, s.audio(ctx, out)
 }
 
 // Get returns the stored release with the hash, or ErrNotFound.
@@ -386,23 +415,62 @@ func (s *Store) Get(ctx context.Context, h Hash) (Release, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return Release{}, ErrNotFound
 	}
-	return r, err
+	if err != nil {
+		return Release{}, err
+	}
+	rs := []Release{r}
+	if err := s.audio(ctx, rs); err != nil {
+		return Release{}, err
+	}
+	return rs[0], nil
+}
+
+// audio fills in the Audio of the releases.
+func (s *Store) audio(ctx context.Context, rs []Release) error {
+	if len(rs) == 0 || len(s.opts.Languages) == 0 {
+		return nil
+	}
+	index := make(map[int64]int, len(rs))
+	args := make([]any, 0, len(rs)+len(s.opts.Languages))
+	for i, r := range rs {
+		index[r.ID] = i
+		args = append(args, r.ID)
+	}
+	for _, l := range s.opts.Languages {
+		args = append(args, l)
+	}
+	rows, err := s.r.QueryContext(ctx, "SELECT torrent_id, language, marker, script_hint, probability, coalesce(layer, '') FROM audio WHERE torrent_id IN ("+
+		placeholders(len(rs))+") AND language IN ("+placeholders(len(s.opts.Languages))+") ORDER BY torrent_id, language", args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var a Audio
+		var p sql.NullFloat64
+		if err := rows.Scan(&id, &a.Language, &a.Marker, &a.ScriptHint, &p, &a.Layer); err != nil {
+			return err
+		}
+		if p.Valid {
+			a.Probability = &p.Float64
+		}
+		i := index[id]
+		rs[i].Audio = append(rs[i].Audio, a)
+	}
+	return rows.Err()
 }
 
 func scanRelease(row interface{ Scan(...any) error }) (Release, error) {
 	var r Release
 	var hash []byte
-	var russian sql.NullFloat64
 	var first, last int64
 	err := row.Scan(&r.ID, &hash, &r.Name, &r.Size, &r.FileCount, &r.Kind, &r.KindLayer, &r.KindConfidence, &r.Source, &r.SourceConfidence,
-		&russian, &r.Classified, &first, &last)
+		&r.Classified, &first, &last)
 	if err != nil {
 		return Release{}, err
 	}
 	r.Hash = Hash(hash)
-	if russian.Valid {
-		r.RussianAudio = &russian.Float64
-	}
 	r.FirstSeen = time.Unix(first, 0).UTC()
 	r.LastSeen = time.Unix(last, 0).UTC()
 	return r, nil
@@ -410,10 +478,20 @@ func scanRelease(row interface{ Scan(...any) error }) (Release, error) {
 
 // Unclassified returns up to limit torrents with an ID above after, in ID
 // order, that the classifier has not examined, whose kind is unknown, and
-// whose names hint at Russian audio; each with at most maxFiles files.
+// whose names have a marker or script hint of one of Options.Languages; each
+// with at most maxFiles files.
 func (s *Store) Unclassified(ctx context.Context, after int64, limit, maxFiles int) ([]Pending, error) {
-	return s.pending(ctx, maxFiles, `SELECT id, name, size, kind IS NOT NULL FROM torrents
-		WHERE classified_at IS NULL AND kind IS NULL AND russian_hint = 1 AND id > ? ORDER BY id LIMIT ?`, after, limit)
+	if len(s.opts.Languages) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(s.opts.Languages)+2)
+	for _, l := range s.opts.Languages {
+		args = append(args, l)
+	}
+	return s.pending(ctx, maxFiles, `SELECT t.id, t.name, t.size, t.kind IS NOT NULL FROM torrents t
+		WHERE t.classified_at IS NULL AND t.kind IS NULL AND EXISTS (SELECT 1 FROM audio a WHERE a.torrent_id = t.id
+			AND a.language IN (`+placeholders(len(s.opts.Languages))+`) AND (a.marker OR a.script_hint))
+		AND t.id > ? ORDER BY t.id LIMIT ?`, append(args, after, limit)...)
 }
 
 // Pending returns the torrents with the IDs that the classifier has not
@@ -497,9 +575,17 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 	var copied int
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `UPDATE torrents SET classified_at = ?, classify_error = NULL,
-			source = ?, source_confidence = ?, russian_audio = ? WHERE id = ?`,
-			at.Unix(), c.Source, c.SourceConfidence, c.RussianAudio, id); err != nil {
+			source = ?, source_confidence = ? WHERE id = ?`,
+			at.Unix(), c.Source, c.SourceConfidence, id); err != nil {
 			return err
+		}
+		for _, lang := range slices.Sorted(maps.Keys(c.Audio)) {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO audio (torrent_id, language, marker, script_hint, probability, layer)
+				VALUES (?, ?, 0, 0, ?, ?) ON CONFLICT (torrent_id, language) DO UPDATE SET
+				probability = excluded.probability, layer = excluded.layer WHERE audio.layer IS NOT ?`,
+				id, lang, c.Audio[lang], LayerJev, LayerRules); err != nil {
+				return err
+			}
 		}
 		if c.Kind == "" {
 			return nil

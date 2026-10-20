@@ -1,6 +1,5 @@
 // Package rules is the first-level filter for submitted torrents: it rejects
-// by name and file extensions what is never worth classifying, and detects
-// explicit markers of Russian audio.
+// by name and file extensions what is never worth classifying.
 package rules
 
 import (
@@ -104,11 +103,7 @@ var (
 	adultCode  = regexp.MustCompile(`\b[A-Z]{2,6}-\d{3,5}\b`)
 	warez      = words(`repack|fitgirl|dodi|crack(?:ed)?|portable|keygen|elamigos|codex|skidrow|gog|v\d+\.\d+`)
 	course     = words(`udemy|course|tutorial|masterclass|skillshare|lynda|pluralsight`)
-	russian    = words(`rus|дубляж|дублированный|многоголосый|двухголосый|одноголосый|` + studios)
 )
-
-// studios are Russian dubbing and voice-over studios and release groups.
-const studios = `lostfilm|newstudio|jaskier|hdrezka|кубик в кубе|alexfilm|baibako|coldfilm|tvshows|novamedia|amedia|кураж-бамбей|red head sound|rhs|гоблин|anilibria|anidub|shiza|anistar|dream cast|selezen|exkinoray|scarabey|hellywood|generalfilm`
 
 // words matches any of the alternatives as a whole word, case-insensitively.
 // Underscores and dots separate words, as they do in release names.
@@ -165,32 +160,6 @@ func Check(name string, size int64, files []File, scripts Scripts) Reason {
 		return Small
 	}
 	return Accept
-}
-
-// RussianMarker reports whether the name or a file path explicitly names a
-// Russian audio track: the word "rus", a Russian dubbing term, or a Russian
-// dubbing studio.
-func RussianMarker(name string, files []File) bool {
-	return russian.MatchString(name) || anyPath(files, russian.MatchString)
-}
-
-// Cyrillic reports whether the name or a file path has a Cyrillic letter.
-func Cyrillic(name string, files []File) bool {
-	return cyrillic(name) || anyPath(files, cyrillic)
-}
-
-func cyrillic(s string) bool {
-	for _, r := range s {
-		if unicode.Is(unicode.Cyrillic, r) {
-			return true
-		}
-	}
-	return false
-}
-
-// Studios lists the studios RussianMarker recognizes.
-func Studios() []string {
-	return strings.Split(studios, "|")
 }
 
 func isAdult(s string) bool {

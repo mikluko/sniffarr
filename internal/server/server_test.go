@@ -13,9 +13,11 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/queue"
@@ -29,7 +31,7 @@ func start(t *testing.T, cfg Config, qopts ...queue.Options) (*httptest.Server, 
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db, store.Options{})
+	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(cfg.Languages)})
 	require.NoError(t, err)
 	var qo queue.Options
 	if len(qopts) > 0 {
@@ -196,7 +198,7 @@ func TestIngestAndSearch(t *testing.T) {
 }
 
 func testIngestAndSearch(t *testing.T, protocol connect.ClientOption) {
-	srv, hc := start(t, Config{Poll: 20 * time.Millisecond})
+	srv, hc := start(t, Config{Poll: 20 * time.Millisecond, Languages: russian})
 	ctx := context.Background()
 	var opts []connect.ClientOption
 	if protocol != nil {
@@ -236,20 +238,76 @@ func testIngestAndSearch(t *testing.T, protocol connect.ClientOption) {
 	require.Equal(t, hash(1), r.GetInfohash())
 	require.Equal(t, int64(1), r.GetFileCount())
 	require.Equal(t, sniffarrv1.Kind_KIND_MOVIE, r.GetKind(), "the name tells")
-	require.InDelta(t, 1.0, r.GetRussianAudio(), 1e-9, "the explicit rus marker")
+	require.Len(t, r.GetAudio(), 1)
+	require.True(t, r.GetAudio()[0].GetMarker())
+	require.InDelta(t, 1.0, r.GetAudio()[0].GetProbability(), 1e-9, "the explicit rus marker")
 	require.Equal(t, "magnet:?xt=urn:btih:0100000000000000000000000000000000000000&dn=The.Thing.1982.1080p.BluRay.x264.Rus.Eng", r.GetMagnet())
 
-	found, err = search.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{MinRussianAudio: new(float32(0.5))}))
+	found, err = search.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{AudioLanguage: new("ru"), MinAudioProbability: new(float32(0.5))}))
 	require.NoError(t, err)
 	require.Len(t, found.Msg.GetReleases(), 1)
 
 	got, err := search.Get(ctx, connect.NewRequest(&sniffarrv1.GetRequest{Infohash: hash(4)}))
 	require.NoError(t, err)
 	require.Equal(t, "Mad.Max.Fury.Road.2015.2160p.WEB-DL", got.Msg.GetRelease().GetName())
-	require.Nil(t, got.Msg.GetRelease().RussianAudio)
+	require.Len(t, got.Msg.GetRelease().GetAudio(), 1)
+	require.Nil(t, got.Msg.GetRelease().GetAudio()[0].Probability, "no marker, no answer yet")
 
 	_, err = search.Get(ctx, connect.NewRequest(&sniffarrv1.GetRequest{Infohash: hash(2)}))
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(err), "rejected torrents are not stored")
+}
+
+var russian, _ = audio.Parse("ru")
+
+func TestAudioHints(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		langs []audio.Language
+		want  map[string][]*sniffarrv1.Audio
+	}{
+		{"ru", russian, map[string][]*sniffarrv1.Audio{
+			"Нечто (1982) BDRip":            {{Language: "ru", ScriptHint: true}},
+			"The.Thing.1982.BDRip.Rus":      {{Language: "ru", Marker: true, Probability: new(float32(1))}},
+			"The.Thing.1982.BDRip":          {{Language: "ru"}},
+			"The.Thing.1982.BDRip.LostFilm": {{Language: "ru", Marker: true, Probability: new(float32(1))}},
+		}},
+		{"none", nil, map[string][]*sniffarrv1.Audio{
+			"Нечто (1982) BDRip":            nil,
+			"The.Thing.1982.BDRip.Rus":      nil,
+			"The.Thing.1982.BDRip":          nil,
+			"The.Thing.1982.BDRip.LostFilm": nil,
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, hc := start(t, Config{Poll: 20 * time.Millisecond, Languages: tt.langs})
+			ingest := ingestClient(srv, hc)
+			_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3, 4)
+			require.NoError(t, err)
+			f := openFetch(t, ingest)
+			f.credit(4)
+			f.expect(1, 2, 3, 4)
+			f.torrent(1, "Нечто (1982) BDRip", "Nechto.avi")
+			f.torrent(2, "The.Thing.1982.BDRip.Rus", "The.Thing.avi")
+			f.torrent(3, "The.Thing.1982.BDRip", "The.Thing.avi")
+			f.torrent(4, "The.Thing.1982.BDRip.LostFilm", "The.Thing.avi")
+			f.finish()
+
+			search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("search")))
+			res, err := search.Search(context.Background(), connect.NewRequest(&sniffarrv1.SearchRequest{}))
+			require.NoError(t, err)
+			got := map[string][]*sniffarrv1.Audio{}
+			for _, r := range res.Msg.GetReleases() {
+				got[r.GetName()] = r.GetAudio()
+			}
+			require.Len(t, got, len(tt.want))
+			for name, want := range tt.want {
+				require.Len(t, got[name], len(want), name)
+				for i := range want {
+					require.True(t, proto.Equal(want[i], got[name][i]), "%s: %v", name, got[name][i])
+				}
+			}
+		})
+	}
 }
 
 func TestFetchCreditAndLeases(t *testing.T) {

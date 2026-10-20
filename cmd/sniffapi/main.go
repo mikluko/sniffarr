@@ -16,6 +16,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/cli"
 	"github.com/mikluko/sniffarr/internal/database"
@@ -43,6 +44,7 @@ type config struct {
 	lazyMax                  int
 	lazyWait                 time.Duration
 	scripts                  rules.Scripts
+	languages                []audio.Language
 	logLevel                 slog.Level
 }
 
@@ -55,11 +57,15 @@ const defaultRetention = 90 * 24 * time.Hour
 const sweepBatch = 1000
 
 func main() {
-	cli.Main(func() (config, error) { return load(os.Getenv) }, run)
+	cli.Main(func() (config, error) { return load(os.LookupEnv) }, run)
 }
 
-// load reads the configuration from getenv.
-func load(getenv func(string) string) (config, error) {
+// load reads the configuration from lookup.
+func load(lookup func(string) (string, bool)) (config, error) {
+	getenv := func(name string) string {
+		v, _ := lookup(name)
+		return v
+	}
 	for _, name := range []string{"SNIFFARR_DB", "SNIFFARR_INGEST_TOKEN", "SNIFFARR_SEARCH_TOKEN"} {
 		if getenv(name) == "" {
 			return config{}, fmt.Errorf("%s is not set", name)
@@ -118,6 +124,14 @@ func load(getenv func(string) string) (config, error) {
 	if c.scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
 		return c, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
 	}
+	languages, ok := lookup("SNIFFARR_AUDIO_LANGUAGES")
+	if !ok {
+		languages = audio.DefaultLanguages
+	}
+	if c.languages, err = audio.Parse(languages); err != nil {
+		return c, fmt.Errorf("SNIFFARR_AUDIO_LANGUAGES: %w", err)
+	}
+	c.store.Languages = audio.Tags(c.languages)
 	if err := c.logLevel.UnmarshalText([]byte(or(getenv("SNIFFARR_LOG_LEVEL"), "info"))); err != nil {
 		return c, errors.New("SNIFFARR_LOG_LEVEL: want debug, info, warn or error")
 	}
@@ -195,7 +209,9 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	if cfg.typesafeKey == "" {
 		log.Warn("TYPESAFE_API_KEY is not set; torrents are classified by their names only")
 	} else {
-		jev = &classify.Jev{Store: s, Classifier: classify.New(cfg.typesafeKey), DailyTokens: cfg.dailyTokens, Log: log}
+		client := classify.New(cfg.typesafeKey)
+		client.Languages = cfg.languages
+		jev = &classify.Jev{Store: s, Classifier: client, DailyTokens: cfg.dailyTokens, Log: log}
 		lazy = &search.Lazy{Classifier: jev, Max: cfg.lazyMax, Wait: cfg.lazyWait, MaxFiles: classify.MaxFiles, Log: log}
 	}
 	handler, err := server.New(server.Config{
@@ -207,6 +223,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		Attempts:    cfg.attempts,
 		Backoff:     cfg.backoff,
 		Scripts:     cfg.scripts,
+		Languages:   cfg.languages,
 		Log:         log,
 		Lazy:        lazy,
 	})

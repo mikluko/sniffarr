@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rules"
@@ -57,7 +58,9 @@ type Service struct {
 	// Scripts are the writing systems a torrent's name may have letters of;
 	// rules.DefaultScripts when nil.
 	Scripts rules.Scripts
-	Now     func() time.Time
+	// Languages get an audio entry in every stored torrent.
+	Languages []audio.Language
+	Now       func() time.Time
 	// Meter records the service's metrics; the global MeterProvider when
 	// nil.
 	Meter metric.MeterProvider
@@ -202,16 +205,14 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 		}
 		return nil
 	}
-	marker := rules.RussianMarker(t.GetName(), files)
 	tr := store.Torrent{
-		Hash:          h,
-		Name:          t.GetName(),
-		Size:          t.GetSize(),
-		Files:         files,
-		Discovery:     d,
-		SeenAt:        now,
-		RussianMarker: marker,
-		RussianHint:   marker || rules.Cyrillic(t.GetName(), files),
+		Hash:      h,
+		Name:      t.GetName(),
+		Size:      t.GetSize(),
+		Files:     files,
+		Discovery: d,
+		SeenAt:    now,
+		Audio:     audioEntries(s.Languages, t.GetName(), files),
 	}
 	if err := s.kind(ctx, &tr); err != nil {
 		return err
@@ -250,6 +251,19 @@ func (s *Service) kind(ctx context.Context, t *store.Torrent) error {
 		t.Kind, t.KindLayer = k, store.LayerReuse
 	}
 	return nil
+}
+
+// audioEntries returns an entry per language for a torrent of the name and
+// files; a marker decides the probability as 1.
+func audioEntries(langs []audio.Language, name string, files []rules.File) []store.Audio {
+	out := make([]store.Audio, len(langs))
+	for i, l := range langs {
+		out[i] = store.Audio{Language: l.Tag, Marker: l.Marker(name, files), ScriptHint: l.ScriptHint(name, files)}
+		if out[i].Marker {
+			out[i].Probability, out[i].Layer = new(1.0), store.LayerRules
+		}
+	}
+	return out
 }
 
 func discovery(src sniffarrv1.Source) (string, error) {

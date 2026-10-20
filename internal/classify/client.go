@@ -1,5 +1,6 @@
 // Package classify asks TypeSafe's Jev what a torrent is, whether it carries
-// Russian audio, and what kind of video copy it is, and records the answers.
+// an audio track in each audio language, and what kind of video copy it is,
+// and records the answers.
 package classify
 
 import (
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/rules"
 )
@@ -30,6 +32,8 @@ type Client struct {
 	Retries int
 	// Backoff is the wait before the first retry; it doubles each time.
 	Backoff time.Duration
+	// Languages are asked about, one audio question each.
+	Languages []audio.Language
 }
 
 // New returns a Client for the API key with the production endpoint and the
@@ -60,8 +64,10 @@ type Result struct {
 	KindConfidence   float64
 	Source           string
 	SourceConfidence float64
-	RussianAudio     float64
-	Tokens           int64
+	// Audio maps the tag of each of Client.Languages to the probability of
+	// an audio track in it.
+	Audio  map[string]float64
+	Tokens int64
 }
 
 // APIError is a non-200 answer from the endpoint.
@@ -83,7 +89,12 @@ func retryable(status int) bool {
 	return status == http.StatusTooManyRequests || status >= 500
 }
 
-func questions(askKind bool) map[string]any {
+// audioQuestion is the key of the question about an audio track in l.
+func audioQuestion(l audio.Language) string {
+	return "audio_" + l.Tag
+}
+
+func questions(askKind bool, langs []audio.Language) map[string]any {
 	q := map[string]any{
 		"kind": map[string]any{
 			"type":         "choice",
@@ -98,17 +109,6 @@ func questions(askKind bool) map[string]any {
 				"other":    "Anything else",
 			},
 		},
-		"russian_audio": map[string]any{
-			"type":         "noul",
-			"instructions": "Does this release carry a Russian-language audio track (dubbing, voice-over, or Russian original), judging by its `name` and `files`?",
-			"criteria": map[string]any{
-				"true": map[string]any{
-					"signs":   "Russian audio is named or clearly implied: Rus, RUS, rus in a file or folder name, Дубляж, Dub, MVO, DVO, AVO, ПМ, a separate Rus*.ac3/.mka/.aac track, a Russian-language title of a video release",
-					"studios": "A Russian dubbing or voice-over studio or release group: " + strings.Join(rules.Studios(), ", "),
-				},
-				"false": "No sign of Russian audio, or not a video release",
-			},
-		},
 		"source": map[string]any{
 			"type":         "choice",
 			"instructions": "If this is a video release, what kind of copy is it?",
@@ -120,6 +120,19 @@ func questions(askKind bool) map[string]any {
 				"other":      "Another video source, or not a video release",
 			},
 		},
+	}
+	for _, l := range langs {
+		q[audioQuestion(l)] = map[string]any{
+			"type":         "noul",
+			"instructions": "Does this release carry a " + l.Name + "-language audio track (dubbing, voice-over, or " + l.Name + " original), judging by its `name` and `files`?",
+			"criteria": map[string]any{
+				"true": map[string]any{
+					"signs":   l.Signs,
+					"studios": "A " + l.Name + " dubbing or voice-over studio or release group: " + strings.Join(l.Studios, ", "),
+				},
+				"false": "No sign of " + l.Name + " audio, or not a video release",
+			},
+		}
 	}
 	if !askKind {
 		delete(q, "kind")
@@ -155,7 +168,7 @@ func (c *Client) Classify(ctx context.Context, in Input) (Result, error) {
 			"size_gib": fmt.Sprintf("%.2f", float64(in.Size)/(1<<30)),
 			"files":    files,
 		},
-		"questions": questions(in.AskKind),
+		"questions": questions(in.AskKind, c.Languages),
 	})
 	if err != nil {
 		return Result{}, err
@@ -196,15 +209,24 @@ func (c *Client) post(ctx context.Context, body []byte, askKind bool) (Result, e
 	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
 		return Result{}, fmt.Errorf("typesafe: decode answer: %w", err)
 	}
-	kind, source, russian := r.Answers["kind"], r.Answers["source"], r.Answers["russian_audio"]
-	if askKind && kind.Choice == "" || source.Choice == "" || russian.Noul == nil {
+	kind, source := r.Answers["kind"], r.Answers["source"]
+	if askKind && kind.Choice == "" || source.Choice == "" {
 		return Result{}, errors.New("typesafe: incomplete answer")
 	}
 	out := Result{
 		Source:           source.Choice,
 		SourceConfidence: source.Confidence,
-		RussianAudio:     *russian.Noul,
 		Tokens:           r.Usage.InputTokens + r.Usage.OutputTokens,
+	}
+	for _, l := range c.Languages {
+		a := r.Answers[audioQuestion(l)]
+		if a.Noul == nil {
+			return Result{}, errors.New("typesafe: incomplete answer")
+		}
+		if out.Audio == nil {
+			out.Audio = map[string]float64{}
+		}
+		out.Audio[l.Tag] = *a.Noul
 	}
 	if askKind {
 		out.Kind, out.KindConfidence = kind.Choice, kind.Confidence

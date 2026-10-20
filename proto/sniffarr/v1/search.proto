@@ -25,10 +25,16 @@ message SearchRequest {
   // Only releases of these kinds; KIND_UNSPECIFIED selects unclassified
   // ones. Empty means any kind.
   repeated Kind kinds = 2;
-  // Only releases whose russian_audio is at least this.
-  optional float min_russian_audio = 3;
+  reserved 3;
+  reserved "min_russian_audio";
   // At most this many releases: 50 when unset, never more than 500.
   int32 limit = 4;
+  // The language, a BCP-47 tag, that min_audio_probability applies to;
+  // required with it.
+  optional string audio_language = 5;
+  // Only releases whose probability of an audio track in audio_language is
+  // known and at least this.
+  optional float min_audio_probability = 6;
 }
 
 message SearchResponse {
@@ -51,9 +57,8 @@ message Release {
   int64 file_count = 4;
   // KIND_UNSPECIFIED until the torrent is classified.
   Kind kind = 5;
-  // Probability of a Russian audio track. Absent when the torrent is not
-  // classified and its names carry no explicit Russian marker.
-  optional float russian_audio = 6;
+  reserved 6;
+  reserved "russian_audio";
   VideoSource source = 7;
   // The classifier's confidence in kind and source, 0 when unclassified.
   float kind_confidence = 8;
@@ -63,9 +68,25 @@ message Release {
   string magnet = 12;
   // What decided kind; LAYER_UNSPECIFIED while kind is unknown.
   Layer layer = 13;
-  // Whether the classifier has examined the release; russian_audio, beyond
-  // an explicit Russian marker, and source come from it.
+  // Whether the classifier has examined the release; source, and audio
+  // probabilities a marker did not decide, come from it.
   bool classified = 14;
+  // At most one entry per audio language the server is configured with, in
+  // tag order; empty without audio languages.
+  repeated Audio audio = 15;
+}
+
+// Audio is what is known of a release's audio track in one language.
+message Audio {
+  // BCP-47 tag.
+  string language = 1;
+  // Probability of an audio track in the language: 1 when marker is set,
+  // else the classifier's answer; absent while unknown.
+  optional float probability = 2;
+  // A word or studio of the language is in the release's name or paths.
+  bool marker = 3;
+  // Letters of the language's script are in the release's name or paths.
+  bool script_hint = 4;
 }
 
 // Layer is what decided a release's kind.

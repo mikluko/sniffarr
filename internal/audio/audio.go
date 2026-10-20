@@ -108,6 +108,9 @@ func lookup(tag string) (Language, bool) {
 
 // Tags returns the tags of langs.
 func Tags(langs []Language) []string {
+	if len(langs) == 0 {
+		return nil
+	}
 	out := make([]string, len(langs))
 	for i, l := range langs {
 		out[i] = l.Tag

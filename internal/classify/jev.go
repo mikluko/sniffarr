@@ -140,7 +140,7 @@ func (j *Jev) classify(ctx context.Context, p store.Pending) error {
 		KindConfidence:   r.KindConfidence,
 		Source:           r.Source,
 		SourceConfidence: r.SourceConfidence,
-		RussianAudio:     r.RussianAudio,
+		Audio:            r.Audio,
 	}, j.now())
 	if err != nil {
 		return fmt.Errorf("store classification: %w", err)
