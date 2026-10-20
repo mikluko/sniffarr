@@ -2,7 +2,9 @@
 {{- $p := $v.persistence }}
 {{- $ls := $v.litestream }}
 {{- $name := printf "%s-api" .Release.Name }}
-{{- $uiLoopback := or (hasPrefix "127." $v.ui.addr) (hasPrefix "localhost" $v.ui.addr) (hasPrefix "[::1]" $v.ui.addr) }}
+{{- if hasKey $v "ui" }}
+{{- fail "api.ui is not a value: the UI is the ui component, ui.enabled, with ui.addr and ui.service.targetPort in place of api.ui.addr and api.ui.targetPort" }}
+{{- end }}
 {{- if not (has $p.type (list "emptyDir" "hostPath" "pvc")) }}
 {{- fail (printf "api.persistence.type: want emptyDir, hostPath or pvc, not %q" $p.type) }}
 {{- end }}
@@ -78,16 +80,9 @@ spec:
           command: [/sniffarr]
           args:
             - "-api"
-            {{- if $v.ui.enabled }}
-            - "-ui"
-            {{- end }}
           env:
             - name: SNIFFARR_DB
               value: /data/sniffarr.db
-            {{- if $v.ui.enabled }}
-            - name: SNIFFARR_UI_ADDR
-              value: {{ $v.ui.addr | quote }}
-            {{- end }}
             {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
@@ -97,10 +92,6 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-            {{- if and $v.ui.enabled (not $uiLoopback) }}
-            - name: ui
-              containerPort: {{ splitList ":" $v.ui.addr | last | atoi }}
-            {{- end }}
           readinessProbe:
             httpGet:
               path: /healthz
@@ -173,11 +164,6 @@ spec:
     - name: http
       port: 8080
       targetPort: http
-    {{- if $v.ui.enabled }}
-    - name: ui
-      port: 8081
-      targetPort: {{ $v.ui.targetPort }}
-    {{- end }}
 {{- if and (eq $p.type "pvc") (not $p.existingClaim) }}
 ---
 apiVersion: v1

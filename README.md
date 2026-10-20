@@ -204,11 +204,8 @@ goes in front of it. Its language is the one picked with `?lang=ru` or
 `X-Forwarded-Access-Token` header, which oauth2-proxy can pass on; a locale is
 kept for 10 minutes per token. Adult releases do not show in its search.
 
-The chart serves the UI with `api.ui.enabled`, on port `ui` (8081) of the
-`<release>-api` Service. `api.extraContainers` and `api.extraVolumes` add a
-proxy to the pod, and `api.ui.targetPort` points the Service port at it.
-With `api.ui.addr` on a loopback address, such as `127.0.0.1:8081`, the UI is
-reachable only through that proxy.
+The chart serves the UI with `ui.enabled`, behind the Service `<release>-ui`;
+see [Helm](#helm).
 
 ## Configuration
 
@@ -376,23 +373,33 @@ helm install sniffarr oci://ghcr.io/mikluko/charts/sniffarr --version X.Y.Z \
 
 `api.existingSecret` is required: the name of a Secret holding
 `SNIFFARR_INGEST_TOKEN` and `SNIFFARR_SEARCH_TOKEN`, and optionally
-`TYPESAFE_API_KEY`, which the api pod takes as its environment. The sniff and
-fetch pods read their ingest token from the same Secret unless
-`sniff.existingSecret` or `fetch.existingSecret` names another. With
-`api.litestream.enabled`, `api.litestream.existingConfigMap` is required too.
-Every value is described in [`values.yaml`](charts/sniffarr/values.yaml).
+`TYPESAFE_API_KEY`, which the api pod takes as its environment. The ui, sniff
+and fetch pods read their token from the same Secret unless
+`ui.existingSecret`, `sniff.existingSecret` or `fetch.existingSecret` names
+another. With `api.litestream.enabled`, `api.litestream.existingConfigMap` is
+required too. Every value is described in
+[`values.yaml`](charts/sniffarr/values.yaml).
 
-The chart runs three Deployments of the one image. `<release>-api` runs
-`sniffarr -api`, and `-ui` too with `api.ui.enabled`, behind a Service of the
-same name. `<release>-sniff` runs `sniffarr -sniff`, `sniff.discover` and
-`sniff.fetch` rendering `-sniff` and `-fetch`, in the host's network by default
-so that `announce_peer` queries reach its DHT port. `<release>-fetch` runs
+The chart runs a Deployment per component, each of the one image.
+`<release>-api` runs `sniffarr -api` behind a Service of the same name.
+`<release>-sniff` runs `sniffarr -sniff`, `sniff.discover` and `sniff.fetch`
+rendering `-sniff` and `-fetch`, in the host's network by default so that
+`announce_peer` queries reach its DHT port. `<release>-fetch` runs
 `sniffarr -fetch`, in the pod network by default, with `fetch.replicas`
 replicas and the URL and token Secret of `sniff` unless its own are set. A
 fetcher's DHT node is passive and the fetcher dials the peers it fetches from,
 so it needs no open port.
 
-Either Deployment reaches the DHT from the pod network through
+With `ui.enabled`, `<release>-ui` runs `sniffarr -ui`, with `ui.replicas`
+replicas, behind the Service `<release>-ui` on `ui.service.port` (8081).
+`ui.addr` is `SNIFFARR_UI_ADDR`, and `ui.env` carries the rest of the UI's
+variables, `SNIFFARR_OIDC_ISSUER` and, when the API's are not the default,
+`SNIFFARR_AUDIO_LANGUAGES`. `ui.extraContainers` and `ui.extraVolumes` add an
+authenticating proxy to the pod, and `ui.service.targetPort` names its port.
+With `ui.addr` on a loopback address, such as `127.0.0.1:8081`, the UI is
+reachable only through that proxy, and `ui.service.targetPort` must name it.
+
+Either DHT Deployment reaches the DHT from the pod network through
 `<component>.service`: a Service of the component's name exposing its port,
 TCP and UDP, `NodePort` by default. With `service.nodePort` the pod listens on
 that port, rendered as `-port`, so the port peers reach the node on is the
