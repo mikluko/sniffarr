@@ -33,9 +33,10 @@ type Store interface {
 	AddTokens(ctx context.Context, day string, n int64) error
 }
 
-// Classifier answers what a torrent is.
+// Classifier answers what a torrent is, and choice questions.
 type Classifier interface {
 	Classify(ctx context.Context, in Input) (Result, error)
+	Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, error)
 }
 
 // Jev classifies stored torrents with the Classifier, within a daily token
@@ -152,12 +153,36 @@ func (j *Jev) classify(ctx context.Context, p store.Pending) error {
 	return nil
 }
 
+// Choose asks the classifier a choice question within the day's budget,
+// and records the tokens spent. It returns ErrBudget, without a request,
+// once the budget is spent.
+func (j *Jev) Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, error) {
+	if ok, err := j.UnderBudget(ctx); err != nil || !ok {
+		return ChoiceResult{}, errors.Join(err, ErrBudget)
+	}
+	r, err := j.Classifier.Choose(ctx, in)
+	if err != nil {
+		return ChoiceResult{}, err
+	}
+	j.metrics().tokens.Add(ctx, r.Tokens)
+	if err := j.Store.AddTokens(ctx, day(j.now()), r.Tokens); err != nil {
+		j.Log.Error("record tokens", "err", err)
+	}
+	return r, nil
+}
+
 // UnderBudget reports whether today's budget has room.
 func (j *Jev) UnderBudget(ctx context.Context) (bool, error) {
+	return j.UnderBudgetLeaving(ctx, 0)
+}
+
+// UnderBudgetLeaving reports whether today's budget has room outside reserve
+// percent of DailyTokens.
+func (j *Jev) UnderBudgetLeaving(ctx context.Context, reserve int) (bool, error) {
 	if j.DailyTokens <= 0 {
 		return true, nil
 	}
-	return j.under(ctx, j.DailyTokens)
+	return j.under(ctx, int64(float64(j.DailyTokens)*float64(100-reserve)/100))
 }
 
 // under reports whether fewer than limit tokens were spent today.

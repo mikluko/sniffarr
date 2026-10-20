@@ -95,10 +95,7 @@ func (w *Worker) classifyAll(ctx context.Context, batch []store.Pending) bool {
 
 // underBudget reports whether today's budget has room outside the Reserve.
 func (w *Worker) underBudget(ctx context.Context) (bool, error) {
-	if w.Jev.DailyTokens <= 0 {
-		return true, nil
-	}
-	return w.Jev.under(ctx, int64(float64(w.Jev.DailyTokens)*float64(100-w.Reserve)/100))
+	return w.Jev.UnderBudgetLeaving(ctx, w.Reserve)
 }
 
 // waitBudget returns once the day's budget has room outside the Reserve,

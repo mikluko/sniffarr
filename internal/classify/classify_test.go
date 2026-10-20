@@ -85,6 +85,15 @@ func newFake(t *testing.T) *fakeTypeSafe {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if q, ok := req.Questions["choice"]; ok {
+			if q.Type != "choice" || len(req.Questions) != 1 {
+				http.Error(w, "bad questions", http.StatusUnprocessableEntity)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"answers": {"choice": {"type": "choice", "choice": "b", "confidence": 0.7}}, "usage": {"input_tokens": 400, "output_tokens": 0}}`))
+			return
+		}
 		kind, askKind := req.Questions["kind"]
 		if req.Model != "jev-latest" || askKind && kind.Type != "choice" || req.Questions["audio_ru"].Type != "noul" || req.Questions["source"].Type != "choice" {
 			http.Error(w, "bad questions", http.StatusUnprocessableEntity)
@@ -125,6 +134,36 @@ func TestClientClassify(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, Result{Kind: "movie", KindConfidence: 0.85, Source: "remux", SourceConfidence: 0.6, Audio: map[string]float64{"ru": 0.75}, Tokens: 1000}, r)
 	require.EqualValues(t, 3, f.requests.Load(), "two 529 answers are retried")
+}
+
+func TestChoose(t *testing.T) {
+	ctx := context.Background()
+	f := newFake(t)
+	in := ChoiceInput{State: map[string]any{"name": "Alien 1979"}, Instructions: "Which?", Options: map[string]string{"a": "first", "b": "second"}}
+	r, err := f.client().Choose(ctx, in)
+	require.NoError(t, err)
+	require.Equal(t, ChoiceResult{Choice: "b", Confidence: 0.7, Tokens: 400}, r)
+	_, err = f.client().Choose(ctx, ChoiceInput{Instructions: "Which?", Options: map[string]string{"a": "first"}})
+	require.ErrorContains(t, err, "incomplete answer", "a choice outside the options")
+
+	s := setup(t)
+	jev := &Jev{Store: s, Classifier: f.client(), DailyTokens: 400, Log: slog.New(slog.DiscardHandler)}
+	_, err = jev.Choose(ctx, in)
+	require.NoError(t, err)
+	n, err := s.TokensUsed(ctx, day(time.Now()))
+	require.NoError(t, err)
+	require.EqualValues(t, 400, n, "the budget is shared with classification")
+	_, err = jev.Choose(ctx, in)
+	require.ErrorIs(t, err, ErrBudget)
+	require.EqualValues(t, 3, f.requests.Load())
+
+	jev.DailyTokens = 1000
+	ok, err := jev.UnderBudgetLeaving(ctx, 50)
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = jev.UnderBudgetLeaving(ctx, 70)
+	require.NoError(t, err)
+	require.False(t, ok, "400 spent reaches 1000 less a 70% reserve")
 }
 
 func TestClientPermanentError(t *testing.T) {

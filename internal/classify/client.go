@@ -173,44 +173,12 @@ func (c *Client) Classify(ctx context.Context, in Input) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	wait := c.Backoff
-	for attempt := 0; ; attempt++ {
-		res, err := c.post(ctx, body, in.AskKind)
-		var apiErr *APIError
-		if err == nil || !errors.As(err, &apiErr) || !retryable(apiErr.Status) || attempt >= c.Retries {
-			return res, err
-		}
-		select {
-		case <-ctx.Done():
-			return Result{}, ctx.Err()
-		case <-time.After(wait):
-		}
-		wait *= 2
-	}
-}
-
-func (c *Client) post(ctx context.Context, body []byte, askKind bool) (Result, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL, bytes.NewReader(body))
+	r, err := c.request(ctx, body)
 	if err != nil {
 		return Result{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.Key)
-	req.Header.Set("Content-Type", "application/json")
-	res, err := c.HTTP.Do(req)
-	if err != nil {
-		return Result{}, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		msg, _ := io.ReadAll(io.LimitReader(res.Body, 1000))
-		return Result{}, &APIError{Status: res.StatusCode, Body: strings.TrimSpace(string(msg))}
-	}
-	var r response
-	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-		return Result{}, fmt.Errorf("typesafe: decode answer: %w", err)
 	}
 	kind, source := r.Answers["kind"], r.Answers["source"]
-	if askKind && kind.Choice == "" || source.Choice == "" {
+	if in.AskKind && kind.Choice == "" || source.Choice == "" {
 		return Result{}, errors.New("typesafe: incomplete answer")
 	}
 	out := Result{
@@ -228,8 +196,88 @@ func (c *Client) post(ctx context.Context, body []byte, askKind bool) (Result, e
 		}
 		out.Audio[l.Tag] = *a.Noul
 	}
-	if askKind {
+	if in.AskKind {
 		out.Kind, out.KindConfidence = kind.Choice, kind.Confidence
 	}
 	return out, nil
+}
+
+// ChoiceInput is a single choice question about a state.
+type ChoiceInput struct {
+	State        map[string]any
+	Instructions string
+	// Options maps each option to its description.
+	Options map[string]string
+}
+
+// ChoiceResult is the classifier's answer to a choice question.
+type ChoiceResult struct {
+	Choice     string
+	Confidence float64
+	Tokens     int64
+}
+
+// Choose asks the classifier one choice question, retrying as Classify
+// does.
+func (c *Client) Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, error) {
+	body, err := json.Marshal(map[string]any{
+		"model": c.Model,
+		"state": in.State,
+		"questions": map[string]any{
+			"choice": map[string]any{"type": "choice", "instructions": in.Instructions, "criteria": in.Options},
+		},
+	})
+	if err != nil {
+		return ChoiceResult{}, err
+	}
+	r, err := c.request(ctx, body)
+	if err != nil {
+		return ChoiceResult{}, err
+	}
+	a := r.Answers["choice"]
+	if _, ok := in.Options[a.Choice]; !ok {
+		return ChoiceResult{}, errors.New("typesafe: incomplete answer")
+	}
+	return ChoiceResult{Choice: a.Choice, Confidence: a.Confidence, Tokens: r.Usage.InputTokens + r.Usage.OutputTokens}, nil
+}
+
+// request posts the request body, retrying overload and rate-limit answers.
+func (c *Client) request(ctx context.Context, body []byte) (response, error) {
+	wait := c.Backoff
+	for attempt := 0; ; attempt++ {
+		res, err := c.post(ctx, body)
+		var apiErr *APIError
+		if err == nil || !errors.As(err, &apiErr) || !retryable(apiErr.Status) || attempt >= c.Retries {
+			return res, err
+		}
+		select {
+		case <-ctx.Done():
+			return response{}, ctx.Err()
+		case <-time.After(wait):
+		}
+		wait *= 2
+	}
+}
+
+func (c *Client) post(ctx context.Context, body []byte) (response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL, bytes.NewReader(body))
+	if err != nil {
+		return response{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Key)
+	req.Header.Set("Content-Type", "application/json")
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return response{}, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, 1000))
+		return response{}, &APIError{Status: res.StatusCode, Body: strings.TrimSpace(string(msg))}
+	}
+	var r response
+	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+		return response{}, fmt.Errorf("typesafe: decode answer: %w", err)
+	}
+	return r, nil
 }
