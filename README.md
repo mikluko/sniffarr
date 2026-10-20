@@ -144,6 +144,10 @@ goes in front of it. Its language is the one picked with `?lang=ru` or
 `X-Forwarded-Access-Token` header, which oauth2-proxy can pass on; the token
 is read, not verified. Adult releases do not show in its search.
 
+The chart serves the UI with `api.ui.enabled`, on port `ui` (8081) of the
+`<release>-api` Service. `api.extraContainers` and `api.extraVolumes` add a
+proxy to the pod, and `api.ui.targetPort` points the Service port at it.
+
 ## Configuration
 
 ### sniffapi

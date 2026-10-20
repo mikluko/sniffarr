@@ -46,6 +46,15 @@ api:
     existingSecret: ""
     # Resources of the litestream containers.
     resources: {}
+  ui:
+    # Serves the web UI: SNIFFARR_UI_ADDR=:8081, container port ui, and Service port ui (8081).
+    enabled: false
+    # Target of the Service port ui, such as the port of an authenticating proxy in extraContainers.
+    targetPort: ui
+  # Containers added to the api pod, rendered as given.
+  extraContainers: []
+  # Volumes added to the api pod, rendered as given.
+  extraVolumes: []
   # Resources of the sniffapi container.
   resources: {}
   # Annotations of the api pod.

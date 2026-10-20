@@ -78,6 +78,10 @@ spec:
           env:
             - name: SNIFFARR_DB
               value: /data/sniffarr.db
+            {{- if $v.ui.enabled }}
+            - name: SNIFFARR_UI_ADDR
+              value: ":8081"
+            {{- end }}
             {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
@@ -87,6 +91,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            {{- if $v.ui.enabled }}
+            - name: ui
+              containerPort: 8081
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /healthz
@@ -107,6 +115,9 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+        {{- with $v.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
@@ -125,6 +136,9 @@ spec:
         - name: litestream-config
           configMap:
             name: {{ required "api.litestream.existingConfigMap is required when litestream is enabled" $ls.existingConfigMap }}
+        {{- end }}
+        {{- with $v.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- with $v.nodeSelector }}
       nodeSelector:
@@ -153,6 +167,11 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+    {{- if $v.ui.enabled }}
+    - name: ui
+      port: 8081
+      targetPort: {{ $v.ui.targetPort }}
+    {{- end }}
 {{- if and (eq $p.type "pvc") (not $p.existingClaim) }}
 ---
 apiVersion: v1
