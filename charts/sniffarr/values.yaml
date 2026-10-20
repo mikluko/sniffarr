@@ -1,5 +1,5 @@
 image:
-  # Image of both binaries.
+  # Image of the sniffarr binary.
   repository: ghcr.io/mikluko/sniffarr
   # Image tag; the chart's appVersion when empty.
   tag: ""
@@ -10,7 +10,7 @@ image:
 imagePullSecrets: []
 
 telemetry:
-  # When false, the sniffapi and sniffdht containers get OTEL_SDK_DISABLED=true; when true, the chart sets no OTEL_* variable.
+  # When false, every sniffarr container gets OTEL_SDK_DISABLED=true; when true, the chart sets no OTEL_* variable.
   enabled: false
 
 api:
@@ -57,7 +57,7 @@ api:
   extraContainers: []
   # Volumes added to the api pod, rendered as given.
   extraVolumes: []
-  # Resources of the sniffapi container.
+  # Resources of the api container.
   resources: {}
   # Annotations of the api pod.
   podAnnotations: {}
@@ -71,11 +71,11 @@ api:
   affinity: {}
 
 sniff:
-  # Deploys <release>-sniff, sniffdht as the discoverer.
+  # Deploys <release>-sniff, sniffarr -sniff.
   enabled: true
-  # Rendered as -discover; the node needs a reachable port to receive announce_peer.
+  # Rendered as -sniff; the node needs a reachable port to receive announce_peer.
   discover: true
-  # Rendered as -fetch; true runs a combined discoverer and fetcher.
+  # Rendered as -fetch; true runs the discoverer and a fetcher in one pod.
   fetch: false
   # Replicas of <release>-sniff.
   replicas: 1
@@ -87,7 +87,7 @@ sniff:
   existingSecret: ""
   # Key of the ingest token in that Secret.
   secretKey: SNIFFARR_INGEST_TOKEN
-  # Command-line flags, name to value, rendered as -name=value after -discover and -fetch.
+  # Command-line flags, name to value, rendered as -name=value after the component flags.
   flags: {}
   # Rendered as -upnp: the node asks the gateways on its network to forward its port, TCP and UDP.
   upnp: false
@@ -102,7 +102,7 @@ sniff:
     annotations: {}
   # Extra environment variables, name to value.
   env: {}
-  # Resources of the sniffdht container of <release>-sniff.
+  # Resources of the sniff container.
   resources: {}
   # Annotations of the sniff pod.
   podAnnotations: {}
@@ -116,7 +116,7 @@ sniff:
   affinity: {}
 
 fetch:
-  # Deploys <release>-fetch, sniffdht with -discover=false -fetch=true.
+  # Deploys <release>-fetch, sniffarr -fetch.
   enabled: true
   # Replicas of <release>-fetch.
   replicas: 1
@@ -128,7 +128,7 @@ fetch:
   existingSecret: ""
   # Key of the ingest token in that Secret; sniff.secretKey when empty.
   secretKey: ""
-  # Command-line flags, name to value, rendered as -name=value after -discover and -fetch.
+  # Command-line flags, name to value, rendered as -name=value after the component flags.
   flags: {}
   # Rendered as -upnp: the node asks the gateways on its network to forward its port, TCP and UDP.
   upnp: false
@@ -143,7 +143,7 @@ fetch:
     annotations: {}
   # Extra environment variables, name to value.
   env: {}
-  # Resources of the sniffdht container of <release>-fetch.
+  # Resources of the fetch container.
   resources: {}
   # Annotations of the fetch pod.
   podAnnotations: {}

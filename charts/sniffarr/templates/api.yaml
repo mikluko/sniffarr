@@ -72,10 +72,15 @@ spec:
         {{- end }}
       {{- end }}
       containers:
-        - name: sniffapi
+        - name: api
           image: {{ include "sniffarr.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [/sniffapi]
+          command: [/sniffarr]
+          args:
+            - "-api"
+            {{- if $v.ui.enabled }}
+            - "-ui"
+            {{- end }}
           env:
             - name: SNIFFARR_DB
               value: /data/sniffarr.db
