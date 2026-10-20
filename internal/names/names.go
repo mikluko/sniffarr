@@ -1,10 +1,12 @@
 // Package names reads what a torrent is from its name alone: a series, a
-// movie, or neither, and a title key under which releases of the same title
-// meet.
+// movie, or neither, a title key under which releases of the same title
+// meet, and a work key under which releases of the same movie, season or
+// album meet.
 package names
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -23,6 +25,13 @@ type Parsed struct {
 	// the title and year for a titled release with a year, "" when the name
 	// yields no title.
 	Key string
+	// Work is the work key: for a series, Key with "/" and Season when the
+	// name gives one; else Key.
+	Work string
+	// Year is the year in the name, 0 when there is none.
+	Year int
+	// Season is the season number in the name, 0 when there is none.
+	Season int
 }
 
 // words matches any of the alternatives as a whole word, case-insensitively,
@@ -41,17 +50,20 @@ var (
 		`web-?dl|webrip|hdrip|dvdrip|dvd5|dvd9|hdtv|hdtvrip|x264|x265|h\.?264|h\.?265|hevc|xvid|camrip|telesync|hdcam`)
 	music  = words(`flac|mp3|lossless|discography|дискография|альбом|album|ost`)
 	groups = regexp.MustCompile(`^(?:\s*\[[^\]]*\])+`)
+	season = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:s(\d{1,2})\s?e\d{1,3}|s(\d{1,2})|(\d{1,2})x\d{2,3}|seasons?\s?(\d{1,2})|` +
+		`temporada\s?(\d{1,2})|staffel\s?(\d{1,2})|(\d{1,2})\s?сезон|сезоны?:?\s?(\d{1,2}))(?:$|[^\p{L}\p{N}])`)
 )
 
-// Parse reads the kind and the title key from a torrent's name.
+// Parse reads the kind, the title key, the work key, the year and the
+// season from a torrent's name.
 func Parse(name string) Parsed {
-	if m := anime.FindStringSubmatch(name); m != nil {
-		return Parsed{Kind: Series, Key: key("s:", cut(m[1], seriesMarker))}
-	}
 	clean := strings.NewReplacer(".", " ", "_", " ").Replace(name)
+	if m := anime.FindStringSubmatch(name); m != nil {
+		return series(key("s:", cut(m[1], seriesMarker)), clean)
+	}
 	title := mainTitle(clean)
 	if loc := seriesMarker.FindStringIndex(clean); loc != nil {
-		return Parsed{Kind: Series, Key: key("s:", cut(title, seriesMarker))}
+		return series(key("s:", cut(title, seriesMarker)), clean)
 	}
 	m := year.FindStringSubmatchIndex(clean)
 	if m == nil {
@@ -62,8 +74,34 @@ func Parse(name string) Parsed {
 	if p.Key == "y:"+y {
 		return Parsed{}
 	}
+	p.Work = p.Key
+	p.Year, _ = strconv.Atoi(y)
 	if quality.MatchString(clean) && !music.MatchString(clean) {
 		p.Kind = Movie
+	}
+	return p
+}
+
+// series returns the Parsed of a series with the title key, with the season
+// and year the cleaned name gives.
+func series(k, clean string) Parsed {
+	p := Parsed{Kind: Series, Key: k, Work: k}
+	if k == "" {
+		return p
+	}
+	if m := season.FindStringSubmatch(clean); m != nil {
+		for _, g := range m[1:] {
+			if g != "" {
+				p.Season, _ = strconv.Atoi(g)
+				break
+			}
+		}
+	}
+	if p.Season > 0 {
+		p.Work = k + "/" + strconv.Itoa(p.Season)
+	}
+	if m := year.FindStringSubmatch(clean); m != nil {
+		p.Year, _ = strconv.Atoi(m[1])
 	}
 	return p
 }
