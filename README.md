@@ -79,8 +79,10 @@ of an audio track in the language to 1; otherwise Jev answers it, one question
 per language. Without languages nothing about audio is recorded, asked or
 returned, and the background classifier has nothing to select.
 
-Titles are a second extension, set by `TMDB_API_KEY`: a v3 API key or an API
-read access token of [TMDB](https://www.themoviedb.org). It matches title keys,
+Titles are a second extension, on by default with the
+[TMDB](https://www.themoviedb.org) read access token sniffarr ships with;
+`TMDB_API_KEY` replaces it with a v3 API key or a read access token of your
+own, and set empty turns the extension off. It matches title keys,
 not torrents, to works, so every release under a key shares its match. A
 background matcher walks the keys of movies and series without a match, newest
 torrents first, and a search matches the unmatched keys of its candidates
@@ -180,7 +182,7 @@ reachable only through that proxy.
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
 | `SNIFFARR_AUDIO_LANGUAGES`         | `ru`             | Audio languages, BCP-47 tags and comma-separated; set but empty is none. An unknown tag fails startup                  |
-| `TMDB_API_KEY`                     |                  | TMDB API key or read access token; when unset, no titles are matched                                                   |
+| `TMDB_API_KEY`                     | built-in token   | TMDB API key or read access token; set empty, no titles are matched                                                    |
 | `SNIFFARR_TITLES_CONCURRENCY`      | `2`              | Background title matches at once                                                                                       |
 | `SNIFFARR_TITLES_RATE`             | `20`             | TMDB requests a second at most                                                                                         |
 | `SNIFFARR_TITLES_RETRY`            | `720h`           | How long a title key that matched nothing waits before it is looked up again                                           |

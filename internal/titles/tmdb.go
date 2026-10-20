@@ -45,6 +45,10 @@ type TMDB struct {
 	requests metric.Int64Counter
 }
 
+// DefaultKey is the TMDB read access token sniffarr ships with; TMDB_API_KEY
+// overrides it, and an empty one turns matching off.
+const DefaultKey = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlMGMwZjVhNmI1ZTU5NTc3Mjg3NTQ5ZDI0NzlmYWEwYSIsIm5iZiI6MTc5MjQ3NTcwOC45MTkwMDAxLCJzdWIiOiI2YWQ3MDIzYzg4YzI5ODYwNTNiZWQ5YzMiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.GzOo3vXlML2qXMF6DydhMkag0X9LGg7Ydk5e733IS9I"
+
 // NewTMDB returns a client of the production API for the key, at most rps
 // requests a second.
 func NewTMDB(key string, rps int) *TMDB {

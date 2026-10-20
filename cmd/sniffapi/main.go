@@ -86,7 +86,6 @@ func load(lookup func(string) (string, bool)) (config, error) {
 		ingestToken: getenv("SNIFFARR_INGEST_TOKEN"),
 		searchToken: getenv("SNIFFARR_SEARCH_TOKEN"),
 		typesafeKey: getenv("TYPESAFE_API_KEY"),
-		tmdbKey:     getenv("TMDB_API_KEY"),
 		uiAddr:      getenv("SNIFFARR_UI_ADDR"),
 		oidcIssuer:  getenv("SNIFFARR_OIDC_ISSUER"),
 	}
@@ -145,10 +144,15 @@ func load(lookup func(string) (string, bool)) (config, error) {
 	if c.titlesRetry, err = duration(getenv, "SNIFFARR_TITLES_RETRY", titles.DefaultRetry); err != nil {
 		return c, err
 	}
-	c.store.Titles = c.tmdbKey != ""
 	if c.scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
 		return c, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
 	}
+	if key, ok := lookup("TMDB_API_KEY"); ok {
+		c.tmdbKey = key
+	} else {
+		c.tmdbKey = titles.DefaultKey
+	}
+	c.store.Titles = c.tmdbKey != ""
 	languages, ok := lookup("SNIFFARR_AUDIO_LANGUAGES")
 	if !ok {
 		languages = audio.DefaultLanguages
