@@ -23,7 +23,8 @@ until SIGINT or SIGTERM.
 - `-ui` serves the web UI, a client of the browse API.
 - `-sniff` walks the DHT for infohashes, by BEP 51 `sample_infohashes` and by
   the `announce_peer` queries its own DHT node receives, and reports them to
-  the ingest API, with the announcing peers counted in sketches.
+  the ingest API, with the announcing peers counted in sketches. Its node
+  answers the queries of other nodes in turn.
 - `-fetch` takes tasks from the ingest API, finds each torrent's peers with
   `get_peers` on its own DHT node, fetches the metadata from them by BEP 9,
   and returns the name, size and file list, with the peers counted in
@@ -340,6 +341,7 @@ torrent's peers over the last 7 days.
 | ---------------- | ------- | ------------------------------------------------------ |
 | `-port`          | `42069` | Port for peers and the DHT, TCP and UDP; `0` picks one |
 | `-upnp`          | `false` | Forward the port, TCP and UDP, by UPnP                 |
+| `-public-ip`     |         | The address other nodes see the node at, for BEP 42    |
 | `-fetchers`      | `2000`  | Metadata fetches at once                               |
 | `-rate`          | `2000`  | DHT queries, and new peer connections, a second        |
 | `-fetch-timeout` | `15s`   | How long to wait for metadata once a torrent has peers |
@@ -351,6 +353,28 @@ With `-upnp` the node asks the gateways it finds on the local network to
 forward the port it listens on, TCP and UDP. Without `-sniff` the node is
 passive by BEP 43: it answers no DHT query and asks other nodes to keep it out
 of their routing tables.
+
+With `-sniff` the node answers `ping`, `find_node`, `get_peers` and
+`announce_peer`, and holds the peers announced to it in memory: one per IP
+and infohash, served in `get_peers` for 30 minutes after the announce, at most
+50 a reply, up to 100 peers of each of up to 200,000 infohashes, the oldest
+evicted first. Nothing of it is persisted. It answers BEP 51
+`sample_infohashes` with up to 20 of the infohashes it holds, their count,
+the nodes nearest the target and an interval of 1800 seconds, one reply per
+source every 10 seconds; and a `get_peers` with `scrape` set gets the BEP 33
+`BFsd` and `BFpe` bloom filters of the seeds and the other peers it holds for
+the infohash, a peer being a seed when its `announce_peer` said `seed`.
+
+The node's ID comes from the API's `HashKey` with the hash key: the API
+generates 20 random bytes once and keeps them in its store, so the node keeps
+its place in other nodes' routing tables across restarts. The node waits for
+the ID before it starts, retrying while the API is unreachable and warning
+at every attempt after the first. With `-public-ip` the ID takes the BEP 42
+prefix of that address and other nodes that check it accept the node; the
+rest of the ID stays, so the same address gives the same ID, and a new address
+a new one. Without `-public-ip` the ID is used as stored, and nodes enforcing
+BEP 42 may not keep it. The passive node of `-fetch` alone takes a random ID
+at each start: it answers nothing and is in no routing table.
 
 Both components count the peers they see in sketches of the current UTC hour
 and send them to the API's `Peers` every 3 minutes, and at once when 100,000
@@ -405,13 +429,17 @@ BitTorrent peer address appears in spans, attributes or logs.
 | `-api`     | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
 | `-sniff`, `-fetch` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
+| `-sniff`   | `sniffarr.dht.replies`                 | `{reply}`    | `sniffarr.dht.query`                       |
+| `-sniff`   | `sniffarr.dht.infohashes`              | `{infohash}` |                                            |
+| `-sniff`   | `sniffarr.dht.peers`                   | `{peer}`     |                                            |
 | `-sniff`   | `sniffarr.sniff.sightings`             | `{infohash}` | `sniffarr.discovery`                       |
 | `-fetch`   | `sniffarr.sniff.fetch.in_flight`       | `{task}`     |                                            |
 | `-fetch`   | `sniffarr.sniff.fetch.outcomes`        | `{task}`     | `sniffarr.fetch.outcome`                   |
 | `-fetch`   | `sniffarr.sniff.fetch.duration`        | `s`          | `sniffarr.fetch.outcome`                   |
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
-`sniffarr.discovery` is `announce` or `sample`; `sniffarr.sighting.result` is
+`sniffarr.discovery` is `announce` or `sample`; `sniffarr.dht.query` is
+`sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
 `sniffarr.classify.layer` is `rules`, `reuse` or `jev`;

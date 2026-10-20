@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-20
+
+### Added
+
+- The DHT node of `-sniff` serves the peers announced to it: `get_peers` replies carry up to 50 peers announced within the last 30 minutes, held in memory only, up to 100 per infohash and 200,000 infohashes. Metrics `sniffarr.dht.infohashes` and `sniffarr.dht.peers`.
+- The node answers BEP 51 `sample_infohashes` with up to 20 of the infohashes it holds, their count, the nodes nearest the target and an interval of 1800 seconds, one reply per source every 10 seconds. Metric `sniffarr.dht.replies`.
+- The node answers a `get_peers` with `scrape` by BEP 33: the reply carries the `BFsd` and `BFpe` bloom filters of the seeds and the other peers held for the infohash, the `seed` flag of `announce_peer` telling them apart.
+- The node's ID is kept across restarts: `IngestService.HashKey` returns `node_id`, 20 bytes the API generates once into its store, and `-sniff` waits for it before the node starts. `-public-ip` gives the ID the BEP 42 prefix of the node's public address.
+
 ## [0.8.0] - 2026-10-20
 
 ### Changed
@@ -145,6 +154,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
 [Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/mikluko/sniffarr/compare/v0.7.1...v0.8.0
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/mikluko/sniffarr/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mikluko/sniffarr/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/mikluko/sniffarr/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/mikluko/sniffarr/compare/v0.6.0...v0.7.0
