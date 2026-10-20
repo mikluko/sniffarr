@@ -1,4 +1,7 @@
 {{- if .Values.sniff.enabled }}
 {{- $v := .Values.sniff }}
-{{- include "sniffarr.sniffdht" (dict "root" . "component" "sniff" "v" $v "discover" $v.discover "fetch" $v.fetch "url" $v.url "existingSecret" $v.existingSecret "secretKey" $v.secretKey "secretRequired" "sniff.existingSecret or api.existingSecret is required") }}
+{{- if not (or $v.discover $v.fetch) }}
+{{- fail "sniff.discover and sniff.fetch are both false: the sniff pod would have nothing to do" }}
+{{- end }}
+{{- include "sniffarr.dht" (dict "root" . "component" "sniff" "v" $v "sniff" $v.discover "fetch" $v.fetch "url" $v.url "existingSecret" $v.existingSecret "secretKey" $v.secretKey "secretRequired" "sniff.existingSecret or api.existingSecret is required") }}
 {{- end }}

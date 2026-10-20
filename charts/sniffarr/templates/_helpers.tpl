@@ -43,12 +43,12 @@ capabilities:
 {{- end }}
 
 {{- /*
-sniffarr.sniffdht is a Deployment of the sniffdht binary, and the Service of its DHT port when
-v.service.enabled. It takes root, component, v (the
-component's values), discover, fetch, url, existingSecret, secretKey, and secretRequired, the
-error when no Secret is set.
+sniffarr.dht is a Deployment of sniffarr with its DHT components, and the Service of its DHT
+port when v.service.enabled. It takes root, component, v (the component's values), sniff and
+fetch (the flags), url, existingSecret, secretKey, and secretRequired, the error when no Secret
+is set.
 */}}
-{{- define "sniffarr.sniffdht" -}}
+{{- define "sniffarr.dht" -}}
 {{- $root := .root }}
 {{- $v := .v }}
 {{- $svc := $v.service }}
@@ -114,13 +114,17 @@ spec:
       securityContext:
         {{- include "sniffarr.podSecurityContext" $root | nindent 8 }}
       containers:
-        - name: sniffdht
+        - name: {{ .component }}
           image: {{ include "sniffarr.image" $root }}
           imagePullPolicy: {{ $root.Values.image.pullPolicy }}
-          command: [/sniffdht]
+          command: [/sniffarr]
           args:
-            - {{ printf "-discover=%v" .discover | quote }}
-            - {{ printf "-fetch=%v" .fetch | quote }}
+            {{- if .sniff }}
+            - "-sniff"
+            {{- end }}
+            {{- if .fetch }}
+            - "-fetch"
+            {{- end }}
             {{- range $k, $f := $v.flags }}
             - {{ printf "-%s=%v" $k $f | quote }}
             {{- end }}
@@ -141,7 +145,7 @@ spec:
             {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
-          {{- if and $port (or .discover $v.hostNetwork $svc.enabled) }}
+          {{- if and $port (or .sniff $v.hostNetwork $svc.enabled) }}
           ports:
             - name: dht
               containerPort: {{ $port }}
