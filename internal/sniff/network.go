@@ -139,8 +139,8 @@ func (s clientSwarm) fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo
 
 // Start starts the client and its DHT node. offer, unless nil, is called
 // with every infohash announced to the node, and peers, unless nil, takes
-// the announcing peer. The client creates, reads and writes no torrent
-// files.
+// the announcing peer through Announced. The client creates, reads and
+// writes no torrent files.
 func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink) (*Network, error) {
 	cfg.defaults()
 	client, err := torrent.NewClient(clientConfig(cfg, offer, peers))
@@ -190,7 +190,7 @@ func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers 
 			sc.OnAnnouncePeer = func(h metainfo.Hash, ip net.IP, port int, portOk bool) {
 				offer(Hash(h), sniffarrv1.Source_SOURCE_ANNOUNCE)
 				if addr, ok := netip.AddrFromSlice(ip); ok && portOk && peers != nil {
-					peers.Add(Hash(h), []netip.AddrPort{netip.AddrPortFrom(addr.Unmap(), uint16(port))})
+					peers.Announced(Hash(h), netip.AddrPortFrom(addr.Unmap(), uint16(port)))
 				}
 			}
 		}

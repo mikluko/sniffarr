@@ -69,10 +69,11 @@ func TestKnown(t *testing.T) {
 	_, err = s.Reject(ctx, hash(2), rules.Book, t0)
 	require.NoError(t, err)
 
-	known, err := s.Known(ctx, []Hash{hash(1), hash(2), hash(3)}, t0.Add(2*time.Hour))
+	stored, rejected, err := s.Known(ctx, []Hash{hash(1), hash(2), hash(3)}, t0.Add(2*time.Hour))
 	require.NoError(t, err)
-	require.Equal(t, map[Hash]bool{hash(1): true, hash(2): true}, known)
-	_, err = s.Known(ctx, []Hash{hash(1)}, t0.Add(time.Hour))
+	require.Equal(t, map[Hash]bool{hash(1): true}, stored)
+	require.Equal(t, map[Hash]bool{hash(2): true}, rejected)
+	_, _, err = s.Known(ctx, []Hash{hash(1)}, t0.Add(time.Hour))
 	require.NoError(t, err)
 
 	r, err := s.Get(ctx, hash(1))
@@ -313,7 +314,7 @@ func TestSweep(t *testing.T) {
 		_, _, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
-	_, err := s.Known(ctx, []Hash{hash(1)}, t0.Add(10*time.Hour))
+	_, _, err := s.Known(ctx, []Hash{hash(1)}, t0.Add(10*time.Hour))
 	require.NoError(t, err)
 
 	n, err := s.Sweep(ctx, t0.Add(4*time.Hour+time.Minute), 2)

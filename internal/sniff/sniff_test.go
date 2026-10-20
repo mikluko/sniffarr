@@ -34,6 +34,8 @@ type fakeIngest struct {
 	cond *sync.Cond
 
 	sighted map[Hash]sniffarrv1.Source
+	// stored are the hashes Sight reports as stored torrents.
+	stored map[Hash]bool
 	// failSight is how many Sight streams fail before one succeeds.
 	failSight int
 
@@ -58,7 +60,7 @@ type fakeIngest struct {
 }
 
 func newFake() *fakeIngest {
-	f := &fakeIngest{sighted: map[Hash]sniffarrv1.Source{}, results: map[Hash]*sniffarrv1.Result{},
+	f := &fakeIngest{sighted: map[Hash]sniffarrv1.Source{}, stored: map[Hash]bool{}, results: map[Hash]*sniffarrv1.Result{},
 		sketches: map[Hash][]*sniffarrv1.PeersRequest{}, unknown: map[Hash]bool{}}
 	f.cond = sync.NewCond(&f.mu)
 	for i := range f.key {
@@ -142,6 +144,7 @@ func (f *fakeIngest) Sight(_ context.Context, stream *connect.ClientStream[sniff
 	var res sniffarrv1.SightResponse
 	for _, m := range got {
 		h := Hash(m.GetInfohash())
+		res.Stored = append(res.Stored, f.stored[h])
 		if _, dup := f.sighted[h]; dup {
 			res.Known++
 			continue
@@ -281,7 +284,15 @@ func run(t *testing.T, f func(context.Context) error) context.CancelFunc {
 func TestDiscoverer(t *testing.T) {
 	ingest := newFake()
 	ingest.failSight = 2
-	d := NewDiscoverer(DiscovererConfig{Ingest: ingest.client(t), StreamFor: 20 * time.Millisecond, Backoff: 5 * time.Millisecond})
+	ingest.stored[hash(3)] = true
+	var mu sync.Mutex
+	var stored []Hash
+	d := NewDiscoverer(DiscovererConfig{Ingest: ingest.client(t), StreamFor: 20 * time.Millisecond, Backoff: 5 * time.Millisecond,
+		Stored: func(h Hash) {
+			mu.Lock()
+			defer mu.Unlock()
+			stored = append(stored, h)
+		}})
 	run(t, d.Run)
 
 	for _, b := range []byte{1, 2, 1, 3} {
@@ -295,6 +306,9 @@ func TestDiscoverer(t *testing.T) {
 	require.Equal(t, sniffarrv1.Source_SOURCE_ANNOUNCE, ingest.sighted[hash(4)])
 	require.Equal(t, sniffarrv1.Source_SOURCE_SAMPLE, ingest.sighted[hash(1)])
 	require.Eventually(t, func() bool { return d.stats.new.Load() == 4 }, 5*time.Second, 5*time.Millisecond, "failed streams are resent")
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []Hash{hash(3)}, stored, "the hash the server reports as stored is passed on, once")
 }
 
 func TestDiscovererFlushesOnShutdown(t *testing.T) {

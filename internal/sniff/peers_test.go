@@ -158,3 +158,25 @@ func TestPeersFlushOnShutdown(t *testing.T) {
 	got := ingest.received(t, hash(1), 1)
 	require.InDelta(t, 5, cardinality(t, got...), 1)
 }
+
+func TestPeersAnnouncedNeedsAdmission(t *testing.T) {
+	ingest := newFake()
+	p, _ := newPeers(t, ingest, PeersConfig{Flush: time.Hour})
+	<-p.Ready()
+	p.Announced(hash(1), addrs(0, 1)[0])
+	require.Equal(t, int64(1), p.stats.unknown.Load(), "an announce of a hash the server has not reported as stored is dropped")
+	p.mu.Lock()
+	require.Empty(t, p.cur)
+	p.mu.Unlock()
+
+	p.Admit(hash(1))
+	p.Announced(hash(1), addrs(1, 1)[0])
+	p.Announced(hash(1), addrs(2, 1)[0])
+	p.Add(hash(2), addrs(0, 3))
+	p.flush(context.Background())
+	got := ingest.received(t, hash(1), 1)
+	require.EqualValues(t, 2, cardinality(t, got...), "admitted, the announces count; the first one is lost")
+	got = ingest.received(t, hash(2), 1)
+	require.EqualValues(t, 3, cardinality(t, got...), "Add counts without admission")
+	require.Equal(t, int64(1), p.stats.unknown.Load())
+}

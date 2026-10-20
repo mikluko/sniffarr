@@ -29,6 +29,9 @@ type DiscovererConfig struct {
 	Backoff time.Duration
 	// Report is the interval of progress logs; DefaultReport.
 	Report time.Duration
+	// Stored, unless nil, is called with every sighted infohash the server
+	// reports as a stored torrent.
+	Stored func(Hash)
 	// Log discards everything when nil.
 	Log *slog.Logger
 	// Meter records metrics; the global MeterProvider when nil.
@@ -160,6 +163,13 @@ func (u *sightSender) close(ctx context.Context) {
 		if err == nil {
 			u.d.stats.new.Add(res.Msg.GetNew())
 			u.d.stats.known.Add(res.Msg.GetKnown())
+			if u.d.cfg.Stored != nil {
+				for i, ok := range res.Msg.GetStored() {
+					if ok && i < len(u.pending) {
+						u.d.cfg.Stored(Hash(u.pending[i].GetInfohash()))
+					}
+				}
+			}
 			u.pending = u.pending[:0]
 			return
 		}

@@ -183,7 +183,11 @@ type SightResponse struct {
 	// Infohashes queued by the stream.
 	New int64 `protobuf:"varint,1,opt,name=new,proto3" json:"new,omitempty"`
 	// Infohashes already stored, rejected or queued.
-	Known         int64 `protobuf:"varint,2,opt,name=known,proto3" json:"known,omitempty"`
+	Known int64 `protobuf:"varint,2,opt,name=known,proto3" json:"known,omitempty"`
+	// One entry per request of the stream, in order: whether its infohash was
+	// a stored torrent when the server handled it. Rejected and queued
+	// infohashes are false.
+	Stored        []bool `protobuf:"varint,3,rep,packed,name=stored,proto3" json:"stored,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -230,6 +234,13 @@ func (x *SightResponse) GetKnown() int64 {
 		return x.Known
 	}
 	return 0
+}
+
+func (x *SightResponse) GetStored() []bool {
+	if x != nil {
+		return x.Stored
+	}
+	return nil
 }
 
 type FetchRequest struct {
@@ -864,10 +875,11 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x18sniffarr/v1/ingest.proto\x12\vsniffarr.v1\"W\n" +
 	"\fSightRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12+\n" +
-	"\x06source\x18\x02 \x01(\x0e2\x13.sniffarr.v1.SourceR\x06source\"7\n" +
+	"\x06source\x18\x02 \x01(\x0e2\x13.sniffarr.v1.SourceR\x06source\"O\n" +
 	"\rSightResponse\x12\x10\n" +
 	"\x03new\x18\x01 \x01(\x03R\x03new\x12\x14\n" +
-	"\x05known\x18\x02 \x01(\x03R\x05known\"t\n" +
+	"\x05known\x18\x02 \x01(\x03R\x05known\x12\x16\n" +
+	"\x06stored\x18\x03 \x03(\bR\x06stored\"t\n" +
 	"\fFetchRequest\x12-\n" +
 	"\x06credit\x18\x01 \x01(\v2\x13.sniffarr.v1.CreditH\x00R\x06credit\x12-\n" +
 	"\x06result\x18\x02 \x01(\v2\x13.sniffarr.v1.ResultH\x00R\x06resultB\x06\n" +
