@@ -6,14 +6,14 @@ image:
   # Pull policy of the image.
   pullPolicy: IfNotPresent
 
-# Image pull secrets of both pods.
+# Image pull secrets of every pod.
 imagePullSecrets: []
 
 telemetry:
-  # When false, both containers get OTEL_SDK_DISABLED=true; when true, the chart sets no OTEL_* variable.
+  # When false, the sniffapi and sniffdht containers get OTEL_SDK_DISABLED=true; when true, the chart sets no OTEL_* variable.
   enabled: false
 
-sniffapi:
+api:
   # Secret the container takes its environment from: SNIFFARR_INGEST_TOKEN, SNIFFARR_SEARCH_TOKEN, optionally TYPESAFE_API_KEY; required.
   existingSecret: ""
   # Extra environment variables, name to value.
@@ -48,31 +48,31 @@ sniffapi:
     resources: {}
   # Resources of the sniffapi container.
   resources: {}
-  # Annotations of the sniffapi pod.
+  # Annotations of the api pod.
   podAnnotations: {}
-  # Labels of the sniffapi pod.
+  # Labels of the api pod.
   podLabels: {}
-  # Node selector of the sniffapi pod.
+  # Node selector of the api pod.
   nodeSelector: {}
-  # Tolerations of the sniffapi pod.
+  # Tolerations of the api pod.
   tolerations: []
-  # Affinity of the sniffapi pod.
+  # Affinity of the api pod.
   affinity: {}
 
-sniffdht:
-  # Deploys sniffdht, the discoverer.
+sniff:
+  # Deploys <release>-sniff, sniffdht as the discoverer.
   enabled: true
   # Rendered as -discover; the node needs a reachable port to receive announce_peer.
   discover: true
   # Rendered as -fetch; true runs a combined discoverer and fetcher.
   fetch: false
-  # Replicas of sniffdht.
+  # Replicas of <release>-sniff.
   replicas: 1
   # Runs the pod in the host's network namespace; the strategy is Recreate when true.
   hostNetwork: true
-  # SNIFFARR_URL; the sniffapi Service of the release when empty.
+  # SNIFFARR_URL; the release's api Service when empty.
   url: ""
-  # Secret holding the ingest token; sniffapi.existingSecret when empty.
+  # Secret holding the ingest token; api.existingSecret when empty.
   existingSecret: ""
   # Key of the ingest token in that Secret.
   secretKey: SNIFFARR_INGEST_TOKEN
@@ -80,45 +80,45 @@ sniffdht:
   flags: {}
   # Extra environment variables, name to value.
   env: {}
-  # Resources of the sniffdht container.
+  # Resources of the sniffdht container of <release>-sniff.
   resources: {}
-  # Annotations of the sniffdht pod.
+  # Annotations of the sniff pod.
   podAnnotations: {}
-  # Labels of the sniffdht pod.
+  # Labels of the sniff pod.
   podLabels: {}
-  # Node selector of the sniffdht pod.
+  # Node selector of the sniff pod.
   nodeSelector: {}
-  # Tolerations of the sniffdht pod.
+  # Tolerations of the sniff pod.
   tolerations: []
-  # Affinity of the sniffdht pod.
+  # Affinity of the sniff pod.
   affinity: {}
 
-snifffetch:
-  # Deploys snifffetch, sniffdht with -discover=false -fetch=true.
+fetch:
+  # Deploys <release>-fetch, sniffdht with -discover=false -fetch=true.
   enabled: true
-  # Replicas of snifffetch.
+  # Replicas of <release>-fetch.
   replicas: 1
   # Runs the pod in the host's network namespace; the strategy is Recreate when true.
   hostNetwork: false
-  # SNIFFARR_URL; sniffdht.url when empty.
+  # SNIFFARR_URL; sniff.url when empty.
   url: ""
-  # Secret holding the ingest token; sniffdht.existingSecret when empty.
+  # Secret holding the ingest token; sniff.existingSecret when empty.
   existingSecret: ""
-  # Key of the ingest token in that Secret; sniffdht.secretKey when empty.
+  # Key of the ingest token in that Secret; sniff.secretKey when empty.
   secretKey: ""
   # Command-line flags, name to value, rendered as -name=value after -discover and -fetch.
   flags: {}
   # Extra environment variables, name to value.
   env: {}
-  # Resources of the snifffetch container.
+  # Resources of the sniffdht container of <release>-fetch.
   resources: {}
-  # Annotations of the snifffetch pod.
+  # Annotations of the fetch pod.
   podAnnotations: {}
-  # Labels of the snifffetch pod.
+  # Labels of the fetch pod.
   podLabels: {}
-  # Node selector of the snifffetch pod.
+  # Node selector of the fetch pod.
   nodeSelector: {}
-  # Tolerations of the snifffetch pod.
+  # Tolerations of the fetch pod.
   tolerations: []
-  # Affinity of the snifffetch pod.
+  # Affinity of the fetch pod.
   affinity: {}

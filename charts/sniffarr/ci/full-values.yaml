@@ -1,4 +1,4 @@
-sniffapi:
+api:
   existingSecret: sniffarr-tokens
   env:
     SNIFFARR_CLASSIFY_SEARCH_RESERVE: 40
@@ -17,21 +17,21 @@ sniffapi:
 telemetry:
   enabled: true
 
-sniffdht:
+sniff:
   hostNetwork: true
   flags:
     port: 51000
     fetchers: 500
     rate: 1000
   env:
-    OTEL_SERVICE_NAME: sniffdht
+    OTEL_SERVICE_NAME: sniff
 
-snifffetch:
+fetch:
   replicas: 3
   flags:
     fetchers: 1000
     min-peers: 2
   env:
-    OTEL_SERVICE_NAME: snifffetch
+    OTEL_SERVICE_NAME: fetch
   nodeSelector:
     kubernetes.io/os: linux

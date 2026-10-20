@@ -1,0 +1,4 @@
+{{- if .Values.sniff.enabled }}
+{{- $v := .Values.sniff }}
+{{- include "sniffarr.sniffdht" (dict "root" . "component" "sniff" "v" $v "discover" $v.discover "fetch" $v.fetch "url" $v.url "existingSecret" $v.existingSecret "secretKey" $v.secretKey "secretRequired" "sniff.existingSecret or api.existingSecret is required") }}
+{{- end }}

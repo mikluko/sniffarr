@@ -1,4 +1,0 @@
-{{- if .Values.sniffdht.enabled }}
-{{- $v := .Values.sniffdht }}
-{{- include "sniffarr.sniffdht" (dict "root" . "component" "sniffdht" "v" $v "discover" $v.discover "fetch" $v.fetch "url" $v.url "existingSecret" $v.existingSecret "secretKey" $v.secretKey) }}
-{{- end }}

@@ -1,2 +1,2 @@
-sniffapi:
+api:
   existingSecret: sniffarr-tokens

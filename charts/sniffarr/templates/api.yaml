@@ -1,9 +1,9 @@
-{{- $v := .Values.sniffapi }}
+{{- $v := .Values.api }}
 {{- $p := $v.persistence }}
 {{- $ls := $v.litestream }}
-{{- $name := printf "%s-sniffapi" .Release.Name }}
+{{- $name := printf "%s-api" .Release.Name }}
 {{- if not (has $p.type (list "emptyDir" "hostPath" "pvc")) }}
-{{- fail (printf "sniffapi.persistence.type: want emptyDir, hostPath or pvc, not %q" $p.type) }}
+{{- fail (printf "api.persistence.type: want emptyDir, hostPath or pvc, not %q" $p.type) }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -11,18 +11,18 @@ metadata:
   name: {{ $name }}
   labels:
     {{- include "sniffarr.labels" . | nindent 4 }}
-    app.kubernetes.io/component: sniffapi
+    app.kubernetes.io/component: api
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "sniffarr.selector" (dict "root" . "component" "sniffapi") | nindent 6 }}
+      {{- include "sniffarr.selector" (dict "root" . "component" "api") | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "sniffarr.selector" (dict "root" . "component" "sniffapi") | nindent 8 }}
+        {{- include "sniffarr.selector" (dict "root" . "component" "api") | nindent 8 }}
         {{- with $v.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -83,7 +83,7 @@ spec:
             {{- end }}
           envFrom:
             - secretRef:
-                name: {{ required "sniffapi.existingSecret is required" $v.existingSecret }}
+                name: {{ required "api.existingSecret is required" $v.existingSecret }}
           ports:
             - name: http
               containerPort: 8080
@@ -113,7 +113,7 @@ spec:
         - name: data
           {{- if eq $p.type "hostPath" }}
           hostPath:
-            path: {{ required "sniffapi.persistence.hostPath.path is required for type hostPath" $p.hostPath.path }}
+            path: {{ required "api.persistence.hostPath.path is required for type hostPath" $p.hostPath.path }}
             type: DirectoryOrCreate
           {{- else if eq $p.type "pvc" }}
           persistentVolumeClaim:
@@ -124,7 +124,7 @@ spec:
         {{- if $ls.enabled }}
         - name: litestream-config
           configMap:
-            name: {{ required "sniffapi.litestream.existingConfigMap is required when litestream is enabled" $ls.existingConfigMap }}
+            name: {{ required "api.litestream.existingConfigMap is required when litestream is enabled" $ls.existingConfigMap }}
         {{- end }}
       {{- with $v.nodeSelector }}
       nodeSelector:
@@ -145,10 +145,10 @@ metadata:
   name: {{ $name }}
   labels:
     {{- include "sniffarr.labels" . | nindent 4 }}
-    app.kubernetes.io/component: sniffapi
+    app.kubernetes.io/component: api
 spec:
   selector:
-    {{- include "sniffarr.selector" (dict "root" . "component" "sniffapi") | nindent 4 }}
+    {{- include "sniffarr.selector" (dict "root" . "component" "api") | nindent 4 }}
   ports:
     - name: http
       port: 8080
@@ -161,7 +161,7 @@ metadata:
   name: {{ $name }}
   labels:
     {{- include "sniffarr.labels" . | nindent 4 }}
-    app.kubernetes.io/component: sniffapi
+    app.kubernetes.io/component: api
 spec:
   accessModes: [ReadWriteOnce]
   {{- with $p.storageClass }}

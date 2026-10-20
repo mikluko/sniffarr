@@ -225,23 +225,24 @@ and the chart in `charts/sniffarr` at the same version, without the `v`.
 
 ```shell
 helm install sniffarr oci://ghcr.io/mikluko/charts/sniffarr --version X.Y.Z \
-  --set sniffapi.existingSecret=sniffarr
+  --set api.existingSecret=sniffarr
 ```
 
-`sniffapi.existingSecret` is required: the name of a Secret holding
+`api.existingSecret` is required: the name of a Secret holding
 `SNIFFARR_INGEST_TOKEN` and `SNIFFARR_SEARCH_TOKEN`, and optionally
-`TYPESAFE_API_KEY`, which sniffapi takes as its environment. sniffdht reads
-its ingest token from the same Secret unless `sniffdht.existingSecret` names
-another. With `sniffapi.litestream.enabled`, `sniffapi.litestream.existingConfigMap`
-is required too. Every value is described in
-[`values.yaml`](charts/sniffarr/values.yaml).
+`TYPESAFE_API_KEY`, which sniffapi takes as its environment. The sniffers read
+their ingest token from the same Secret unless `sniff.existingSecret` or
+`fetch.existingSecret` names another. With `api.litestream.enabled`,
+`api.litestream.existingConfigMap` is required too. Every value is described
+in [`values.yaml`](charts/sniffarr/values.yaml).
 
-The chart runs sniffdht as two Deployments. `<release>-sniffdht` discovers,
-in the host's network by default so that `announce_peer` queries reach its
-DHT port; `<release>-snifffetch` fetches, in the pod network by default, with
-`snifffetch.replicas` replicas and the URL and token Secret of `sniffdht`
-unless its own are set. A fetcher's DHT node is passive and the fetcher dials
-the peers it fetches from, so it needs no open port.
+The chart runs sniffapi as `<release>-api`, behind a Service of the same name,
+and sniffdht as two Deployments. `<release>-sniff` discovers, in the host's
+network by default so that `announce_peer` queries reach its DHT port;
+`<release>-fetch` fetches, in the pod network by default, with
+`fetch.replicas` replicas and the URL and token Secret of `sniff` unless its
+own are set. A fetcher's DHT node is passive and the fetcher dials the peers
+it fetches from, so it needs no open port.
 
 ## Generating code
 

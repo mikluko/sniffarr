@@ -44,7 +44,8 @@ capabilities:
 
 {{- /*
 sniffarr.sniffdht is a Deployment of the sniffdht binary. It takes root, component, v (the
-component's values), discover, fetch, url, existingSecret and secretKey.
+component's values), discover, fetch, url, existingSecret, secretKey, and secretRequired, the
+error when no Secret is set.
 */}}
 {{- define "sniffarr.sniffdht" -}}
 {{- $root := .root }}
@@ -104,11 +105,11 @@ spec:
             {{- end }}
           env:
             - name: SNIFFARR_URL
-              value: {{ .url | default (printf "http://%s-sniffapi:8080" $root.Release.Name) | quote }}
+              value: {{ .url | default (printf "http://%s-api:8080" $root.Release.Name) | quote }}
             - name: SNIFFARR_INGEST_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ required (printf "%s.existingSecret or sniffapi.existingSecret is required" .component) (.existingSecret | default $root.Values.sniffapi.existingSecret) }}
+                  name: {{ required .secretRequired (.existingSecret | default $root.Values.api.existingSecret) }}
                   key: {{ .secretKey }}
             {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
             {{- . | nindent 12 }}
