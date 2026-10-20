@@ -236,11 +236,15 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 	return nil
 }
 
-// kind sets the torrent's title key, and its kind when the name tells it or
-// a stored torrent of the same title key has one.
+// kind sets the torrent's title key, work key, year and season, and its kind
+// when the name tells it or a stored torrent of the same title key has one.
+// A name whose work key is empty takes its title key.
 func (s *Service) kind(ctx context.Context, t *store.Torrent) error {
 	p := names.Parse(t.Name)
-	t.TitleKey = p.Key
+	t.TitleKey, t.WorkKey, t.Year, t.Season = p.Key, p.Work, p.Year, p.Season
+	if t.WorkKey == "" {
+		t.WorkKey = t.TitleKey
+	}
 	if p.Kind != "" {
 		t.Kind, t.KindLayer = p.Kind, store.LayerRules
 		return nil

@@ -109,3 +109,39 @@ func TestSightStoredFlags(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []bool{false}, stored, "a queued hash is known but not stored")
 }
+
+func TestResultStoresWork(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	st, err := store.New(ctx, db, store.Options{})
+	require.NoError(t, err)
+	q, err := queue.New(ctx, db, queue.Options{})
+	require.NoError(t, err)
+	s := &Service{Store: st, Queue: q, Log: slog.New(slog.DiscardHandler)}
+	now := time.Now()
+	_, _, err = q.Enqueue(ctx, []queue.Sighting{{Hash: queue.Hash{1}, Discovery: queue.Sample}, {Hash: queue.Hash{2}, Discovery: queue.Sample}}, now)
+	require.NoError(t, err)
+	leased, _, err := q.Lease(ctx, 1, 2, now, time.Minute)
+	require.NoError(t, err)
+	require.Len(t, leased, 2)
+	for i, name := range []string{"Heat.1995.1080p.BluRay", "The Office (US) Season 3 Complete 720p"} {
+		require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(byte(i + 1)),
+			Outcome: &sniffarrv1.Result_Torrent{Torrent: &sniffarrv1.Torrent{Name: name, Size: 8 << 30,
+				Files: []*sniffarrv1.File{{Path: name + ".mkv", Size: 8 << 30}}}}}))
+	}
+
+	movie, err := st.Get(ctx, store.Hash{1})
+	require.NoError(t, err)
+	require.Equal(t, "y:heat 1995", movie.TitleKey)
+	require.Equal(t, "y:heat 1995", movie.WorkKey, "a movie's work is its title and year")
+	require.Equal(t, 1995, movie.Year)
+	require.Zero(t, movie.Season)
+	series, err := st.Get(ctx, store.Hash{2})
+	require.NoError(t, err)
+	require.Equal(t, "s:the office", series.TitleKey)
+	require.Equal(t, "s:the office/3", series.WorkKey, "a series' work is its title and season")
+	require.Zero(t, series.Year)
+	require.Equal(t, 3, series.Season)
+}
