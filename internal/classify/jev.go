@@ -157,8 +157,13 @@ func (j *Jev) UnderBudget(ctx context.Context) (bool, error) {
 	if j.DailyTokens <= 0 {
 		return true, nil
 	}
+	return j.under(ctx, j.DailyTokens)
+}
+
+// under reports whether fewer than limit tokens were spent today.
+func (j *Jev) under(ctx context.Context, limit int64) (bool, error) {
 	used, err := j.Store.TokensUsed(ctx, day(j.now()))
-	return used < j.DailyTokens, err
+	return used < limit, err
 }
 
 func day(t time.Time) string {

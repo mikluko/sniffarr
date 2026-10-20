@@ -190,6 +190,33 @@ func TestWorkerBudget(t *testing.T) {
 	require.EqualValues(t, 2, f.requests.Load(), "the budget stops requests once spent")
 }
 
+func TestWorkerReserve(t *testing.T) {
+	f := newFake(t)
+	s := setup(t, "Heat.1995", "Ronin.1998", "Collateral.2004", "Thief.1981")
+	w := worker(s, f.client())
+	w.Concurrency = 1
+	w.Jev.DailyTokens = 3000
+	w.Reserve = 50
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() { done <- w.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		p, err := s.Unclassified(ctx, 0, 10, 1)
+		return err == nil && len(p) == 2
+	}, 5*time.Second, 10*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	require.ErrorIs(t, <-done, context.Canceled)
+	require.EqualValues(t, 2, f.requests.Load(), "the Worker stops at the reserve")
+
+	p, err := s.Unclassified(context.Background(), 0, 10, 1)
+	require.NoError(t, err)
+	require.NoError(t, w.Jev.Classify(context.Background(), p[0]), "Search spends the reserve")
+	require.ErrorIs(t, w.Jev.Classify(context.Background(), p[1]), ErrBudget)
+	require.EqualValues(t, 3, f.requests.Load())
+}
+
 func TestJevAsksKindOnlyWhenUnknown(t *testing.T) {
 	ctx := context.Background()
 	f := newFake(t)

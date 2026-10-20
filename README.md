@@ -58,7 +58,8 @@ records which layer decided its kind:
    the candidates of a search before the answer, and in the background only
    for torrents of unknown kind whose names are Cyrillic or carry a Russian
    marker. Both share a daily token budget, 2,000,000 tokens by default, some
-   1,500 torrents a day. A search waits for Jev for a short while at most;
+   1,500 torrents a day; the background stops at 75% of it by default, leaving
+   the rest for searches. A search waits for Jev for a short while at most;
    answers that come later are recorded for the next search, and a slow or
    failing Jev never fails a search.
 
@@ -96,25 +97,26 @@ in the `Authorization` header; `/healthz` needs none.
 
 ### sniffapi
 
-| Variable                         | Default   | Meaning                                                     |
-| -------------------------------- | --------- | ----------------------------------------------------------- |
-| `SNIFFARR_DB`                    |           | Path of the SQLite database; required                       |
-| `SNIFFARR_INGEST_TOKEN`          |           | Bearer token of `IngestService`; required                   |
-| `SNIFFARR_SEARCH_TOKEN`          |           | Bearer token of `SearchService`; required                   |
-| `SNIFFARR_ADDR`                  | `:8080`   | Listen address                                              |
-| `TYPESAFE_API_KEY`               |           | TypeSafe API key; when unset, only rules and reuse classify |
-| `SNIFFARR_CLASSIFY_CONCURRENCY`  | `4`       | Background classification requests at once                  |
-| `SNIFFARR_CLASSIFY_DAILY_TOKENS` | `2000000` | Classifier tokens per UTC day at most; `0` is no limit      |
-| `SNIFFARR_SEARCH_CLASSIFY_MAX`   | `20`      | Candidates one search has classified at most                |
-| `SNIFFARR_SEARCH_CLASSIFY_WAIT`  | `2s`      | How long a search waits for them                            |
-| `SNIFFARR_FETCH_LEASE`           | `1m`      | How long a fetcher may hold a task                          |
-| `SNIFFARR_FETCH_ATTEMPTS`        | `3`       | Failed fetches after which an infohash is dropped           |
-| `SNIFFARR_FETCH_BACKOFF`         | `10m`     | Wait before retrying a failed task, doubled per failure     |
-| `SNIFFARR_QUEUE_MAX_SIZE`        | `1000000` | Infohashes the queue keeps                                  |
-| `SNIFFARR_QUEUE_MAX_AGE`         | `24h`     | How long an infohash may wait in the queue                  |
-| `SNIFFARR_QUEUE_DEAD_FOR`        | `168h`    | How long a dropped or evicted infohash stays out            |
-| `SNIFFARR_STORE_MAX_FILES`       | `20`      | Files stored per torrent, the largest ones                  |
-| `SNIFFARR_RETENTION`             | `2160h`   | How long a stored torrent is kept without being seen        |
+| Variable                           | Default   | Meaning                                                                                    |
+| ---------------------------------- | --------- | ------------------------------------------------------------------------------------------ |
+| `SNIFFARR_DB`                      |           | Path of the SQLite database; required                                                      |
+| `SNIFFARR_INGEST_TOKEN`            |           | Bearer token of `IngestService`; required                                                  |
+| `SNIFFARR_SEARCH_TOKEN`            |           | Bearer token of `SearchService`; required                                                  |
+| `SNIFFARR_ADDR`                    | `:8080`   | Listen address                                                                             |
+| `TYPESAFE_API_KEY`                 |           | TypeSafe API key; when unset, only rules and reuse classify                                |
+| `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`       | Background classification requests at once                                                 |
+| `SNIFFARR_CLASSIFY_DAILY_TOKENS`   | `2000000` | Classifier tokens per UTC day at most; `0` is no limit                                     |
+| `SNIFFARR_CLASSIFY_SEARCH_RESERVE` | `25`      | Percentage of the daily tokens background classification leaves for searches, `0` to `100` |
+| `SNIFFARR_SEARCH_CLASSIFY_MAX`     | `20`      | Candidates one search has classified at most                                               |
+| `SNIFFARR_SEARCH_CLASSIFY_WAIT`    | `2s`      | How long a search waits for them                                                           |
+| `SNIFFARR_FETCH_LEASE`             | `1m`      | How long a fetcher may hold a task                                                         |
+| `SNIFFARR_FETCH_ATTEMPTS`          | `3`       | Failed fetches after which an infohash is dropped                                          |
+| `SNIFFARR_FETCH_BACKOFF`           | `10m`     | Wait before retrying a failed task, doubled per failure                                    |
+| `SNIFFARR_QUEUE_MAX_SIZE`          | `1000000` | Infohashes the queue keeps                                                                 |
+| `SNIFFARR_QUEUE_MAX_AGE`           | `24h`     | How long an infohash may wait in the queue                                                 |
+| `SNIFFARR_QUEUE_DEAD_FOR`          | `168h`    | How long a dropped or evicted infohash stays out                                           |
+| `SNIFFARR_STORE_MAX_FILES`         | `20`      | Files stored per torrent, the largest ones                                                 |
+| `SNIFFARR_RETENTION`               | `2160h`   | How long a stored torrent is kept without being seen                                       |
 
 The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start. A torrent keeps its true file

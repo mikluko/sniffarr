@@ -33,6 +33,7 @@ type config struct {
 	typesafeKey              string
 	concurrency              int
 	dailyTokens              int64
+	searchReserve            int
 	lease, backoff           time.Duration
 	attempts                 int
 	queue                    queue.Options
@@ -72,6 +73,9 @@ func load(getenv func(string) string) (config, error) {
 	}
 	if c.dailyTokens, err = strconv.ParseInt(or(getenv("SNIFFARR_CLASSIFY_DAILY_TOKENS"), strconv.Itoa(classify.DefaultDailyTokens)), 10, 64); err != nil || c.dailyTokens < 0 {
 		return c, errors.New("SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer")
+	}
+	if c.searchReserve, err = percent(getenv, "SNIFFARR_CLASSIFY_SEARCH_RESERVE", classify.DefaultSearchReserve); err != nil {
+		return c, err
 	}
 	if c.attempts, err = positive(getenv, "SNIFFARR_FETCH_ATTEMPTS", ingest.DefaultAttempts); err != nil {
 		return c, err
@@ -114,6 +118,18 @@ func positive(getenv func(string) string, name string, def int) (int, error) {
 	n, err := strconv.Atoi(v)
 	if err != nil || n < 1 {
 		return 0, fmt.Errorf("%s: want a positive integer", name)
+	}
+	return n, nil
+}
+
+func percent(getenv func(string) string, name string, def int) (int, error) {
+	v := getenv(name)
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 || n > 100 {
+		return 0, fmt.Errorf("%s: want an integer from 0 to 100", name)
 	}
 	return n, nil
 }
@@ -206,7 +222,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		return nil
 	})
 	if jev != nil {
-		w := &classify.Worker{Store: s, Jev: jev, Concurrency: cfg.concurrency, Poll: 10 * time.Second, Log: log}
+		w := &classify.Worker{Store: s, Jev: jev, Concurrency: cfg.concurrency, Reserve: cfg.searchReserve, Poll: 10 * time.Second, Log: log}
 		g.Go(func() error {
 			if err := w.Run(ctx); !errors.Is(err, context.Canceled) {
 				return err
