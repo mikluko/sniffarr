@@ -85,6 +85,14 @@ type Candidate struct {
 	// Year is the year of release or first air, 0 when TMDB has none.
 	Year     int
 	Overview string
+	// Popularity is TMDB's score of recent attention; it has no unit and is
+	// comparable only between candidates of one search.
+	Popularity float64
+	Votes      int
+	// Language is the original language, ISO 639-1; Countries the origin
+	// countries, ISO 3166-1 alpha-2, which the search gives for series only.
+	Language  string
+	Countries []string
 }
 
 // Search searches movies, or series when series is set, by title in the
@@ -99,14 +107,18 @@ func (c *Client) Search(ctx context.Context, series bool, query string, year int
 	}
 	var res struct {
 		Results []struct {
-			ID            int    `json:"id"`
-			Title         string `json:"title"`
-			OriginalTitle string `json:"original_title"`
-			ReleaseDate   string `json:"release_date"`
-			Name          string `json:"name"`
-			OriginalName  string `json:"original_name"`
-			FirstAirDate  string `json:"first_air_date"`
-			Overview      string `json:"overview"`
+			ID            int      `json:"id"`
+			Title         string   `json:"title"`
+			OriginalTitle string   `json:"original_title"`
+			ReleaseDate   string   `json:"release_date"`
+			Name          string   `json:"name"`
+			OriginalName  string   `json:"original_name"`
+			FirstAirDate  string   `json:"first_air_date"`
+			Overview      string   `json:"overview"`
+			Popularity    float64  `json:"popularity"`
+			VoteCount     int      `json:"vote_count"`
+			Language      string   `json:"original_language"`
+			Countries     []string `json:"origin_country"`
 		} `json:"results"`
 	}
 	if err := c.get(ctx, path, q, &res); err != nil {
@@ -115,7 +127,8 @@ func (c *Client) Search(ctx context.Context, series bool, query string, year int
 	out := make([]Candidate, len(res.Results))
 	for i, r := range res.Results {
 		out[i] = Candidate{ID: r.ID, Title: r.Title + r.Name, OriginalTitle: r.OriginalTitle + r.OriginalName,
-			Year: yearOf(r.ReleaseDate + r.FirstAirDate), Overview: r.Overview}
+			Year: yearOf(r.ReleaseDate + r.FirstAirDate), Overview: r.Overview,
+			Popularity: r.Popularity, Votes: r.VoteCount, Language: r.Language, Countries: r.Countries}
 	}
 	return out, nil
 }

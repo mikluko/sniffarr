@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-20
+
+### Changed
+
+- Among several TMDB candidates that fit a title, the one with a popularity of at least 20 and ten times every other's is the match, under layer `tmdb` with confidence 0.8; the classifier is asked only when none stands out, and it is shown each candidate's language, countries, popularity and votes.
+- A title key that matched nothing is looked up again after 7 days by default, `SNIFFARR_TMDB_RETRY` `168h`, in place of 30.
+
 ## [0.13.0] - 2026-10-20
 
 ### Added
@@ -189,7 +196,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/mikluko/sniffarr/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mikluko/sniffarr/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/mikluko/sniffarr/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/mikluko/sniffarr/compare/v0.10.0...v0.11.0

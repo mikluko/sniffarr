@@ -103,9 +103,12 @@ name, both in a `Русское / Original` name, is searched on TMDB as a movie
 series after the torrent's kind, in English and, when it has Cyrillic letters,
 in Russian too. A candidate fits when one of its titles equals one of the
 name's, ignoring case and punctuation, and, when the key has a year, its year
-is the key's or one off. One fit is the match; among several, Jev picks one or
-none, within the classifier's daily budget and its search reserve. Without
-`TYPESAFE_API_KEY` several fits match nothing. A match records the work's TMDB
+is the key's or one off. One fit is the match; among several, the one with a
+TMDB popularity of at least 20 and ten times every other's is; else Jev picks
+one or none, shown each fit's titles, year, language, countries, popularity,
+votes and the first sentence of its overview, within the classifier's daily
+budget and its search reserve. Without `TYPESAFE_API_KEY` several fits with no
+such favourite match nothing. A match records the work's TMDB
 ID; a key that matched nothing is looked up again after `SNIFFARR_TMDB_RETRY`,
 and one that matched never is. Without the key nothing is matched and releases
 carry no IDs.
@@ -332,7 +335,7 @@ the same to each.
 | `TMDB_API_KEY`                     | built-in token   | TMDB API key or read access token; set empty, no titles are matched                                                    |
 | `SNIFFARR_TMDB_CONCURRENCY`        | `2`              | Background title matches at once                                                                                       |
 | `SNIFFARR_TMDB_RATE`               | `20`             | TMDB requests a second at most                                                                                         |
-| `SNIFFARR_TMDB_RETRY`              | `720h`           | How long a title key that matched nothing waits before it is looked up again                                           |
+| `SNIFFARR_TMDB_RETRY`              | `168h`           | How long a title key that matched nothing waits before it is looked up again                                           |
 | `SNIFFARR_SEARCH_TMDB_MAX`         | `5`              | Title keys one search has matched at most                                                                              |
 | `SNIFFARR_TORZNAB_TOKEN`           |                  | API key of the Torznab endpoint; when unset, there is none                                                             |
 
