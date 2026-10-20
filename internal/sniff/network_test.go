@@ -59,7 +59,7 @@ func freePort(t *testing.T) int {
 func started(t *testing.T, cfg NetworkConfig, id [20]byte) *Network {
 	t.Helper()
 	n := New(cfg, nil, nil)
-	require.NoError(t, n.Start(id))
+	require.NoError(t, n.Start(id, netip.Addr{}))
 	t.Cleanup(n.Close)
 	return n
 }
@@ -123,12 +123,13 @@ func TestClientConfig(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		cfg      NetworkConfig
+		publicIP netip.Addr
 		offer    func(Hash, sniffarrv1.Source)
 		announce bool
 	}{
 		{name: "discovering", cfg: NetworkConfig{Port: 6881}, offer: offer, announce: true},
 		{name: "discovering with UPnP", cfg: NetworkConfig{Port: 6881, UPnP: true}, offer: offer, announce: true},
-		{name: "discovering with a public IP", cfg: NetworkConfig{Port: 6881, PublicIP: public}, offer: offer, announce: true},
+		{name: "discovering with a public IP", cfg: NetworkConfig{Port: 6881}, publicIP: public, offer: offer, announce: true},
 		{name: "passive", cfg: NetworkConfig{Port: 6881, Passive: true}},
 		{name: "passive with UPnP", cfg: NetworkConfig{Port: 6881, Passive: true, UPnP: true}},
 	} {
@@ -138,7 +139,7 @@ func TestClientConfig(t *testing.T) {
 			if tt.cfg.Passive {
 				id = [20]byte{}
 			}
-			c := n.clientConfig(id)
+			c := n.clientConfig(id, tt.publicIP)
 			require.Equal(t, 6881, c.ListenPort)
 			require.Equal(t, !tt.cfg.UPnP, c.NoDefaultPortForwarding, "UPnP alone decides port forwarding")
 			var sc dht.ServerConfig
@@ -154,7 +155,7 @@ func TestClientConfig(t *testing.T) {
 			require.Same(t, n.store, sc.PeerStore)
 			require.IsType(t, &socket{}, sc.Conn)
 			require.Len(t, n.sockets, 1)
-			if !tt.cfg.PublicIP.IsValid() {
+			if !tt.publicIP.IsValid() {
 				require.Equal(t, krpc.ID(testID), sc.NodeId, "the ID is used as given")
 				return
 			}
@@ -176,7 +177,7 @@ func TestStartPassiveOnAnyPort(t *testing.T) {
 	defer cancel()
 	_, err := n.Metadata(ctx, Hash{1})
 	require.ErrorIs(t, err, context.DeadlineExceeded, "Metadata waits for Start")
-	require.NoError(t, n.Start([20]byte{}))
+	require.NoError(t, n.Start([20]byte{}, netip.Addr{}))
 	t.Cleanup(n.Close)
 	require.Positive(t, n.Port(), "port 0 has the system pick one")
 	seeds, downloaders := n.Swarm(Hash{1})

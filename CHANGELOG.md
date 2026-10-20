@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-20
+
+### Changed
+
+- **Breaking:** `-public-ip` is gone. `-sniff` asks a STUN server for its public address at start, `-stun`, default `stun.l.google.com:19302`; the node ID takes the BEP 42 prefix of the answer, and is used as stored when the server does not answer within 5 seconds or `-stun` is empty.
+
+### Removed
+
+- The line under the charts of the data page that pointed at Grafana for the rest of the telemetry.
+
 ## [0.9.0] - 2026-10-20
 
 ### Added
@@ -153,9 +163,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.8.0...HEAD
-[0.8.0]: https://github.com/mikluko/sniffarr/compare/v0.7.1...v0.8.0
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/mikluko/sniffarr/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/mikluko/sniffarr/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mikluko/sniffarr/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/mikluko/sniffarr/compare/v0.7.0...v0.7.1

@@ -69,7 +69,6 @@
   {{template "chart" (chartArgs $.Base .Daily ($.T "d.daily"))}}
   <div class="charthead"><h3>{{$.T "d.weekly"}}</h3><span class="mu">{{$.T "d.lastweek"}} {{$.Num .NewWeek}}</span></div>
   {{template "chart" (chartArgs $.Base .Weekly ($.T "d.weekly"))}}
-  <p class="mu">{{$.T "d.grafana"}}</p>
 </section>
 </main>
 {{end}}

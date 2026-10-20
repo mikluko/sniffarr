@@ -47,10 +47,6 @@ type NetworkConfig struct {
 	// it out of their routing tables, by BEP 43. A passive node receives no
 	// announce_peer and stores no peer.
 	Passive bool
-	// PublicIP, when valid, is the address other nodes see the node at: the
-	// node ID given to Start takes the BEP 42 prefix of it. Invalid leaves
-	// the ID as given.
-	PublicIP netip.Addr
 	// Rate caps both DHT queries and new peer connections per second;
 	// DefaultRate. The libraries' own limits, 250 queries and 10 connections
 	// a second, starve thousands of concurrent fetches.
@@ -171,10 +167,12 @@ func New(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink)
 }
 
 // Start starts the client and its DHT node under the node ID id, random
-// when zero; it is called once. The client creates, reads and writes no
-// torrent files. Until Start returns, the methods that use the node wait.
-func (n *Network) Start(id [20]byte) error {
-	client, err := torrent.NewClient(n.clientConfig(id))
+// when zero; it is called once. A valid publicIP, the address other nodes
+// see the node at, gives the ID its BEP 42 prefix; invalid leaves the ID as
+// given. The client creates, reads and writes no torrent files. Until Start
+// returns, the methods that use the node wait.
+func (n *Network) Start(id [20]byte, publicIP netip.Addr) error {
+	client, err := torrent.NewClient(n.clientConfig(id, publicIP))
 	if err != nil {
 		return err
 	}
@@ -231,8 +229,8 @@ func (n *Network) started() bool {
 }
 
 // clientConfig is the configuration of the torrent client and its DHT node
-// that Start starts under id.
-func (n *Network) clientConfig(id [20]byte) *torrent.ClientConfig {
+// that Start starts under id, prefixed by publicIP when it is valid.
+func (n *Network) clientConfig(id [20]byte, publicIP netip.Addr) *torrent.ClientConfig {
 	cfg := n.cfg
 	c := torrent.NewDefaultClientConfig()
 	c.DefaultStorage = noStorage{}
@@ -250,7 +248,7 @@ func (n *Network) clientConfig(id [20]byte) *torrent.ClientConfig {
 	c.ConfigureAnacrolixDhtServer = func(sc *dht.ServerConfig) {
 		sc.SendLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
 		sc.Passive = cfg.Passive
-		sc.NodeId = nodeID(id, cfg.PublicIP)
+		sc.NodeId = nodeID(id, publicIP)
 		if n.store != nil {
 			sc.PeerStore = n.store
 			s := newSocket(sc.Conn, sc.NodeId, n.store, n.replies)
