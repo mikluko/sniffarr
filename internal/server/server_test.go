@@ -442,6 +442,12 @@ func TestAuth(t *testing.T) {
 	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("ingest")))
 	_, err := search.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{}))
 	require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
+	browse := sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("ingest")))
+	_, err = browse.Page(ctx, connect.NewRequest(&sniffarrv1.PageRequest{}))
+	require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
+	browse = sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("search")))
+	_, err = browse.Page(ctx, connect.NewRequest(&sniffarrv1.PageRequest{}))
+	require.NoError(t, err, "the search token opens BrowseService")
 
 	res, err := hc.Get(srv.URL + "/healthz")
 	require.NoError(t, err)

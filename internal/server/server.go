@@ -1,6 +1,6 @@
-// Package server assembles the sniffarr HTTP handler: the ingest and search
-// APIs, each behind its own bearer token, the Torznab API, and an
-// unauthenticated /healthz.
+// Package server assembles the sniffarr HTTP handler: the ingest API behind
+// its bearer token, the search and browse APIs behind theirs, the Torznab
+// API, and an unauthenticated /healthz.
 package server
 
 import (
@@ -51,6 +51,9 @@ type Config struct {
 	// TorznabToken, when set, serves the Torznab API at /torznab/api to
 	// requests with it as their apikey.
 	TorznabToken string
+	// DailyTokens is the classifier's daily token limit BrowseService
+	// reports; 0 is none.
+	DailyTokens int64
 }
 
 // New returns the handler serving the APIs and /healthz.
@@ -72,6 +75,11 @@ func New(c Config) (http.Handler, error) {
 	searchService := &search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy}
 	mux.Handle(sniffarrv1connect.NewSearchServiceHandler(
 		searchService,
+		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
+		connect.WithReadMaxBytes(MaxMessage),
+	))
+	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
+		&search.Browser{Store: c.Store, Log: c.Log, DailyTokens: c.DailyTokens},
 		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

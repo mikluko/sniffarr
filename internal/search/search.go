@@ -1,4 +1,5 @@
-// Package search implements sniffarr.v1.SearchService over the store.
+// Package search implements sniffarr.v1.SearchService and
+// sniffarr.v1.BrowseService over the store.
 package search
 
 import (
