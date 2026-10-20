@@ -93,13 +93,15 @@ func TestClientConfig(t *testing.T) {
 		announce bool
 	}{
 		{name: "discovering", cfg: NetworkConfig{Port: 6881}, offer: offer, announce: true},
+		{name: "discovering with UPnP", cfg: NetworkConfig{Port: 6881, UPnP: true}, offer: offer, announce: true},
 		{name: "passive", cfg: NetworkConfig{Port: 6881, Passive: true}},
+		{name: "passive with UPnP", cfg: NetworkConfig{Port: 6881, Passive: true, UPnP: true}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.cfg.defaults()
 			c := clientConfig(tt.cfg, tt.offer)
 			require.Equal(t, 6881, c.ListenPort)
-			require.Equal(t, tt.cfg.Passive, c.NoDefaultPortForwarding, "a passive node forwards no port")
+			require.Equal(t, !tt.cfg.UPnP, c.NoDefaultPortForwarding, "UPnP alone decides port forwarding")
 			var sc dht.ServerConfig
 			c.ConfigureAnacrolixDhtServer(&sc)
 			require.Equal(t, tt.cfg.Passive, sc.Passive)

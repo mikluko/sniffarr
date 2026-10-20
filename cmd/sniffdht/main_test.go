@@ -35,6 +35,15 @@ func TestLoad(t *testing.T) {
 			require.Equal(t, slog.LevelInfo, c.logLevel)
 			require.True(t, c.discover, "both roles by default")
 			require.True(t, c.fetch)
+			require.False(t, c.network.UPnP, "no port forwarding unless asked")
+		}},
+		{name: "upnp", env: env, args: []string{"-upnp"}, want: func(t *testing.T, c config) {
+			require.True(t, c.network.UPnP)
+			require.False(t, c.network.Passive)
+		}},
+		{name: "fetcher only with upnp", env: env, args: []string{"-discover=false", "-upnp"}, want: func(t *testing.T, c config) {
+			require.True(t, c.network.Passive, "passive follows -discover")
+			require.True(t, c.network.UPnP, "UPnP follows -upnp alone")
 		}},
 		{name: "fetcher only", env: env, args: []string{"-discover=false", "-port", "0"}, want: func(t *testing.T, c config) {
 			require.False(t, c.discover)

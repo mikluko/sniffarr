@@ -32,12 +32,15 @@ const (
 // NetworkConfig tunes the DHT node and the metadata fetches. Zero fields
 // take the default named in their doc.
 type NetworkConfig struct {
-	// Port is the TCP and UDP port for peers and the DHT, forwarded by UPnP
-	// unless Passive; 0 has the system pick a free one.
+	// Port is the TCP and UDP port for peers and the DHT; 0 has the system
+	// pick a free one.
 	Port int
+	// UPnP asks the gateways found on the local network to forward the port
+	// the client listens on, TCP and UDP, to it.
+	UPnP bool
 	// Passive makes the DHT node answer no query and ask other nodes to keep
-	// it out of their routing tables, by BEP 43, and skips port forwarding.
-	// A passive node receives no announce_peer.
+	// it out of their routing tables, by BEP 43. A passive node receives no
+	// announce_peer.
 	Passive bool
 	// Rate caps both DHT queries and new peer connections per second;
 	// DefaultRate. The libraries' own limits, 250 queries and 10 connections
@@ -166,7 +169,7 @@ func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) *torre
 	c.DisableWebseeds = true
 	c.DisableWebtorrent = true
 	c.ListenPort = cfg.Port
-	c.NoDefaultPortForwarding = cfg.Passive
+	c.NoDefaultPortForwarding = !cfg.UPnP
 	c.PeriodicallyAnnounceTorrentsToDht = false
 	c.TotalHalfOpenConns = 4 * cfg.Fetchers
 	c.DialRateLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
