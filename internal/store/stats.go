@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,10 +32,20 @@ type Browse struct {
 	// MinSize drops releases smaller than it, in bytes.
 	MinSize       int64
 	Offset, Limit int
+	// Sort is SortPeers, SortLastSeen or SortSize; "" is best text match
+	// first with Text and most recently seen first without.
+	Sort string
 }
 
-// Page returns the releases b selects, best text match first, or most
-// recently seen first when b has no text, and how many it selects in all.
+// Sorts of a page.
+const (
+	SortPeers    = "peers"
+	SortLastSeen = "last_seen"
+	SortSize     = "size"
+)
+
+// Page returns the releases b selects, in b's sort, and how many it selects
+// in all.
 func (s *Store) Page(ctx context.Context, b Browse) ([]Release, int64, error) {
 	var where []string
 	var args []any
@@ -45,6 +56,14 @@ func (s *Store) Page(ctx context.Context, b Browse) ([]Release, int64, error) {
 		where = append(where, "torrents_fts MATCH ?")
 		args = append(args, m)
 		order = "f.rank, t.id"
+	}
+	switch b.Sort {
+	case SortPeers:
+		order = "t.peers_week DESC, t.id DESC"
+	case SortLastSeen:
+		order = "t.last_seen DESC, t.id DESC"
+	case SortSize:
+		order = "t.size DESC, t.id DESC"
 	}
 	switch {
 	case b.UnknownKind:
@@ -115,11 +134,19 @@ type Card struct {
 	// counts them all.
 	Files  []rules.File
 	Stored int
+	// Peers are the release's distinct peers over each window.
+	Peers PeerCounts
+	// Work is the release's work, zero without a work key; Releases counts
+	// its releases of any kind and ReleaseRank is the release's place among
+	// them by PeersWeek, 1 first.
+	Work        Work
+	Releases    int64
+	ReleaseRank int
 }
 
-// Card returns the stored release with the hash and its first files, at most
-// files of them, or ErrNotFound.
-func (s *Store) Card(ctx context.Context, h Hash, files int) (Card, error) {
+// Card returns the stored release with the hash, its first files, at most
+// files of them, and its peers and work at now, or ErrNotFound.
+func (s *Store) Card(ctx context.Context, h Hash, files int, now time.Time) (Card, error) {
 	r, err := s.Get(ctx, h)
 	if err != nil {
 		return Card{}, err
@@ -130,6 +157,25 @@ func (s *Store) Card(ctx context.Context, h Hash, files int) (Card, error) {
 		return Card{}, err
 	}
 	if c.Files, err = s.files(ctx, r.ID, files); err != nil {
+		return Card{}, err
+	}
+	if c.Peers, err = s.Peers(ctx, r.ID, now); err != nil {
+		return Card{}, err
+	}
+	if r.WorkKey == "" {
+		return c, nil
+	}
+	kind := ""
+	if slices.Contains(TopKinds, r.Kind) {
+		kind = r.Kind
+	}
+	works, err := s.works(ctx, kind, []string{r.WorkKey}, VoiceAny)
+	if err != nil {
+		return Card{}, err
+	}
+	c.Work = works[r.WorkKey]
+	if err := s.r.QueryRowContext(ctx, `SELECT count(*), 1 + count(*) FILTER (WHERE peers_week > ? OR peers_week = ? AND id > ?)
+		FROM torrents WHERE work_key = ?`, r.PeersWeek, r.PeersWeek, r.ID, r.WorkKey).Scan(&c.Releases, &c.ReleaseRank); err != nil {
 		return Card{}, err
 	}
 	return c, nil
@@ -195,9 +241,8 @@ func (s *Store) Stats(ctx context.Context, now time.Time, days int) (Stats, erro
 			FROM audio WHERE language IN (`+placeholders(len(args))+`) GROUP BY language`, args...); err != nil {
 			return Stats{}, err
 		}
-		if err := s.r.QueryRowContext(ctx, `SELECT count(*) FROM torrents t
-			WHERE t.classified_at IS NULL AND t.kind IS NULL AND EXISTS (SELECT 1 FROM audio a WHERE a.torrent_id = t.id
-				AND a.language IN (`+placeholders(len(args))+`) AND (a.marker OR a.script_hint))`, args...).Scan(&st.Pending); err != nil {
+		var err error
+		if st.Pending, err = s.pendingCount(ctx); err != nil {
 			return Stats{}, err
 		}
 	}
