@@ -28,8 +28,8 @@ var Module = fx.Module("sniff",
 	fx.Invoke(run),
 )
 
-func newDiscoverer(ingest sniffarrv1connect.IngestServiceClient, log *slog.Logger) *sniffer.Discoverer {
-	return sniffer.NewDiscoverer(sniffer.DiscovererConfig{Ingest: ingest, Log: log})
+func newDiscoverer(ingest sniffarrv1connect.IngestServiceClient, p *sniffer.Peers, log *slog.Logger) *sniffer.Discoverer {
+	return sniffer.NewDiscoverer(sniffer.DiscovererConfig{Ingest: ingest, Stored: p.Admit, Log: log})
 }
 
 func offer(d *sniffer.Discoverer) dht.Offer { return d.Offer }

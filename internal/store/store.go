@@ -276,11 +276,11 @@ func (s *Store) tx(ctx context.Context, f func(*sql.Tx) error) error {
 	return s.db.Tx(ctx, f)
 }
 
-// Known returns which of the hashes are stored or rejected, and moves the
-// last sighting of the stored ones to seen.
-func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (map[Hash]bool, error) {
-	known := make(map[Hash]bool, len(hashes))
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+// Known returns which of the hashes are stored and which are rejected, and
+// moves the last sighting of the stored ones to seen.
+func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (stored, rejected map[Hash]bool, err error) {
+	stored, rejected = make(map[Hash]bool, len(hashes)), map[Hash]bool{}
+	err = s.tx(ctx, func(tx *sql.Tx) error {
 		for c := range slices.Chunk(hashes, 500) {
 			args := make([]any, len(c))
 			for i, h := range c {
@@ -291,18 +291,23 @@ func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (map[H
 				append([]any{seen.Unix()}, args...)...); err != nil {
 				return err
 			}
-			rows, err := tx.QueryContext(ctx, "SELECT infohash FROM torrents WHERE infohash IN ("+in+") UNION ALL SELECT infohash FROM rejected WHERE infohash IN ("+in+")",
+			rows, err := tx.QueryContext(ctx, "SELECT infohash, 1 FROM torrents WHERE infohash IN ("+in+") UNION ALL SELECT infohash, 0 FROM rejected WHERE infohash IN ("+in+")",
 				append(args, args...)...)
 			if err != nil {
 				return err
 			}
 			for rows.Next() {
 				var b []byte
-				if err := rows.Scan(&b); err != nil {
+				var isStored bool
+				if err := rows.Scan(&b, &isStored); err != nil {
 					rows.Close()
 					return err
 				}
-				known[Hash(b)] = true
+				if isStored {
+					stored[Hash(b)] = true
+				} else {
+					rejected[Hash(b)] = true
+				}
 			}
 			if err := rows.Close(); err != nil {
 				return err
@@ -310,7 +315,7 @@ func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (map[H
 		}
 		return nil
 	})
-	return known, err
+	return stored, rejected, err
 }
 
 // Insert stores a torrent for classification, with its MaxFiles largest

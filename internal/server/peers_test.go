@@ -18,6 +18,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/queue"
+	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/sketch"
 	"github.com/mikluko/sniffarr/internal/sniff"
@@ -111,4 +112,25 @@ func TestPeersEndToEnd(t *testing.T) {
 	require.NoError(t, stream.Send(&sniffarrv1.PeersRequest{Infohash: []byte{1}, Hour: now.Unix(), Sketch: sk.Bytes()}))
 	_, err = stream.CloseAndReceive()
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "an infohash is 20 bytes")
+}
+
+func TestSightStored(t *testing.T) {
+	srv, hc := start(t, Config{Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+	res, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3)
+	require.NoError(t, err)
+	require.Equal(t, []bool{false, false, false}, res.GetStored(), "nothing is stored yet")
+
+	f := openFetch(t, ingest)
+	f.credit(3)
+	f.expect(1, 2, 3)
+	f.torrent(1, "The.Thing.1982.1080p.BluRay.x264", "The.Thing.1982.mkv")
+	f.torrent(2, rot13.String("Ovt.Cnpxntr.KKK.1080c"), "video.mp4")
+	f.finish()
+
+	res, err = sight(t, ingest, sniffarrv1.Source_SOURCE_ANNOUNCE, 1, 2, 3, 9, 1)
+	require.NoError(t, err)
+	require.Equal(t, []bool{true, false, false, false, true}, res.GetStored(), "the stored torrent is flagged, the rejected, leased and new ones are not")
+	require.Equal(t, int64(1), res.GetNew())
+	require.Equal(t, int64(4), res.GetKnown())
 }

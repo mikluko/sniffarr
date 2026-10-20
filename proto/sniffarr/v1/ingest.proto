@@ -9,9 +9,9 @@ option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniff
 // and both report the peers they see as sketches.
 service IngestService {
   // Sight queues every infohash the server has neither stored, rejected nor
-  // queued, and reports the totals when the client closes the stream. A
-  // sighting of a stored torrent moves its last sighting; an announce
-  // sighting moves a queued sample ahead.
+  // queued, and reports the totals, and which infohashes are stored torrents,
+  // when the client closes the stream. A sighting of a stored torrent moves
+  // its last sighting; an announce sighting moves a queued sample ahead.
   rpc Sight(stream SightRequest) returns (SightResponse);
   // Fetch leases one queued infohash per unit of credit to the stream, and
   // takes the results back on it. A lease returns to the queue when the
@@ -38,6 +38,10 @@ message SightResponse {
   int64 new = 1;
   // Infohashes already stored, rejected or queued.
   int64 known = 2;
+  // One entry per request of the stream, in order: whether its infohash was
+  // a stored torrent when the server handled it. Rejected and queued
+  // infohashes are false.
+  repeated bool stored = 3;
 }
 
 // Source is how a sniffer learned of an infohash.

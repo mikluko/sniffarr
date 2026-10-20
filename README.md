@@ -157,7 +157,7 @@ in the `Authorization` header; `/healthz` needs none.
 
 - `Sight` is client-streaming: it queues every infohash the server has neither
   stored, rejected nor queued, and returns how many were new and how many
-  known.
+  known, and, per infohash sent, whether it is a stored torrent.
 - `Fetch` is bidirectional: the client grants credit, one unit per task it can
   take, the server answers with a task per unit, and the client returns each
   task's result, metadata or a failure, on the same stream.
@@ -346,7 +346,11 @@ of their routing tables.
 Both components count the peers they see in sketches of the current UTC hour
 and send them to the API's `Peers` every 3 minutes, and at once when 100,000
 sketches wait; a send that fails is retried, and while the API is unreachable
-the oldest unsent batch makes room for new sketches. The key comes from the
+the oldest unsent batch makes room for new sketches. `-sniff` counts an
+announcing peer only for an infohash `Sight` has reported as a stored torrent,
+remembering up to 1,000,000 of them, so a torrent's first announce before that
+answer is not counted; `-fetch` counts the peers of every torrent it fetched,
+and the API drops the sketches of those it rejected. The key comes from the
 API's `HashKey` at start, and peers seen before it arrives are not counted.
 
 Discovery rests on `sample_infohashes`: in a measured run on a server with a
