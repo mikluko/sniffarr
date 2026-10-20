@@ -105,10 +105,27 @@ in Russian too. A candidate fits when one of its titles equals one of the
 name's, ignoring case and punctuation, and, when the key has a year, its year
 is the key's or one off. One fit is the match; among several, Jev picks one or
 none, within the classifier's daily budget and its search reserve. Without
-`TYPESAFE_API_KEY` several fits match nothing. A match records the work's TMDB,
-IMDb, TVDB (series) and Wikidata IDs; a key that matched nothing is looked up
-again after `SNIFFARR_TMDB_RETRY`, and one that matched never is. Without the
-key nothing is matched and releases carry no IDs.
+`TYPESAFE_API_KEY` several fits match nothing. A match records the work's TMDB
+ID; a key that matched nothing is looked up again after `SNIFFARR_TMDB_RETRY`,
+and one that matched never is. Without the key nothing is matched and releases
+carry no IDs.
+
+A match recorded, the work's page is fetched twice, as `en-US` and `ru-RU`,
+each with its external IDs appended. The first answer gives the work's
+details: its type, original title, poster path, rating and votes, runtime (a
+typical episode's for a series), a series' status and seasons, its origin
+countries and original language, and its IMDb, TVDB (series) and Wikidata
+IDs; each answer gives its title, overview and genres in that language, stored
+as `en` and `ru` texts as TMDB returns them, which is the original where TMDB
+has no translation. A match whose page could not be fetched keeps its ID
+alone, and the TMDB worker's backfill fetches the details of every match
+without them, oldest match first, under `SNIFFARR_TMDB_RATE` and
+`SNIFFARR_TMDB_CONCURRENCY`, until none is left; it looks again every 10
+seconds. A page TMDB refuses to serve records empty details, so the work is
+not asked about again. The web UI shows the details on the card, in the top
+and over search results, with posters from `image.tmdb.org`; every page
+carries the TMDB logo and the notice "This product uses the TMDB API but is
+not endorsed or certified by TMDB."
 
 Peers are a third extension, always on. A peer is an `IP:port`; `-sniff` sees
 one in every `announce_peer` its node receives, `-fetch` in every `get_peers`
@@ -173,9 +190,13 @@ in the `Authorization` header; `/healthz` needs none.
   language. It has Jev examine a bounded number of its candidates first, so
   the filters apply to what is known once that is done. Each release carries
   the layer that decided its kind, whether Jev has examined it, its audio
-  entries, and its work's IDs; given one ID, `Search` returns the releases of
-  that work.
-- `Get` returns one release by infohash.
+  entries, its work's IDs, and `tmdb`, a `TMDBWork`: what TMDB knows of the
+  work its title is matched to, with the title, overview and genres in the
+  request's `lang`, `ru` or `en` (`en` when empty), falling back to the other
+  language and the title to the original; absent while the title was never
+  looked up, with `id` 0 when nothing matched. Given one ID, `Search` returns
+  the releases of that work.
+- `Get` returns one release by infohash, with `tmdb` in `lang` likewise.
 - `BrowseService` reads the store as the web UI shows it and classifies
   nothing first. `Page` returns one page of releases under the UI's filters,
   kind or unknown kind, an audio language's marker or probability, source,
@@ -192,7 +213,10 @@ in the `Authorization` header; `/healthz` needs none.
   every release or those voiced in the first audio language, with each
   work's rank, peers, change, releases, best audio, sources and first
   sighting, and when the top was computed. `Work` returns one work with its
-  releases ordered by peers over the window.
+  releases ordered by peers over the window. `Page`, `Card`, `Top` and `Work`
+  take `lang`, `ru` or `en`; every release carries `tmdb` as `Search` does,
+  and every work, in `Page`, `Top` and `Work`, carries `tmdb` of the title of
+  its release with the most peers.
 
 ## Torznab
 
@@ -242,9 +266,9 @@ API's.
 | `GET /?q=…`         | Search over names and file paths, filtered by kind, audio language and mark or probability, source, the layer that decided the kind, and size, sorted by peers over the last 7 days (`sort=peers`, the default), by last sighting (`last_seen`) or by size (`size`); any of `q`, `kind`, `vl`, `voice`, `source`, `layer`, `min`, `sort` or `o` in the query makes it a search. The first page of a query lists the works it matches |
 | `GET /top`          | The 100 works of a kind with the most peers over a window: `kind` is `movie`, `series` or `music`, `win` is `24h`, `7d` or `30d`, `voice` is `any`, `p50` or `explicit`, narrowing works to their releases with the first audio language's probability of at least 0.5 or its mark; the first 25 until `all=1`                                                                                                                       |
 | `GET /top/w/{id}`   | One work's row of the top, with its releases most peers first when `open=1`, over `win` and `voice` as above; `id` is the one in the top's links                                                                                                                                                                                                                                                                                     |
-| `GET /t/{infohash}` | A release: its magnet link, peers over the last day, 7 days and 30 days, its work and place among the work's releases, classification, audio signs per language and the first 8 stored files, every one with `files=all`                                                                                                                                                                                                             |
+| `GET /t/{infohash}` | A release: its magnet link, peers over the last day, 7 days and 30 days, what TMDB knows of its title's work with the work's place in the top and the release's place among its releases, or TMDB and IMDb searches for the title while it is unmatched, classification, audio signs per language and the first 8 stored files, every one with `files=all`                                                                     |
 | `GET /data`         | The store's counts: kinds, layers, sources, audio per language, rejections by reason, the classifier's pending torrents and tokens used, and new torrents per day and per week                                                                                                                                                                                                                                                       |
-| `GET /static/…`     | Stylesheet and scripts                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `GET /static/…`     | Stylesheet, scripts and the TMDB logo                                                                                                                                                                                                                                                                                                                                                                                                |
 
 A parameter value outside those listed is the default: every kind, the first
 audio language, `voice=any`, `sort=peers`, `kind=movie`, `win=7d`. A fragment

@@ -1,10 +1,10 @@
 /* sniffarr operator UI. System font, no icons, dense tables. */
 :root{
   color-scheme:light dark;
-  --bg:#ffffff;--fg:#1a1a1a;--mu:#5e5e5e;--bd:#dedede;--alt:#f6f6f6;--sel:#eef3fa;--ln:#0b57a4;--inbg:#ffffff;--bar:#4a4a4a;
+  --bg:#ffffff;--fg:#1a1a1a;--mu:#5e5e5e;--bd:#dedede;--alt:#f6f6f6;--sel:#eef3fa;--warn:#9a4a00;--ln:#0b57a4;--inbg:#ffffff;--bar:#4a4a4a;
 }
 @media (prefers-color-scheme:dark){
-  :root{--bg:#141414;--fg:#e4e4e4;--mu:#a3a3a3;--bd:#2e2e2e;--alt:#1b1b1b;--sel:#1a2230;--ln:#86b7ff;--inbg:#1b1b1b;--bar:#b5b5b5}
+  :root{--bg:#141414;--fg:#e4e4e4;--mu:#a3a3a3;--bd:#2e2e2e;--alt:#1b1b1b;--sel:#1a2230;--warn:#f0a35e;--ln:#86b7ff;--inbg:#1b1b1b;--bar:#b5b5b5}
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -108,6 +108,40 @@ button{cursor:pointer;padding:1px 8px;font-size:12px}
 .tt tr.rel:last-child td{border-bottom:1px solid var(--bd)}
 .tt tr.rel td.nm{padding-left:28px}
 
+/* TMDB */
+.th{width:28px;height:42px;flex:none;object-fit:cover;border-radius:2px;background:var(--alt)}
+.th-none{height:1px;background:none}
+.th-l{width:40px;height:60px}
+.th-l.th-none{height:60px;border:1px dashed var(--bd)}
+.tw{display:flex;align-items:center;gap:8px}
+.tt tr.wk td{vertical-align:middle}
+.tw-t{min-width:0}
+.key{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.tw-t .orig{display:block;font-size:12px}
+.workhits{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px 24px}
+.hit{display:flex;gap:8px;align-items:flex-start;min-width:0}
+.hit-t{min-width:0;overflow-wrap:anywhere}
+.tm{position:relative;display:flex;gap:16px;align-items:flex-start;padding:12px;border:1px solid var(--bd);border-radius:3px;max-width:980px}
+.tm:hover{background:var(--alt)}
+.tm-poster{width:150px;height:225px;flex:none;object-fit:cover;border-radius:2px;background:var(--alt)}
+.tm-none{display:flex;align-items:center;justify-content:center;text-align:center;color:var(--mu);border:1px dashed var(--bd);background:none;font-size:12px}
+.tm-matched .tm-none{width:100px;height:150px}
+.tm-unmatched .tm-poster,.tm-unchecked .tm-poster{width:60px;height:90px}
+.tm-body{display:flex;flex-direction:column;gap:4px;min-width:0}
+h2.tm-title{margin:0;font-size:17px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--fg);overflow-wrap:anywhere}
+.tm-title .mono{font-size:14px}
+.tm-keyl{font-size:12px;font-weight:400}
+.tm-orig{color:var(--mu)}
+.tm-stretch::after{content:"";position:absolute;inset:0}
+.tm-links,.tm-links a{position:relative;z-index:1}
+.tm-over{margin:4px 0;max-width:72ch;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tm-state{font-weight:600}
+.tm-op{font-size:12px}
+.warn{color:var(--warn);font-weight:600}
+.attr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:11px;padding-top:12px;border-top:1px solid var(--bd)}
+.attr img{height:12px;width:auto;display:block}
+.home .attr{justify-content:center;padding:0 16px 16px;border-top:none}
+
 @media (max-width:640px){
   .search>button,.filters select{min-height:40px}
   /* results collapse to two-line rows: name, then size · kind · dub · source · last seen */
@@ -132,4 +166,6 @@ button{cursor:pointer;padding:1px 8px;font-size:12px}
   .tt tr.rel td.nm{display:block}
   .topctl .at{margin-left:0}
   .kpis .at{margin-left:0}
+  .tm{gap:12px;padding:10px}
+  .tm-poster{width:96px;height:144px}
 }

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-20
+
+### Added
+
+- A matched title's TMDB details: type, original title, poster path, rating and votes, runtime, a series' status and seasons, countries and language in `tmdb_works`, and its title, overview and genres in Russian and English in the table `tmdb_texts`; a migration adds them. `Release`, `Work` and `WorkMatch` carry `tmdb`, a `TMDBWork`, with the texts in the request's `lang`, `ru` or `en`, which `SearchRequest`, `GetRequest`, `PageRequest`, `CardRequest`, `TopRequest` and `WorkRequest` take; a title looked up and not found is a `TMDBWork` with `id` 0.
+- The TMDB worker backfills the details of matches that lack them, oldest match first, under `SNIFFARR_TMDB_RATE` and `SNIFFARR_TMDB_CONCURRENCY`.
+- The web UI shows the match on a torrent's card, in the rows of the top and in the block over search results, with posters from `image.tmdb.org`, links to TMDB and IMDb, and the method, confidence and date of the match; an unmatched title gets TMDB and IMDb searches.
+- The TMDB logo and the notice "This product uses the TMDB API but is not endorsed or certified by TMDB." at the foot of every page of the web UI.
+
+### Changed
+
+- The block over search results is "Titles" (Russian «Названия»); the top's caption no longer names works; the card's "work" row and "look up" links are the TMDB block.
+- A match's IMDb, TVDB and Wikidata IDs come with the work's page, so a match costs two requests past its searches instead of one, and a backfilled match two; a page TMDB refuses to serve leaves the match with empty details instead of recording a failed match.
+
 ## [0.12.0] - 2026-10-20
 
 ### Changed
@@ -175,7 +189,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/mikluko/sniffarr/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/mikluko/sniffarr/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/mikluko/sniffarr/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mikluko/sniffarr/compare/v0.9.0...v0.10.0

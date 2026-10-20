@@ -46,7 +46,10 @@
 <tbody id="work-{{.Ref.ID}}"{{if .Open}} class="open"{{end}}>
   <tr class="wk">
     <td class="r mu">{{.Rank}}</td>
-    <td class="nm"><a href="{{$.WorkURL .Ref.ID (not .Open)}}" hx-get="{{$.WorkURL .Ref.ID (not .Open)}}" hx-target="#work-{{.Ref.ID}}" hx-swap="morph:outerHTML" aria-expanded="{{if .Open}}true{{else}}false{{end}}">{{.Ref.Title}}</a>{{if .Ref.Sub}} <span class="mu">{{.Ref.Sub}}</span>{{end}}</td>
+    <td class="nm"><span class="tw">
+      {{- if .TMDB.HasPoster}}<img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="28" height="42" alt="" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="th th-none" aria-hidden="true"></span>{{end -}}
+      <span class="tw-t"><a href="{{$.WorkURL .Ref.ID (not .Open)}}" hx-get="{{$.WorkURL .Ref.ID (not .Open)}}" hx-target="#work-{{.Ref.ID}}" hx-swap="morph:outerHTML" aria-expanded="{{if .Open}}true{{else}}false{{end}}"{{if not .TMDB.Matched}} class="key"{{end}}>{{$.Title .Ref .TMDB}}</a>{{with $.TitleSub .Ref .TMDB}} <span class="mu">{{.}}</span>{{end}}
+      {{- if .TMDB.ShowOriginal}}<span class="orig mu">{{.TMDB.OriginalTitle}}</span>{{end}}</span></span></td>
     <td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>
     <td class="r dl">{{$.Delta .Delta}}</td>
     <td class="r rl" data-l="{{$.T "top.releases_lc"}}">{{.Releases}}</td>

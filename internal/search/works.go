@@ -73,6 +73,10 @@ func (b *Browser) Top(ctx context.Context, req *connect.Request[sniffarrv1.TopRe
 	if err != nil {
 		return nil, err
 	}
+	lang, err := language(m.GetLang())
+	if err != nil {
+		return nil, err
+	}
 	limit, offset := int(m.GetLimit()), int(m.GetOffset())
 	switch {
 	case limit < 0 || offset < 0:
@@ -92,7 +96,7 @@ func (b *Browser) Top(ctx context.Context, req *connect.Request[sniffarrv1.TopRe
 		res.ComputedAt = timestamppb.New(at)
 	}
 	for _, e := range entries {
-		pe := &sniffarrv1.TopEntry{Rank: int32(e.Rank), Work: work(e.Work), Peers: e.Peers}
+		pe := &sniffarrv1.TopEntry{Rank: int32(e.Rank), Work: work(e.Work, lang), Peers: e.Peers}
 		if e.Delta != nil {
 			pe.Delta = new(float32(*e.Delta))
 		}
@@ -110,6 +114,10 @@ func (b *Browser) Work(ctx context.Context, req *connect.Request[sniffarrv1.Work
 	if err != nil {
 		return nil, err
 	}
+	lang, err := language(m.GetLang())
+	if err != nil {
+		return nil, err
+	}
 	v, err := b.Store.Work(ctx, m.GetKey(), window, voice, b.now())
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, connect.NewError(connect.CodeNotFound, err)
@@ -118,12 +126,12 @@ func (b *Browser) Work(ctx context.Context, req *connect.Request[sniffarrv1.Work
 		b.Log.ErrorContext(ctx, "work", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("work failed"))
 	}
-	res := &sniffarrv1.WorkResponse{Work: work(v.Work), Peers: v.Peers, Rank: int32(v.Rank)}
+	res := &sniffarrv1.WorkResponse{Work: work(v.Work, lang), Peers: v.Peers, Rank: int32(v.Rank)}
 	if v.Delta != nil {
 		res.Delta = new(float32(*v.Delta))
 	}
 	for _, r := range v.Releases {
-		res.Releases = append(res.Releases, &sniffarrv1.WorkRelease{Release: release(r.Release), Peers: r.Peers})
+		res.Releases = append(res.Releases, &sniffarrv1.WorkRelease{Release: release(r.Release, lang), Peers: r.Peers})
 	}
 	return connect.NewResponse(res), nil
 }
@@ -138,8 +146,9 @@ func workRef(w store.Work) *sniffarrv1.WorkRef {
 	return ref
 }
 
-func work(w store.Work) *sniffarrv1.Work {
-	out := &sniffarrv1.Work{Ref: workRef(w), Releases: w.Releases, FirstSeen: timestamppb.New(w.FirstSeen)}
+// work is the API's view of a work, with TMDBWork texts in lang.
+func work(w store.Work, lang string) *sniffarrv1.Work {
+	out := &sniffarrv1.Work{Ref: workRef(w), Releases: w.Releases, FirstSeen: timestamppb.New(w.FirstSeen), Tmdb: tmdbWork(w.TMDB, w.Kind, lang)}
 	for _, a := range w.Audio {
 		pa := &sniffarrv1.Audio{Language: a.Language, Marker: a.Marker, ScriptHint: a.ScriptHint}
 		if a.Probability != nil {

@@ -66,6 +66,10 @@ func name[K comparable, V comparable](m map[K]V, v V) (K, bool) {
 
 func (b *Browser) Page(ctx context.Context, req *connect.Request[sniffarrv1.PageRequest]) (*connect.Response[sniffarrv1.PageResponse], error) {
 	m := req.Msg
+	lang, err := language(m.GetLang())
+	if err != nil {
+		return nil, err
+	}
 	q := store.Browse{Text: m.GetQuery(), MinSize: m.GetMinSize(), Offset: int(m.GetOffset()), Limit: int(m.GetLimit())}
 	switch {
 	case q.Limit < 0:
@@ -127,7 +131,7 @@ func (b *Browser) Page(ctx context.Context, req *connect.Request[sniffarrv1.Page
 	}
 	res := &sniffarrv1.PageResponse{Releases: make([]*sniffarrv1.Release, len(found)), Total: total}
 	for i, r := range found {
-		res.Releases[i] = release(r)
+		res.Releases[i] = release(r, lang)
 	}
 	if q.Text != "" && q.Offset == 0 {
 		works, err := b.Store.Works(ctx, q.Text, b.now(), PageWorks)
@@ -136,13 +140,17 @@ func (b *Browser) Page(ctx context.Context, req *connect.Request[sniffarrv1.Page
 			return nil, connect.NewError(connect.CodeInternal, errors.New("page failed"))
 		}
 		for _, w := range works {
-			res.Works = append(res.Works, &sniffarrv1.WorkMatch{Work: workRef(w.Work), Peers: w.Peers, Releases: w.Work.Releases})
+			res.Works = append(res.Works, &sniffarrv1.WorkMatch{Work: workRef(w.Work), Peers: w.Peers, Releases: w.Work.Releases, Tmdb: tmdbWork(w.Work.TMDB, w.Work.Kind, lang)})
 		}
 	}
 	return connect.NewResponse(res), nil
 }
 
 func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.CardRequest]) (*connect.Response[sniffarrv1.CardResponse], error) {
+	lang, err := language(req.Msg.GetLang())
+	if err != nil {
+		return nil, err
+	}
 	h := req.Msg.GetInfohash()
 	if len(h) != len(store.Hash{}) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("infohash of %d bytes, want 20", len(h)))
@@ -155,7 +163,7 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 		b.Log.ErrorContext(ctx, "card", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("card failed"))
 	}
-	res := &sniffarrv1.CardResponse{Release: release(c.Release), Discovery: discoveries[c.Discovery],
+	res := &sniffarrv1.CardResponse{Release: release(c.Release, lang), Discovery: discoveries[c.Discovery],
 		Peers: &sniffarrv1.PeerCounts{Day: c.Peers.Day, Week: c.Peers.Week, Month: c.Peers.Month}}
 	for _, f := range c.Files {
 		res.Files = append(res.Files, &sniffarrv1.File{Path: f.Path, Size: f.Size})

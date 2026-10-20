@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -67,8 +69,27 @@ var sources = map[string]sniffarrv1.VideoSource{
 	"other":      sniffarrv1.VideoSource_VIDEO_SOURCE_OTHER,
 }
 
+// Languages are the languages of TMDBWork texts a request may ask for; the
+// first is the default.
+var Languages = []string{"en", "ru"}
+
+// language reads a request's lang.
+func language(lang string) (string, error) {
+	if lang == "" {
+		return Languages[0], nil
+	}
+	if !slices.Contains(Languages, lang) {
+		return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown lang %q", lang))
+	}
+	return lang, nil
+}
+
 func (s *Service) Search(ctx context.Context, req *connect.Request[sniffarrv1.SearchRequest]) (*connect.Response[sniffarrv1.SearchResponse], error) {
 	m := req.Msg
+	lang, err := language(m.GetLang())
+	if err != nil {
+		return nil, err
+	}
 	q := store.Query{Text: m.GetQuery(), Exclude: hidden, Limit: int(m.GetLimit())}
 	switch {
 	case q.Limit < 0:
@@ -98,7 +119,6 @@ func (s *Service) Search(ctx context.Context, req *connect.Request[sniffarrv1.Se
 		q.ID = &store.ExternalID{Provider: id.GetProvider(), ID: id.GetId()}
 	}
 	var found []store.Release
-	var err error
 	if s.Lazy != nil {
 		found, err = s.Lazy.search(ctx, s.Store, q)
 	} else {
@@ -110,12 +130,16 @@ func (s *Service) Search(ctx context.Context, req *connect.Request[sniffarrv1.Se
 	}
 	res := &sniffarrv1.SearchResponse{Releases: make([]*sniffarrv1.Release, len(found))}
 	for i, r := range found {
-		res.Releases[i] = release(r)
+		res.Releases[i] = release(r, lang)
 	}
 	return connect.NewResponse(res), nil
 }
 
 func (s *Service) Get(ctx context.Context, req *connect.Request[sniffarrv1.GetRequest]) (*connect.Response[sniffarrv1.GetResponse], error) {
+	lang, err := language(req.Msg.GetLang())
+	if err != nil {
+		return nil, err
+	}
 	b := req.Msg.GetInfohash()
 	if len(b) != len(store.Hash{}) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("infohash of %d bytes, want 20", len(b)))
@@ -128,10 +152,49 @@ func (s *Service) Get(ctx context.Context, req *connect.Request[sniffarrv1.GetRe
 		s.Log.Error("get", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("get failed"))
 	}
-	return connect.NewResponse(&sniffarrv1.GetResponse{Release: release(r)}), nil
+	return connect.NewResponse(&sniffarrv1.GetResponse{Release: release(r, lang)}), nil
 }
 
-func release(r store.Release) *sniffarrv1.Release {
+// tmdbWork is the API's view of a title match with texts in lang, or nil
+// while the title was never looked up. A match without details takes its type
+// from kind, movie or series.
+func tmdbWork(t store.Title, kind, lang string) *sniffarrv1.TMDBWork {
+	if t.MatchedAt.IsZero() {
+		return nil
+	}
+	out := &sniffarrv1.TMDBWork{CheckedAt: timestamppb.New(t.MatchedAt)}
+	if t.Layer == "" {
+		return out
+	}
+	out.Layer, out.Confidence, out.Year = tmdbLayers[t.Layer], float32(t.Confidence), int32(t.Year)
+	for _, id := range t.IDs {
+		switch id.Provider {
+		case store.ProviderTMDB:
+			out.Id, _ = strconv.ParseInt(id.ID, 10, 64)
+		case store.ProviderIMDb:
+			out.ImdbId = id.ID
+		}
+	}
+	out.Type = "movie"
+	if kind == "series" {
+		out.Type = "tv"
+	}
+	d := t.Details
+	if d == nil {
+		return out
+	}
+	if d.Type != "" {
+		out.Type = d.Type
+	}
+	text := d.Text(lang)
+	out.Title, out.OriginalTitle, out.Overview, out.Genres = text.Title, d.OriginalTitle, text.Overview, text.Genres
+	out.PosterPath, out.Rating, out.Votes, out.Runtime = d.PosterPath, d.Rating, int32(d.Votes), int32(d.Runtime)
+	out.Status, out.Seasons, out.Countries, out.Language = d.Status, int32(d.Seasons), d.Countries, d.Language
+	return out
+}
+
+// release is the API's view of a release, with TMDBWork texts in lang.
+func release(r store.Release, lang string) *sniffarrv1.Release {
 	out := &sniffarrv1.Release{
 		Infohash:         r.Hash[:],
 		Name:             r.Name,
@@ -148,6 +211,7 @@ func release(r store.Release) *sniffarrv1.Release {
 		TmdbLayer:        tmdbLayers[r.Title.Layer],
 		TmdbConfidence:   float32(r.Title.Confidence),
 		PeersWeek:        r.PeersWeek,
+		Tmdb:             tmdbWork(r.Title, r.Kind, lang),
 	}
 	for _, id := range r.Title.IDs {
 		out.Ids = append(out.Ids, &sniffarrv1.ExternalId{Provider: id.Provider, Id: id.ID})

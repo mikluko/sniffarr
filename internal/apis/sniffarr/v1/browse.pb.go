@@ -284,8 +284,10 @@ type PageRequest struct {
 	// Releases to skip.
 	Offset int32 `protobuf:"varint,10,opt,name=offset,proto3" json:"offset,omitempty"`
 	// At most this many releases: 50 when unset, never more than 500.
-	Limit         int32 `protobuf:"varint,11,opt,name=limit,proto3" json:"limit,omitempty"`
-	Sort          Sort  `protobuf:"varint,12,opt,name=sort,proto3,enum=sniffarr.v1.Sort" json:"sort,omitempty"`
+	Limit int32 `protobuf:"varint,11,opt,name=limit,proto3" json:"limit,omitempty"`
+	Sort  Sort  `protobuf:"varint,12,opt,name=sort,proto3,enum=sniffarr.v1.Sort" json:"sort,omitempty"`
+	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+	Lang          string `protobuf:"bytes,13,opt,name=lang,proto3" json:"lang,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -404,6 +406,13 @@ func (x *PageRequest) GetSort() Sort {
 	return Sort_SORT_UNSPECIFIED
 }
 
+func (x *PageRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
 type PageResponse struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Releases []*Release             `protobuf:"bytes,1,rep,name=releases,proto3" json:"releases,omitempty"`
@@ -475,7 +484,10 @@ type WorkMatch struct {
 	// Distinct peers of the work's releases over the last 7 days.
 	Peers int64 `protobuf:"varint,2,opt,name=peers,proto3" json:"peers,omitempty"`
 	// Stored releases of the work.
-	Releases      int64 `protobuf:"varint,3,opt,name=releases,proto3" json:"releases,omitempty"`
+	Releases int64 `protobuf:"varint,3,opt,name=releases,proto3" json:"releases,omitempty"`
+	// What TMDB knows of the work, by the title of its release with the most
+	// peers; absent while that title was never looked up.
+	Tmdb          *TMDBWork `protobuf:"bytes,4,opt,name=tmdb,proto3" json:"tmdb,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -531,9 +543,18 @@ func (x *WorkMatch) GetReleases() int64 {
 	return 0
 }
 
+func (x *WorkMatch) GetTmdb() *TMDBWork {
+	if x != nil {
+		return x.Tmdb
+	}
+	return nil
+}
+
 type CardRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Infohash      []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+	Lang          string `protobuf:"bytes,2,opt,name=lang,proto3" json:"lang,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -573,6 +594,13 @@ func (x *CardRequest) GetInfohash() []byte {
 		return x.Infohash
 	}
 	return nil
+}
+
+func (x *CardRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
 }
 
 type CardResponse struct {
@@ -842,7 +870,10 @@ type Work struct {
 	// without a source adds none.
 	Sources []VideoSource `protobuf:"varint,4,rep,packed,name=sources,proto3,enum=sniffarr.v1.VideoSource" json:"sources,omitempty"`
 	// The first sighting of the earliest release.
-	FirstSeen     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=first_seen,json=firstSeen,proto3" json:"first_seen,omitempty"`
+	FirstSeen *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=first_seen,json=firstSeen,proto3" json:"first_seen,omitempty"`
+	// What TMDB knows of the work, by the title of its release with the most
+	// peers; absent while that title was never looked up.
+	Tmdb          *TMDBWork `protobuf:"bytes,6,opt,name=tmdb,proto3" json:"tmdb,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -908,6 +939,13 @@ func (x *Work) GetSources() []VideoSource {
 func (x *Work) GetFirstSeen() *timestamppb.Timestamp {
 	if x != nil {
 		return x.FirstSeen
+	}
+	return nil
+}
+
+func (x *Work) GetTmdb() *TMDBWork {
+	if x != nil {
+		return x.Tmdb
 	}
 	return nil
 }
@@ -1020,7 +1058,9 @@ type TopRequest struct {
 	// Entries to skip.
 	Offset int32 `protobuf:"varint,4,opt,name=offset,proto3" json:"offset,omitempty"`
 	// At most this many entries: 20 when unset, never more than 100.
-	Limit         int32 `protobuf:"varint,5,opt,name=limit,proto3" json:"limit,omitempty"`
+	Limit int32 `protobuf:"varint,5,opt,name=limit,proto3" json:"limit,omitempty"`
+	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+	Lang          string `protobuf:"bytes,6,opt,name=lang,proto3" json:"lang,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1088,6 +1128,13 @@ func (x *TopRequest) GetLimit() int32 {
 		return x.Limit
 	}
 	return 0
+}
+
+func (x *TopRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
 }
 
 type TopResponse struct {
@@ -1229,9 +1276,11 @@ func (x *TopEntry) GetDelta() float32 {
 type WorkRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// WorkRef.key.
-	Key           string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Window        Window `protobuf:"varint,2,opt,name=window,proto3,enum=sniffarr.v1.Window" json:"window,omitempty"`
-	Voice         Voice  `protobuf:"varint,3,opt,name=voice,proto3,enum=sniffarr.v1.Voice" json:"voice,omitempty"`
+	Key    string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Window Window `protobuf:"varint,2,opt,name=window,proto3,enum=sniffarr.v1.Window" json:"window,omitempty"`
+	Voice  Voice  `protobuf:"varint,3,opt,name=voice,proto3,enum=sniffarr.v1.Voice" json:"voice,omitempty"`
+	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+	Lang          string `protobuf:"bytes,4,opt,name=lang,proto3" json:"lang,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1285,6 +1334,13 @@ func (x *WorkRequest) GetVoice() Voice {
 		return x.Voice
 	}
 	return Voice_VOICE_UNSPECIFIED
+}
+
+func (x *WorkRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
 }
 
 type WorkResponse struct {
@@ -1879,7 +1935,7 @@ var File_sniffarr_v1_browse_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\n" +
-	"\x18sniffarr/v1/browse.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18sniffarr/v1/ingest.proto\x1a\x18sniffarr/v1/search.proto\"\xee\x03\n" +
+	"\x18sniffarr/v1/browse.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18sniffarr/v1/ingest.proto\x1a\x18sniffarr/v1/search.proto\"\x82\x04\n" +
 	"\vPageRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12%\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12!\n" +
@@ -1893,19 +1949,22 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x06offset\x18\n" +
 	" \x01(\x05R\x06offset\x12\x14\n" +
 	"\x05limit\x18\v \x01(\x05R\x05limit\x12%\n" +
-	"\x04sort\x18\f \x01(\x0e2\x11.sniffarr.v1.SortR\x04sortB\x11\n" +
+	"\x04sort\x18\f \x01(\x0e2\x11.sniffarr.v1.SortR\x04sort\x12\x12\n" +
+	"\x04lang\x18\r \x01(\tR\x04langB\x11\n" +
 	"\x0f_audio_languageB\x18\n" +
 	"\x16_min_audio_probability\"\x84\x01\n" +
 	"\fPageResponse\x120\n" +
 	"\breleases\x18\x01 \x03(\v2\x14.sniffarr.v1.ReleaseR\breleases\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12,\n" +
-	"\x05works\x18\x03 \x03(\v2\x16.sniffarr.v1.WorkMatchR\x05works\"g\n" +
+	"\x05works\x18\x03 \x03(\v2\x16.sniffarr.v1.WorkMatchR\x05works\"\x92\x01\n" +
 	"\tWorkMatch\x12(\n" +
 	"\x04work\x18\x01 \x01(\v2\x14.sniffarr.v1.WorkRefR\x04work\x12\x14\n" +
 	"\x05peers\x18\x02 \x01(\x03R\x05peers\x12\x1a\n" +
-	"\breleases\x18\x03 \x01(\x03R\breleases\")\n" +
+	"\breleases\x18\x03 \x01(\x03R\breleases\x12)\n" +
+	"\x04tmdb\x18\x04 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdb\"=\n" +
 	"\vCardRequest\x12\x1a\n" +
-	"\binfohash\x18\x01 \x01(\fR\binfohash\"\xb2\x02\n" +
+	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\"\xb2\x02\n" +
 	"\fCardResponse\x12.\n" +
 	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\x121\n" +
 	"\tdiscovery\x18\x02 \x01(\x0e2\x13.sniffarr.v1.SourceR\tdiscovery\x12'\n" +
@@ -1925,26 +1984,28 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x05title\x18\x03 \x01(\tR\x05title\x12\x12\n" +
 	"\x04year\x18\x04 \x01(\x05R\x04year\x12\x16\n" +
 	"\x06season\x18\x05 \x01(\x05R\x06season\x12\x12\n" +
-	"\x04rank\x18\x06 \x01(\x05R\x04rank\"\xe3\x01\n" +
+	"\x04rank\x18\x06 \x01(\x05R\x04rank\"\x8e\x02\n" +
 	"\x04Work\x12&\n" +
 	"\x03ref\x18\x01 \x01(\v2\x14.sniffarr.v1.WorkRefR\x03ref\x12\x1a\n" +
 	"\breleases\x18\x02 \x01(\x03R\breleases\x12(\n" +
 	"\x05audio\x18\x03 \x03(\v2\x12.sniffarr.v1.AudioR\x05audio\x122\n" +
 	"\asources\x18\x04 \x03(\x0e2\x18.sniffarr.v1.VideoSourceR\asources\x129\n" +
 	"\n" +
-	"first_seen\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeen\"\r\n" +
+	"first_seen\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeen\x12)\n" +
+	"\x04tmdb\x18\x06 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdb\"\r\n" +
 	"\vHomeRequest\"W\n" +
 	"\fHomeResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x03R\x05total\x12\x17\n" +
 	"\anew_day\x18\x02 \x01(\x03R\x06newDay\x12\x18\n" +
-	"\apending\x18\x03 \x01(\x03R\apending\"\xb8\x01\n" +
+	"\apending\x18\x03 \x01(\x03R\apending\"\xcc\x01\n" +
 	"\n" +
 	"TopRequest\x12%\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12+\n" +
 	"\x06window\x18\x02 \x01(\x0e2\x13.sniffarr.v1.WindowR\x06window\x12(\n" +
 	"\x05voice\x18\x03 \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\x12\x16\n" +
 	"\x06offset\x18\x04 \x01(\x05R\x06offset\x12\x14\n" +
-	"\x05limit\x18\x05 \x01(\x05R\x05limit\"\x91\x01\n" +
+	"\x05limit\x18\x05 \x01(\x05R\x05limit\x12\x12\n" +
+	"\x04lang\x18\x06 \x01(\tR\x04lang\"\x91\x01\n" +
 	"\vTopResponse\x12/\n" +
 	"\aentries\x18\x01 \x03(\v2\x15.sniffarr.v1.TopEntryR\aentries\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12;\n" +
@@ -1955,11 +2016,12 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x04work\x18\x02 \x01(\v2\x11.sniffarr.v1.WorkR\x04work\x12\x14\n" +
 	"\x05peers\x18\x03 \x01(\x03R\x05peers\x12\x19\n" +
 	"\x05delta\x18\x04 \x01(\x02H\x00R\x05delta\x88\x01\x01B\b\n" +
-	"\x06_delta\"v\n" +
+	"\x06_delta\"\x8a\x01\n" +
 	"\vWorkRequest\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
 	"\x06window\x18\x02 \x01(\x0e2\x13.sniffarr.v1.WindowR\x06window\x12(\n" +
-	"\x05voice\x18\x03 \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\"\xba\x01\n" +
+	"\x05voice\x18\x03 \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\x12\x12\n" +
+	"\x04lang\x18\x04 \x01(\tR\x04lang\"\xba\x01\n" +
 	"\fWorkResponse\x12%\n" +
 	"\x04work\x18\x01 \x01(\v2\x11.sniffarr.v1.WorkR\x04work\x12\x14\n" +
 	"\x05peers\x18\x02 \x01(\x03R\x05peers\x124\n" +
@@ -2081,10 +2143,11 @@ var file_sniffarr_v1_browse_proto_goTypes = []any{
 	(VideoSource)(0),              // 28: sniffarr.v1.VideoSource
 	(Layer)(0),                    // 29: sniffarr.v1.Layer
 	(*Release)(nil),               // 30: sniffarr.v1.Release
-	(Source)(0),                   // 31: sniffarr.v1.Source
-	(*File)(nil),                  // 32: sniffarr.v1.File
-	(*Audio)(nil),                 // 33: sniffarr.v1.Audio
-	(*timestamppb.Timestamp)(nil), // 34: google.protobuf.Timestamp
+	(*TMDBWork)(nil),              // 31: sniffarr.v1.TMDBWork
+	(Source)(0),                   // 32: sniffarr.v1.Source
+	(*File)(nil),                  // 33: sniffarr.v1.File
+	(*Audio)(nil),                 // 34: sniffarr.v1.Audio
+	(*timestamppb.Timestamp)(nil), // 35: google.protobuf.Timestamp
 }
 var file_sniffarr_v1_browse_proto_depIdxs = []int32{
 	27, // 0: sniffarr.v1.PageRequest.kind:type_name -> sniffarr.v1.Kind
@@ -2094,53 +2157,55 @@ var file_sniffarr_v1_browse_proto_depIdxs = []int32{
 	30, // 4: sniffarr.v1.PageResponse.releases:type_name -> sniffarr.v1.Release
 	6,  // 5: sniffarr.v1.PageResponse.works:type_name -> sniffarr.v1.WorkMatch
 	10, // 6: sniffarr.v1.WorkMatch.work:type_name -> sniffarr.v1.WorkRef
-	30, // 7: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
-	31, // 8: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
-	32, // 9: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
-	9,  // 10: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
-	10, // 11: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkRef
-	27, // 12: sniffarr.v1.WorkRef.kind:type_name -> sniffarr.v1.Kind
-	10, // 13: sniffarr.v1.Work.ref:type_name -> sniffarr.v1.WorkRef
-	33, // 14: sniffarr.v1.Work.audio:type_name -> sniffarr.v1.Audio
-	28, // 15: sniffarr.v1.Work.sources:type_name -> sniffarr.v1.VideoSource
-	34, // 16: sniffarr.v1.Work.first_seen:type_name -> google.protobuf.Timestamp
-	27, // 17: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
-	1,  // 18: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
-	2,  // 19: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
-	16, // 20: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
-	34, // 21: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
-	11, // 22: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.Work
-	1,  // 23: sniffarr.v1.WorkRequest.window:type_name -> sniffarr.v1.Window
-	2,  // 24: sniffarr.v1.WorkRequest.voice:type_name -> sniffarr.v1.Voice
-	11, // 25: sniffarr.v1.WorkResponse.work:type_name -> sniffarr.v1.Work
-	19, // 26: sniffarr.v1.WorkResponse.releases:type_name -> sniffarr.v1.WorkRelease
-	30, // 27: sniffarr.v1.WorkRelease.release:type_name -> sniffarr.v1.Release
-	22, // 28: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
-	23, // 29: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
-	24, // 30: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
-	25, // 31: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
-	26, // 32: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
-	27, // 33: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
-	29, // 34: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
-	28, // 35: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
-	3,  // 36: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
-	4,  // 37: sniffarr.v1.BrowseService.Page:input_type -> sniffarr.v1.PageRequest
-	7,  // 38: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
-	20, // 39: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
-	12, // 40: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
-	14, // 41: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
-	17, // 42: sniffarr.v1.BrowseService.Work:input_type -> sniffarr.v1.WorkRequest
-	5,  // 43: sniffarr.v1.BrowseService.Page:output_type -> sniffarr.v1.PageResponse
-	8,  // 44: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
-	21, // 45: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
-	13, // 46: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
-	15, // 47: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
-	18, // 48: sniffarr.v1.BrowseService.Work:output_type -> sniffarr.v1.WorkResponse
-	43, // [43:49] is the sub-list for method output_type
-	37, // [37:43] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	31, // 7: sniffarr.v1.WorkMatch.tmdb:type_name -> sniffarr.v1.TMDBWork
+	30, // 8: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
+	32, // 9: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
+	33, // 10: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
+	9,  // 11: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
+	10, // 12: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkRef
+	27, // 13: sniffarr.v1.WorkRef.kind:type_name -> sniffarr.v1.Kind
+	10, // 14: sniffarr.v1.Work.ref:type_name -> sniffarr.v1.WorkRef
+	34, // 15: sniffarr.v1.Work.audio:type_name -> sniffarr.v1.Audio
+	28, // 16: sniffarr.v1.Work.sources:type_name -> sniffarr.v1.VideoSource
+	35, // 17: sniffarr.v1.Work.first_seen:type_name -> google.protobuf.Timestamp
+	31, // 18: sniffarr.v1.Work.tmdb:type_name -> sniffarr.v1.TMDBWork
+	27, // 19: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
+	1,  // 20: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
+	2,  // 21: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
+	16, // 22: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
+	35, // 23: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
+	11, // 24: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.Work
+	1,  // 25: sniffarr.v1.WorkRequest.window:type_name -> sniffarr.v1.Window
+	2,  // 26: sniffarr.v1.WorkRequest.voice:type_name -> sniffarr.v1.Voice
+	11, // 27: sniffarr.v1.WorkResponse.work:type_name -> sniffarr.v1.Work
+	19, // 28: sniffarr.v1.WorkResponse.releases:type_name -> sniffarr.v1.WorkRelease
+	30, // 29: sniffarr.v1.WorkRelease.release:type_name -> sniffarr.v1.Release
+	22, // 30: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
+	23, // 31: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
+	24, // 32: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
+	25, // 33: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
+	26, // 34: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
+	27, // 35: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
+	29, // 36: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
+	28, // 37: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
+	3,  // 38: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
+	4,  // 39: sniffarr.v1.BrowseService.Page:input_type -> sniffarr.v1.PageRequest
+	7,  // 40: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
+	20, // 41: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
+	12, // 42: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
+	14, // 43: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
+	17, // 44: sniffarr.v1.BrowseService.Work:input_type -> sniffarr.v1.WorkRequest
+	5,  // 45: sniffarr.v1.BrowseService.Page:output_type -> sniffarr.v1.PageResponse
+	8,  // 46: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
+	21, // 47: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
+	13, // 48: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
+	15, // 49: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
+	18, // 50: sniffarr.v1.BrowseService.Work:output_type -> sniffarr.v1.WorkResponse
+	45, // [45:51] is the sub-list for method output_type
+	39, // [39:45] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_browse_proto_init() }

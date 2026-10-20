@@ -120,32 +120,101 @@ func (c *Client) Search(ctx context.Context, series bool, query string, year int
 	return out, nil
 }
 
-// ExternalIDs returns the IMDb, TVDB and Wikidata IDs of the movie, or the
-// series when series is set, by provider; absent IDs are left out.
-func (c *Client) ExternalIDs(ctx context.Context, series bool, id int) (map[string]string, error) {
-	path := "/3/movie/" + strconv.Itoa(id) + "/external_ids"
+// Details is what TMDB tells of a movie or series in one language, with its
+// IDs with other providers.
+type Details struct {
+	ID            int
+	Title         string
+	OriginalTitle string
+	// Year is the year of release or first air, 0 when TMDB has none.
+	Year       int
+	PosterPath string
+	Overview   string
+	Genres     []string
+	Rating     float64
+	Votes      int
+	// Runtime is in minutes: a movie's, or the first typical episode runtime
+	// of a series; 0 when TMDB has none.
+	Runtime int
+	// Status and Seasons are a series'.
+	Status  string
+	Seasons int
+	// Countries are the origin countries, or the production countries when
+	// TMDB names no origin, as ISO 3166-1 alpha-2; Language is ISO 639-1.
+	Countries []string
+	Language  string
+	// IDs are the IMDb, TVDB and Wikidata IDs by provider; absent IDs are
+	// left out.
+	IDs map[string]string
+}
+
+// Details returns the movie, or the series when series is set, with the ID
+// in the language, an IETF tag such as en-US; text TMDB has no translation
+// of comes as TMDB falls back.
+func (c *Client) Details(ctx context.Context, series bool, id int, language string) (Details, error) {
+	path := "/3/movie/" + strconv.Itoa(id)
 	if series {
-		path = "/3/tv/" + strconv.Itoa(id) + "/external_ids"
+		path = "/3/tv/" + strconv.Itoa(id)
 	}
 	var res struct {
-		IMDb     string `json:"imdb_id"`
-		TVDB     int    `json:"tvdb_id"`
-		Wikidata string `json:"wikidata_id"`
+		ID                  int                     `json:"id"`
+		Title               string                  `json:"title"`
+		Name                string                  `json:"name"`
+		OriginalTitle       string                  `json:"original_title"`
+		OriginalName        string                  `json:"original_name"`
+		ReleaseDate         string                  `json:"release_date"`
+		FirstAirDate        string                  `json:"first_air_date"`
+		PosterPath          string                  `json:"poster_path"`
+		Overview            string                  `json:"overview"`
+		Genres              []struct{ Name string } `json:"genres"`
+		VoteAverage         float64                 `json:"vote_average"`
+		VoteCount           int                     `json:"vote_count"`
+		Runtime             int                     `json:"runtime"`
+		EpisodeRunTime      []int                   `json:"episode_run_time"`
+		Status              string                  `json:"status"`
+		NumberOfSeasons     int                     `json:"number_of_seasons"`
+		OriginCountry       []string                `json:"origin_country"`
+		ProductionCountries []struct {
+			ISO string `json:"iso_3166_1"`
+		} `json:"production_countries"`
+		OriginalLanguage string `json:"original_language"`
+		ExternalIDs      struct {
+			IMDb     string `json:"imdb_id"`
+			TVDB     int    `json:"tvdb_id"`
+			Wikidata string `json:"wikidata_id"`
+		} `json:"external_ids"`
 	}
-	if err := c.get(ctx, path, url.Values{}, &res); err != nil {
-		return nil, err
+	if err := c.get(ctx, path, url.Values{"language": {language}, "append_to_response": {"external_ids"}}, &res); err != nil {
+		return Details{}, err
 	}
-	out := map[string]string{}
-	if res.IMDb != "" {
-		out["imdb"] = res.IMDb
+	d := Details{ID: res.ID, Title: res.Title + res.Name, OriginalTitle: res.OriginalTitle + res.OriginalName,
+		Year: yearOf(res.ReleaseDate + res.FirstAirDate), PosterPath: res.PosterPath, Overview: res.Overview,
+		Rating: res.VoteAverage, Votes: res.VoteCount, Runtime: res.Runtime, Countries: res.OriginCountry,
+		Language: res.OriginalLanguage, IDs: map[string]string{}}
+	for _, g := range res.Genres {
+		d.Genres = append(d.Genres, g.Name)
 	}
-	if res.TVDB != 0 {
-		out["tvdb"] = strconv.Itoa(res.TVDB)
+	if series {
+		d.Status, d.Seasons = res.Status, res.NumberOfSeasons
+		if len(res.EpisodeRunTime) > 0 {
+			d.Runtime = res.EpisodeRunTime[0]
+		}
 	}
-	if res.Wikidata != "" {
-		out["wikidata"] = res.Wikidata
+	if len(d.Countries) == 0 {
+		for _, c := range res.ProductionCountries {
+			d.Countries = append(d.Countries, c.ISO)
+		}
 	}
-	return out, nil
+	if res.ExternalIDs.IMDb != "" {
+		d.IDs["imdb"] = res.ExternalIDs.IMDb
+	}
+	if res.ExternalIDs.TVDB != 0 {
+		d.IDs["tvdb"] = strconv.Itoa(res.ExternalIDs.TVDB)
+	}
+	if res.ExternalIDs.Wikidata != "" {
+		d.IDs["wikidata"] = res.ExternalIDs.Wikidata
+	}
+	return d, nil
 }
 
 func yearOf(date string) int {

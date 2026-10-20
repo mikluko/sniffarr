@@ -28,6 +28,47 @@ type PeerCounts struct {
 	Day, Week, Month int64
 }
 
+// ---------- TMDB ----------
+
+// TMDB match states. A nil *TMDBWork renders like TMDBUnchecked.
+const (
+	TMDBMatched   = "matched"   // matched; PosterPath may still be empty
+	TMDBUnmatched = "unmatched" // checked, nothing suitable found
+	TMDBUnchecked = "unchecked" // not checked yet
+)
+
+// TMDBWork is what the UI shows from TMDB for a title key. Text fields come
+// already localized for Base.Lang (TMDB translations); OriginalTitle is TMDB's
+// original_title / original_name.
+type TMDBWork struct {
+	State     string    // TMDBMatched | TMDBUnmatched | TMDBUnchecked
+	CheckedAt time.Time // last lookup, zero = never
+
+	// Set when State == TMDBMatched.
+	ID            int64
+	Type          string // "movie" | "tv"
+	IMDbID        string // "tt15239678", "" = unknown
+	Title         string
+	OriginalTitle string
+	Year          int    // release year; first air year for tv
+	PosterPath    string // "/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg", "" = no poster
+	Overview      string
+	Genres        []string // localized names
+	Rating        float64  // vote_average, 0–10
+	Votes         int      // vote_count
+	Runtime       int      // minutes; movie runtime, typical episode runtime for tv
+	Status        string   // tv: TMDB status, keyed in i18n as tvstatus.<value>
+	Seasons       int      // tv: number_of_seasons
+	Countries     []string // ISO 3166-1 alpha-2, origin/production
+	Language      string   // original_language, ISO 639-1
+
+	// How the match was made.
+	Method     string  // "search" (unique search hit) | "classifier" (picked among candidates)
+	Confidence float64 // 0–1
+}
+
+// ---------- home (GET / without query or filters) ----------
+
 type HomePage struct {
 	Base
 	Summary Summary
@@ -38,6 +79,8 @@ type Summary struct {
 	NewDay  int64 // new in the last 24 h
 	Pending int64 // classifier queue
 }
+
+// ---------- search results (GET / with q or any filter) ----------
 
 type SearchPage struct {
 	Base
@@ -62,6 +105,7 @@ type WorkHit struct {
 	Ref      WorkRef
 	Peers    int64 // in the 7-day window
 	Releases int
+	TMDB     *TMDBWork
 }
 
 type Results struct {
@@ -91,6 +135,8 @@ type VoiceCell struct {
 	Explicit bool
 	Prob     *float64 // nil = not scored
 }
+
+// ---------- top 100 (GET /top) ----------
 
 type TopPage struct {
 	Base
@@ -124,6 +170,7 @@ type Work struct {
 	FirstSeen time.Time   // earliest release
 	Open      bool        // Items is filled and shown
 	Items     []Release   // releases by peers, filled only when Open
+	TMDB      *TMDBWork
 }
 
 type Release struct {
@@ -135,6 +182,8 @@ type Release struct {
 	Source    string
 	FirstSeen time.Time
 }
+
+// ---------- torrent card ----------
 
 type TorrentPage struct {
 	Base
@@ -151,9 +200,9 @@ type Torrent struct {
 	FirstSeen     time.Time
 	LastSeen      time.Time
 	DiscoveredVia string // "announce" | "sample"
-	TMDBURL       string // the work's TMDB page when its ID is known, else a TMDB search for the title; "" hides the row
-	IMDbURL       string // the work's IMDb page when its ID is known, else an IMDb search for the title
+	TMDBQuery     string // cleaned title, used for TMDB/IMDb search links when not matched
 	Peers         PeerCounts
+	TMDB          *TMDBWork // match of the title key; shown only when Work != nil
 
 	Work       *WorkRef // nil = not grouped into a work
 	WorkRels   int      // releases of the work
@@ -196,6 +245,8 @@ type File struct {
 	Path string
 	Size int64
 }
+
+// ---------- data ----------
 
 type DataPage struct {
 	Base
