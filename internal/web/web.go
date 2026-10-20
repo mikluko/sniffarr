@@ -528,13 +528,13 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		FirstSeen:     r.GetFirstSeen().AsTime(),
 		LastSeen:      r.GetLastSeen().AsTime(),
 		DiscoveredVia: discoveries[c.GetDiscovery()],
-		TMDBQuery:     title(r.GetName()),
 		Kind:          ui.Answer{Value: uiOr(kinds, r.GetKind()), Layer: uiOr(kindLayers, r.GetLayer())},
 		Source:        ui.Answer{Value: uiOr(sources, r.GetSource()), Layer: "none"},
 		Peers:         ui.PeerCounts{Day: c.GetPeers().GetDay(), Week: c.GetPeers().GetWeek(), Month: c.GetPeers().GetMonth()},
 		WorkRels:      int(c.GetReleases()),
 		RankInWork:    int(c.GetReleaseRank()),
 	}
+	t.TMDBURL, t.IMDbURL = lookups(r)
 	if c.Work != nil {
 		ref := workRef(c.GetWork())
 		t.Work = &ref
@@ -582,6 +582,35 @@ func title(name string) string {
 		return t
 	}
 	return k
+}
+
+// lookups returns the release's TMDB and IMDb links: its work's pages where
+// the IDs are known, else searches for its title; both "" when the name
+// yields no title.
+func lookups(r *sniffarrv1.Release) (tmdb, imdb string) {
+	for _, id := range r.GetIds() {
+		switch id.GetProvider() {
+		case "tmdb":
+			kind := "movie"
+			if r.GetKind() == sniffarrv1.Kind_KIND_SERIES {
+				kind = "tv"
+			}
+			tmdb = "https://www.themoviedb.org/" + kind + "/" + url.PathEscape(id.GetId())
+		case "imdb":
+			imdb = "https://www.imdb.com/title/" + url.PathEscape(id.GetId()) + "/"
+		}
+	}
+	t := title(r.GetName())
+	if t == "" {
+		return tmdb, imdb
+	}
+	if tmdb == "" {
+		tmdb = "https://www.themoviedb.org/search?query=" + url.QueryEscape(t)
+	}
+	if imdb == "" {
+		imdb = "https://www.imdb.com/find/?q=" + url.QueryEscape(t)
+	}
+	return tmdb, imdb
 }
 
 // backURL is the search page the request came from, or "".

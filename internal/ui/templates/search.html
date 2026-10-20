@@ -49,7 +49,7 @@
     <div class="mu">{{.T "results.works"}}</div>
     <div class="workhits">
     {{range .Works}}
-      <span><a href="/top?kind={{.Ref.Kind}}">{{$.Work .Ref}}</a>
+      <span><a href="/top/w/{{.Ref.ID}}?open=1">{{$.Work .Ref}}</a>
       <span class="mu">· {{$.T (concat "kind." .Ref.Kind)}}{{if .Ref.Rank}} · №{{.Ref.Rank}}{{end}} · {{$.Num .Peers}} {{$.T "top.peers_lc"}} · {{.Releases}} {{$.T "top.releases_lc"}}</span></span>
     {{end}}
     </div>

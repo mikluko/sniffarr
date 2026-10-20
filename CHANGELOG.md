@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-20
+
+### Changed
+
+- A torrent's card links to TMDB and IMDb: the work's pages when its IDs are known, else searches for its title.
+- The work named on a torrent's card and in search results links to that work in the top with its releases open, in place of the top of its kind.
+
 ## [0.7.1] - 2026-10-20
 
 ### Fixed
@@ -137,7 +144,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/mikluko/sniffarr/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/mikluko/sniffarr/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/mikluko/sniffarr/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mikluko/sniffarr/compare/v0.5.0...v0.6.0

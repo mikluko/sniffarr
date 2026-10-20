@@ -16,11 +16,11 @@
     <tr><th>{{$.T "card.size"}}</th><td>{{$.Size .Size}}</td></tr>
     <tr><th>{{$.T "card.files"}}</th><td>{{.FileCount}}</td></tr>
     <tr><th>{{$.T "card.peers"}}</th><td>{{$.Num .Peers.Week}} {{$.T "win.7d_lc"}} <span class="mu">· {{$.Num .Peers.Day}} {{$.T "win.24h_lc"}} · {{$.Num .Peers.Month}} {{$.T "win.30d_lc"}}</span></td></tr>
-    {{with .Work}}<tr><th>{{$.T "card.work"}}</th><td><a href="/top?kind={{.Kind}}">{{$.Work .}}</a> <span class="mu">{{if .Rank}}· №{{.Rank}} {{$.T (concat "card.intop." .Kind)}} {{end}}· {{$.Torrent.WorkRels}} {{$.T "top.releases_lc"}}, {{$.T "card.thisis"}}{{$.Torrent.RankInWork}}</span></td></tr>{{end}}
+    {{with .Work}}<tr><th>{{$.T "card.work"}}</th><td><a href="/top/w/{{.ID}}?open=1">{{$.Work .}}</a> <span class="mu">{{if .Rank}}· №{{.Rank}} {{$.T (concat "card.intop." .Kind)}} {{end}}· {{$.Torrent.WorkRels}} {{$.T "top.releases_lc"}}, {{$.T "card.thisis"}}{{$.Torrent.RankInWork}}</span></td></tr>{{end}}
     <tr><th>{{$.T "col.first"}}</th><td>{{$.TimeFull .FirstSeen}}</td></tr>
     <tr><th>{{$.T "col.last"}}</th><td>{{$.TimeFull .LastSeen}}</td></tr>
     <tr><th>{{$.T "card.via"}}</th><td>{{$.T (concat "via." .DiscoveredVia)}}</td></tr>
-    {{if .TMDBQuery}}<tr><th>TMDB</th><td><a href="https://www.themoviedb.org/search?query={{queryEscape .TMDBQuery}}" rel="noreferrer" target="_blank">{{$.T "card.tmdb"}} «{{.TMDBQuery}}»</a></td></tr>{{end}}
+    {{if .TMDBURL}}<tr><th>{{$.T "card.links"}}</th><td><a href="{{.TMDBURL}}" rel="noreferrer" target="_blank">TMDB</a> · <a href="{{.IMDbURL}}" rel="noreferrer" target="_blank">IMDb</a></td></tr>{{end}}
   </table>
 </section>
 
