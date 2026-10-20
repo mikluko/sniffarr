@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -21,8 +22,10 @@ import (
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/memconn"
+	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
+	"github.com/mikluko/sniffarr/internal/sketch"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -35,9 +38,30 @@ func hexOf(b byte) string {
 	return hex.EncodeToString(h[:])
 }
 
+// Names of the seeded releases, and the UI ids of their works.
+const (
+	alien     = "Alien.1979.Rus.1080p.BluRay"
+	severance = "Severance.S02.1080p.WEB-DL"
+)
+
+var (
+	alienID     = workID(names.Parse(alien).Work)
+	severanceID = workID(names.Parse(severance).Work)
+)
+
+// peers returns a sketch of n peers numbered from first.
+func peers(k sketch.Key, first, n int) []byte {
+	s := sketch.New()
+	for i := first; i < first+n; i++ {
+		s.Add(k.Hash(netip.AddrPortFrom(netip.AddrFrom4([4]byte{10, byte(i >> 16), byte(i >> 8), byte(i)}), 6881)))
+	}
+	return s.Bytes()
+}
+
 // handler serves, with l, the UI over an in-process browse API whose store
-// holds a Russian-marked movie with ten files, a classified series, a torrent
-// of unknown kind and an adult one.
+// holds a Russian-marked movie with ten files and 100 peers, a classified
+// series with 30 peers now and 40 the day before, a torrent of unknown kind
+// with 10 peers and an adult one, with the tops computed at now.
 func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
 	ctx := context.Background()
@@ -51,14 +75,16 @@ func handler(t *testing.T, l Locales) http.Handler {
 		files = append(files, rules.File{Path: "Alien/part" + string(rune('a'+i)) + ".mkv", Size: int64(10-i) << 30})
 	}
 	for _, tr := range []store.Torrent{
-		{Hash: hash(1), Name: "Alien.1979.Rus.1080p.BluRay", Size: 55 << 30, Files: files, Discovery: "announce", SeenAt: now.Add(-time.Hour),
+		{Hash: hash(1), Name: alien, Size: 55 << 30, Files: files, Discovery: "announce", SeenAt: now.Add(-time.Hour),
 			Kind: "movie", KindLayer: store.LayerRules, Audio: []store.Audio{{Language: "ru", Marker: true, Probability: new(1.0), Layer: store.LayerRules}}},
-		{Hash: hash(2), Name: "Severance.S02.1080p.WEB-DL", Size: 40 << 30, Discovery: "sample", SeenAt: now.Add(-30 * time.Hour),
+		{Hash: hash(2), Name: severance, Size: 40 << 30, Discovery: "sample", SeenAt: now.Add(-30 * time.Hour),
 			Audio: []store.Audio{{Language: "ru"}}},
 		{Hash: hash(3), Name: "Сборник", Size: 1 << 30, Discovery: "sample", SeenAt: now.Add(-2 * time.Hour),
 			Audio: []store.Audio{{Language: "ru", ScriptHint: true}}},
 		{Hash: hash(4), Name: "Hidden.Thing", Size: 1 << 30, Discovery: "sample", SeenAt: now.Add(-time.Minute), Kind: "adult", KindLayer: store.LayerRules},
 	} {
+		p := names.Parse(tr.Name)
+		tr.TitleKey, tr.WorkKey, tr.Year, tr.Season = p.Key, p.Work, p.Year, p.Season
 		_, _, err := st.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
@@ -70,6 +96,16 @@ func handler(t *testing.T, l Locales) http.Handler {
 	_, err = st.Reject(ctx, hash(10), rules.Small, now)
 	require.NoError(t, err)
 	require.NoError(t, st.AddTokens(ctx, now.Format(time.DateOnly), 250))
+	k, err := st.HashKey(ctx)
+	require.NoError(t, err)
+	_, _, err = st.MergePeers(ctx, []store.PeerSketch{
+		{Hash: hash(1), Hour: now, Sketch: peers(k, 0, 100)},
+		{Hash: hash(2), Hour: now, Sketch: peers(k, 0, 30)},
+		{Hash: hash(2), Hour: now.Add(-30 * time.Hour), Sketch: peers(k, 1000, 40)},
+		{Hash: hash(3), Hour: now, Sketch: peers(k, 0, 10)},
+	})
+	require.NoError(t, err)
+	require.NoError(t, st.ComputeTop(ctx, now))
 	langs, err := audio.Parse("ru")
 	require.NoError(t, err)
 	h, err := New(Config{Browse: browse(t, st), Languages: langs, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
@@ -109,7 +145,7 @@ func get(t *testing.T, h http.Handler, path, target string, header ...string) *h
 	return w
 }
 
-var untranslated = regexp.MustCompile(`\b(?:kind|layer|source|drop|voiceband|voicemode|script|via|d|card|col|home|sort|nav|f)\.[a-z_]+\b`)
+var untranslated = regexp.MustCompile(`\b(?:kind|layer|source|drop|voiceband|voicemode|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results)\.[a-z_]+\b`)
 
 func page(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
@@ -128,7 +164,7 @@ func TestHome(t *testing.T) {
 	require.Contains(t, body, "<span>+3 in 24 h</span>", "first seen within the last 24 hours")
 	require.Contains(t, body, "<span>classifier pending: 1</span>")
 	require.NotContains(t, body, "Alien.1979")
-	require.NotContains(t, body, `href="/top`, "the top is not served yet")
+	require.Contains(t, body, `<a href="/top?kind=movie">`)
 	for _, path := range []string{"/?q=", "/?kind=movie", "/?vl=ru", "/?voice=any", "/?source=", "/?layer=", "/?min=", "/?sort=size", "/?o=50"} {
 		require.Contains(t, page(t, get(t, h, path, "")), `id="results"`, "%s is a search", path)
 	}
@@ -143,16 +179,23 @@ func TestSearch(t *testing.T) {
 		require.Contains(t, body, name)
 	}
 	require.NotContains(t, body, "Hidden.Thing", "adult releases are hidden")
-	require.Less(t, strings.Index(body, "Alien.1979"), strings.Index(body, "Сборник"), "latest first")
+	require.Less(t, strings.Index(body, "Alien.1979"), strings.Index(body, "Severance"), "most peers first")
+	require.Less(t, strings.Index(body, "Severance"), strings.Index(body, "Сборник"))
 	require.NotContains(t, body, "hx-trigger=\"every", "no auto-refresh")
-	require.NotContains(t, body, `href="/top`, "the top is not served yet")
-	require.Contains(t, body, `<a href="/" class="reset">`)
+	require.Contains(t, body, `<a href="/top" class="reset">`)
+	require.NotContains(t, body, `<div class="works">`, "no works without a query")
 
 	frag := page(t, get(t, h, "/?kind=series", "results"))
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<section id="results"`))
 	require.Contains(t, frag, "Severance")
 	require.NotContains(t, frag, "Alien")
 	require.Contains(t, frag, "0.90", "a classifier's confidence")
+
+	frag = page(t, get(t, h, "/?q=alien", "results"))
+	require.Contains(t, frag, `<div class="works">`)
+	require.Contains(t, frag, `<a href="/top?kind=movie">Alien (1979)</a>`, "the work by title and year")
+	require.Contains(t, frag, "№1", "its place in the movie top")
+	require.NotContains(t, page(t, get(t, h, "/?q=alien&o=50", "results")), `<div class="works">`, "works on the first page only")
 }
 
 func TestSearchFilters(t *testing.T) {
@@ -185,7 +228,7 @@ func TestSearchFilters(t *testing.T) {
 func TestSearchURL(t *testing.T) {
 	require.Equal(t, "/?q=", searchURL("", s0.filters(nil), 0, "ru"), "a search, not the home page")
 	require.Equal(t, "/?kind=movie&o=50&q=alien&voice=p50", searchURL("alien", s0.filters(map[string][]string{"kind": {"movie"}, "voice": {"p50"}, "vl": {"ru"}}), 50, "ru"))
-	require.Equal(t, "/?kind=movie", searchURL("", s0.filters(map[string][]string{"kind": {"movie"}, "source": {"bogus"}, "sort": {"last_seen"}}), 0, "ru"), "invalid and default values are dropped")
+	require.Equal(t, "/?kind=movie", searchURL("", s0.filters(map[string][]string{"kind": {"movie"}, "source": {"bogus"}, "sort": {"peers"}}), 0, "ru"), "invalid and default values are dropped")
 	require.Equal(t, "/?sort=size", searchURL("", s0.filters(map[string][]string{"sort": {"size"}}), 0, "ru"))
 }
 
@@ -193,13 +236,92 @@ func TestSort(t *testing.T) {
 	h := handler(t, nil)
 	body := page(t, get(t, h, "/?q=&sort=size", ""))
 	require.Contains(t, body, `<option value="size" selected>`)
-	require.NotContains(t, body, `<option value="last_seen" selected>`)
+	require.NotContains(t, body, `<option value="peers" selected>`)
+	require.Less(t, strings.Index(body, "Alien.1979"), strings.Index(body, "Severance"), "largest first")
+	body = page(t, get(t, h, "/?q=&sort=last_seen", ""))
+	require.Contains(t, body, `<option value="last_seen" selected>`)
+	require.Less(t, strings.Index(body, "Сборник"), strings.Index(body, "Severance"), "latest first")
 	body = page(t, get(t, h, "/?q=alien", ""))
-	require.Contains(t, body, `<option value="last_seen" selected>`, "the default")
-	body = page(t, get(t, h, "/?q=alien&sort=peers", ""))
-	require.Contains(t, body, `<option value="last_seen" selected>`, "an unknown sort is the default")
-	require.Equal(t, "last_seen", s0.filters(map[string][]string{"sort": {"peers"}}).Sort)
+	require.Contains(t, body, `<option value="peers" selected>`, "the default")
+	body = page(t, get(t, h, "/?q=alien&sort=bogus", ""))
+	require.Contains(t, body, `<option value="peers" selected>`, "an unknown sort is the default")
+	require.Equal(t, "peers", s0.filters(map[string][]string{"sort": {"bogus"}}).Sort)
 	require.Equal(t, "size", s0.filters(map[string][]string{"sort": {"size"}}).Sort)
+}
+
+func TestTop(t *testing.T) {
+	h := handler(t, nil)
+	body := page(t, get(t, h, "/top", ""))
+	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
+	require.Contains(t, body, `aria-current="page">movies</a>`, "movies without a kind")
+	require.Contains(t, body, `<tbody id="work-`+alienID+`">`)
+	require.Contains(t, body, `>Alien</a> <span class="mu">1979</span>`, "a movie's title and year")
+	require.Contains(t, body, `<td class="r mu">1</td>`, "its place")
+	require.Contains(t, body, `<td class="r dl">new</td>`, "no peers the week before")
+	require.Contains(t, body, `>explicit</td>`, "the marker of its release")
+	require.NotContains(t, body, "Severance")
+	require.Contains(t, body, `href="/top/w/`+alienID+`?open=1&amp;win=7d"`, "the toggle opens")
+	require.Contains(t, body, `hx-target="#work-`+alienID+`"`)
+	require.Contains(t, body, ">show all 100</a>", "the first 25 of 100")
+	require.Contains(t, body, "Oct 20 12:00", "computed at now")
+	require.NotContains(t, body, `class="open"`)
+
+	body = page(t, get(t, h, "/top?kind=series&win=24h&voice=p50&all=1", ""))
+	require.Contains(t, body, `aria-current="page">series</a>`)
+	require.Contains(t, body, `>Severance</a> <span class="mu">S02</span>`, "a series' title and season")
+	require.Contains(t, body, `href="/top?all=1&amp;kind=series&amp;voice=p50&amp;win=24h" hx-get="/top?all=1&amp;kind=series&amp;voice=p50&amp;win=24h" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true" aria-current="true">24 h</a>`)
+	require.Regexp(t, `<td class="r dl">−\d+%</td>`, body, "fewer peers than the day before")
+	require.Contains(t, body, "WEB", "its source")
+	require.NotContains(t, body, ">show all 100</a>", "every work is listed")
+
+	body = page(t, get(t, h, "/top?kind=music", ""))
+	require.Contains(t, body, "Empty: the top has not been computed yet.")
+
+	frag := page(t, get(t, h, "/top?kind=series", "top"))
+	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<section id="top"`))
+	require.Contains(t, frag, "Severance")
+
+	for _, tt := range []struct{ path, want string }{
+		{"/top?kind=book", `aria-current="page">movies</a>`},
+		{"/top?kind=", `aria-current="page">movies</a>`},
+		{"/top?win=1y", `aria-current="true">7 days</a>`},
+		{"/top?voice=loud", `href="/top?kind=movie&amp;win=7d" hx-get="/top?kind=movie&amp;win=7d" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true" aria-current="true">any</a>`},
+		{"/top?all=yes", ">show all 100</a>"},
+	} {
+		require.Contains(t, page(t, get(t, h, tt.path, "")), tt.want, "%s falls back to the default", tt.path)
+	}
+}
+
+func TestWork(t *testing.T) {
+	h := handler(t, nil)
+	frag := page(t, get(t, h, "/top/w/"+alienID+"?open=1", "work-"+alienID))
+	require.True(t, strings.HasPrefix(frag, `<tbody id="work-`+alienID+`" class="open">`), "the tbody alone: %s", frag)
+	require.Contains(t, frag, `<td class="r mu">1</td>`, "its place in the top")
+	require.Contains(t, frag, `<td class="r dl">new</td>`)
+	require.Contains(t, frag, `<a href="/t/`+hexOf(1)+`">`+alien+`</a>`, "its release")
+	require.Contains(t, frag, `href="/top/w/`+alienID+`?win=7d"`, "the toggle closes")
+	require.Contains(t, frag, `aria-expanded="true"`)
+
+	frag = page(t, get(t, h, "/top/w/"+alienID+"?win=7d", "work-"+alienID))
+	require.True(t, strings.HasPrefix(frag, `<tbody id="work-`+alienID+`">`))
+	require.NotContains(t, frag, hexOf(1), "closed")
+	require.Contains(t, frag, `aria-expanded="false"`)
+
+	frag = page(t, get(t, h, "/top/w/"+severanceID+"?open=1&win=24h&voice=p50", "work-"+severanceID))
+	require.Regexp(t, `<td class="r dl">−\d+%</td>`, frag, "the change over the window asked for")
+	require.Contains(t, frag, `href="/top/w/`+severanceID+`?voice=p50&amp;win=24h"`)
+	require.Contains(t, frag, severance)
+	frag = page(t, get(t, h, "/top/w/"+severanceID+"?open=1&voice=explicit", "work-"+severanceID))
+	require.NotContains(t, frag, severance, "no release of the work has the marker")
+
+	body := page(t, get(t, h, "/top/w/"+alienID+"?open=1", ""))
+	require.True(t, strings.HasPrefix(body, "<!doctype html>"), "a full page without htmx")
+	require.Contains(t, body, `aria-current="page">movies</a>`)
+	require.Contains(t, body, alien)
+	require.NotContains(t, body, "Severance")
+
+	require.Equal(t, http.StatusNotFound, get(t, h, "/top/w/"+workID("y:nothing 2000"), "work-x").Code)
+	require.Equal(t, http.StatusNotFound, get(t, h, "/top/w/%21%21", "").Code, "not an id")
 }
 
 var s0 = &server{tags: []string{"ru"}}
@@ -211,6 +333,9 @@ func TestTorrent(t *testing.T) {
 	require.Contains(t, body, "magnet:?xt=urn:btih:"+hexOf(1))
 	require.Contains(t, body, `<td class="r">Rus</td>`, "the matched word")
 	require.Contains(t, body, "alien 1979", "the TMDB query")
+	require.Regexp(t, `<th>peers</th><td>\d+ in 7 days <span class="mu">· \d+ in 24 h · \d+ in 30 days</span></td>`, body)
+	require.Contains(t, body, `<a href="/top?kind=movie">Alien (1979)</a> <span class="mu">· №1 among movies · 1 releases, this one by peers #1</span>`)
+	require.NotContains(t, page(t, get(t, h, "/t/"+hexOf(3), "")), "<th>work</th>", "a release whose name yields no work")
 	require.Equal(t, 8, strings.Count(body, `<td class="mono wrapc">`), "the first eight files")
 	require.Contains(t, body, "?files=all")
 

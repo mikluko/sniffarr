@@ -1,12 +1,14 @@
 // Package web serves the web UI as a client of the browse API: the home
-// page, search, a release's card, and the store's counts. It authenticates
-// nobody; that is left to a proxy in front of it.
+// page, search, the tops of works, a release's card, and the store's counts.
+// It authenticates nobody; that is left to a proxy in front of it.
 package web
 
 import (
 	"cmp"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -35,6 +37,12 @@ const PageSize = 50
 
 // cardFiles is how many files a card lists until all are asked for.
 const cardFiles = 8
+
+// A top page lists topShown works until all topSize are asked for.
+const (
+	topShown = 25
+	topSize  = 100
+)
 
 // infohashLen is the length of a BitTorrent v1 infohash in bytes.
 const infohashLen = 20
@@ -87,6 +95,8 @@ func New(cfg Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", ui.Static())
 	mux.HandleFunc("GET /{$}", s.index)
+	mux.HandleFunc("GET /top", s.top)
+	mux.HandleFunc("GET /top/w/{id}", s.work)
 	mux.HandleFunc("GET /t/{infohash}", s.torrent)
 	mux.HandleFunc("GET /data", s.data)
 	return mux, nil
@@ -135,6 +145,9 @@ var (
 		sniffarrv1.Rejection_REJECTION_BOOK: "book", sniffarrv1.Rejection_REJECTION_COURSE: "course", sniffarrv1.Rejection_REJECTION_SCRIPT: "script",
 		sniffarrv1.Rejection_REJECTION_NO_MEDIA: "filetype", sniffarrv1.Rejection_REJECTION_SMALL: "size"}
 	discoveries = map[sniffarrv1.Source]string{sniffarrv1.Source_SOURCE_ANNOUNCE: "announce", sniffarrv1.Source_SOURCE_SAMPLE: "sample"}
+	sorts       = map[sniffarrv1.Sort]string{sniffarrv1.Sort_SORT_PEERS: "peers", sniffarrv1.Sort_SORT_LAST_SEEN: "last_seen", sniffarrv1.Sort_SORT_SIZE: "size"}
+	windows     = map[sniffarrv1.Window]string{sniffarrv1.Window_WINDOW_DAY: "24h", sniffarrv1.Window_WINDOW_WEEK: "7d", sniffarrv1.Window_WINDOW_MONTH: "30d"}
+	voices      = map[sniffarrv1.Voice]string{sniffarrv1.Voice_VOICE_UNSPECIFIED: "any", sniffarrv1.Voice_VOICE_LIKELY: "p50", sniffarrv1.Voice_VOICE_MARKER: "explicit"}
 )
 
 // uiOr returns m's value for k, or "none".
@@ -173,17 +186,13 @@ func (s *server) index(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *server) home(w http.ResponseWriter, req *http.Request) {
-	res, err := s.cfg.Browse.Stats(req.Context(), connect.NewRequest(&sniffarrv1.StatsRequest{Days: 1}))
+	res, err := s.cfg.Browse.Home(req.Context(), connect.NewRequest(&sniffarrv1.HomeRequest{}))
 	if err != nil {
-		s.fail(w, req, "stats", err)
+		s.fail(w, req, "home", err)
 		return
 	}
-	st := res.Msg
-	sum := ui.Summary{Total: st.GetTotal(), Pending: st.GetPending()}
-	if d := st.GetDays(); len(d) > 0 {
-		sum.NewDay = d[0]
-	}
-	s.render(w, req, "home", ui.HomePage{Base: s.base(w, req, "home"), Summary: sum})
+	h := res.Msg
+	s.render(w, req, "home", ui.HomePage{Base: s.base(w, req, "home"), Summary: ui.Summary{Total: h.GetTotal(), NewDay: h.GetNewDay(), Pending: h.GetPending()}})
 }
 
 // filters reads the search filters from the query, keeping valid values only.
@@ -214,7 +223,7 @@ func (s *server) filters(q url.Values) ui.Filters {
 }
 
 // defaultSort is the order of a search that names none.
-const defaultSort = "last_seen"
+const defaultSort = "peers"
 
 // minSize is the size in bytes of a size in GiB as typed, with a point or a
 // comma; 0 when it is not a positive number.
@@ -283,6 +292,7 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 	if f.Layer != "" {
 		b.Layer, _ = key(kindLayers, f.Layer)
 	}
+	b.Sort, _ = key(sorts, f.Sort)
 	page, err := s.cfg.Browse.Page(req.Context(), connect.NewRequest(b))
 	if err != nil {
 		s.fail(w, req, "search", err)
@@ -314,29 +324,182 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 		if r.GetLayer() == sniffarrv1.Layer_LAYER_CLASSIFIER {
 			row.Confidence = new(float64(r.GetKindConfidence()))
 		}
-		for _, tag := range s.tags {
-			var c ui.VoiceCell
-			if a := audioOf(r, tag); a != nil {
-				c.Explicit = a.GetMarker()
-				if !a.GetMarker() {
-					c.Prob = probability(a)
-				}
-			}
-			row.Voice = append(row.Voice, c)
-		}
+		row.Voice = s.voiceCells(r.GetAudio())
 		res.Rows = append(res.Rows, row)
 	}
-	s.render(w, req, "search", ui.SearchPage{Base: s.base(w, req, "search"), Q: q, Filters: f, Results: res})
+	var works []ui.WorkHit
+	for _, m := range page.Msg.GetWorks() {
+		works = append(works, ui.WorkHit{Ref: workRef(m.GetWork()), Peers: m.GetPeers(), Releases: int(m.GetReleases())})
+	}
+	s.render(w, req, "search", ui.SearchPage{Base: s.base(w, req, "search"), Q: q, Filters: f, Works: works, Results: res})
 }
 
-// audioOf is r's audio entry for the language, or nil.
-func audioOf(r *sniffarrv1.Release, tag string) *sniffarrv1.Audio {
-	for _, a := range r.GetAudio() {
+// audioOf is the audio entry for the language, or nil.
+func audioOf(audio []*sniffarrv1.Audio, tag string) *sniffarrv1.Audio {
+	for _, a := range audio {
 		if a.GetLanguage() == tag {
 			return a
 		}
 	}
 	return nil
+}
+
+// voiceCells are the dubbing cells of the configured languages, in order.
+func (s *server) voiceCells(audio []*sniffarrv1.Audio) []ui.VoiceCell {
+	cells := make([]ui.VoiceCell, len(s.tags))
+	for i, tag := range s.tags {
+		if a := audioOf(audio, tag); a != nil {
+			cells[i].Explicit = a.GetMarker()
+			if !a.GetMarker() {
+				cells[i].Prob = probability(a)
+			}
+		}
+	}
+	return cells
+}
+
+// workID is the UI's id of a work key: base64url, so that it fits a path
+// segment and an HTML id whatever the key holds.
+func workID(key string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(key))
+}
+
+// workKey is the work key of a UI id, or false for an id workID did not make.
+func workKey(id string) (string, bool) {
+	b, err := base64.RawURLEncoding.DecodeString(id)
+	if err != nil || len(b) == 0 {
+		return "", false
+	}
+	return string(b), true
+}
+
+// workRef is the UI's name of a work. Sub is the year of a movie and the
+// season of a series as "S01"; a music work has none.
+func workRef(w *sniffarrv1.WorkRef) ui.WorkRef {
+	ref := ui.WorkRef{ID: workID(w.GetKey()), Kind: uiOr(kinds, w.GetKind()), Title: w.GetTitle(), Rank: int(w.GetRank())}
+	switch {
+	case ref.Kind == "movie" && w.GetYear() > 0:
+		ref.Sub = strconv.Itoa(int(w.GetYear()))
+	case ref.Kind == "series" && w.GetSeason() > 0:
+		ref.Sub = fmt.Sprintf("S%02d", w.GetSeason())
+	}
+	return ref
+}
+
+// uiWork is the UI's row of a work, without its place and peers.
+func (s *server) uiWork(w *sniffarrv1.Work) ui.Work {
+	out := ui.Work{Ref: workRef(w.GetRef()), Releases: int(w.GetReleases()), Voice: s.voiceCells(w.GetAudio()), FirstSeen: w.GetFirstSeen().AsTime()}
+	for _, src := range w.GetSources() {
+		if k, ok := sources[src]; ok {
+			out.Sources = append(out.Sources, k)
+		}
+	}
+	return out
+}
+
+// topQuery reads the window and voice of a top from the query; a value that
+// is not one of the UI's is the default, 7d and any.
+func topQuery(q url.Values) (win, voice string, window sniffarrv1.Window, v sniffarrv1.Voice) {
+	win, voice = q.Get("win"), q.Get("voice")
+	if !slices.Contains(ui.Windows, win) {
+		win = "7d"
+	}
+	if !slices.Contains(ui.VoiceModes, voice) {
+		voice = "any"
+	}
+	window, _ = key(windows, win)
+	v, _ = key(voices, voice)
+	return win, voice, window, v
+}
+
+// top serves GET /top: the works of a kind with the most peers over a
+// window. A kind that has no top is movie; all=1 lists every work instead of
+// the first topShown.
+func (s *server) top(w http.ResponseWriter, req *http.Request) {
+	qs := req.URL.Query()
+	kind := qs.Get("kind")
+	if !slices.Contains(ui.TopKinds, kind) {
+		kind = ui.TopKinds[0]
+	}
+	win, voice, window, v := topQuery(qs)
+	all := qs.Get("all") == "1"
+	limit := topShown
+	if all {
+		limit = topSize
+	}
+	pk, _ := key(kinds, kind)
+	res, err := s.cfg.Browse.Top(req.Context(), connect.NewRequest(&sniffarrv1.TopRequest{Kind: pk, Window: window, Voice: v, Limit: int32(limit)}))
+	if err != nil {
+		s.fail(w, req, "top", err)
+		return
+	}
+	page := ui.TopPage{Base: s.base(w, req, "top"), Kind: kind, Window: win, VoiceMode: voice, Limit: topSize, All: all}
+	if at := res.Msg.GetComputedAt(); at != nil {
+		page.Computed = at.AsTime()
+	}
+	for _, e := range res.Msg.GetEntries() {
+		page.Works = append(page.Works, s.topWork(e))
+	}
+	s.render(w, req, "top", page)
+}
+
+// topWork is the UI's row of an entry of a top.
+func (s *server) topWork(e *sniffarrv1.TopEntry) ui.Work {
+	wk := s.uiWork(e.GetWork())
+	wk.Rank, wk.Peers = int(e.GetRank()), e.GetPeers()
+	if e.Delta != nil {
+		wk.Delta = new(float64(e.GetDelta()))
+	}
+	return wk
+}
+
+// work serves GET /top/w/{id}: one work's row of the top, with its releases
+// when open=1. Its place and change come from the top of its kind over the
+// window; a work outside that top has none.
+func (s *server) work(w http.ResponseWriter, req *http.Request) {
+	k, ok := workKey(req.PathValue("id"))
+	if !ok {
+		http.NotFound(w, req)
+		return
+	}
+	qs := req.URL.Query()
+	win, voice, window, v := topQuery(qs)
+	res, err := s.cfg.Browse.Work(req.Context(), connect.NewRequest(&sniffarrv1.WorkRequest{Key: k, Window: window, Voice: v}))
+	if connect.CodeOf(err) == connect.CodeNotFound {
+		http.NotFound(w, req)
+		return
+	}
+	if err != nil {
+		s.fail(w, req, "work", err)
+		return
+	}
+	wk := s.uiWork(res.Msg.GetWork())
+	wk.Peers = res.Msg.GetPeers()
+	if slices.Contains(ui.TopKinds, wk.Ref.Kind) {
+		top, err := s.cfg.Browse.Top(req.Context(), connect.NewRequest(&sniffarrv1.TopRequest{Kind: res.Msg.GetWork().GetRef().GetKind(), Window: window, Voice: v, Limit: topSize}))
+		if err != nil {
+			s.fail(w, req, "top", err)
+			return
+		}
+		for _, e := range top.Msg.GetEntries() {
+			if e.GetWork().GetRef().GetKey() == k {
+				wk = s.topWork(e)
+			}
+		}
+	}
+	if qs.Get("open") == "1" {
+		wk.Open = true
+		for _, r := range res.Msg.GetReleases() {
+			rel := r.GetRelease()
+			wk.Items = append(wk.Items, ui.Release{InfoHash: hex.EncodeToString(rel.GetInfohash()), Name: rel.GetName(), Peers: r.GetPeers(), Size: rel.GetSize(),
+				Voice: s.voiceCells(rel.GetAudio()), Source: uiOr(sources, rel.GetSource()), FirstSeen: rel.GetFirstSeen().AsTime()})
+		}
+	}
+	kind := wk.Ref.Kind
+	if !slices.Contains(ui.TopKinds, kind) {
+		kind = ui.TopKinds[0]
+	}
+	s.render(w, req, "top", ui.TopPage{Base: s.base(w, req, "top"), Kind: kind, Window: win, VoiceMode: voice, Limit: topSize, All: true, Works: []ui.Work{wk}})
 }
 
 // probability is the classifier's probability of an audio track, or nil
@@ -377,6 +540,13 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		TMDBQuery:     title(r.GetName()),
 		Kind:          ui.Answer{Value: uiOr(kinds, r.GetKind()), Layer: uiOr(kindLayers, r.GetLayer())},
 		Source:        ui.Answer{Value: uiOr(sources, r.GetSource()), Layer: "none"},
+		Peers:         ui.PeerCounts{Day: c.GetPeers().GetDay(), Week: c.GetPeers().GetWeek(), Month: c.GetPeers().GetMonth()},
+		WorkRels:      int(c.GetReleases()),
+		RankInWork:    int(c.GetReleaseRank()),
+	}
+	if c.Work != nil {
+		ref := workRef(c.GetWork())
+		t.Work = &ref
 	}
 	if r.GetLayer() == sniffarrv1.Layer_LAYER_CLASSIFIER {
 		t.Kind.Confidence = new(float64(r.GetKindConfidence()))
@@ -391,7 +561,7 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	}
 	for _, l := range s.cfg.Languages {
 		d := ui.VoiceDetail{Lang: l.Tag}
-		if a := audioOf(r, l.Tag); a != nil {
+		if a := audioOf(r.GetAudio(), l.Tag); a != nil {
 			if a.GetMarker() {
 				d.Mark = l.Mark(r.GetName(), files)
 			} else {
