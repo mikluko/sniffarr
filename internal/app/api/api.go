@@ -1,6 +1,7 @@
 // Package api is the API component: the ingest, search and browse services
 // and the Torznab indexer over the store, with the classify and titles
-// workers and the store's maintenance.
+// workers, the store's maintenance, the rollup of peer sketches and the tops
+// of works.
 package api
 
 import (
@@ -78,6 +79,12 @@ var Module = fx.Module("api",
 // maintenance is the interval of maintain.
 const maintenance = time.Minute
 
+// rollup is the interval of the peer sketches' rollup.
+const rollup = time.Hour
+
+// topInterval is how often the tops of works are recomputed.
+const topInterval = 10 * time.Minute
+
 // sweepBatch is the most torrents one retention transaction deletes.
 const sweepBatch = 1000
 
@@ -146,6 +153,15 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *st
 		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, log) })
 		return nil
 	})
+	app.Go(lc, sd, log, "peers rollup", func(ctx context.Context) error {
+		every(ctx, rollup, func() { rollupPeers(ctx, s, log) })
+		return nil
+	})
+	app.Go(lc, sd, log, "top", func(ctx context.Context) error {
+		computeTop(ctx, s, log)
+		every(ctx, topInterval, func() { computeTop(ctx, s, log) })
+		return nil
+	})
 	if c.jev != nil {
 		w := &classify.Worker{Store: s, Jev: c.jev, Concurrency: cfg.ClassifyConcurrency, Reserve: cfg.SearchReserve, Poll: workerPoll, Log: log}
 		app.Go(lc, sd, log, "classify worker", w.Run)
@@ -176,6 +192,26 @@ func maintain(ctx context.Context, q *queue.Queue, s *store.Store, retention tim
 	if n > 0 {
 		log.Info("swept store", "deleted", n)
 	}
+}
+
+// rollupPeers rolls the peer sketches up and logs what it did.
+func rollupPeers(ctx context.Context, s *store.Store, log *slog.Logger) {
+	r, err := s.RollupPeers(ctx, time.Now())
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "rollup peers", "err", err)
+	} else if r != (store.Rolled{}) {
+		log.Info("rolled up peers", "hours", r.Hours, "days", r.Days)
+	}
+}
+
+// computeTop recomputes the tops of works.
+func computeTop(ctx context.Context, s *store.Store, log *slog.Logger) {
+	start := time.Now()
+	if err := s.ComputeTop(ctx, start); err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "compute top", "err", err)
+		return
+	}
+	log.Debug("computed top", "took", time.Since(start))
 }
 
 // every calls f every d until ctx is done.
