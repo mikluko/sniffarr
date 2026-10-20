@@ -47,38 +47,32 @@ func TestRenderAll(t *testing.T) {
 	}
 	dir := os.Getenv("PREVIEW_DIR")
 	for _, lang := range []string{"ru", "en"} {
-		for _, top := range []bool{true, false} {
-			for _, c := range cases {
-				name := lang + "/" + c.name
-				if !top {
-					name += "/notop"
-				}
-				req := httptest.NewRequest("GET", c.path, nil)
-				if c.target != "" {
-					req.Header.Set("HX-Request", "true")
-					req.Header.Set("HX-Target", c.target)
-				}
-				b := r.Base(req, lang, "", []string{"ru"}, loc)
-				b.Now = now
-				b.Top = top
-				w := httptest.NewRecorder()
-				if err := r.Render(w, req, c.page, c.data(b)); err != nil {
-					t.Fatalf("%s: %v", name, err)
-				}
-				body := w.Body.String()
-				full := strings.HasPrefix(body, "<!doctype html>")
-				if full != (c.target == "") {
-					t.Errorf("%s: full page = %v, want %v", name, full, c.target == "")
-				}
-				if c.target != "" && !strings.Contains(body, `id="`+c.target+`"`) {
-					t.Errorf("%s: fragment lacks id=%q", name, c.target)
-				}
-				if (c.name == "home" || c.name == "data") && strings.Contains(body, `href="/top`) != top {
-					t.Errorf("%s: links to the top = %v, want %v", name, !top, top)
-				}
-				if dir != "" && full && top {
-					_ = os.WriteFile(filepath.Join(dir, lang+"-"+c.name+".html"), w.Body.Bytes(), 0o644)
-				}
+		for _, c := range cases {
+			name := lang + "/" + c.name
+			req := httptest.NewRequest("GET", c.path, nil)
+			if c.target != "" {
+				req.Header.Set("HX-Request", "true")
+				req.Header.Set("HX-Target", c.target)
+			}
+			b := r.Base(req, lang, "", []string{"ru"}, loc)
+			b.Now = now
+			w := httptest.NewRecorder()
+			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			body := w.Body.String()
+			full := strings.HasPrefix(body, "<!doctype html>")
+			if full != (c.target == "") {
+				t.Errorf("%s: full page = %v, want %v", name, full, c.target == "")
+			}
+			if c.target != "" && !strings.Contains(body, `id="`+c.target+`"`) {
+				t.Errorf("%s: fragment lacks id=%q", name, c.target)
+			}
+			if c.name == "top-work" && !strings.HasPrefix(strings.TrimSpace(body), "<tbody") {
+				t.Errorf("%s: the fragment is not a bare <tbody>", name)
+			}
+			if dir != "" && full {
+				_ = os.WriteFile(filepath.Join(dir, lang+"-"+c.name+".html"), w.Body.Bytes(), 0o644)
 			}
 		}
 	}

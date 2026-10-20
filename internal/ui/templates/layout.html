@@ -18,7 +18,7 @@
 <header class="top">
   <a href="/" class="brand">sniffarr</a>
   <nav>
-    {{if .Top}}<a href="/top"{{if eq .Nav "top"}} class="on" aria-current="page"{{end}}>{{.T "nav.top"}}</a>{{end}}
+    <a href="/top"{{if eq .Nav "top"}} class="on" aria-current="page"{{end}}>{{.T "nav.top"}}</a>
     <a href="/data"{{if eq .Nav "data"}} class="on" aria-current="page"{{end}}>{{.T "nav.data"}}</a>
   </nav>
   {{template "langs" .}}

@@ -14,7 +14,6 @@ type Base struct {
 	Lang       string   // "ru" | "en"
 	Langs      []string // switcher entries
 	Nav        string   // "home" | "search" | "top" | "data" | "" (card)
-	Top        bool     // the top exists: its links and the peer counts it ranks by are shown
 	VoiceLangs []string // configured dubbing languages, e.g. ["ru"]
 	Path       string   // current path+query, for the language switcher
 	Loc        *time.Location

@@ -36,7 +36,7 @@
       <select name="sort">
         {{range sorts}}<option value="{{.}}"{{if eq . $.Filters.Sort}} selected{{end}}>{{$.T (concat "sort." .)}}</option>{{end}}
       </select></label>
-    {{if .Top}}<a href="/top" class="reset">← {{.T "nav.totop"}}</a>{{else}}<a href="/" class="reset">{{.T "f.reset"}}</a>{{end}}
+    <a href="/top" class="reset">← {{.T "nav.totop"}}</a>
   </div>
 </form>
 {{template "results" .}}
@@ -60,7 +60,7 @@
   <div class="scroll">
   <table class="t">
     <thead><tr>
-      <th>{{.T "col.name"}}</th>{{if .Top}}<th class="r">{{.T "col.peers7"}}</th>{{end}}<th class="r">{{.T "col.size"}}</th><th>{{.T "col.kind"}}</th>
+      <th>{{.T "col.name"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "col.kind"}}</th>
       {{range .VoiceLangs}}<th class="r" title="{{$.T "col.voice"}}">{{.}}</th>{{end}}
       <th>{{.T "col.source"}}</th><th>{{.T "col.first"}}</th><th>{{.T "col.last"}}</th>
     </tr></thead>
@@ -68,7 +68,6 @@
     {{range .Results.Rows}}
       <tr id="t-{{.InfoHash}}">
         <td class="nm"><a href="/t/{{.InfoHash}}">{{.Name}}</a></td>
-        {{if $.Top}}<td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>{{end}}
         <td class="r">{{$.Size .Size}}</td>
         <td>{{$.T (concat "kind." .Kind)}} <span class="mu">· {{$.T (concat "layer." .Layer)}}{{if .Confidence}} {{$.Prob .Confidence}}{{end}}</span></td>
         {{range $i, $c := .Voice}}<td class="r v" data-l="{{index $.VoiceLangs $i}}">{{$.Voice $c}}</td>{{end}}
