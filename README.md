@@ -128,6 +128,40 @@ in the `Authorization` header; `/healthz` needs none.
   that work.
 - `Get` returns one release by infohash.
 
+## Torznab
+
+With `SNIFFARR_TORZNAB_TOKEN` set, the API port also serves a
+[Torznab](https://torznab.github.io/spec-1.3-draft/) indexer at
+`/torznab/api`, for Prowlarr, Radarr and Sonarr; without it the path answers 404. Each request carries the token as its `apikey` parameter, and no bearer
+token.
+
+| `t`        | Parameters                                                        |
+| ---------- | ----------------------------------------------------------------- |
+| `caps`     |                                                                   |
+| `search`   | `q`, `cat`, `offset`, `limit`                                     |
+| `movie`    | `q`, `tmdbid`, `imdbid`, `cat`, `offset`, `limit`                 |
+| `tvsearch` | `q`, `tvdbid`, `tmdbid`, `season`, `ep`, `cat`, `offset`, `limit` |
+
+It answers through `Search`, so its candidates are classified and matched as
+a search's are, and returns movies and series only: `movie` searches movies,
+`tvsearch` series, `search` both, and `cat` narrows them to Movies (2000s) or
+TV (5000s). An ID parameter selects the releases matched to that work,
+`tmdbid` among movies for `movie` and among series for `tvsearch`; `imdbid`
+takes either `tt0078748` or `78748`. `season` and `ep` are accepted and
+ignored. `limit` is 100 by default and `offset` and `limit` together 500 at
+most.
+
+Each item is a release: its name, its magnet as guid, link and enclosure, its
+first sighting as `pubDate`, and the attributes `category`, `size`,
+`infohash`, `magneturl`, and `tmdbid`, `imdbid` (without `tt`) and `tvdbid`
+when its title is matched. The category is Movies or TV, `/UHD` for a name
+with `2160p`, `4K` or `UHD`, `/HD` for `1080p`, `1080i` or `720p`, `/SD`
+otherwise. Items carry no seeders or peers, which the DHT does not tell;
+Radarr's minimum-seeders check passes a release without them.
+
+In Prowlarr, add an indexer of type Generic Torznab with URL
+`http://<host>:8080/torznab`, API path `/api`, and the token as API key.
+
 ## Web UI
 
 With `SNIFFARR_UI_ADDR` set, sniffapi also serves a web UI on that address,
@@ -187,6 +221,7 @@ reachable only through that proxy.
 | `SNIFFARR_TITLES_RATE`             | `20`             | TMDB requests a second at most                                                                                         |
 | `SNIFFARR_TITLES_RETRY`            | `720h`           | How long a title key that matched nothing waits before it is looked up again                                           |
 | `SNIFFARR_SEARCH_TITLES_MAX`       | `5`              | Title keys one search has matched at most                                                                              |
+| `SNIFFARR_TORZNAB_TOKEN`           |                  | API key of the Torznab endpoint; when unset, there is none                                                             |
 | `SNIFFARR_LOG_LEVEL`               | `info`           | Level to log at: `debug`, `info`, `warn` or `error`                                                                    |
 
 The database runs in WAL mode and its schema migrates on start; leases left

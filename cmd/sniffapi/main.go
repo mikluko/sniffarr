@@ -38,6 +38,7 @@ type config struct {
 	ingestToken, searchToken string
 	typesafeKey              string
 	tmdbKey                  string
+	torznabToken             string
 	titlesConcurrency        int
 	titlesRate               int
 	titlesRetry              time.Duration
@@ -81,13 +82,14 @@ func load(lookup func(string) (string, bool)) (config, error) {
 		}
 	}
 	c := config{
-		addr:        or(getenv("SNIFFARR_ADDR"), ":8080"),
-		db:          getenv("SNIFFARR_DB"),
-		ingestToken: getenv("SNIFFARR_INGEST_TOKEN"),
-		searchToken: getenv("SNIFFARR_SEARCH_TOKEN"),
-		typesafeKey: getenv("TYPESAFE_API_KEY"),
-		uiAddr:      getenv("SNIFFARR_UI_ADDR"),
-		oidcIssuer:  getenv("SNIFFARR_OIDC_ISSUER"),
+		addr:         or(getenv("SNIFFARR_ADDR"), ":8080"),
+		db:           getenv("SNIFFARR_DB"),
+		ingestToken:  getenv("SNIFFARR_INGEST_TOKEN"),
+		searchToken:  getenv("SNIFFARR_SEARCH_TOKEN"),
+		typesafeKey:  getenv("TYPESAFE_API_KEY"),
+		uiAddr:       getenv("SNIFFARR_UI_ADDR"),
+		oidcIssuer:   getenv("SNIFFARR_OIDC_ISSUER"),
+		torznabToken: getenv("SNIFFARR_TORZNAB_TOKEN"),
 	}
 	var err error
 	if c.concurrency, err = positive(getenv, "SNIFFARR_CLASSIFY_CONCURRENCY", 4); err != nil {
@@ -255,17 +257,18 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		lazy.Titles = matcher
 	}
 	handler, err := server.New(server.Config{
-		Store:       s,
-		Queue:       q,
-		IngestToken: cfg.ingestToken,
-		SearchToken: cfg.searchToken,
-		Lease:       cfg.lease,
-		Attempts:    cfg.attempts,
-		Backoff:     cfg.backoff,
-		Scripts:     cfg.scripts,
-		Languages:   cfg.languages,
-		Log:         log,
-		Lazy:        lazy,
+		Store:        s,
+		Queue:        q,
+		IngestToken:  cfg.ingestToken,
+		SearchToken:  cfg.searchToken,
+		Lease:        cfg.lease,
+		Attempts:     cfg.attempts,
+		Backoff:      cfg.backoff,
+		Scripts:      cfg.scripts,
+		Languages:    cfg.languages,
+		Log:          log,
+		Lazy:         lazy,
+		TorznabToken: cfg.torznabToken,
 	})
 	if err != nil {
 		return err

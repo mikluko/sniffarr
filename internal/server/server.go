@@ -1,5 +1,6 @@
 // Package server assembles the sniffarr HTTP handler: the ingest and search
-// APIs, each behind its own bearer token, and an unauthenticated /healthz.
+// APIs, each behind its own bearer token, the Torznab API, and an
+// unauthenticated /healthz.
 package server
 
 import (
@@ -19,6 +20,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/torznab"
 )
 
 // MaxMessage is the largest request message, in bytes, either API accepts.
@@ -46,9 +48,12 @@ type Config struct {
 	Meter metric.MeterProvider
 	// Lazy, when set, has Search classify its candidates first.
 	Lazy *search.Lazy
+	// TorznabToken, when set, serves the Torznab API at /torznab/api to
+	// requests with it as their apikey.
+	TorznabToken string
 }
 
-// New returns the handler serving both APIs and /healthz.
+// New returns the handler serving the APIs and /healthz.
 func New(c Config) (http.Handler, error) {
 	var opts []otelconnect.Option
 	if c.Meter != nil {
@@ -64,11 +69,15 @@ func New(c Config) (http.Handler, error) {
 		connect.WithInterceptors(otel, auth.NewBearer(c.IngestToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
+	searchService := &search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy}
 	mux.Handle(sniffarrv1connect.NewSearchServiceHandler(
-		&search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy},
+		searchService,
 		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
+	if c.TorznabToken != "" {
+		mux.Handle("GET /torznab/api", &torznab.Handler{Search: searchService, Token: c.TorznabToken, Log: c.Log})
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})

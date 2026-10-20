@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -308,6 +309,23 @@ func TestAudioHints(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTorznab(t *testing.T) {
+	srv, hc := start(t, Config{})
+	res, err := hc.Get(srv.URL + "/torznab/api?t=caps&apikey=")
+	require.NoError(t, err)
+	res.Body.Close()
+	require.Equal(t, http.StatusNotFound, res.StatusCode, "without a token there is no endpoint")
+
+	srv, hc = start(t, Config{TorznabToken: "tz"})
+	res, err = hc.Get(srv.URL + "/torznab/api?t=caps&apikey=tz")
+	require.NoError(t, err)
+	b, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, string(b), `<server title="sniffarr">`, "no bearer token needed, only the apikey")
 }
 
 func TestFetchCreditAndLeases(t *testing.T) {
