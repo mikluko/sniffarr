@@ -17,6 +17,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
+	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/auth"
@@ -195,7 +196,7 @@ func TestSearch(t *testing.T) {
 
 	frag = page(t, get(t, h, "/?q=alien", "results"))
 	require.Contains(t, frag, `<div class="works">`)
-	require.Contains(t, frag, `<a href="/top?kind=movie">Alien (1979)</a>`, "the work by title and year")
+	require.Contains(t, frag, `<a href="/top/w/eTphbGllbiAxOTc5?open=1">Alien (1979)</a>`, "the work by title and year, opening its releases")
 	require.Contains(t, frag, "№1", "its place in the movie top")
 	require.NotContains(t, page(t, get(t, h, "/?q=alien&o=50", "results")), `<div class="works">`, "works on the first page only")
 }
@@ -335,9 +336,9 @@ func TestTorrent(t *testing.T) {
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, "magnet:?xt=urn:btih:"+hexOf(1))
 	require.Contains(t, body, `<td class="r">Rus</td>`, "the matched word")
-	require.Contains(t, body, "alien 1979", "the TMDB query")
+	require.Contains(t, body, `<a href="https://www.themoviedb.org/search?query=alien&#43;1979" rel="noreferrer" target="_blank">TMDB</a> · <a href="https://www.imdb.com/find/?q=alien&#43;1979" rel="noreferrer" target="_blank">IMDb</a>`, "searches when no ID is known")
 	require.Regexp(t, `<th>peers</th><td>\d+ in 7 days <span class="mu">· \d+ in 24 h · \d+ in 30 days</span></td>`, body)
-	require.Contains(t, body, `<a href="/top?kind=movie">Alien (1979)</a> <span class="mu">· №1 among movies · 1 releases, this one by peers #1</span>`)
+	require.Regexp(t, `<a href="/top/w/[A-Za-z0-9_-]+\?open=1">Alien \(1979\)</a> <span class="mu">· №1 among movies · 1 releases, this one by peers #1</span>`, body, "the work link opens the work's releases")
 	require.NotContains(t, page(t, get(t, h, "/t/"+hexOf(3), "")), "<th>work</th>", "a release whose name yields no work")
 	require.Equal(t, 8, strings.Count(body, `<td class="mono wrapc">`), "the first eight files")
 	require.Contains(t, body, "?files=all")
@@ -348,6 +349,31 @@ func TestTorrent(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/"+hexOf(9), "").Code)
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz", "").Code)
+}
+
+func TestLookups(t *testing.T) {
+	ids := []*sniffarrv1.ExternalId{{Provider: "tmdb", Id: "348"}, {Provider: "imdb", Id: "tt0078748"}}
+	for _, tt := range []struct {
+		name       string
+		r          *sniffarrv1.Release
+		tmdb, imdb string
+	}{
+		{"movie by ID", &sniffarrv1.Release{Name: "Alien.1979.1080p", Kind: sniffarrv1.Kind_KIND_MOVIE, Ids: ids},
+			"https://www.themoviedb.org/movie/348", "https://www.imdb.com/title/tt0078748/"},
+		{"series by ID", &sniffarrv1.Release{Name: "Severance S02E01", Kind: sniffarrv1.Kind_KIND_SERIES, Ids: ids},
+			"https://www.themoviedb.org/tv/348", "https://www.imdb.com/title/tt0078748/"},
+		{"search without IDs", &sniffarrv1.Release{Name: "Alien.1979.1080p", Kind: sniffarrv1.Kind_KIND_MOVIE},
+			"https://www.themoviedb.org/search?query=alien+1979", "https://www.imdb.com/find/?q=alien+1979"},
+		{"one ID, the other searched", &sniffarrv1.Release{Name: "Alien.1979.1080p", Ids: ids[:1]},
+			"https://www.themoviedb.org/movie/348", "https://www.imdb.com/find/?q=alien+1979"},
+		{"no title", &sniffarrv1.Release{Name: "1080p"}, "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tmdb, imdb := lookups(tt.r)
+			require.Equal(t, tt.tmdb, tmdb)
+			require.Equal(t, tt.imdb, imdb)
+		})
+	}
 }
 
 func TestData(t *testing.T) {

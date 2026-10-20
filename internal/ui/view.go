@@ -151,7 +151,8 @@ type Torrent struct {
 	FirstSeen     time.Time
 	LastSeen      time.Time
 	DiscoveredVia string // "announce" | "sample"
-	TMDBQuery     string // cleaned title, used for a plain TMDB search link
+	TMDBURL       string // the work's TMDB page when its ID is known, else a TMDB search for the title; "" hides the row
+	IMDbURL       string // the work's IMDb page when its ID is known, else an IMDb search for the title
 	Peers         PeerCounts
 
 	Work       *WorkRef // nil = not grouped into a work
