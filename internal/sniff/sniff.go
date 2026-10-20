@@ -1,13 +1,16 @@
 // Package sniffer is the replica side of the sniffarr work queue: a
-// Discoverer reports the infohashes the DHT reveals to the server, and a
+// Discoverer reports the infohashes the DHT reveals to the server, a
 // Fetcher takes tasks from the server, fetches their metadata from peers,
-// and returns it. A sniffer never downloads pieces, uploads, or announces
-// itself, and it keeps peer addresses only for the duration of a fetch.
+// and returns it, and Peers counts the peers seen in sketches for the
+// server. A sniffer never downloads pieces, uploads, or announces itself,
+// and it keeps peer addresses only for the duration of a fetch; a counted
+// peer is kept as its hash.
 package sniff
 
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"sync"
 	"time"
 )
@@ -20,6 +23,9 @@ type Metadata struct {
 	Name  string
 	Size  int64
 	Files []File
+	// Peers are the peers the metadata came through: those the DHT named
+	// and those connected, each once.
+	Peers []netip.AddrPort
 }
 
 // File is one file of a torrent.

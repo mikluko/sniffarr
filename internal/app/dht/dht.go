@@ -37,10 +37,16 @@ type nodeParams struct {
 	// Offer receives the infohashes announced to the node; nil when nothing
 	// discovers, and the node must then be passive.
 	Offer Offer `optional:"true"`
+	// Peers counts the peers that announce to the node; nil counts none.
+	Peers *sniff.Peers `optional:"true"`
 }
 
 func start(p nodeParams) (*sniff.Network, error) {
-	n, err := sniff.Start(p.Config.Network, p.Offer)
+	var sink sniff.PeerSink
+	if p.Peers != nil {
+		sink = p.Peers
+	}
+	n, err := sniff.Start(p.Config.Network, p.Offer, sink)
 	if err != nil {
 		return nil, fmt.Errorf("dht: %w", err)
 	}

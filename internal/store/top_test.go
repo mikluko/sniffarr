@@ -54,7 +54,7 @@ func seeded(t *testing.T) *Store {
 		{Hash: hash(1), Hour: t0, Sketch: sketchOf(k, 0, 120)},
 		{Hash: hash(2), Hour: t0.Add(-time.Hour), Sketch: sketchOf(k, 50, 100)},
 		{Hash: hash(3), Hour: t0.Add(-2 * time.Hour), Sketch: sketchOf(k, 0, 80)},
-		{Hash: hash(3), Hour: t0.Add(-30 * time.Hour), Sketch: sketchOf(k, 1000, 40)},
+		{Hash: hash(3), Hour: t0.Add(-30 * time.Hour), Sketch: sketchOf(k, 1000, 50)},
 		{Hash: hash(4), Hour: t0, Sketch: sketchOf(k, 0, 20)},
 		{Hash: hash(5), Hour: t0, Sketch: sketchOf(k, 0, 30)},
 		{Hash: hash(6), Hour: t0, Sketch: sketchOf(k, 100, 30)},
@@ -87,7 +87,7 @@ func TestComputeTop(t *testing.T) {
 	require.InDelta(t, 150, top[0].Peers, 15, "the two Dune releases' peers are unioned")
 	require.Nil(t, top[0].Delta, "Dune had no peers the day before")
 	require.NotNil(t, top[1].Delta)
-	require.InDelta(t, 1.0, *top[1].Delta, 0.25, "Interstellar doubled from 40 to 80")
+	require.InDelta(t, 0.6, *top[1].Delta, 0.2, "Interstellar grew from 50 to 80")
 	require.Equal(t, Work{Key: "y:dune part two 2024", Kind: "movie", Title: "Dune Part Two", Year: 2024, Rank: 1, Releases: 2,
 		Audio: []Audio{{Language: "ru", Marker: true, Probability: new(1.0)}}, FirstSeen: t0}, top[0].Work)
 	require.Equal(t, "Interstellar", top[1].Work.Title)
@@ -103,7 +103,7 @@ func TestComputeTop(t *testing.T) {
 	top, _, _, err = s.Top(ctx, "movie", WindowWeek, VoiceAny, 10, 0)
 	require.NoError(t, err)
 	require.Equal(t, []string{"y:dune part two 2024", "y:interstellar 2014", "y:oppenheimer 2023"}, keys(top))
-	require.InDelta(t, 120, top[1].Peers, 12, "the week has both of Interstellar's hours")
+	require.InDelta(t, 130, top[1].Peers, 13, "the week has both of Interstellar's hours")
 	require.Nil(t, top[1].Delta, "nothing the week before")
 	top, _, _, err = s.Top(ctx, "movie", WindowWeek, VoiceAny, 1, 1)
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestComputeTop(t *testing.T) {
 
 	r, err := s.Get(ctx, hash(3))
 	require.NoError(t, err)
-	require.InDelta(t, 120, r.PeersWeek, 12, "peers_week is refreshed")
+	require.InDelta(t, 130, r.PeersWeek, 13, "peers_week is refreshed")
 	r, err = s.Get(ctx, hash(8))
 	require.NoError(t, err)
 	require.InDelta(t, 500, r.PeersWeek, 50, "every torrent has peers_week, in a top or not")

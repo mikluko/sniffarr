@@ -21,7 +21,7 @@ type Config struct {
 // Module runs the fetcher from start to stop.
 var Module = fx.Module("fetch", fx.Invoke(run))
 
-func run(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, ingest sniffarrv1connect.IngestServiceClient, n *sniff.Network) {
-	f := sniff.NewFetcher(sniff.FetcherConfig{Ingest: ingest, Workers: cfg.Workers, Log: log}, n)
+func run(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, ingest sniffarrv1connect.IngestServiceClient, n *sniff.Network, p *sniff.Peers) {
+	f := sniff.NewFetcher(sniff.FetcherConfig{Ingest: ingest, Workers: cfg.Workers, Peers: p, Log: log}, n)
 	app.Go(lc, sd, log, "fetcher", f.Run)
 }

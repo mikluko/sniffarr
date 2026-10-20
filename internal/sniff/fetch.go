@@ -29,6 +29,8 @@ type FetcherConfig struct {
 	Backoff time.Duration
 	// Report is the interval of progress logs; DefaultReport.
 	Report time.Duration
+	// Peers, unless nil, takes the peers each fetched torrent came through.
+	Peers PeerSink
 	// Log discards everything when nil.
 	Log *slog.Logger
 	// Meter records metrics; the global MeterProvider when nil.
@@ -222,6 +224,9 @@ func (f *Fetcher) work(ctx context.Context) {
 		m, err := f.source.Metadata(ctx, h)
 		if ctx.Err() != nil {
 			return
+		}
+		if err == nil && f.cfg.Peers != nil {
+			f.cfg.Peers.Add(h, m.Peers)
 		}
 		r, outcome := f.result(ctx, h, m, err)
 		f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))

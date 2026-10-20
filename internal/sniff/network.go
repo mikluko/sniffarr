@@ -126,15 +126,24 @@ func (s clientSwarm) fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo
 	for _, f := range info.UpvertedFiles() {
 		m.Files = append(m.Files, File{Path: f.DisplayPath(info), Size: f.Length})
 	}
+	for _, c := range t.PeerConns() {
+		if c.RemoteAddr == nil {
+			continue
+		}
+		if addr, err := netip.ParseAddrPort(c.RemoteAddr.String()); err == nil {
+			m.Peers = append(m.Peers, addr)
+		}
+	}
 	return m, nil
 }
 
 // Start starts the client and its DHT node. offer, unless nil, is called
-// with every infohash announced to the node. The client creates, reads and
-// writes no torrent files.
-func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, error) {
+// with every infohash announced to the node, and peers, unless nil, takes
+// the announcing peer. The client creates, reads and writes no torrent
+// files.
+func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink) (*Network, error) {
 	cfg.defaults()
-	client, err := torrent.NewClient(clientConfig(cfg, offer))
+	client, err := torrent.NewClient(clientConfig(cfg, offer, peers))
 	if err != nil {
 		return nil, err
 	}
@@ -158,8 +167,8 @@ func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) (*Network, er
 }
 
 // clientConfig is the configuration of the torrent client and its DHT node
-// that Start starts for cfg and offer.
-func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) *torrent.ClientConfig {
+// that Start starts for cfg, offer and peers.
+func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink) *torrent.ClientConfig {
 	c := torrent.NewDefaultClientConfig()
 	c.DefaultStorage = noStorage{}
 	c.NoUpload = true
@@ -178,8 +187,11 @@ func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source)) *torre
 		sc.PeerStore = nil
 		sc.Passive = cfg.Passive
 		if offer != nil {
-			sc.OnAnnouncePeer = func(h metainfo.Hash, _ net.IP, _ int, _ bool) {
+			sc.OnAnnouncePeer = func(h metainfo.Hash, ip net.IP, port int, portOk bool) {
 				offer(Hash(h), sniffarrv1.Source_SOURCE_ANNOUNCE)
+				if addr, ok := netip.AddrFromSlice(ip); ok && portOk && peers != nil {
+					peers.Add(Hash(h), []netip.AddrPort{netip.AddrPortFrom(addr.Unmap(), uint16(port))})
+				}
 			}
 		}
 	}
@@ -294,13 +306,33 @@ func (n *Network) sampleNode(ctx context.Context, a krpc.NodeAddr, found func(Ha
 
 // Metadata finds the torrent's peers on the DHT and gets its metadata from
 // them, failing with ErrNoPeers when it finds fewer than MinPeers. The peers'
-// addresses are dropped with the torrent before Metadata returns.
+// addresses are dropped with the torrent before Metadata returns, save in
+// Metadata.Peers.
 func (n *Network) Metadata(ctx context.Context, h Hash) (Metadata, error) {
 	peers := n.findPeers(ctx, h)
 	if len(peers) < n.cfg.MinPeers {
 		return Metadata{}, ErrNoPeers
 	}
-	return n.swarm.fetch(ctx, h, peers)
+	m, err := n.swarm.fetch(ctx, h, peers)
+	if err != nil {
+		return m, err
+	}
+	seen := make(map[netip.AddrPort]bool, len(peers)+len(m.Peers))
+	all := make([]netip.AddrPort, 0, len(peers)+len(m.Peers))
+	for _, a := range m.Peers {
+		if !seen[a] {
+			seen[a] = true
+			all = append(all, a)
+		}
+	}
+	for _, p := range peers {
+		if a, ok := p.Addr.(netip.AddrPort); ok && !seen[a] {
+			seen[a] = true
+			all = append(all, a)
+		}
+	}
+	m.Peers = all
+	return m, nil
 }
 
 // enoughPeers is how many peers findPeers looks for when MinPeers is fewer.
