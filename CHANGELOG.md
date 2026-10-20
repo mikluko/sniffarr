@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-20
+
+### Added
+
+- Peers per torrent, as HyperLogLog sketches and nothing else: `-sniff` counts the senders of `announce_peer` and `-fetch` the peers it meets, for stored torrents only, and both send their sketches to the API with `IngestService.Peers` every 3 minutes, hashing each `IP:port` with the key `IngestService.HashKey` gives. The store keeps hourly sketches for 8 days and daily ones for 65.
+- Works: `work_key`, `year` and `season` on every torrent; a movie or an album is its title and year, a series its title and season.
+- The top of works, `BrowseService.Top` and `Work`, recomputed every 10 minutes for `movie`, `series` and `music` over the windows `24h`, `7d` and `30d` and the voice filters `any`, `p50` and `explicit`, each entry with its peers, releases and change against the previous window.
+- `BrowseService.Home`; `Page` takes `sort` (`peers`, `last_seen`, `size`) and lists matching `works`; `Card` carries `peers` over three windows, the torrent's `work`, its `releases` and `release_rank`; `Release` carries `peers_week`.
+- `SightResponse.stored` says, per infohash sent, whether the torrent is stored.
+- Web UI: a home page at `/` with a summary, the top at `/top` and `/top/w/{id}`, a works block and a 7-day peers column in search results sorted by `sort`, peers over three windows and the work on a torrent's card, and `?lang=ru|en` remembered in a cookie for a year.
+- Metrics `sniffarr.ingest.sketches`, `sniffarr.sniff.peers` and `sniffarr.sniff.sketches`.
+
+### Changed
+
+- The search page does not poll for new torrents; the data page still does.
+- The web UI's English locale is `en`; `C` and `POSIX` resolve to it.
+
 ## [0.6.0] - 2026-10-20
 
 ### Added
@@ -113,7 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/mikluko/sniffarr/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mikluko/sniffarr/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mikluko/sniffarr/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mikluko/sniffarr/compare/v0.3.0...v0.4.0
