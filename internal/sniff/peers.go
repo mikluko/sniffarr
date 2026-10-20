@@ -20,11 +20,16 @@ import (
 const (
 	DefaultPeersCap   = 100000
 	DefaultPeersFlush = 3 * time.Minute
+	DefaultPeersKnown = 1000000
 )
 
 // PeerSink takes the peers seen sharing an infohash.
 type PeerSink interface {
+	// Add counts the peers as sharing h.
 	Add(h Hash, peers []netip.AddrPort)
+	// Announced counts the peer as sharing h when h is known to be a stored
+	// torrent, and drops it otherwise.
+	Announced(h Hash, peer netip.AddrPort)
 }
 
 // PeersConfig tunes a Peers. Zero fields take the default named in their
@@ -38,6 +43,9 @@ type PeersConfig struct {
 	Cap int
 	// Flush is how often the sketches are sent; DefaultPeersFlush.
 	Flush time.Duration
+	// Known is how many infohashes admitted by Admit are remembered;
+	// DefaultPeersKnown. Once full, the older half is forgotten.
+	Known int
 	// Backoff is the wait after a failed send; DefaultBackoff.
 	Backoff time.Duration
 	// Report is the interval of progress logs; DefaultReport.
@@ -56,6 +64,8 @@ type PeersConfig struct {
 type Peers struct {
 	cfg PeersConfig
 
+	known *recent[Hash]
+
 	mu      sync.Mutex
 	key     sketch.Key
 	keyed   bool
@@ -65,7 +75,7 @@ type Peers struct {
 	pending []peerBatch
 	early   chan struct{}
 
-	stats    struct{ peers, unkeyed, evicted, merged, dropped atomic.Int64 }
+	stats    struct{ peers, unkeyed, unknown, evicted, merged, dropped atomic.Int64 }
 	peers    metric.Int64Counter
 	sketches metric.Int64Counter
 }
@@ -80,6 +90,7 @@ type peerBatch struct {
 func NewPeers(cfg PeersConfig) *Peers {
 	orDefault(&cfg.Cap, DefaultPeersCap)
 	orDefault(&cfg.Flush, DefaultPeersFlush)
+	orDefault(&cfg.Known, DefaultPeersKnown)
 	orDefault(&cfg.Backoff, DefaultBackoff)
 	orDefault(&cfg.Report, DefaultReport)
 	if cfg.Log == nil {
@@ -91,6 +102,7 @@ func NewPeers(cfg PeersConfig) *Peers {
 	m := meter(cfg.Meter)
 	return &Peers{
 		cfg:      cfg,
+		known:    newRecent[Hash](cfg.Known),
 		cur:      map[Hash]*sketch.Sketch{},
 		ready:    make(chan struct{}),
 		early:    make(chan struct{}, 1),
@@ -102,6 +114,23 @@ func NewPeers(cfg PeersConfig) *Peers {
 // Ready returns a channel closed once Run has the key and Add counts.
 func (p *Peers) Ready() <-chan struct{} {
 	return p.ready
+}
+
+// Admit remembers h as a stored torrent, whose announcing peers Announced
+// counts from then on.
+func (p *Peers) Admit(h Hash) {
+	p.known.add(h)
+}
+
+// Announced counts peer as seen sharing h now when h has been admitted, and
+// drops it otherwise: a stored torrent announced before the server's Sight
+// answer admits it loses that peer.
+func (p *Peers) Announced(h Hash, peer netip.AddrPort) {
+	if !p.known.has(h) {
+		p.stats.unknown.Add(1)
+		return
+	}
+	p.Add(h, []netip.AddrPort{peer})
 }
 
 // Add counts the peers as seen sharing h now. It never blocks on the
@@ -290,7 +319,7 @@ func (p *Peers) log(msg string) {
 	p.mu.Lock()
 	waiting := p.waiting()
 	p.mu.Unlock()
-	p.cfg.Log.Info(msg, "peers", p.stats.peers.Load(), "unkeyed", p.stats.unkeyed.Load(), "waiting", waiting,
+	p.cfg.Log.Info(msg, "peers", p.stats.peers.Load(), "unkeyed", p.stats.unkeyed.Load(), "unknown", p.stats.unknown.Load(), "waiting", waiting,
 		"merged", p.stats.merged.Load(), "dropped", p.stats.dropped.Load(), "evicted", p.stats.evicted.Load())
 }
 

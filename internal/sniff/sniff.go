@@ -104,6 +104,17 @@ func newRecent[K comparable](size int) *recent[K] {
 	return &recent[K]{size: size, cur: map[K]struct{}{}, prev: map[K]struct{}{}}
 }
 
+// has reports whether h is in the set.
+func (r *recent[K]) has(h K) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, ok := r.cur[h]
+	if !ok {
+		_, ok = r.prev[h]
+	}
+	return ok
+}
+
 // add adds h and reports whether it was absent.
 func (r *recent[K]) add(h K) bool {
 	r.mu.Lock()

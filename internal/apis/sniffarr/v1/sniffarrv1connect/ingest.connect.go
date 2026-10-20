@@ -46,9 +46,9 @@ const (
 // IngestServiceClient is a client for the sniffarr.v1.IngestService service.
 type IngestServiceClient interface {
 	// Sight queues every infohash the server has neither stored, rejected nor
-	// queued, and reports the totals when the client closes the stream. A
-	// sighting of a stored torrent moves its last sighting; an announce
-	// sighting moves a queued sample ahead.
+	// queued, and reports the totals, and which infohashes are stored torrents,
+	// when the client closes the stream. A sighting of a stored torrent moves
+	// its last sighting; an announce sighting moves a queued sample ahead.
 	Sight(context.Context) *connect.ClientStreamForClient[v1.SightRequest, v1.SightResponse]
 	// Fetch leases one queued infohash per unit of credit to the stream, and
 	// takes the results back on it. A lease returns to the queue when the
@@ -133,9 +133,9 @@ func (c *ingestServiceClient) Peers(ctx context.Context) *connect.ClientStreamFo
 // IngestServiceHandler is an implementation of the sniffarr.v1.IngestService service.
 type IngestServiceHandler interface {
 	// Sight queues every infohash the server has neither stored, rejected nor
-	// queued, and reports the totals when the client closes the stream. A
-	// sighting of a stored torrent moves its last sighting; an announce
-	// sighting moves a queued sample ahead.
+	// queued, and reports the totals, and which infohashes are stored torrents,
+	// when the client closes the stream. A sighting of a stored torrent moves
+	// its last sighting; an announce sighting moves a queued sample ahead.
 	Sight(context.Context, *connect.ClientStream[v1.SightRequest]) (*connect.Response[v1.SightResponse], error)
 	// Fetch leases one queued infohash per unit of credit to the stream, and
 	// takes the results back on it. A lease returns to the queue when the

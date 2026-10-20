@@ -97,12 +97,13 @@ func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffa
 		if len(batch) == 0 {
 			return nil
 		}
-		queued, known, err := s.sight(ctx, batch)
+		queued, known, stored, err := s.sight(ctx, batch)
 		if err != nil {
 			return err
 		}
 		res.New += int64(queued)
 		res.Known += int64(known)
+		res.Stored = append(res.Stored, stored...)
 		s.metrics().sightings.Add(ctx, int64(queued), resultNew)
 		s.metrics().sightings.Add(ctx, int64(known), resultKnown)
 		if queued > 0 {
@@ -138,19 +139,23 @@ func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffa
 }
 
 // sight enqueues the sightings of hashes neither stored nor rejected, and
-// returns how many it queued and how many were known.
-func (s *Service) sight(ctx context.Context, batch []queue.Sighting) (queued, known int, err error) {
+// returns how many it queued, how many were known, and, per sighting in
+// order, whether its hash is a stored torrent.
+func (s *Service) sight(ctx context.Context, batch []queue.Sighting) (queued, known int, stored []bool, err error) {
 	hashes := make([]store.Hash, len(batch))
 	for i, g := range batch {
 		hashes[i] = store.Hash(g.Hash)
 	}
-	stored, err := s.Store.Known(ctx, hashes, s.now())
+	isStored, rejected, err := s.Store.Known(ctx, hashes, s.now())
 	if err != nil {
-		return 0, 0, s.internal(ctx, "known", err)
+		return 0, 0, nil, s.internal(ctx, "known", err)
 	}
+	stored = make([]bool, len(batch))
 	fresh := batch[:0:0]
-	for _, g := range batch {
-		if stored[store.Hash(g.Hash)] {
+	for i, g := range batch {
+		h := store.Hash(g.Hash)
+		stored[i] = isStored[h]
+		if isStored[h] || rejected[h] {
 			known++
 		} else {
 			fresh = append(fresh, g)
@@ -158,9 +163,9 @@ func (s *Service) sight(ctx context.Context, batch []queue.Sighting) (queued, kn
 	}
 	queued, queuedBefore, err := s.Queue.Enqueue(ctx, fresh, s.now())
 	if err != nil {
-		return 0, 0, s.internal(ctx, "enqueue", err)
+		return 0, 0, nil, s.internal(ctx, "enqueue", err)
 	}
-	return queued, known + queuedBefore, nil
+	return queued, known + queuedBefore, stored, nil
 }
 
 // store passes fetched metadata through the rules, stores or rejects it, and

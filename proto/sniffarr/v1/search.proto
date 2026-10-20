@@ -83,6 +83,9 @@ message Release {
   TitleLayer title_layer = 17;
   // Confidence in the title match, 0 while unmatched.
   float title_confidence = 18;
+  // Distinct peers of the release over the last 7 days, as last computed by
+  // the server; what SORT_PEERS orders by.
+  int64 peers_week = 19;
 }
 
 // ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
