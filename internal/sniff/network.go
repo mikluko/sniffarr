@@ -15,6 +15,7 @@ import (
 	peer_store "github.com/anacrolix/dht/v2/peer-store"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
 
@@ -30,6 +31,9 @@ const (
 	DefaultWalkers      = 16
 )
 
+// sweepEvery is how often the peer store drops expired peers.
+const sweepEvery = time.Minute
+
 // NetworkConfig tunes the DHT node and the metadata fetches. Zero fields
 // take the default named in their doc.
 type NetworkConfig struct {
@@ -41,8 +45,12 @@ type NetworkConfig struct {
 	UPnP bool
 	// Passive makes the DHT node answer no query and ask other nodes to keep
 	// it out of their routing tables, by BEP 43. A passive node receives no
-	// announce_peer.
+	// announce_peer and stores no peer.
 	Passive bool
+	// PublicIP, when valid, is the address other nodes see the node at: the
+	// node ID given to Start takes the BEP 42 prefix of it. Invalid leaves
+	// the ID as given.
+	PublicIP netip.Addr
 	// Rate caps both DHT queries and new peer connections per second;
 	// DefaultRate. The libraries' own limits, 250 queries and 10 connections
 	// a second, starve thousands of concurrent fetches.
@@ -72,14 +80,25 @@ func (c *NetworkConfig) defaults() {
 }
 
 // Network is a BitTorrent client with its own DHT node that fetches torrent
-// metadata only. It does not upload, seed, announce its torrents, exchange
-// peers, or store announced peers.
+// metadata only. It does not upload, seed, announce its torrents or
+// exchange peers. Unless passive, its node serves the peers announced to it
+// for DefaultPeerTTL, answers sample_infohashes and get_peers with scrape,
+// and keeps nothing across restarts. The zero value is not usable; use New.
 type Network struct {
-	cfg     NetworkConfig
+	cfg   NetworkConfig
+	offer func(Hash, sniffarrv1.Source)
+	peers PeerSink
+	// store is nil for a passive node.
+	store   *peerStore
+	ready   chan struct{}
+	stop    chan struct{}
+	once    sync.Once
+	sockets []*socket
 	client  *torrent.Client
 	dht     *dht.Server
 	swarm   swarm
 	answers metric.Int64Counter
+	replies metric.Int64Counter
 }
 
 // swarm reaches the peers of a torrent.
@@ -138,38 +157,83 @@ func (s clientSwarm) fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo
 	return m, nil
 }
 
-// Start starts the client and its DHT node. offer, unless nil, is called
+// New returns a Network that Start starts. offer, unless nil, is called
 // with every infohash announced to the node, and peers, unless nil, takes
-// the announcing peer through Announced. The client creates, reads and
-// writes no torrent files.
-func Start(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink) (*Network, error) {
+// the announcing peer through Announced.
+func New(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink) *Network {
 	cfg.defaults()
-	client, err := torrent.NewClient(clientConfig(cfg, offer, peers))
-	if err != nil {
-		return nil, err
+	n := &Network{cfg: cfg, offer: offer, peers: peers, ready: make(chan struct{}), stop: make(chan struct{})}
+	if !cfg.Passive {
+		n.store = newPeerStore(peerStoreConfig{})
 	}
-	n := &Network{cfg: cfg, client: client}
+	n.observe(meter(cfg.Meter))
+	return n
+}
+
+// Start starts the client and its DHT node under the node ID id, random
+// when zero; it is called once. The client creates, reads and writes no
+// torrent files. Until Start returns, the methods that use the node wait.
+func (n *Network) Start(id [20]byte) error {
+	client, err := torrent.NewClient(n.clientConfig(id))
+	if err != nil {
+		return err
+	}
 	for _, d := range client.DhtServers() {
-		if w, ok := d.(torrent.AnacrolixDhtServerWrapper); ok {
+		w, ok := d.(torrent.AnacrolixDhtServerWrapper)
+		if !ok {
+			continue
+		}
+		if n.dht == nil {
 			n.dht = w.Server
-			break
+		}
+		for _, s := range n.sockets {
+			if s.LocalAddr().String() == w.Server.Addr().String() {
+				s.bind(w.Server.Nodes)
+			}
 		}
 	}
 	if n.dht == nil {
-		n.Close()
-		return nil, errors.New("the torrent client has no DHT node")
+		client.Close()
+		return errors.New("the torrent client has no DHT node")
 	}
-	n.swarm = clientSwarm{client: client, dht: n.dht, timeout: cfg.FetchTimeout}
-	if err := n.observe(meter(cfg.Meter)); err != nil {
-		n.Close()
-		return nil, err
+	n.client = client
+	n.swarm = clientSwarm{client: client, dht: n.dht, timeout: n.cfg.FetchTimeout}
+	if n.store != nil {
+		go n.sweep()
 	}
-	return n, nil
+	close(n.ready)
+	return nil
+}
+
+// Ready returns a channel closed once Start has started the node.
+func (n *Network) Ready() <-chan struct{} {
+	return n.ready
+}
+
+// wait blocks until the node is started or ctx is done.
+func (n *Network) wait(ctx context.Context) error {
+	select {
+	case <-n.ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// started reports whether the node is started.
+func (n *Network) started() bool {
+	select {
+	case <-n.ready:
+		return true
+	default:
+		return false
+	}
 }
 
 // clientConfig is the configuration of the torrent client and its DHT node
-// that Start starts for cfg, offer and peers.
-func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink) *torrent.ClientConfig {
+// that Start starts under id.
+func (n *Network) clientConfig(id [20]byte) *torrent.ClientConfig {
+	cfg := n.cfg
 	c := torrent.NewDefaultClientConfig()
 	c.DefaultStorage = noStorage{}
 	c.NoUpload = true
@@ -185,13 +249,19 @@ func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers 
 	c.DialRateLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
 	c.ConfigureAnacrolixDhtServer = func(sc *dht.ServerConfig) {
 		sc.SendLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
-		sc.PeerStore = noPeers{}
 		sc.Passive = cfg.Passive
-		if offer != nil {
+		sc.NodeId = nodeID(id, cfg.PublicIP)
+		if n.store != nil {
+			sc.PeerStore = n.store
+			s := newSocket(sc.Conn, sc.NodeId, n.store, n.replies)
+			sc.Conn = s
+			n.sockets = append(n.sockets, s)
+		}
+		if n.offer != nil {
 			sc.OnAnnouncePeer = func(h metainfo.Hash, ip net.IP, port int, portOk bool) {
-				offer(Hash(h), sniffarrv1.Source_SOURCE_ANNOUNCE)
-				if addr, ok := netip.AddrFromSlice(ip); ok && portOk && peers != nil {
-					peers.Announced(Hash(h), netip.AddrPortFrom(addr.Unmap(), uint16(port)))
+				n.offer(Hash(h), sniffarrv1.Source_SOURCE_ANNOUNCE)
+				if addr, ok := netip.AddrFromSlice(ip); ok && portOk && n.peers != nil {
+					n.peers.Announced(Hash(h), netip.AddrPortFrom(addr.Unmap(), uint16(port)))
 				}
 			}
 		}
@@ -200,53 +270,120 @@ func clientConfig(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers 
 	return c
 }
 
-// noPeers is the DHT node's peer store: the node issues get_peers tokens,
-// and so receives announce_peer, only with a store set, and this one keeps
-// no peer and serves none.
-type noPeers struct{}
+// nodeID returns id with the BEP 42 prefix of publicIP when it is valid;
+// a zero id stays zero, for the node to pick a random one. The library
+// uses a given ID as is.
+func nodeID(id [20]byte, publicIP netip.Addr) krpc.ID {
+	out := krpc.ID(id)
+	if out.IsZero() || !publicIP.IsValid() {
+		return out
+	}
+	dht.SecureNodeId(&out, publicIP.Unmap().AsSlice())
+	return out
+}
 
-func (noPeers) AddPeer(peer_store.InfoHash, krpc.NodeAddr) {}
+// sweep drops expired peers from the store every sweepEvery until Close.
+func (n *Network) sweep() {
+	tick := time.NewTicker(sweepEvery)
+	defer tick.Stop()
+	for {
+		select {
+		case <-n.stop:
+			return
+		case <-tick.C:
+			n.store.Sweep()
+		}
+	}
+}
 
-func (noPeers) GetPeers(peer_store.InfoHash) []krpc.NodeAddr { return nil }
-
-func (n *Network) observe(m metric.Meter) error {
+func (n *Network) observe(m metric.Meter) {
 	n.answers = counter(m, "sniffarr.dht.sample_answers", "{answer}", "sample_infohashes queries answered.")
+	n.replies = counter(m, "sniffarr.dht.replies", "{reply}", "Queries the node's socket answered or completed itself, by query.")
 	_, err := m.Int64ObservableGauge("sniffarr.dht.nodes", metric.WithUnit("{node}"),
 		metric.WithDescription("Nodes in the DHT routing table."),
 		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
-			o.Observe(int64(n.dht.NumNodes()))
+			o.Observe(int64(n.Nodes()))
 			return nil
 		}))
-	return err
+	if err != nil {
+		otel.Handle(err)
+	}
+	if n.store == nil {
+		return
+	}
+	_, err = m.Int64ObservableGauge("sniffarr.dht.infohashes", metric.WithUnit("{infohash}"),
+		metric.WithDescription("Infohashes with peers in the node's peer store."),
+		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
+			infohashes, _ := n.store.Count()
+			o.Observe(int64(infohashes))
+			return nil
+		}))
+	if err != nil {
+		otel.Handle(err)
+	}
+	_, err = m.Int64ObservableGauge("sniffarr.dht.peers", metric.WithUnit("{peer}"),
+		metric.WithDescription("Peers in the node's peer store."),
+		metric.WithInt64Callback(func(_ context.Context, o metric.Int64Observer) error {
+			_, peers := n.store.Count()
+			o.Observe(int64(peers))
+			return nil
+		}))
+	if err != nil {
+		otel.Handle(err)
+	}
 }
 
 // Bootstrap populates the DHT routing table from the bootstrap nodes.
 func (n *Network) Bootstrap(ctx context.Context) error {
+	if err := n.wait(ctx); err != nil {
+		return err
+	}
 	_, err := n.dht.BootstrapContext(ctx)
 	return err
 }
 
-// Port returns the port the client listens on.
+// Port returns the port the client listens on; 0 before Start.
 func (n *Network) Port() int {
+	if !n.started() {
+		return 0
+	}
 	return n.client.LocalPort()
 }
 
-// Nodes returns how many DHT nodes the node knows.
+// Nodes returns how many DHT nodes the node knows; 0 before Start.
 func (n *Network) Nodes() int {
+	if !n.started() {
+		return 0
+	}
 	return n.dht.NumNodes()
+}
+
+// Swarm returns the seeds and the other peers of h the node's peer store
+// counts, by BEP 33 filters; zeros for a passive node.
+func (n *Network) Swarm(h Hash) (seeds, downloaders float64) {
+	if n.store == nil {
+		return 0, 0
+	}
+	return n.store.Estimate(peer_store.InfoHash(h))
 }
 
 // Close stops the client, waiting a few seconds at most.
 func (n *Network) Close() {
-	done := make(chan struct{})
-	go func() {
-		n.client.Close()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-	}
+	n.once.Do(func() {
+		close(n.stop)
+		if !n.started() {
+			return
+		}
+		done := make(chan struct{})
+		go func() {
+			n.client.Close()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+		}
+	})
 }
 
 // Sample walks the DHT with BEP 51 sample_infohashes queries for random
@@ -254,6 +391,9 @@ func (n *Network) Close() {
 // every sampled infohash until ctx is done. walkers queries run at once,
 // DefaultWalkers when it is zero.
 func (n *Network) Sample(ctx context.Context, walkers int, found func(Hash)) {
+	if n.wait(ctx) != nil {
+		return
+	}
 	orDefault(&walkers, DefaultWalkers)
 	frontier := make(chan krpc.NodeAddr, 50000)
 	asked := newRecent[string](1000000)
@@ -319,6 +459,9 @@ func (n *Network) sampleNode(ctx context.Context, a krpc.NodeAddr, found func(Ha
 // addresses are dropped with the torrent before Metadata returns, save in
 // Metadata.Peers.
 func (n *Network) Metadata(ctx context.Context, h Hash) (Metadata, error) {
+	if err := n.wait(ctx); err != nil {
+		return Metadata{}, err
+	}
 	peers := n.findPeers(ctx, h)
 	if len(peers) < n.cfg.MinPeers {
 		return Metadata{}, ErrNoPeers

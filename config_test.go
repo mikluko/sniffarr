@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"log/slog"
+	"net/netip"
 	"net/url"
 	"testing"
 	"time"
@@ -99,6 +100,12 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, dht.Config{Network: want}, c.dht, "a node that does not discover is passive")
 			require.Equal(t, fetch.Config{Workers: 100}, c.fetch)
 		}},
+		{name: "sniff with a public IP", args: []string{"-sniff", "-public-ip", "203.0.113.7"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
+			want := defaultNetwork(false)
+			want.PublicIP = netip.MustParseAddr("203.0.113.7")
+			require.Equal(t, dht.Config{Network: want}, c.dht)
+		}},
+		{name: "bad public IP", args: []string{"-sniff", "-public-ip", "example.net"}, err: `invalid value "example.net" for flag -public-ip`},
 		{name: "sniff without a URL", args: []string{"-sniff"}, env: []string{"SNIFFARR_INGEST_TOKEN", "in"}, err: "SNIFFARR_URL is not set"},
 		{name: "fetch without a token", args: []string{"-fetch"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "SNIFFARR_INGEST_TOKEN is not set"},
 		{name: "bad scheme", args: []string{"-fetch"}, env: []string{"SNIFFARR_URL", "api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, err: "SNIFFARR_URL: want an http or https URL"},

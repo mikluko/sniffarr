@@ -49,8 +49,9 @@ type fakeIngest struct {
 	// many results; 0 never does.
 	failFetchAfter int
 
-	// key is what HashKey answers after failKey failures.
+	// key and nodeID are what HashKey answers after failKey failures.
 	key     sketch.Key
+	nodeID  [20]byte
 	failKey int
 	// sketches holds the Peers requests received, by hash; a hash in
 	// unknown is dropped. failPeers is how many Peers streams fail first.
@@ -66,6 +67,9 @@ func newFake() *fakeIngest {
 	for i := range f.key {
 		f.key[i] = byte(i)
 	}
+	for i := range f.nodeID {
+		f.nodeID[i] = byte(0xa0 + i)
+	}
 	return f
 }
 
@@ -76,7 +80,7 @@ func (f *fakeIngest) HashKey(context.Context, *connect.Request[sniffarrv1.HashKe
 		f.failKey--
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("down"))
 	}
-	return connect.NewResponse(&sniffarrv1.HashKeyResponse{Key: f.key[:]}), nil
+	return connect.NewResponse(&sniffarrv1.HashKeyResponse{Key: f.key[:], NodeId: f.nodeID[:]}), nil
 }
 
 func (f *fakeIngest) Peers(_ context.Context, stream *connect.ClientStream[sniffarrv1.PeersRequest]) (*connect.Response[sniffarrv1.PeersResponse], error) {
@@ -519,9 +523,11 @@ func (s *fakeSwarm) fetch(_ context.Context, h Hash, peers []torrent.PeerInfo) (
 }
 
 func fakeNetwork(cfg NetworkConfig, s *fakeSwarm) *Network {
-	cfg.defaults()
 	s.fetched = map[Hash]int{}
-	return &Network{cfg: cfg, swarm: s}
+	n := New(cfg, nil, nil)
+	n.swarm = s
+	close(n.ready)
+	return n
 }
 
 func TestFetcherMinPeers(t *testing.T) {

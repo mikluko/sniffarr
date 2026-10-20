@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"time"
@@ -75,6 +76,7 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	fs.BoolVar(&c.on.fetch, "fetch", false, "take fetch tasks from the ingest API and return their metadata")
 	fs.IntVar(&c.dht.Network.Port, "port", sniffer.DefaultPort, "TCP and UDP port for peers and the DHT; 0 picks a free one")
 	fs.BoolVar(&c.dht.Network.UPnP, "upnp", false, "ask the gateways on the local network to forward the listening port, TCP and UDP, by UPnP")
+	fs.TextVar(&c.dht.Network.PublicIP, "public-ip", netip.Addr{}, "the address other DHT nodes see this node at, which gives its node ID the BEP 42 prefix; empty leaves the ID as stored")
 	fs.IntVar(&c.dht.Network.Fetchers, "fetchers", sniffer.DefaultFetchers, "metadata fetches at once")
 	fs.IntVar(&c.dht.Network.Rate, "rate", sniffer.DefaultRate, "DHT queries, and new peer connections, a second")
 	fs.DurationVar(&c.dht.Network.FetchTimeout, "fetch-timeout", sniffer.DefaultFetchTimeout, "how long to wait for a torrent's metadata once it has peers")

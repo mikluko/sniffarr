@@ -2,8 +2,9 @@
 // Discoverer reports the infohashes the DHT reveals to the server, a
 // Fetcher takes tasks from the server, fetches their metadata from peers,
 // and returns it, and Peers counts the peers seen in sketches for the
-// server. A sniffer never downloads pieces, uploads, or announces itself,
-// and it keeps peer addresses only for the duration of a fetch; a counted
+// server. A sniffer never downloads pieces, uploads, or announces itself.
+// It keeps peer addresses in memory only: those of a fetch for its
+// duration, those announced to its DHT node for DefaultPeerTTL; a counted
 // peer is kept as its hash.
 package sniff
 
