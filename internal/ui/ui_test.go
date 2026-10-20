@@ -27,39 +27,58 @@ func TestRenderAll(t *testing.T) {
 		name, page, path, target string
 		data                     func(Base) any
 	}
+	oneWork := func(b Base) any {
+		p := SampleTop(b, "movie", "m-dune-part-two-2024", false)
+		p.Works = p.Works[2:3]
+		return p
+	}
 	cases := []tc{
-		{"search", "search", "/", "", func(b Base) any { b.Nav = "search"; return SampleSearch(b, "") }},
-		{"search-q", "search", "/?q=dune", "", func(b Base) any { b.Nav = "search"; return SampleSearch(b, "dune") }},
-		{"search-results", "search", "/", "results", func(b Base) any { return SampleSearch(b, "") }},
+		{"home", "home", "/", "", func(b Base) any { b.Nav = "home"; return SampleHome(b) }},
+		{"search", "search", "/?q=dune", "", func(b Base) any { b.Nav = "search"; return SampleSearch(b, "dune") }},
+		{"search-results", "search", "/?q=dune", "results", func(b Base) any { return SampleSearch(b, "dune") }},
+		{"top", "top", "/top", "", func(b Base) any { b.Nav = "top"; return SampleTop(b, "movie", "m-dune-part-two-2024", false) }},
+		{"top-series", "top", "/top?kind=series", "", func(b Base) any { b.Nav = "top"; return SampleTop(b, "series", "", true) }},
+		{"top-frag", "top", "/top?kind=series", "top", func(b Base) any { return SampleTop(b, "series", "", false) }},
+		{"top-work", "top", "/top/w/m-dune-part-two-2024?open=1", "work-m-dune-part-two-2024", oneWork},
 		{"torrent", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false) }},
 		{"torrent-files", "torrent", "/t/x?files=all", "files", func(b Base) any { return SampleTorrent(b, true) }},
 		{"data", "data", "/data", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
 		{"data-frag", "data", "/data", "data", func(b Base) any { return SampleData(b) }},
 	}
 	dir := os.Getenv("PREVIEW_DIR")
-	for _, lang := range []string{"ru", "C"} {
-		for _, c := range cases {
-			req := httptest.NewRequest("GET", c.path, nil)
-			if c.target != "" {
-				req.Header.Set("HX-Request", "true")
-				req.Header.Set("HX-Target", c.target)
-			}
-			b := r.Base(req, lang, "", []string{"ru"}, loc)
-			b.Now = now
-			w := httptest.NewRecorder()
-			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
-				t.Fatalf("%s/%s: %v", lang, c.name, err)
-			}
-			body := w.Body.String()
-			full := strings.HasPrefix(body, "<!doctype html>")
-			if full != (c.target == "") {
-				t.Errorf("%s/%s: full page = %v, want %v", lang, c.name, full, c.target == "")
-			}
-			if c.target != "" && !strings.Contains(body, `id="`+c.target+`"`) {
-				t.Errorf("%s/%s: fragment lacks id=%q", lang, c.name, c.target)
-			}
-			if dir != "" && full {
-				_ = os.WriteFile(filepath.Join(dir, lang+"-"+c.name+".html"), w.Body.Bytes(), 0o644)
+	for _, lang := range []string{"ru", "en"} {
+		for _, top := range []bool{true, false} {
+			for _, c := range cases {
+				name := lang + "/" + c.name
+				if !top {
+					name += "/notop"
+				}
+				req := httptest.NewRequest("GET", c.path, nil)
+				if c.target != "" {
+					req.Header.Set("HX-Request", "true")
+					req.Header.Set("HX-Target", c.target)
+				}
+				b := r.Base(req, lang, "", []string{"ru"}, loc)
+				b.Now = now
+				b.Top = top
+				w := httptest.NewRecorder()
+				if err := r.Render(w, req, c.page, c.data(b)); err != nil {
+					t.Fatalf("%s: %v", name, err)
+				}
+				body := w.Body.String()
+				full := strings.HasPrefix(body, "<!doctype html>")
+				if full != (c.target == "") {
+					t.Errorf("%s: full page = %v, want %v", name, full, c.target == "")
+				}
+				if c.target != "" && !strings.Contains(body, `id="`+c.target+`"`) {
+					t.Errorf("%s: fragment lacks id=%q", name, c.target)
+				}
+				if (c.name == "home" || c.name == "data") && strings.Contains(body, `href="/top`) != top {
+					t.Errorf("%s: links to the top = %v, want %v", name, !top, top)
+				}
+				if dir != "" && full && top {
+					_ = os.WriteFile(filepath.Join(dir, lang+"-"+c.name+".html"), w.Body.Bytes(), 0o644)
+				}
 			}
 		}
 	}
@@ -70,7 +89,7 @@ func TestRenderAll(t *testing.T) {
 
 func TestFormat(t *testing.T) {
 	ru := Base{Lang: "ru"}
-	c := Base{Lang: "C"}
+	c := Base{Lang: "en"}
 	for _, x := range []struct{ got, want string }{
 		{ru.Num(1284311), "1 284 311"},
 		{c.Num(1284311), "1,284,311"},

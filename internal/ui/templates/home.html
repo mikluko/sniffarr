@@ -1,0 +1,31 @@
+{{define "title"}}sniffarr{{end}}
+
+{{define "main"}}
+<div class="home">
+  <header class="home-top">
+    {{if .Top}}<a href="/top">{{.T "nav.top"}}</a>{{end}}
+    <a href="/data">{{.T "nav.data"}}</a>
+    {{template "langs" .}}
+  </header>
+  <main class="home-main">
+    <h1>sniffarr</h1>
+    <form class="search home-search" action="/" method="get">
+      <label for="q" class="vh">{{.T "search.label"}}</label>
+      <input id="q" name="q" type="search" placeholder="{{.T "search.placeholder"}}" autocomplete="off" spellcheck="false" autofocus>
+      <button type="submit">{{.T "search.submit"}}</button>
+    </form>
+    {{if .Top}}<nav class="home-tops mu">
+      <span>{{.T "home.top"}}</span>
+      {{range topKinds}}<a href="/top?kind={{.}}">{{$.T (concat "topkind." .)}}</a>{{end}}
+    </nav>{{end}}
+  </main>
+  <footer class="home-foot mu">
+    {{with .Summary}}
+    <span>{{$.Num .Total}} {{$.T "home.torrents"}}</span>
+    <span>+{{$.Num .NewDay}} {{$.T "home.perday"}}</span>
+    <span>{{$.T "home.pending"}} {{$.Num .Pending}}</span>
+    {{end}}
+    <a href="/data">{{.T "home.more"}}</a>
+  </footer>
+</div>
+{{end}}

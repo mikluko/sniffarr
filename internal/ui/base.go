@@ -2,6 +2,7 @@ package ui
 
 import (
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -10,9 +11,10 @@ import (
 // Base is embedded in every page model. Templates call its methods for
 // translation and locale-aware formatting: {{.T "key"}}, {{$.Num .N}}, ...
 type Base struct {
-	Lang       string   // "ru" | "C"
+	Lang       string   // "ru" | "en"
 	Langs      []string // switcher entries
-	Nav        string   // "search" | "data" | "" (card)
+	Nav        string   // "home" | "search" | "top" | "data" | "" (card)
+	Top        bool     // the top exists: its links and the peer counts it ranks by are shown
 	VoiceLangs []string // configured dubbing languages, e.g. ["ru"]
 	Path       string   // current path+query, for the language switcher
 	Loc        *time.Location
@@ -160,4 +162,96 @@ func (b Base) Voice(c VoiceCell) string {
 		return b.T("voice.explicit")
 	}
 	return b.Prob(c.Prob)
+}
+
+// Delta formats a change against the previous window: "+12%", "−8%", "0%";
+// nil means the work was absent then ("new").
+func (b Base) Delta(d *float64) string {
+	if d == nil {
+		return b.T("top.new")
+	}
+	v := math.Round(*d * 100)
+	switch {
+	case v > 0:
+		return "+" + strconv.FormatFloat(v, 'f', 0, 64) + "%"
+	case v < 0:
+		return "−" + strconv.FormatFloat(-v, 'f', 0, 64) + "%"
+	}
+	return "0%"
+}
+
+// Work names a work in one line: "Дюна: Часть вторая (2024)", "Сёгун · S01".
+func (b Base) Work(w WorkRef) string {
+	if w.Sub == "" {
+		return w.Title
+	}
+	if w.Kind == "movie" {
+		return w.Title + " (" + w.Sub + ")"
+	}
+	return w.Title + " · " + w.Sub
+}
+
+// SourceList joins translated source keys: "WEB, ремукс".
+func (b Base) SourceList(keys []string) string {
+	if len(keys) == 0 {
+		return "—"
+	}
+	out := make([]string, len(keys))
+	for i, k := range keys {
+		out[i] = b.T("source." + k)
+	}
+	return strings.Join(out, ", ")
+}
+
+// URL builds a top page link with the given parameters.
+func (p TopPage) URL(kind, win, voice string, all bool) string {
+	v := url.Values{}
+	v.Set("kind", kind)
+	v.Set("win", win)
+	if voice != "" && voice != "any" {
+		v.Set("voice", voice)
+	}
+	if all {
+		v.Set("all", "1")
+	}
+	return "/top?" + v.Encode()
+}
+
+// WorkURL is the toggle link for one work's releases.
+func (p TopPage) WorkURL(id string, open bool) string {
+	v := url.Values{}
+	v.Set("win", p.Window)
+	if p.VoiceMode != "" && p.VoiceMode != "any" {
+		v.Set("voice", p.VoiceMode)
+	}
+	if open {
+		v.Set("open", "1")
+	}
+	return "/top/w/" + url.PathEscape(id) + "?" + v.Encode()
+}
+
+// Date formats a day: same year → "20.10" / "Oct 20", else "20.10.2025" / "2025-10-20".
+func (b Base) Date(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	loc := b.Loc
+	if loc == nil {
+		loc = time.Local
+	}
+	t = t.In(loc)
+	now := b.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	same := t.Year() == now.In(loc).Year()
+	switch {
+	case b.ru() && same:
+		return t.Format("02.01")
+	case b.ru():
+		return t.Format("02.01.2006")
+	case same:
+		return t.Format("Jan 2")
+	}
+	return t.Format("2006-01-02")
 }

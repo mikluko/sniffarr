@@ -1,10 +1,10 @@
 /* sniffarr operator UI. System font, no icons, dense tables. */
 :root{
   color-scheme:light dark;
-  --bg:#ffffff;--fg:#1a1a1a;--mu:#5e5e5e;--bd:#dedede;--alt:#f6f6f6;--ln:#0b57a4;--inbg:#ffffff;--bar:#4a4a4a;
+  --bg:#ffffff;--fg:#1a1a1a;--mu:#5e5e5e;--bd:#dedede;--alt:#f6f6f6;--sel:#eef3fa;--ln:#0b57a4;--inbg:#ffffff;--bar:#4a4a4a;
 }
 @media (prefers-color-scheme:dark){
-  :root{--bg:#141414;--fg:#e4e4e4;--mu:#a3a3a3;--bd:#2e2e2e;--alt:#1b1b1b;--ln:#86b7ff;--inbg:#1b1b1b;--bar:#b5b5b5}
+  :root{--bg:#141414;--fg:#e4e4e4;--mu:#a3a3a3;--bd:#2e2e2e;--alt:#1b1b1b;--sel:#1a2230;--ln:#86b7ff;--inbg:#1b1b1b;--bar:#b5b5b5}
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -74,6 +74,40 @@ button{cursor:pointer;padding:1px 8px;font-size:12px}
 .chart svg{width:100%;height:160px;display:block;fill:var(--bar);border-bottom:1px solid var(--bd)}
 .chart .xax{display:flex;justify-content:space-between;color:var(--mu);font-size:11px}
 
+/* home */
+.home{min-height:100vh;display:flex;flex-direction:column}
+.home-top{display:flex;justify-content:flex-end;gap:16px;padding:12px 16px;color:var(--mu)}
+.home-top .langs{margin-left:0}
+.home-main{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;gap:18px;padding:18vh 16px 48px}
+.home-main h1{font-size:36px;font-weight:700;letter-spacing:-.01em}
+.home-search{width:100%;max-width:640px;flex-wrap:nowrap}
+.home-search input[type=search]{flex:1 1 auto;padding:10px 12px;font-size:16px}
+.home-search>button{min-height:44px;padding:0 18px;font-size:15px}
+.home-tops{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px}
+.home-foot{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 20px;padding:12px 16px 16px;border-top:1px solid var(--bd)}
+
+/* search: matched works */
+.works{display:flex;flex-direction:column;gap:4px}
+.workhits{display:flex;flex-wrap:wrap;gap:4px 24px}
+
+/* top */
+.topv{display:flex;flex-direction:column;gap:10px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px 18px;border-bottom:1px solid var(--bd)}
+.tabs a{padding:6px 0;border-bottom:2px solid transparent;margin-bottom:-1px;font-size:14px;text-transform:capitalize}
+.tabs a[aria-current]{color:var(--fg);font-weight:600;border-bottom-color:var(--fg);text-decoration:none}
+.topctl{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.topctl .at{margin-left:auto}
+.seg{display:inline-flex;margin-right:12px}
+.seg a{border:1px solid var(--bd);margin-left:-1px;padding:3px 10px;color:var(--fg);text-decoration:none}
+.seg a:first-child{border-radius:3px 0 0 3px;margin-left:0}
+.seg a:last-child{border-radius:0 3px 3px 0}
+.seg a[aria-current]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tt tbody tr:nth-child(even){background:none}
+.tt tbody.open td{background:var(--sel)}
+.tt tr.rel td{border-bottom-color:transparent;font-size:12px}
+.tt tr.rel:last-child td{border-bottom:1px solid var(--bd)}
+.tt tr.rel td.nm{padding-left:28px}
+
 @media (max-width:640px){
   .search>button,.filters select{min-height:40px}
   /* results collapse to two-line rows: name, then size · kind · dub · source · last seen */
@@ -83,5 +117,19 @@ button{cursor:pointer;padding:1px 8px;font-size:12px}
   #results .t td.nm{display:block;min-width:0;padding-bottom:2px}
   #results .t td.v::before{content:attr(data-l) " ";color:var(--mu)}
   #results .t td.fs{display:none}
+  .t td.pe::after,.t td.rl::after{content:" " attr(data-l);color:var(--mu)}
+  /* top: rank + title, then peers · delta · releases · dub */
+  .tt,.tt tbody{display:block}
+  .tt thead,.tt td.src,.tt td.fs{display:none}
+  .tt tr{display:block;padding:6px 0}
+  .tt td{border:none;padding:0}
+  .tt tr.wk{display:flex;flex-wrap:wrap;gap:2px 8px;border-bottom:1px solid var(--bd)}
+  .tt tr.wk td.r:first-child{width:20px}
+  .tt tr.wk td.nm{flex:1 1 calc(100% - 40px);min-width:0}
+  .tt tr.wk td.pe{margin-left:28px}
+  .tt td.v::before{content:attr(data-l) " ";color:var(--mu)}
+  .tt tr.rel td{display:inline;padding-right:8px}
+  .tt tr.rel td.nm{display:block}
+  .topctl .at{margin-left:0}
   .kpis .at{margin-left:0}
 }

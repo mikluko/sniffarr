@@ -17,8 +17,11 @@ import (
 var files embed.FS
 
 // Page names and the fragments (htmx targets) each one can return alone.
+// A target "work-<id>" matches the fragment "work".
 var pages = map[string][]string{
+	"home":    {},
 	"search":  {"results"},
+	"top":     {"top", "work"},
 	"torrent": {"files"},
 	"data":    {"data"},
 }
@@ -43,6 +46,9 @@ func New() (*Renderer, error) {
 		"layers":     func() []string { return Layers },
 		"voiceModes": func() []string { return VoiceModes },
 		"voiceBands": func() []string { return VoiceBands },
+		"topKinds":   func() []string { return TopKinds },
+		"windows":    func() []string { return Windows },
+		"sorts":      func() []string { return Sorts },
 		"concat":     func(a ...string) string { return strings.Join(a, "") },
 		"int64":      func(i int) int64 { return int64(i) },
 		"add":        func(a, b int) int { return a + b },
@@ -83,28 +89,28 @@ func New() (*Renderer, error) {
 
 // Base builds the common page model for a request.
 //
-//	lang: from Lang(); nav: "search" | "data" | "".
+//	lang: from Lang(); nav: "home" | "search" | "top" | "data" | "".
 func (r *Renderer) Base(req *http.Request, lang, nav string, voiceLangs []string, loc *time.Location) Base {
 	if _, ok := r.msgs[lang]; !ok {
-		lang = "C"
+		lang = "en"
 	}
 	return Base{
-		Lang: lang, Langs: []string{"ru", "C"}, Nav: nav,
+		Lang: lang, Langs: []string{"ru", "en"}, Nav: nav,
 		VoiceLangs: voiceLangs, Path: req.URL.RequestURI(),
 		Loc: loc, Now: time.Now(), msgs: r.msgs[lang],
 	}
 }
 
 // Lang resolves the UI language: ?lang= (switcher, also sets a cookie) →
-// "lang" cookie → userLocale, the signed-in person's locale → C.
-// Any locale starting with "ru" maps to "ru".
+// "lang" cookie → userLocale, the signed-in person's locale → en.
+// Any locale starting with "ru" maps to "ru"; "C", "POSIX" and "en*" map to "en".
 func Lang(w http.ResponseWriter, req *http.Request, userLocale string) string {
 	pick := func(s string) string {
 		if strings.HasPrefix(strings.ToLower(s), "ru") {
 			return "ru"
 		}
-		if s == "C" || strings.HasPrefix(strings.ToLower(s), "en") {
-			return "C"
+		if s == "C" || s == "POSIX" || strings.HasPrefix(strings.ToLower(s), "en") {
+			return "en"
 		}
 		return ""
 	}
@@ -121,11 +127,11 @@ func Lang(w http.ResponseWriter, req *http.Request, userLocale string) string {
 	if l := pick(userLocale); l != "" {
 		return l
 	}
-	return "C"
+	return "en"
 }
 
 // Render writes the full page, or only the fragment htmx asked for:
-// HX-Request: true + HX-Target: <fragment id> → that block alone.
+// HX-Request: true + HX-Target: <fragment id> (or <fragment>-<id>) → that block alone.
 // History restores always get the full page.
 func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, page string, data any) error {
 	t, ok := r.tpl[page]
@@ -136,7 +142,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, page string,
 	if req.Header.Get("HX-Request") == "true" && req.Header.Get("HX-History-Restore-Request") != "true" {
 		target := req.Header.Get("HX-Target")
 		for _, f := range pages[page] {
-			if f == target {
+			if target == f || strings.HasPrefix(target, f+"-") {
 				name = f
 			}
 		}

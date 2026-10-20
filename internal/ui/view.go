@@ -5,7 +5,8 @@ package ui
 import "time"
 
 // Enumerations as the UI knows them. Values are stable keys; labels come from i18n
-// ("kind.<v>", "source.<v>", "layer.<v>", "voicemode.<v>", "drop.<v>", "voiceband.<v>").
+// ("kind.<v>", "source.<v>", "layer.<v>", "voicemode.<v>", "drop.<v>", "voiceband.<v>",
+// "topkind.<v>", "win.<v>", "sort.<v>").
 var (
 	Kinds       = []string{"movie", "series", "music", "book", "software", "other", "unknown"}
 	Sources     = []string{"disc", "remux", "rip", "web", "other"}
@@ -14,12 +15,35 @@ var (
 	DropReasons = []string{"adult", "software", "book", "course", "script", "filetype", "size"}
 	// VoiceBands are the rows of the dubbing table on the data page, in order.
 	VoiceBands = []string{"explicit", "likely", "unlikely", "unscored"}
+	// TopKinds are the tabs of the top page.
+	TopKinds = []string{"movie", "series", "music"}
+	// Windows are the popularity windows.
+	Windows = []string{"24h", "7d", "30d"}
+	// Sorts are the orders of search results.
+	Sorts = []string{"last_seen", "size"}
 )
+
+// PeerCounts are unique peers seen in each window.
+type PeerCounts struct {
+	Day, Week, Month int64
+}
+
+type HomePage struct {
+	Base
+	Summary Summary
+}
+
+type Summary struct {
+	Total   int64 // torrents stored
+	NewDay  int64 // new in the last 24 h
+	Pending int64 // classifier queue
+}
 
 type SearchPage struct {
 	Base
 	Q       string
 	Filters Filters
+	Works   []WorkHit // works whose title matches q, best first; at most a handful
 	Results Results
 }
 
@@ -30,11 +54,17 @@ type Filters struct {
 	Source    string
 	Layer     string
 	MinSizeGB string // raw input, echoed back
+	Sort      string // Sorts value, "" = last_seen
+}
+
+// WorkHit is a work matched by the search query, shown above the torrents.
+type WorkHit struct {
+	Ref      WorkRef
+	Peers    int64 // in the 7-day window
+	Releases int
 }
 
 type Results struct {
-	Fresh   bool   // no query, first page: sorted by last seen, auto-refreshed
-	SelfURL string // current URL with all params; used for polling
 	Offset  int
 	Shown   int
 	Total   int64
@@ -46,6 +76,7 @@ type Results struct {
 type Row struct {
 	InfoHash   string
 	Name       string
+	Peers      int64 // unique peers, 7 days
 	Size       int64
 	Kind       string
 	Layer      string
@@ -59,6 +90,50 @@ type Row struct {
 type VoiceCell struct {
 	Explicit bool
 	Prob     *float64 // nil = not scored
+}
+
+type TopPage struct {
+	Base
+	Kind      string // TopKinds value
+	Window    string // Windows value
+	VoiceMode string // VoiceModes value; filters works by their best release
+	Computed  time.Time
+	Limit     int  // 100
+	All       bool // Works holds all Limit entries; otherwise the first 25
+	Works     []Work
+}
+
+// WorkRef names a work: a movie (title + year), a series season (title + season),
+// an album (artist + album), a book (author + title), a program (name + version).
+type WorkRef struct {
+	ID    string
+	Kind  string
+	Title string // "Дюна: Часть вторая", "Сёгун", "Pink Floyd"
+	Sub   string // "2024", "S01", "The Dark Side Of The Moon"
+	Rank  int    // place in the top of its kind for the 7-day window, 0 = outside
+}
+
+type Work struct {
+	Ref       WorkRef
+	Rank      int // place in this top (window and filter)
+	Peers     int64
+	Delta     *float64 // change against the previous window, nil = was absent ("new")
+	Releases  int
+	Voice     []VoiceCell // best release per language, aligned with Base.VoiceLangs
+	Sources   []string    // Sources values present among releases
+	FirstSeen time.Time   // earliest release
+	Open      bool        // Items is filled and shown
+	Items     []Release   // releases by peers, filled only when Open
+}
+
+type Release struct {
+	InfoHash  string
+	Name      string
+	Peers     int64
+	Size      int64
+	Voice     []VoiceCell
+	Source    string
+	FirstSeen time.Time
 }
 
 type TorrentPage struct {
@@ -77,6 +152,11 @@ type Torrent struct {
 	LastSeen      time.Time
 	DiscoveredVia string // "announce" | "sample"
 	TMDBQuery     string // cleaned title, used for a plain TMDB search link
+	Peers         PeerCounts
+
+	Work       *WorkRef // nil = not grouped into a work
+	WorkRels   int      // releases of the work
+	RankInWork int      // place of this torrent among them by 7-day peers
 
 	Kind   Answer
 	Source Answer

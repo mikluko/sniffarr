@@ -1,0 +1,71 @@
+{{define "title"}}{{.T "nav.top"}}: {{.T (concat "topkind." .Kind)}}{{end}}
+
+{{define "main"}}
+{{template "searchbar" .}}
+{{template "top" .}}
+{{end}}
+
+{{define "top"}}
+<section id="top" class="topv">
+  <nav class="tabs" aria-label="{{.T "top.category"}}">
+    {{range topKinds}}<a href="{{$.URL . $.Window $.VoiceMode false}}" hx-get="{{$.URL . $.Window $.VoiceMode false}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.Kind}} aria-current="page"{{end}}>{{$.T (concat "topkind." .)}}</a>{{end}}
+  </nav>
+  <div class="topctl">
+    <span class="mu">{{.T "top.window"}}</span>
+    <span class="seg">{{range windows}}<a href="{{$.URL $.Kind . $.VoiceMode $.All}}" hx-get="{{$.URL $.Kind . $.VoiceMode $.All}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.Window}} aria-current="true"{{end}}>{{$.T (concat "win." .)}}</a>{{end}}</span>
+    {{range .VoiceLangs}}
+    <span class="mu">{{$.T "col.voice"}} {{.}}</span>
+    <span class="seg">{{range voiceModes}}<a href="{{$.URL $.Kind $.Window . $.All}}" hx-get="{{$.URL $.Kind $.Window . $.All}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.VoiceMode}} aria-current="true"{{end}}>{{$.T (concat "voicemode." .)}}</a>{{end}}</span>
+    {{end}}
+    <span class="mu at">{{.T "top.computed"}} {{$.Time .Computed}}</span>
+  </div>
+  <p class="mu">{{.T "top.caption"}}</p>
+  {{if .Works}}
+  <div class="scroll">
+  <table class="t tt">
+    <thead><tr>
+      <th class="r">#</th><th>{{.T (concat "top.unit." .Kind)}}</th><th class="r">{{.T "top.peers"}}</th><th class="r">{{.T "top.delta"}}</th>
+      <th class="r">{{.T "top.releases"}}</th>
+      {{range .VoiceLangs}}<th class="r">{{.}}</th>{{end}}
+      <th>{{.T "top.sources"}}</th><th>{{.T "col.first"}}</th>
+    </tr></thead>
+    {{template "work" .}}
+  </table>
+  </div>
+  <p class="mu">{{.T "top.shown"}} 1–{{len .Works}} {{.T "results.of"}} {{.Limit}}
+    {{if not .All}}<a href="{{$.URL $.Kind $.Window $.VoiceMode true}}" hx-get="{{$.URL $.Kind $.Window $.VoiceMode true}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "top.showall"}} {{.Limit}}</a>{{end}}</p>
+  {{else}}
+  <p>{{.T "top.empty"}}</p>
+  {{end}}
+</section>
+{{end}}
+
+{{/* One <tbody> per work, so a work can be swapped alone: GET /top/w/{id} with HX-Target work-{id}. */}}
+{{define "work"}}
+{{range .Works}}
+<tbody id="work-{{.Ref.ID}}"{{if .Open}} class="open"{{end}}>
+  <tr class="wk">
+    <td class="r mu">{{.Rank}}</td>
+    <td class="nm"><a href="{{$.WorkURL .Ref.ID (not .Open)}}" hx-get="{{$.WorkURL .Ref.ID (not .Open)}}" hx-target="#work-{{.Ref.ID}}" hx-swap="morph:outerHTML" aria-expanded="{{if .Open}}true{{else}}false{{end}}">{{.Ref.Title}}</a>{{if .Ref.Sub}} <span class="mu">{{.Ref.Sub}}</span>{{end}}</td>
+    <td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>
+    <td class="r dl">{{$.Delta .Delta}}</td>
+    <td class="r rl" data-l="{{$.T "top.releases_lc"}}">{{.Releases}}</td>
+    {{range $i, $c := .Voice}}<td class="r v" data-l="{{index $.VoiceLangs $i}}">{{$.Voice $c}}</td>{{end}}
+    <td class="src">{{$.SourceList .Sources}}</td>
+    <td class="mu fs">{{$.Date .FirstSeen}}</td>
+  </tr>
+  {{if .Open}}{{range .Items}}
+  <tr class="rel">
+    <td></td>
+    <td class="nm"><a href="/t/{{.InfoHash}}">{{.Name}}</a></td>
+    <td class="r">{{$.Num .Peers}}</td>
+    <td></td>
+    <td class="r">{{$.Size .Size}}</td>
+    {{range .Voice}}<td class="r">{{$.Voice .}}</td>{{end}}
+    <td>{{$.T (concat "source." .Source)}}</td>
+    <td class="mu">{{$.Date .FirstSeen}}</td>
+  </tr>
+  {{end}}{{end}}
+</tbody>
+{{end}}
+{{end}}
