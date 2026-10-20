@@ -11,7 +11,7 @@ var (
 	Sources     = []string{"disc", "remux", "rip", "web", "other"}
 	Layers      = []string{"rules", "title_repeat", "classifier"}
 	VoiceModes  = []string{"any", "p50", "explicit"}
-	DropReasons = []string{"adult", "software", "course", "script", "filetype", "size"}
+	DropReasons = []string{"adult", "software", "book", "course", "script", "filetype", "size"}
 	// VoiceBands are the rows of the dubbing table on the data page, in order.
 	VoiceBands = []string{"explicit", "likely", "unlikely", "unscored"}
 )
