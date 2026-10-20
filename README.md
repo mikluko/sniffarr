@@ -190,19 +190,21 @@ Russian. The UI touches no database: it reads `BrowseService` with
 `SNIFFARR_URL` otherwise. Its `SNIFFARR_AUDIO_LANGUAGES` must then be the
 API's.
 
-| Route               | Page                                                                                                                                                                                                       |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /`             | Search over names and file paths, filtered by kind, audio language and mark or probability, source, the layer that decided the kind, and size; without a query, the latest sightings, refreshed every 15 s |
-| `GET /t/{infohash}` | A release: its magnet link, classification, audio signs per language and stored files                                                                                                                      |
-| `GET /data`         | The store's counts: kinds, layers, sources, audio per language, rejections by reason, the classifier's pending torrents and tokens used, and new torrents per day and per week                             |
-| `GET /static/…`     | Stylesheet and scripts                                                                                                                                                                                     |
+| Route               | Page                                                                                                                                                                                                                                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`             | Without a query or filter, the home page: the search box, how many releases are stored, how many were first seen in the last 24 h, and how many await the classifier                                                                                                                         |
+| `GET /?q=…`         | Search over names and file paths, filtered by kind, audio language and mark or probability, source, the layer that decided the kind, and size, sorted by last sighting or by size; any of `q`, `kind`, `vl`, `voice`, `source`, `layer`, `min`, `sort` or `o` in the query makes it a search |
+| `GET /t/{infohash}` | A release: its magnet link, classification, audio signs per language and stored files                                                                                                                                                                                                        |
+| `GET /data`         | The store's counts: kinds, layers, sources, audio per language, rejections by reason, the classifier's pending torrents and tokens used, and new torrents per day and per week                                                                                                               |
+| `GET /static/…`     | Stylesheet and scripts                                                                                                                                                                                                                                                                       |
 
 The UI authenticates nobody: an authenticating proxy, such as oauth2-proxy,
 goes in front of it. Its language is the one picked with `?lang=ru` or
-`?lang=C`, remembered in a cookie, else, with `SNIFFARR_OIDC_ISSUER` set, the
-`locale` claim of the provider's userinfo for the access token in the
-`X-Forwarded-Access-Token` header, which oauth2-proxy can pass on; a locale is
-kept for 10 minutes per token. Adult releases do not show in its search.
+`?lang=en`, on any page, remembered in a cookie for a year, else, with
+`SNIFFARR_OIDC_ISSUER` set, the `locale` claim of the provider's userinfo for
+the access token in the `X-Forwarded-Access-Token` header, which oauth2-proxy
+can pass on; a locale is kept for 10 minutes per token. Adult releases do not
+show in its search.
 
 The chart serves the UI with `ui.enabled`, behind the Service `<release>-ui`;
 see [Helm](#helm).
