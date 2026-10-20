@@ -43,16 +43,37 @@ capabilities:
 {{- end }}
 
 {{- /*
-sniffarr.sniffdht is a Deployment of the sniffdht binary. It takes root, component, v (the
+sniffarr.sniffdht is a Deployment of the sniffdht binary, and the Service of its DHT port when
+v.service.enabled. It takes root, component, v (the
 component's values), discover, fetch, url, existingSecret, secretKey, and secretRequired, the
 error when no Secret is set.
 */}}
 {{- define "sniffarr.sniffdht" -}}
 {{- $root := .root }}
 {{- $v := .v }}
+{{- $svc := $v.service }}
 {{- $port := 42069 }}
 {{- if hasKey $v.flags "port" }}
 {{- $port = $v.flags.port }}
+{{- end }}
+{{- $nodePort := 0 }}
+{{- if $svc.enabled }}
+{{- if not (has $svc.type (list "ClusterIP" "NodePort" "LoadBalancer")) }}
+{{- fail (printf "%s.service.type: want ClusterIP, NodePort or LoadBalancer, not %q" .component $svc.type) }}
+{{- end }}
+{{- if $svc.nodePort }}
+{{- if eq $svc.type "ClusterIP" }}
+{{- fail (printf "%s.service.nodePort: a ClusterIP Service has no node port" .component) }}
+{{- end }}
+{{- $nodePort = int $svc.nodePort }}
+{{- if and (hasKey $v.flags "port") (ne (int $v.flags.port) $nodePort) }}
+{{- fail (printf "%s.flags.port is %v but %s.service.nodePort is %v: the pod listens on the node port, so leave flags.port unset or equal" .component $v.flags.port .component $nodePort) }}
+{{- end }}
+{{- $port = $nodePort }}
+{{- end }}
+{{- if not $port }}
+{{- fail (printf "%s.service: wants a fixed port, not flags.port 0" .component) }}
+{{- end }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -103,6 +124,12 @@ spec:
             {{- range $k, $f := $v.flags }}
             - {{ printf "-%s=%v" $k $f | quote }}
             {{- end }}
+            {{- if and $nodePort (not (hasKey $v.flags "port")) }}
+            - {{ printf "-port=%d" $nodePort | quote }}
+            {{- end }}
+            {{- if $v.upnp }}
+            - "-upnp"
+            {{- end }}
           env:
             - name: SNIFFARR_URL
               value: {{ .url | default (printf "http://%s-api:8080" $root.Release.Name) | quote }}
@@ -114,7 +141,7 @@ spec:
             {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
-          {{- if and $port (or .discover $v.hostNetwork) }}
+          {{- if and $port (or .discover $v.hostNetwork $svc.enabled) }}
           ports:
             - name: dht
               containerPort: {{ $port }}
@@ -147,4 +174,32 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- if $svc.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $root.Release.Name }}-{{ .component }}
+  labels:
+    {{- include "sniffarr.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ .component }}
+  {{- with $svc.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $svc.type }}
+  selector:
+    {{- include "sniffarr.selector" (dict "root" $root "component" .component) | nindent 4 }}
+  ports:
+    {{- range $proto := list "tcp" "udp" }}
+    - name: dht-{{ $proto }}
+      port: {{ $port }}
+      targetPort: {{ $port }}
+      protocol: {{ upper $proto }}
+      {{- with $nodePort }}
+      nodePort: {{ . }}
+      {{- end }}
+    {{- end }}
+{{- end }}
 {{- end }}

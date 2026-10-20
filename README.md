@@ -348,6 +348,13 @@ network by default so that `announce_peer` queries reach its DHT port;
 own are set. A fetcher's DHT node is passive and the fetcher dials the peers
 it fetches from, so it needs no open port.
 
+Either Deployment reaches the DHT from the pod network through
+`<component>.service`: a Service of the component's name exposing its port,
+TCP and UDP, `NodePort` by default. With `service.nodePort` the pod listens on
+that port, rendered as `-port`, so the port peers reach the node on is the
+port it uses; `flags.port` must then be unset or equal. `<component>.upnp`
+renders `-upnp`.
+
 ## Generating code
 
 The generated code under `internal/apis` is committed. After changing a `.proto` file,

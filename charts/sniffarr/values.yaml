@@ -89,6 +89,17 @@ sniff:
   secretKey: SNIFFARR_INGEST_TOKEN
   # Command-line flags, name to value, rendered as -name=value after -discover and -fetch.
   flags: {}
+  # Rendered as -upnp: the node asks the gateways on its network to forward its port, TCP and UDP.
+  upnp: false
+  service:
+    # Exposes the DHT port, TCP and UDP, as <release>-sniff; needs a fixed port, not flags.port 0.
+    enabled: false
+    # ClusterIP, NodePort or LoadBalancer.
+    type: NodePort
+    # Node port of both entries, allocated by the cluster when 0; when set, the pod listens on it, so flags.port must be unset or equal.
+    nodePort: 0
+    # Annotations of the Service.
+    annotations: {}
   # Extra environment variables, name to value.
   env: {}
   # Resources of the sniffdht container of <release>-sniff.
@@ -119,6 +130,17 @@ fetch:
   secretKey: ""
   # Command-line flags, name to value, rendered as -name=value after -discover and -fetch.
   flags: {}
+  # Rendered as -upnp: the node asks the gateways on its network to forward its port, TCP and UDP.
+  upnp: false
+  service:
+    # Exposes the DHT port, TCP and UDP, as <release>-fetch; needs a fixed port, not flags.port 0.
+    enabled: false
+    # ClusterIP, NodePort or LoadBalancer.
+    type: NodePort
+    # Node port of both entries, allocated by the cluster when 0; when set, the pod listens on it, so flags.port must be unset or equal.
+    nodePort: 0
+    # Annotations of the Service.
+    annotations: {}
   # Extra environment variables, name to value.
   env: {}
   # Resources of the sniffdht container of <release>-fetch.

@@ -1,0 +1,19 @@
+api:
+  existingSecret: sniffarr-tokens
+
+sniff:
+  hostNetwork: false
+  upnp: true
+  service:
+    enabled: true
+    nodePort: 30069
+
+fetch:
+  upnp: true
+  flags:
+    port: 6881
+  service:
+    enabled: true
+    type: LoadBalancer
+    annotations:
+      example.com/address-pool: public
