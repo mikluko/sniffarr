@@ -3,7 +3,7 @@
 {{define "main"}}
 <div class="home">
   <header class="home-top">
-    {{if .Top}}<a href="/top">{{.T "nav.top"}}</a>{{end}}
+    <a href="/top">{{.T "nav.top"}}</a>
     <a href="/data">{{.T "nav.data"}}</a>
     {{template "langs" .}}
   </header>
@@ -14,10 +14,10 @@
       <input id="q" name="q" type="search" placeholder="{{.T "search.placeholder"}}" autocomplete="off" spellcheck="false" autofocus>
       <button type="submit">{{.T "search.submit"}}</button>
     </form>
-    {{if .Top}}<nav class="home-tops mu">
+    <nav class="home-tops mu">
       <span>{{.T "home.top"}}</span>
       {{range topKinds}}<a href="/top?kind={{.}}">{{$.T (concat "topkind." .)}}</a>{{end}}
-    </nav>{{end}}
+    </nav>
   </main>
   <footer class="home-foot mu">
     {{with .Summary}}

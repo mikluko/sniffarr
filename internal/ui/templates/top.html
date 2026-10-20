@@ -42,7 +42,7 @@
 
 {{/* One <tbody> per work, so a work can be swapped alone: GET /top/w/{id} with HX-Target work-{id}. */}}
 {{define "work"}}
-{{range .Works}}
+{{- range .Works -}}
 <tbody id="work-{{.Ref.ID}}"{{if .Open}} class="open"{{end}}>
   <tr class="wk">
     <td class="r mu">{{.Rank}}</td>

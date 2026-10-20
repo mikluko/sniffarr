@@ -20,7 +20,7 @@ var (
 	// Windows are the popularity windows.
 	Windows = []string{"24h", "7d", "30d"}
 	// Sorts are the orders of search results.
-	Sorts = []string{"last_seen", "size"}
+	Sorts = []string{"peers", "last_seen", "size"}
 )
 
 // PeerCounts are unique peers seen in each window.
@@ -54,7 +54,7 @@ type Filters struct {
 	Source    string
 	Layer     string
 	MinSizeGB string // raw input, echoed back
-	Sort      string // Sorts value, "" = last_seen
+	Sort      string // Sorts value, "" = peers
 }
 
 // WorkHit is a work matched by the search query, shown above the torrents.
@@ -76,7 +76,6 @@ type Results struct {
 type Row struct {
 	InfoHash   string
 	Name       string
-	Peers      int64 // unique peers, 7 days
 	Size       int64
 	Kind       string
 	Layer      string
@@ -106,7 +105,7 @@ type TopPage struct {
 // WorkRef names a work: a movie (title + year), a series season (title + season),
 // an album (artist + album), a book (author + title), a program (name + version).
 type WorkRef struct {
-	ID    string
+	ID    string // opaque; safe in a URL path segment and in an HTML id
 	Kind  string
 	Title string // "Дюна: Часть вторая", "Сёгун", "Pink Floyd"
 	Sub   string // "2024", "S01", "The Dark Side Of The Moon"
