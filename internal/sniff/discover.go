@@ -1,4 +1,4 @@
-package sniffer
+package sniff
 
 import (
 	"context"
@@ -58,7 +58,7 @@ func NewDiscoverer(cfg DiscovererConfig) *Discoverer {
 		cfg:       cfg,
 		recent:    newRecent[Hash](cfg.Remember),
 		offers:    make(chan *sniffarrv1.SightRequest, cfg.Queue),
-		sightings: counter(meter(cfg.Meter), "sniffarr.sniffer.sightings", "{infohash}", "Infohashes sighted and not sighted recently, by how."),
+		sightings: counter(meter(cfg.Meter), "sniffarr.sniff.sightings", "{infohash}", "Infohashes sighted and not sighted recently, by how."),
 	}
 }
 

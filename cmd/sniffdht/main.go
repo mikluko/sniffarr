@@ -24,14 +24,14 @@ import (
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/cli"
 	"github.com/mikluko/sniffarr/internal/server"
-	"github.com/mikluko/sniffarr/internal/sniffer"
+	"github.com/mikluko/sniffarr/internal/sniff"
 	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 type config struct {
 	server          *url.URL
 	token           string
-	network         sniffer.NetworkConfig
+	network         sniff.NetworkConfig
 	walkers         int
 	discover, fetch bool
 }
@@ -48,12 +48,12 @@ func load(args []string, getenv func(string) string, output io.Writer) (config, 
 	fs.SetOutput(output)
 	fs.BoolVar(&c.discover, "discover", true, "walk the DHT and report the infohashes it reveals")
 	fs.BoolVar(&c.fetch, "fetch", true, "take fetch tasks from the server and return their metadata")
-	fs.IntVar(&c.network.Port, "port", sniffer.DefaultPort, "TCP and UDP port for peers and the DHT, forwarded by UPnP")
-	fs.IntVar(&c.network.Fetchers, "fetchers", sniffer.DefaultFetchers, "metadata fetches at once")
-	fs.IntVar(&c.network.Rate, "rate", sniffer.DefaultRate, "DHT queries, and new peer connections, a second")
-	fs.DurationVar(&c.network.FetchTimeout, "fetch-timeout", sniffer.DefaultFetchTimeout, "how long to wait for a torrent's metadata once it has peers")
-	fs.DurationVar(&c.network.PeerWait, "peer-wait", sniffer.DefaultPeerWait, "how long to look for a torrent's peers on the DHT")
-	fs.IntVar(&c.walkers, "walkers", sniffer.DefaultWalkers, "sample_infohashes queries at once")
+	fs.IntVar(&c.network.Port, "port", sniff.DefaultPort, "TCP and UDP port for peers and the DHT, forwarded by UPnP")
+	fs.IntVar(&c.network.Fetchers, "fetchers", sniff.DefaultFetchers, "metadata fetches at once")
+	fs.IntVar(&c.network.Rate, "rate", sniff.DefaultRate, "DHT queries, and new peer connections, a second")
+	fs.DurationVar(&c.network.FetchTimeout, "fetch-timeout", sniff.DefaultFetchTimeout, "how long to wait for a torrent's metadata once it has peers")
+	fs.DurationVar(&c.network.PeerWait, "peer-wait", sniff.DefaultPeerWait, "how long to look for a torrent's peers on the DHT")
+	fs.IntVar(&c.walkers, "walkers", sniff.DefaultWalkers, "sample_infohashes queries at once")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
@@ -97,13 +97,13 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		connect.WithInterceptors(otel, auth.Client(cfg.token)),
 		connect.WithSendMaxBytes(server.MaxMessage),
 	)
-	var d *sniffer.Discoverer
-	var offer func(sniffer.Hash, sniffarrv1.Source)
+	var d *sniff.Discoverer
+	var offer func(sniff.Hash, sniffarrv1.Source)
 	if cfg.discover {
-		d = sniffer.NewDiscoverer(sniffer.DiscovererConfig{Ingest: ingest, Log: log})
+		d = sniff.NewDiscoverer(sniff.DiscovererConfig{Ingest: ingest, Log: log})
 		offer = d.Offer
 	}
-	n, err := sniffer.Start(cfg.network, offer)
+	n, err := sniff.Start(cfg.network, offer)
 	if err != nil {
 		return fmt.Errorf("start: %w", err)
 	}
@@ -116,13 +116,13 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	g, ctx := errgroup.WithContext(ctx)
 	if d != nil {
 		g.Go(func() error {
-			n.Sample(ctx, cfg.walkers, func(h sniffer.Hash) { d.Offer(h, sniffarrv1.Source_SOURCE_SAMPLE) })
+			n.Sample(ctx, cfg.walkers, func(h sniff.Hash) { d.Offer(h, sniffarrv1.Source_SOURCE_SAMPLE) })
 			return nil
 		})
 		g.Go(func() error { return d.Run(ctx) })
 	}
 	if cfg.fetch {
-		f := sniffer.NewFetcher(sniffer.FetcherConfig{Ingest: ingest, Workers: cfg.network.Fetchers, Log: log}, n)
+		f := sniff.NewFetcher(sniff.FetcherConfig{Ingest: ingest, Workers: cfg.network.Fetchers, Log: log}, n)
 		g.Go(func() error { return f.Run(ctx) })
 	}
 	if err := g.Wait(); !errors.Is(err, context.Canceled) {

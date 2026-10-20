@@ -1,4 +1,4 @@
-package sniffer
+package sniff
 
 import (
 	"context"
@@ -268,17 +268,17 @@ func TestFetcherMetrics(t *testing.T) {
 	for _, sm := range rm.ScopeMetrics {
 		for _, m := range sm.Metrics {
 			switch m.Name {
-			case "sniffarr.sniffer.fetch.outcomes":
+			case "sniffarr.sniff.fetch.outcomes":
 				for _, p := range m.Data.(metricdata.Sum[int64]).DataPoints {
 					o, _ := p.Attributes.Value("sniffarr.fetch.outcome")
 					outcomes[o.AsString()] = p.Value
 				}
-			case "sniffarr.sniffer.fetch.duration":
+			case "sniffarr.sniff.fetch.duration":
 				require.Equal(t, "s", m.Unit)
 				for _, p := range m.Data.(metricdata.Histogram[float64]).DataPoints {
 					fetches += p.Count
 				}
-			case "sniffarr.sniffer.fetch.in_flight":
+			case "sniffarr.sniff.fetch.in_flight":
 				for _, p := range m.Data.(metricdata.Sum[int64]).DataPoints {
 					inFlight += p.Value
 				}

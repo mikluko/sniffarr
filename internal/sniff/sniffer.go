@@ -3,7 +3,7 @@
 // Fetcher takes tasks from the server, fetches their metadata from peers,
 // and returns it. A sniffer never downloads pieces, uploads, or announces
 // itself, and it keeps peer addresses only for the duration of a fetch.
-package sniffer
+package sniff
 
 import (
 	"context"

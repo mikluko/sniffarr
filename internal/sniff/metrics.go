@@ -1,4 +1,4 @@
-package sniffer
+package sniff
 
 import (
 	"go.opentelemetry.io/otel"
@@ -12,7 +12,7 @@ func meter(mp metric.MeterProvider) metric.Meter {
 	if mp == nil {
 		mp = otel.GetMeterProvider()
 	}
-	return mp.Meter("github.com/mikluko/sniffarr/internal/sniffer")
+	return mp.Meter("github.com/mikluko/sniffarr/internal/sniff")
 }
 
 func counter(m metric.Meter, name, unit, desc string) metric.Int64Counter {

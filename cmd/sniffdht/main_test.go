@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/sniffer"
+	"github.com/mikluko/sniffarr/internal/sniff"
 )
 
 func TestLoad(t *testing.T) {
@@ -22,14 +22,14 @@ func TestLoad(t *testing.T) {
 		{name: "defaults", env: env, want: func(t *testing.T, c config) {
 			require.Equal(t, "http://sniffapi:8080", c.server.String())
 			require.Equal(t, "secret", c.token)
-			require.Equal(t, sniffer.NetworkConfig{
-				Port:         sniffer.DefaultPort,
-				Rate:         sniffer.DefaultRate,
-				Fetchers:     sniffer.DefaultFetchers,
-				PeerWait:     sniffer.DefaultPeerWait,
-				FetchTimeout: sniffer.DefaultFetchTimeout,
+			require.Equal(t, sniff.NetworkConfig{
+				Port:         sniff.DefaultPort,
+				Rate:         sniff.DefaultRate,
+				Fetchers:     sniff.DefaultFetchers,
+				PeerWait:     sniff.DefaultPeerWait,
+				FetchTimeout: sniff.DefaultFetchTimeout,
 			}, c.network)
-			require.Equal(t, sniffer.DefaultWalkers, c.walkers)
+			require.Equal(t, sniff.DefaultWalkers, c.walkers)
 			require.True(t, c.discover, "both roles by default")
 			require.True(t, c.fetch)
 		}},

@@ -186,10 +186,10 @@ BitTorrent peer address appears in spans, attributes or logs.
 | `sniffapi` | `sniffarr.classify.errors`             | `{error}`    | `sniffarr.classify.error`                  |
 | `sniffdht` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
 | `sniffdht` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
-| `sniffdht` | `sniffarr.sniffer.sightings`           | `{infohash}` | `sniffarr.discovery`                       |
-| `sniffdht` | `sniffarr.sniffer.fetch.in_flight`     | `{task}`     |                                            |
-| `sniffdht` | `sniffarr.sniffer.fetch.outcomes`      | `{task}`     | `sniffarr.fetch.outcome`                   |
-| `sniffdht` | `sniffarr.sniffer.fetch.duration`      | `s`          | `sniffarr.fetch.outcome`                   |
+| `sniffdht` | `sniffarr.sniff.sightings`             | `{infohash}` | `sniffarr.discovery`                       |
+| `sniffdht` | `sniffarr.sniff.fetch.in_flight`       | `{task}`     |                                            |
+| `sniffdht` | `sniffarr.sniff.fetch.outcomes`        | `{task}`     | `sniffarr.fetch.outcome`                   |
+| `sniffdht` | `sniffarr.sniff.fetch.duration`        | `s`          | `sniffarr.fetch.outcome`                   |
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
 `sniffarr.discovery` is `announce` or `sample`; `sniffarr.sighting.result` is

@@ -1,4 +1,4 @@
-package sniffer
+package sniff
 
 import (
 	"context"
@@ -41,12 +41,12 @@ type fetchMetrics struct {
 
 func newFetchMetrics(mp metric.MeterProvider) fetchMetrics {
 	m := meter(mp)
-	inFlight, err := m.Int64UpDownCounter("sniffarr.sniffer.fetch.in_flight", metric.WithUnit("{task}"),
+	inFlight, err := m.Int64UpDownCounter("sniffarr.sniff.fetch.in_flight", metric.WithUnit("{task}"),
 		metric.WithDescription("Fetch tasks received and not finished."))
 	if err != nil {
 		otel.Handle(err)
 	}
-	duration, err := m.Float64Histogram("sniffarr.sniffer.fetch.duration", metric.WithUnit("s"),
+	duration, err := m.Float64Histogram("sniffarr.sniff.fetch.duration", metric.WithUnit("s"),
 		metric.WithDescription("Time to fetch a torrent's metadata, from looking for peers to the outcome."),
 		metric.WithExplicitBucketBoundaries(0.5, 1, 2, 4, 8, 12, 16, 20, 25, 30, 60))
 	if err != nil {
@@ -54,7 +54,7 @@ func newFetchMetrics(mp metric.MeterProvider) fetchMetrics {
 	}
 	return fetchMetrics{
 		inFlight: inFlight,
-		outcomes: counter(m, "sniffarr.sniffer.fetch.outcomes", "{task}", "Fetch tasks finished, by outcome."),
+		outcomes: counter(m, "sniffarr.sniff.fetch.outcomes", "{task}", "Fetch tasks finished, by outcome."),
 		duration: duration,
 	}
 }
