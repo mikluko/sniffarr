@@ -20,6 +20,7 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"github.com/mikluko/sniffarr/internal/sketch"
 )
 
 func hash(b byte) Hash {
@@ -45,12 +46,83 @@ type fakeIngest struct {
 	// failFetchAfter ends the first Fetch stream with an error after that
 	// many results; 0 never does.
 	failFetchAfter int
+
+	// key is what HashKey answers after failKey failures.
+	key     sketch.Key
+	failKey int
+	// sketches holds the Peers requests received, by hash; a hash in
+	// unknown is dropped. failPeers is how many Peers streams fail first.
+	sketches  map[Hash][]*sniffarrv1.PeersRequest
+	unknown   map[Hash]bool
+	failPeers int
 }
 
 func newFake() *fakeIngest {
-	f := &fakeIngest{sighted: map[Hash]sniffarrv1.Source{}, results: map[Hash]*sniffarrv1.Result{}}
+	f := &fakeIngest{sighted: map[Hash]sniffarrv1.Source{}, results: map[Hash]*sniffarrv1.Result{},
+		sketches: map[Hash][]*sniffarrv1.PeersRequest{}, unknown: map[Hash]bool{}}
 	f.cond = sync.NewCond(&f.mu)
+	for i := range f.key {
+		f.key[i] = byte(i)
+	}
 	return f
+}
+
+func (f *fakeIngest) HashKey(context.Context, *connect.Request[sniffarrv1.HashKeyRequest]) (*connect.Response[sniffarrv1.HashKeyResponse], error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failKey > 0 {
+		f.failKey--
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("down"))
+	}
+	return connect.NewResponse(&sniffarrv1.HashKeyResponse{Key: f.key[:]}), nil
+}
+
+func (f *fakeIngest) Peers(_ context.Context, stream *connect.ClientStream[sniffarrv1.PeersRequest]) (*connect.Response[sniffarrv1.PeersResponse], error) {
+	var got []*sniffarrv1.PeersRequest
+	for stream.Receive() {
+		got = append(got, stream.Msg())
+	}
+	if err := stream.Err(); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failPeers > 0 {
+		f.failPeers--
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("down"))
+	}
+	var res sniffarrv1.PeersResponse
+	for _, m := range got {
+		h := Hash(m.GetInfohash())
+		if f.unknown[h] {
+			res.Dropped++
+			continue
+		}
+		f.sketches[h] = append(f.sketches[h], m)
+		res.Merged++
+	}
+	f.cond.Broadcast()
+	return connect.NewResponse(&res), nil
+}
+
+// received returns the sketches received for h once there are at least n.
+func (f *fakeIngest) received(t *testing.T, h Hash, n int) []*sniffarrv1.PeersRequest {
+	t.Helper()
+	deadline := time.AfterFunc(5*time.Second, func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.cond.Broadcast()
+	})
+	defer deadline.Stop()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for len(f.sketches[h]) < n {
+		f.cond.Wait()
+		if len(f.sketches[h]) < n && !deadline.Stop() {
+			t.Fatalf("%d sketches of %x, want %d", len(f.sketches[h]), h[:1], n)
+		}
+	}
+	return f.sketches[h]
 }
 
 func (f *fakeIngest) Sight(_ context.Context, stream *connect.ClientStream[sniffarrv1.SightRequest]) (*connect.Response[sniffarrv1.SightResponse], error) {
