@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/netip"
 
 	"go.uber.org/fx"
 
@@ -13,12 +14,17 @@ import (
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/app"
 	"github.com/mikluko/sniffarr/internal/sniff"
+	"github.com/mikluko/sniffarr/internal/stun"
 )
 
 // Config is what Module needs.
 type Config struct {
 	// Network tunes the node; Passive must be set when nothing discovers.
 	Network sniff.NetworkConfig
+	// STUN is the server a node that is not passive asks for its public
+	// address before it starts, for the BEP 42 prefix of its ID; empty asks
+	// none and the ID is used as stored.
+	STUN string
 }
 
 // Offer takes an infohash announced to the node, with its source.
@@ -53,14 +59,27 @@ func start(p nodeParams) *sniff.Network {
 	n := sniff.New(p.Config.Network, p.Offer, sink)
 	p.Lifecycle.Append(fx.StopHook(n.Close))
 	app.Go(p.Lifecycle, p.Shutdowner, p.Log, "dht", func(ctx context.Context) error {
-		var id [20]byte
+		var (
+			id       [20]byte
+			publicIP netip.Addr
+		)
 		if !p.Config.Network.Passive {
 			var err error
 			if id, err = sniff.ObtainNodeID(ctx, p.Ingest, sniff.DefaultBackoff, p.Log); err != nil {
 				return err
 			}
+			if p.Config.STUN != "" {
+				if publicIP, err = stun.Addr(ctx, p.Config.STUN); err != nil {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+					p.Log.Warn("public address unknown, the node ID is used as stored", "err", err)
+				} else {
+					p.Log.Info("public address", "addr", publicIP)
+				}
+			}
 		}
-		if err := n.Start(id); err != nil {
+		if err := n.Start(id, publicIP); err != nil {
 			return fmt.Errorf("dht: %w", err)
 		}
 		if err := n.Bootstrap(ctx); err != nil && ctx.Err() == nil {

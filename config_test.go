@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"log/slog"
-	"net/netip"
 	"net/url"
 	"testing"
 	"time"
@@ -26,6 +25,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/search"
 	sniffer "github.com/mikluko/sniffarr/internal/sniff"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/stun"
 	"github.com/mikluko/sniffarr/internal/titles"
 )
 
@@ -89,7 +89,7 @@ func TestLoadComponents(t *testing.T) {
 		{name: "ui without a token", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "SNIFFARR_SEARCH_TOKEN is not set"},
 		{name: "sniff and fetch", args: []string{"-sniff", "-fetch"}, env: []string{"SNIFFARR_URL", "https://api.example.com", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
 			require.Equal(t, components{sniff: true, fetch: true}, c.on)
-			require.Equal(t, dht.Config{Network: defaultNetwork(false)}, c.dht, "a discovering node is not passive")
+			require.Equal(t, dht.Config{Network: defaultNetwork(false), STUN: stun.DefaultServer}, c.dht, "a discovering node is not passive")
 			require.Equal(t, sniff.Config{Walkers: sniffer.DefaultWalkers}, c.sniff)
 			require.Equal(t, fetch.Config{Workers: sniffer.DefaultFetchers}, c.fetch)
 			require.Equal(t, client.Config{URL: &url.URL{Scheme: "https", Host: "api.example.com"}, IngestToken: "in"}, c.client)
@@ -97,15 +97,15 @@ func TestLoadComponents(t *testing.T) {
 		{name: "fetch alone", args: []string{"-fetch", "-port", "0", "-fetchers", "100", "-upnp"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
 			want := defaultNetwork(true)
 			want.Port, want.Fetchers, want.UPnP = 0, 100, true
-			require.Equal(t, dht.Config{Network: want}, c.dht, "a node that does not discover is passive")
+			require.Equal(t, dht.Config{Network: want, STUN: stun.DefaultServer}, c.dht, "a node that does not discover is passive")
 			require.Equal(t, fetch.Config{Workers: 100}, c.fetch)
 		}},
-		{name: "sniff with a public IP", args: []string{"-sniff", "-public-ip", "203.0.113.7"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
-			want := defaultNetwork(false)
-			want.PublicIP = netip.MustParseAddr("203.0.113.7")
-			require.Equal(t, dht.Config{Network: want}, c.dht)
+		{name: "sniff with another STUN server", args: []string{"-sniff", "-stun", "stun.example.net:3478"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
+			require.Equal(t, dht.Config{Network: defaultNetwork(false), STUN: "stun.example.net:3478"}, c.dht)
 		}},
-		{name: "bad public IP", args: []string{"-sniff", "-public-ip", "example.net"}, err: `invalid value "example.net" for flag -public-ip`},
+		{name: "sniff without STUN", args: []string{"-sniff", "-stun", ""}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
+			require.Equal(t, dht.Config{Network: defaultNetwork(false)}, c.dht, "an empty -stun asks no server")
+		}},
 		{name: "sniff without a URL", args: []string{"-sniff"}, env: []string{"SNIFFARR_INGEST_TOKEN", "in"}, err: "SNIFFARR_URL is not set"},
 		{name: "fetch without a token", args: []string{"-fetch"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "SNIFFARR_INGEST_TOKEN is not set"},
 		{name: "bad scheme", args: []string{"-fetch"}, env: []string{"SNIFFARR_URL", "api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, err: "SNIFFARR_URL: want an http or https URL"},

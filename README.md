@@ -341,7 +341,7 @@ torrent's peers over the last 7 days.
 | ---------------- | ------- | ------------------------------------------------------ |
 | `-port`          | `42069` | Port for peers and the DHT, TCP and UDP; `0` picks one |
 | `-upnp`          | `false` | Forward the port, TCP and UDP, by UPnP                 |
-| `-public-ip`     |         | The address other nodes see the node at, for BEP 42    |
+| `-stun`          | `stun.l.google.com:19302` | STUN server asked for the node's public address, for BEP 42; empty asks none |
 | `-fetchers`      | `2000`  | Metadata fetches at once                               |
 | `-rate`          | `2000`  | DHT queries, and new peer connections, a second        |
 | `-fetch-timeout` | `15s`   | How long to wait for metadata once a torrent has peers |
@@ -369,12 +369,14 @@ The node's ID comes from the API's `HashKey` with the hash key: the API
 generates 20 random bytes once and keeps them in its store, so the node keeps
 its place in other nodes' routing tables across restarts. The node waits for
 the ID before it starts, retrying while the API is unreachable and warning
-at every attempt after the first. With `-public-ip` the ID takes the BEP 42
-prefix of that address and other nodes that check it accept the node; the
-rest of the ID stays, so the same address gives the same ID, and a new address
-a new one. Without `-public-ip` the ID is used as stored, and nodes enforcing
-BEP 42 may not keep it. The passive node of `-fetch` alone takes a random ID
-at each start: it answers nothing and is in no routing table.
+at every attempt after the first. Then it asks the `-stun` server for its
+public address, with 5 seconds to answer, and the ID takes the BEP 42 prefix
+of that address, so other nodes that check it accept the node; the rest of
+the ID stays, so the same address gives the same ID, and a new address a new
+one. When the server does not answer the ID is used as stored, with a warning,
+and so it is when `-stun` is empty; nodes enforcing BEP 42 may not keep it. The
+passive node of `-fetch` alone takes a random ID at each start: it answers
+nothing and is in no routing table.
 
 Both components count the peers they see in sketches of the current UTC hour
 and send them to the API's `Peers` every 3 minutes, and at once when 100,000
