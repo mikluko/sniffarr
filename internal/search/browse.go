@@ -31,6 +31,13 @@ type Browser struct {
 	Now func() time.Time
 }
 
+func (b *Browser) now() time.Time {
+	if b.Now != nil {
+		return b.Now()
+	}
+	return time.Now()
+}
+
 var discoveries = map[string]sniffarrv1.Source{
 	"sample":   sniffarrv1.Source_SOURCE_SAMPLE,
 	"announce": sniffarrv1.Source_SOURCE_ANNOUNCE,
@@ -108,6 +115,11 @@ func (b *Browser) Page(ctx context.Context, req *connect.Request[sniffarrv1.Page
 		}
 		q.KindLayer = layer
 	}
+	sort, ok := sorts[m.GetSort()]
+	if !ok {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown sort %d", m.GetSort()))
+	}
+	q.Sort = sort
 	found, total, err := b.Store.Page(ctx, q)
 	if err != nil {
 		b.Log.ErrorContext(ctx, "page", "err", err)
@@ -117,6 +129,16 @@ func (b *Browser) Page(ctx context.Context, req *connect.Request[sniffarrv1.Page
 	for i, r := range found {
 		res.Releases[i] = release(r)
 	}
+	if q.Text != "" && q.Offset == 0 {
+		works, err := b.Store.Works(ctx, q.Text, b.now(), PageWorks)
+		if err != nil {
+			b.Log.ErrorContext(ctx, "works", "err", err)
+			return nil, connect.NewError(connect.CodeInternal, errors.New("page failed"))
+		}
+		for _, w := range works {
+			res.Works = append(res.Works, &sniffarrv1.WorkMatch{Work: workRef(w.Work), Peers: w.Peers, Releases: w.Work.Releases})
+		}
+	}
 	return connect.NewResponse(res), nil
 }
 
@@ -125,7 +147,7 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 	if len(h) != len(store.Hash{}) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("infohash of %d bytes, want 20", len(h)))
 	}
-	c, err := b.Store.Card(ctx, store.Hash(h), math.MaxInt32)
+	c, err := b.Store.Card(ctx, store.Hash(h), math.MaxInt32, b.now())
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -133,9 +155,13 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 		b.Log.ErrorContext(ctx, "card", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("card failed"))
 	}
-	res := &sniffarrv1.CardResponse{Release: release(c.Release), Discovery: discoveries[c.Discovery]}
+	res := &sniffarrv1.CardResponse{Release: release(c.Release), Discovery: discoveries[c.Discovery],
+		Peers: &sniffarrv1.PeerCounts{Day: c.Peers.Day, Week: c.Peers.Week, Month: c.Peers.Month}}
 	for _, f := range c.Files {
 		res.Files = append(res.Files, &sniffarrv1.File{Path: f.Path, Size: f.Size})
+	}
+	if c.Work.Key != "" {
+		res.Work, res.Releases, res.ReleaseRank = workRef(c.Work), c.Releases, int32(c.ReleaseRank)
 	}
 	return connect.NewResponse(res), nil
 }
@@ -145,10 +171,7 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	if days < 0 || days > MaxStatsDays {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("days %d, want 0 to %d", days, MaxStatsDays))
 	}
-	now := time.Now()
-	if b.Now != nil {
-		now = b.Now()
-	}
+	now := b.now()
 	st, err := b.Store.Stats(ctx, now, days)
 	if err != nil {
 		b.Log.ErrorContext(ctx, "stats", "err", err)
