@@ -9,7 +9,6 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -18,10 +17,10 @@ type Config struct {
 	// Path is the SQLite database file, created when missing.
 	Path  string
 	Store store.Options
-	Queue queue.Options
+	Queue store.QueueOptions
 }
 
-// Module provides *database.DB, *store.Store and *queue.Queue from Config;
+// Module provides *database.DB, *store.Store and *store.Queue from Config;
 // the database closes at stop, and the queue's leases are freed at start.
 var Module = fx.Module("db", fx.Provide(open, newStore, newQueue))
 
@@ -42,8 +41,8 @@ func newStore(db *database.DB, cfg Config) (*store.Store, error) {
 	return s, nil
 }
 
-func newQueue(lc fx.Lifecycle, db *database.DB, cfg Config) (*queue.Queue, error) {
-	q, err := queue.New(context.Background(), db, cfg.Queue)
+func newQueue(lc fx.Lifecycle, db *database.DB, cfg Config) (*store.Queue, error) {
+	q, err := store.NewQueue(context.Background(), db, cfg.Queue)
 	if err != nil {
 		return nil, fmt.Errorf("queue: %w", err)
 	}

@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -61,249 +63,6 @@ func TestReopenKeepsData(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestKnown(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	_, _, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
-	require.NoError(t, err)
-	_, err = s.Reject(ctx, hash(2), rules.Book, t0)
-	require.NoError(t, err)
-
-	stored, rejected, err := s.Known(ctx, []Hash{hash(1), hash(2), hash(3)}, t0.Add(2*time.Hour))
-	require.NoError(t, err)
-	require.Equal(t, map[Hash]bool{hash(1): true}, stored)
-	require.Equal(t, map[Hash]bool{hash(2): true}, rejected)
-	_, _, err = s.Known(ctx, []Hash{hash(1)}, t0.Add(time.Hour))
-	require.NoError(t, err)
-
-	r, err := s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, t0, r.FirstSeen)
-	require.Equal(t, t0.Add(2*time.Hour), r.LastSeen, "an older sighting never moves last_seen back")
-}
-
-func TestInsertReject(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-
-	ok, _, err := s.Insert(ctx, torrent(1, "Alien.1979.1080p.BluRay", "Alien.1979.1080p.BluRay.mkv"))
-	require.NoError(t, err)
-	require.True(t, ok)
-	ok, _, err = s.Insert(ctx, torrent(1, "Alien.1979.1080p.BluRay"))
-	require.NoError(t, err)
-	require.False(t, ok, "second insert")
-
-	ok, err = s.Reject(ctx, hash(2), rules.Adult, t0)
-	require.NoError(t, err)
-	require.True(t, ok)
-	ok, err = s.Reject(ctx, hash(2), rules.Adult, t0)
-	require.NoError(t, err)
-	require.False(t, ok, "second reject")
-	ok, err = s.Reject(ctx, hash(1), rules.Small, t0)
-	require.NoError(t, err)
-	require.False(t, ok, "reject of a stored hash")
-	ok, _, err = s.Insert(ctx, torrent(2, "x"))
-	require.NoError(t, err)
-	require.False(t, ok, "insert of a rejected hash")
-
-	_, err = s.Get(ctx, hash(2))
-	require.ErrorIs(t, err, ErrNotFound)
-}
-
-func TestSearch(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	for _, tr := range []Torrent{
-		torrent(1, "Alien.1979.Director's.Cut.1080p.BluRay", "Alien.1979.mkv"),
-		torrent(2, "Aliens.1986.1080p", "Aliens.1986.mkv"),
-		torrent(3, "Чужой 1979 BDRip", "Чужой.mkv", "Audio/Rus/Чужой.ac3"),
-		torrent(4, "Collection", "Ridley Scott/Alien 1979.mkv"),
-		torrent(5, "Alien Parody 1979"),
-	} {
-		switch tr.Hash {
-		case hash(3):
-			tr.Audio = []Audio{{Language: "ru", Marker: true, ScriptHint: true, Probability: new(1.0), Layer: LayerRules}}
-		case hash(4):
-		default:
-			tr.Audio = []Audio{{Language: "ru"}}
-		}
-		tr.SeenAt = t0.Add(time.Duration(tr.Hash[0]) * time.Minute)
-		_, _, err := s.Insert(ctx, tr)
-		require.NoError(t, err)
-	}
-	classify(t, s, 1, Classification{Kind: "movie", KindConfidence: 0.9, Source: "encode", Audio: map[string]float64{"ru": 0.2}})
-	classify(t, s, 2, Classification{Kind: "movie", Audio: map[string]float64{"ru": 0.7, "uk": 0.9}})
-	classify(t, s, 3, Classification{Kind: "movie", Audio: map[string]float64{"ru": 0.1}})
-	classify(t, s, 5, Classification{Kind: "adult"})
-
-	names := func(q Query) []string {
-		t.Helper()
-		if q.Limit == 0 {
-			q.Limit = 10
-		}
-		rs, err := s.Search(ctx, q)
-		require.NoError(t, err)
-		var out []string
-		for _, r := range rs {
-			out = append(out, r.Name)
-		}
-		return out
-	}
-
-	require.ElementsMatch(t, []string{"Alien.1979.Director's.Cut.1080p.BluRay", "Collection", "Alien Parody 1979"}, names(Query{Text: "alien 1979"}))
-	require.ElementsMatch(t, []string{"Alien.1979.Director's.Cut.1080p.BluRay", "Collection"}, names(Query{Text: "alien 1979", Exclude: []string{"adult"}}))
-	require.Equal(t, []string{"Чужой 1979 BDRip"}, names(Query{Text: "чужой"}))
-	require.Equal(t, []string{"Collection"}, names(Query{Text: "Ridley"}), "file paths are searched")
-	require.Empty(t, names(Query{Text: `"); DROP TABLE torrents; --`}))
-	require.Equal(t, []string{"Collection"}, names(Query{Kinds: []string{""}}))
-	require.Equal(t, []string{"Чужой 1979 BDRip", "Aliens.1986.1080p"}, names(Query{AudioLanguage: "ru", MinAudioProbability: new(0.5)}),
-		"the classifier does not override a marker's 1")
-	require.Equal(t, []string{"Collection", "Чужой 1979 BDRip", "Aliens.1986.1080p"},
-		names(Query{AudioLanguage: "ru", MinAudioProbability: new(0.5), Unexamined: true}), "4 is unexamined and its audio unknown")
-	require.Equal(t, []string{"Aliens.1986.1080p"}, names(Query{AudioLanguage: "uk", MinAudioProbability: new(0.5)}),
-		"the filter reads the language's own entries")
-	require.Equal(t, []string{"Alien Parody 1979", "Collection", "Чужой 1979 BDRip"}, names(Query{Limit: 3}), "most recently seen first")
-
-	r, err := s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, Release{
-		ID: 1, Hash: hash(1), Name: "Alien.1979.Director's.Cut.1080p.BluRay", Size: 1 << 30, FileCount: 1,
-		Kind: "movie", KindLayer: LayerJev, KindConfidence: 0.9, Source: "encode", Classified: true,
-		Audio:     []Audio{{Language: "ru", Probability: new(0.2), Layer: LayerJev}},
-		FirstSeen: t0.Add(time.Minute), LastSeen: t0.Add(time.Minute),
-	}, r)
-	r, err = s.Get(ctx, hash(2))
-	require.NoError(t, err)
-	require.Equal(t, []Audio{{Language: "ru", Probability: new(0.7), Layer: LayerJev}}, r.Audio, "uk is not among the languages")
-	r, err = s.Get(ctx, hash(4))
-	require.NoError(t, err)
-	require.Nil(t, r.Audio)
-}
-
-func classify(t *testing.T, s *Store, id int64, c Classification) int {
-	t.Helper()
-	n, err := s.Classify(context.Background(), id, c, t0)
-	require.NoError(t, err)
-	return n
-}
-
-func TestUnclassified(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	for i := byte(1); i <= 5; i++ {
-		tr := torrent(i, "t", "a.mkv", "b.mkv", "c.mkv")
-		tr.Audio = []Audio{{Language: "ru", ScriptHint: i == 2 || i == 5, Marker: i == 1 || i == 3}}
-		if i == 5 {
-			tr.Kind, tr.KindLayer = "series", LayerRules
-		}
-		_, _, err := s.Insert(ctx, tr)
-		require.NoError(t, err)
-	}
-	classify(t, s, 1, Classification{Kind: "movie"})
-	require.NoError(t, s.ClassifyFailed(ctx, 3, "422", t0))
-
-	p, err := s.Unclassified(ctx, 0, 10, 2)
-	require.NoError(t, err)
-	require.Equal(t, []Pending{{ID: 2, Name: "t", Size: 1 << 30, Files: []rules.File{{Path: "a.mkv", Size: 1 << 30}, {Path: "b.mkv", Size: 1 << 30}}}}, p,
-		"not 4, without a hint, nor 5, whose kind is known")
-	p, err = s.Unclassified(ctx, 2, 10, 2)
-	require.NoError(t, err)
-	require.Empty(t, p)
-	none, err := New(ctx, s.db, Options{})
-	require.NoError(t, err)
-	p, err = none.Unclassified(ctx, 0, 10, 2)
-	require.NoError(t, err)
-	require.Empty(t, p, "no hint counts without audio languages")
-
-	p, err = s.Pending(ctx, []int64{1, 4, 5}, 1)
-	require.NoError(t, err)
-	require.Equal(t, []Pending{
-		{ID: 4, Name: "t", Size: 1 << 30, Files: []rules.File{{Path: "a.mkv", Size: 1 << 30}}},
-		{ID: 5, Name: "t", Size: 1 << 30, Files: []rules.File{{Path: "a.mkv", Size: 1 << 30}}, KindKnown: true},
-	}, p, "1 is examined already")
-}
-
-func TestReuseByKey(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	for i, k := range []string{"y:dune 2024", "y:dune 2024", "y:dune 2021", "y:arrival 2016"} {
-		tr := torrent(byte(i+1), "t")
-		tr.TitleKey = k
-		_, _, err := s.Insert(ctx, tr)
-		require.NoError(t, err)
-	}
-	kind, err := s.KindByKey(ctx, "y:arrival 2016")
-	require.NoError(t, err)
-	require.Empty(t, kind)
-
-	require.Equal(t, 1, classify(t, s, 1, Classification{Kind: "movie"}), "copied to 2, not to 3 of another year")
-	r, err := s.Get(ctx, hash(2))
-	require.NoError(t, err)
-	require.Equal(t, "movie", r.Kind)
-	require.Equal(t, LayerReuse, r.KindLayer)
-	require.False(t, r.Classified, "only the kind is copied")
-	r, err = s.Get(ctx, hash(3))
-	require.NoError(t, err)
-	require.Empty(t, r.Kind)
-
-	require.Zero(t, classify(t, s, 2, Classification{Kind: "other", Source: "web"}), "a known kind stays")
-	r, err = s.Get(ctx, hash(2))
-	require.NoError(t, err)
-	require.Equal(t, "movie", r.Kind)
-	require.Equal(t, "web", r.Source)
-
-	kind, err = s.KindByKey(ctx, "y:dune 2024")
-	require.NoError(t, err)
-	require.NotEmpty(t, kind)
-
-	tr := torrent(9, "Arrival.2016.1080p")
-	tr.TitleKey, tr.Kind, tr.KindLayer = "y:arrival 2016", "movie", LayerRules
-	_, copied, err := s.Insert(ctx, tr)
-	require.NoError(t, err)
-	require.Equal(t, 1, copied)
-	r, err = s.Get(ctx, hash(4))
-	require.NoError(t, err)
-	require.Equal(t, "movie", r.Kind, "a later release with a known kind lends it too")
-	require.Equal(t, LayerReuse, r.KindLayer)
-}
-
-func TestTokens(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	n, err := s.TokensUsed(ctx, "2026-10-01")
-	require.NoError(t, err)
-	require.Zero(t, n)
-	require.NoError(t, s.AddTokens(ctx, "2026-10-01", 300))
-	require.NoError(t, s.AddTokens(ctx, "2026-10-01", 200))
-	n, err = s.TokensUsed(ctx, "2026-10-01")
-	require.NoError(t, err)
-	require.EqualValues(t, 500, n)
-}
-
-func TestMaxFiles(t *testing.T) {
-	ctx := context.Background()
-	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
-	defer db.Close()
-	s.opts.MaxFiles = 2
-	tr := torrent(1, "Collection")
-	tr.Audio = []Audio{{Language: "ru", ScriptHint: true}}
-	for i, size := range []int64{10, 30, 20, 5} {
-		tr.Files = append(tr.Files, rules.File{Path: fmt.Sprintf("f%d.mkv", i), Size: size})
-	}
-	_, _, err := s.Insert(ctx, tr)
-	require.NoError(t, err)
-
-	r, err := s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.EqualValues(t, 4, r.FileCount, "the count stays true")
-	p, err := s.Unclassified(ctx, 0, 1, 10)
-	require.NoError(t, err)
-	require.Equal(t, []rules.File{{Path: "f1.mkv", Size: 30}, {Path: "f2.mkv", Size: 20}}, p[0].Files, "the largest, largest first")
-	got, err := s.Search(ctx, Query{Text: "f0", Limit: 10})
-	require.NoError(t, err)
-	require.Empty(t, got, "a file not stored is not searched")
-}
-
 func TestSweep(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
@@ -332,10 +91,10 @@ func TestSweep(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 2, "swept torrents leave the search index")
 	var files int
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM files").Scan(&files))
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_files").Scan(&files))
 	require.Equal(t, 2, files, "and their files go with them")
 	var audio int
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM audio").Scan(&audio))
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_audio").Scan(&audio))
 	require.Equal(t, 2, audio, "and their audio")
 }
 
@@ -383,10 +142,176 @@ func TestMigrateAudio(t *testing.T) {
 		4: {Language: "ru"},
 	}, got)
 	var dropped int
-	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('torrents') WHERE name LIKE 'russian%'").Scan(&dropped))
+	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('torrent_releases') WHERE name LIKE 'russian%'").Scan(&dropped))
 	require.Zero(t, dropped, "the old columns are gone")
 	p, err := s.Unclassified(ctx, 0, 10, 1)
 	require.NoError(t, err)
 	require.Len(t, p, 1, "3, unexamined with a hint")
 	require.EqualValues(t, 3, p[0].ID)
+}
+
+// queueMigrations are the migrations of the queue component as the databases
+// before 007 applied them.
+var queueMigrations = fstest.MapFS{
+	"001_queue.sql": {Data: []byte(`CREATE TABLE queue (
+    id          INTEGER PRIMARY KEY,
+    infohash    BLOB    NOT NULL UNIQUE,
+    priority    INTEGER NOT NULL,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    not_before  INTEGER NOT NULL DEFAULT 0,
+    lease_owner INTEGER,
+    lease_until INTEGER
+);
+CREATE INDEX queue_order ON queue (priority, id) WHERE lease_owner IS NULL;
+CREATE INDEX queue_lease_owner ON queue (lease_owner) WHERE lease_owner IS NOT NULL;
+CREATE INDEX queue_lease_until ON queue (lease_until) WHERE lease_until IS NOT NULL;`)},
+	"002_bounds.sql": {Data: []byte(`ALTER TABLE queue ADD COLUMN queued_at INTEGER NOT NULL DEFAULT 0;
+UPDATE queue SET queued_at = CAST(unixepoch('subsec') * 1000 AS INTEGER);
+CREATE INDEX queue_queued_at ON queue (queued_at) WHERE lease_owner IS NULL;
+CREATE INDEX queue_evict ON queue (priority DESC, id) WHERE lease_owner IS NULL;
+CREATE TABLE dead (
+    infohash BLOB    PRIMARY KEY,
+    until    INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX dead_until ON dead (until);`)},
+}
+
+// schema returns the type and name of every object in db's sqlite_master.
+func schema(t *testing.T, db *database.DB) []string {
+	t.Helper()
+	rows, err := db.R.QueryContext(context.Background(), "SELECT type || ' ' || name FROM sqlite_master ORDER BY type, name")
+	require.NoError(t, err)
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		require.NoError(t, rows.Scan(&s))
+		out = append(out, s)
+	}
+	require.NoError(t, rows.Err())
+	return out
+}
+
+func TestMigrateModules(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	old := fstest.MapFS{}
+	for _, name := range []string{"001_init.sql", "002_layers.sql", "003_audio.sql", "004_titles.sql", "005_peers.sql", "006_tmdb.sql"} {
+		b, err := migrations.ReadFile("migrations/" + name)
+		require.NoError(t, err)
+		old[name] = &fstest.MapFile{Data: b}
+	}
+	require.NoError(t, db.Migrate(ctx, "store", old))
+	require.NoError(t, db.Migrate(ctx, "queue", queueMigrations))
+	for _, stmt := range []string{
+		`INSERT INTO torrents (id, infohash, name, size, file_count, discovery, first_seen, last_seen, kind, kind_layer, title_key)
+			VALUES (1, x'0100000000000000000000000000000000000000', 'Alien.1979.1080p.BluRay', 1073741824, 1, 'sample', 100, 100, 'movie', 'rules', 'y:alien 1979')`,
+		"INSERT INTO torrents_fts (rowid, name, paths) VALUES (1, 'Alien.1979.1080p.BluRay', 'Alien.1979.mkv')",
+		"INSERT INTO files (torrent_id, idx, path, size) VALUES (1, 0, 'Alien.1979.mkv', 1073741824)",
+		"INSERT INTO audio (torrent_id, language, marker, script_hint, probability, layer) VALUES (1, 'ru', 1, 0, 1.0, 'rules')",
+		"INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at) VALUES ('y:alien 1979', 1979, 0.9, 'tmdb', 100)",
+		"INSERT INTO tmdb_ids (title_key, provider, id) VALUES ('y:alien 1979', 'tmdb', '348')",
+		"INSERT INTO peers_hour (torrent_id, hour, sketch) VALUES (1, 3600, x'0102')",
+		"INSERT INTO peers_day (torrent_id, day, sketch) VALUES (1, 0, x'0102')",
+		"INSERT INTO top (kind, window, voice, rank, work_key, peers, releases, computed_at) VALUES ('movie', '7d', 'any', 1, 'y:alien 1979', 5, 1, 100)",
+		"INSERT INTO rejected (infohash, reason, rejected_at) VALUES (x'02', 'small', 100)",
+		"INSERT INTO token_usage (day, tokens) VALUES ('2026-10-01', 500)",
+		"INSERT INTO settings (key, value) VALUES ('peer_hash_key', x'00')",
+		"INSERT INTO queue (infohash, priority, queued_at) VALUES (x'03', 1, 100000)",
+		"INSERT INTO dead (infohash, until) VALUES (x'04', 200000)",
+	} {
+		_, err := db.W.ExecContext(ctx, stmt)
+		require.NoError(t, err, stmt)
+	}
+
+	s, err := New(ctx, db, Options{Languages: []string{"ru"}})
+	require.NoError(t, err)
+	q, err := NewQueue(ctx, db, QueueOptions{})
+	require.NoError(t, err)
+
+	names := schema(t, db)
+	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "ingest_queue", "ingest_dead",
+		"ingest_rejected", "ingest_token_usage", "stat_peers_by_hour", "stat_peers_by_day", "stat_top", "tmdb_works", "tmdb_ids", "settings",
+		"torrent_releases_fts_data", "torrent_releases_fts_idx", "torrent_releases_fts_docsize", "torrent_releases_fts_config"} {
+		require.Contains(t, names, "table "+name)
+	}
+	for _, name := range names {
+		for _, gone := range []string{"torrents", "files", "audio", "queue", "dead", "rejected", "token_usage", "peers_hour", "peers_day", "top"} {
+			require.NotEqual(t, "table "+gone, name)
+			require.NotEqual(t, "index "+gone, name)
+		}
+		require.False(t, strings.HasPrefix(name, "table torrents_fts"), name)
+	}
+	wantIndexes := []string{
+		"torrent_releases_unclassified", "torrent_releases_last_seen", "torrent_releases_title_key", "torrent_releases_background",
+		"torrent_releases_titled", "torrent_releases_work_key", "torrent_releases_peers_week", "torrent_releases_size",
+		"ingest_queue_order", "ingest_queue_lease_owner", "ingest_queue_lease_until", "ingest_queue_queued_at", "ingest_queue_evict",
+		"ingest_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id",
+	}
+	var gotIndexes []string
+	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
+		var name, table string
+		if err := rows.Scan(&name, &table); err != nil {
+			return err
+		}
+		require.True(t, strings.HasPrefix(name, table+"_"), "%s is an index of %s", name, table)
+		gotIndexes = append(gotIndexes, name)
+		return nil
+	}, "SELECT name, tbl_name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL"))
+	require.ElementsMatch(t, wantIndexes, gotIndexes)
+	for _, table := range []string{"torrent_files", "torrent_audio", "stat_peers_by_hour", "stat_peers_by_day"} {
+		var ddl string
+		require.NoError(t, db.R.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE name = ?", table).Scan(&ddl))
+		require.Contains(t, ddl, `REFERENCES "torrent_releases"`, table)
+	}
+	var version int
+	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
+	require.Equal(t, 7, version)
+	var queueRows int
+	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations WHERE component = 'queue'").Scan(&queueRows))
+	require.Zero(t, queueRows, "the queue component is gone")
+	rows, err := db.R.QueryContext(ctx, "PRAGMA foreign_key_check")
+	require.NoError(t, err)
+	require.False(t, rows.Next(), "no foreign key is broken")
+	require.NoError(t, rows.Close())
+
+	r, err := s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Equal(t, "Alien.1979.1080p.BluRay", r.Name)
+	require.Equal(t, []Audio{{Language: "ru", Marker: true, Probability: new(1.0), Layer: LayerRules}}, r.Audio)
+	got, err := s.Search(ctx, Query{Text: "alien", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, got, 1, "the search index survived")
+	files, err := s.files(ctx, 1, 10)
+	require.NoError(t, err)
+	require.Equal(t, []rules.File{{Path: "Alien.1979.mkv", Size: 1 << 30}}, files)
+	tokens, err := s.TokensUsed(ctx, "2026-10-01")
+	require.NoError(t, err)
+	require.EqualValues(t, 500, tokens)
+	n, err := q.Len(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	for table, want := range map[string]int{"ingest_dead": 1, "ingest_rejected": 1, "stat_peers_by_hour": 1, "stat_peers_by_day": 1,
+		"stat_top": 1, "tmdb_works": 1, "tmdb_ids": 1, "settings": 1} {
+		var n int
+		require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&n))
+		require.Equal(t, want, n, table)
+	}
+
+	_, err = db.W.ExecContext(ctx, "DELETE FROM torrent_releases")
+	require.NoError(t, err)
+	for _, table := range []string{"torrent_files", "torrent_audio", "stat_peers_by_hour", "stat_peers_by_day"} {
+		var n int
+		require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&n))
+		require.Zero(t, n, "%s cascades from torrent_releases", table)
+	}
+
+	fresh, err := database.Open(ctx, filepath.Join(t.TempDir(), "fresh.db"))
+	require.NoError(t, err)
+	defer fresh.Close()
+	_, err = New(ctx, fresh, Options{})
+	require.NoError(t, err)
+	require.Equal(t, schema(t, fresh), names, "a fresh database has the same schema as a migrated one")
 }

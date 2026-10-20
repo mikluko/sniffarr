@@ -1,15 +1,9 @@
-// Package queue is the work queue of infohashes awaiting their metadata:
-// sightings enqueue them, fetchers lease them, and a result completes or
-// fails them. Its tables live in the shared database.
-package queue
+package store
 
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"errors"
-	"fmt"
-	"io/fs"
 	"slices"
 	"time"
 
@@ -22,9 +16,6 @@ import (
 
 // ErrNotQueued is returned for a hash that is not in the queue.
 var ErrNotQueued = errors.New("not queued")
-
-// Hash is a BitTorrent v1 infohash.
-type Hash [20]byte
 
 // Discoveries name how a hash was sighted, in the order the queue serves
 // them.
@@ -46,8 +37,9 @@ const (
 	DefaultNoPeersFor = 24 * time.Hour
 )
 
-// Options bound a Queue. Zero fields take the default named in their doc.
-type Options struct {
+// QueueOptions bound a Queue. Zero fields take the default named in their
+// doc.
+type QueueOptions struct {
 	// MaxSize is the most hashes Trim leaves queued; DefaultMaxSize.
 	MaxSize int
 	// MaxAge is how long a hash may wait in the queue before Trim evicts it;
@@ -66,15 +58,12 @@ type Options struct {
 // Queue is the work queue. It is safe for concurrent use.
 type Queue struct {
 	db        *database.DB
-	opts      Options
+	opts      QueueOptions
 	evictions metric.Int64Counter
 }
 
-//go:embed migrations/*.sql
-var migrations embed.FS
-
-// New returns the Queue in db, applying any pending migrations.
-func New(ctx context.Context, db *database.DB, opts Options) (*Queue, error) {
+// NewQueue returns the Queue in db, applying any pending migrations.
+func NewQueue(ctx context.Context, db *database.DB, opts QueueOptions) (*Queue, error) {
 	if opts.MaxSize <= 0 {
 		opts.MaxSize = DefaultMaxSize
 	}
@@ -90,12 +79,8 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Queue, error) {
 	if opts.Meter == nil {
 		opts.Meter = otel.GetMeterProvider()
 	}
-	sub, err := fs.Sub(migrations, "migrations")
-	if err != nil {
+	if err := migrate(ctx, db); err != nil {
 		return nil, err
-	}
-	if err := db.Migrate(ctx, "queue", sub); err != nil {
-		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	q := &Queue{db: db, opts: opts}
 	if err := q.observe(opts.Meter); err != nil {
@@ -126,7 +111,7 @@ func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
 		for _, g := range sightings {
 			var dead bool
-			if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM dead WHERE infohash = ? AND until > ?)", g.Hash[:], now.UnixMilli()).Scan(&dead); err != nil {
+			if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM ingest_dead WHERE infohash = ? AND until > ?)", g.Hash[:], now.UnixMilli()).Scan(&dead); err != nil {
 				return err
 			}
 			if dead {
@@ -134,11 +119,11 @@ func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 					known++
 					continue
 				}
-				if _, err := tx.ExecContext(ctx, "DELETE FROM dead WHERE infohash = ?", g.Hash[:]); err != nil {
+				if _, err := tx.ExecContext(ctx, "DELETE FROM ingest_dead WHERE infohash = ?", g.Hash[:]); err != nil {
 					return err
 				}
 			}
-			res, err := tx.ExecContext(ctx, "UPDATE queue SET priority = min(priority, ?) WHERE infohash = ?", priority(g.Discovery), g.Hash[:])
+			res, err := tx.ExecContext(ctx, "UPDATE ingest_queue SET priority = min(priority, ?) WHERE infohash = ?", priority(g.Discovery), g.Hash[:])
 			if err != nil {
 				return err
 			}
@@ -150,7 +135,7 @@ func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 				known++
 				continue
 			}
-			if _, err := tx.ExecContext(ctx, "INSERT INTO queue (infohash, priority, queued_at) VALUES (?, ?, ?)", g.Hash[:], priority(g.Discovery), now.UnixMilli()); err != nil {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO ingest_queue (infohash, priority, queued_at) VALUES (?, ?, ?)", g.Hash[:], priority(g.Discovery), now.UnixMilli()); err != nil {
 				return err
 			}
 			queued++
@@ -177,23 +162,23 @@ func (q *Queue) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 	var t Trimmed
 	until := now.Add(q.opts.DeadFor).UnixMilli()
 	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
-		n, err := evict(ctx, tx, "SELECT id FROM queue WHERE lease_owner IS NULL AND queued_at < ?", until, now.Add(-q.opts.MaxAge).UnixMilli())
+		n, err := evict(ctx, tx, "SELECT id FROM ingest_queue WHERE lease_owner IS NULL AND queued_at < ?", until, now.Add(-q.opts.MaxAge).UnixMilli())
 		if err != nil {
 			return err
 		}
 		t.Aged = n
 		var size int
-		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM queue").Scan(&size); err != nil {
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM ingest_queue").Scan(&size); err != nil {
 			return err
 		}
 		if over := size - q.opts.MaxSize; over > 0 {
-			n, err := evict(ctx, tx, "SELECT id FROM queue WHERE lease_owner IS NULL ORDER BY priority DESC, id LIMIT ?", until, over)
+			n, err := evict(ctx, tx, "SELECT id FROM ingest_queue WHERE lease_owner IS NULL ORDER BY priority DESC, id LIMIT ?", until, over)
 			if err != nil {
 				return err
 			}
 			t.Oversize = n
 		}
-		res, err := tx.ExecContext(ctx, "DELETE FROM dead WHERE until <= ?", now.UnixMilli())
+		res, err := tx.ExecContext(ctx, "DELETE FROM ingest_dead WHERE until <= ?", now.UnixMilli())
 		if err != nil {
 			return err
 		}
@@ -209,25 +194,6 @@ func (q *Queue) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 	return t, nil
 }
 
-func evictionAttr(why string) metric.AddOption {
-	return metric.WithAttributes(attribute.String("sniffarr.queue.eviction", why))
-}
-
-// evict moves the queued hashes whose ids selectIDs returns into the dead set
-// until until, and returns how many it moved.
-func evict(ctx context.Context, tx *sql.Tx, selectIDs string, until int64, args ...any) (int, error) {
-	if _, err := tx.ExecContext(ctx, "INSERT INTO dead (infohash, until) SELECT infohash, ? FROM queue WHERE id IN ("+selectIDs+") ON CONFLICT (infohash) DO UPDATE SET until = excluded.until",
-		append([]any{until}, args...)...); err != nil {
-		return 0, err
-	}
-	res, err := tx.ExecContext(ctx, "DELETE FROM queue WHERE id IN ("+selectIDs+")", args...)
-	if err != nil {
-		return 0, err
-	}
-	n, err := res.RowsAffected()
-	return int(n), err
-}
-
 // Lease frees the leases expired by now, then leases up to n free hashes to
 // owner until now+d. It returns the leased hashes, announced ones first,
 // then oldest first, and how many leases expired. A hash is free when it has
@@ -239,7 +205,7 @@ func (q *Queue) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 	}
 	var out []leased
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, "UPDATE queue SET lease_owner = NULL, lease_until = NULL WHERE lease_until <= ?", now.UnixMilli())
+		res, err := tx.ExecContext(ctx, "UPDATE ingest_queue SET lease_owner = NULL, lease_until = NULL WHERE lease_until <= ?", now.UnixMilli())
 		if err != nil {
 			return err
 		}
@@ -248,8 +214,8 @@ func (q *Queue) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 			return err
 		}
 		expired = int(e)
-		rows, err := tx.QueryContext(ctx, `UPDATE queue SET lease_owner = ?, lease_until = ? WHERE id IN (
-				SELECT id FROM queue WHERE lease_owner IS NULL AND not_before <= ? ORDER BY priority, id LIMIT ?)
+		rows, err := tx.QueryContext(ctx, `UPDATE ingest_queue SET lease_owner = ?, lease_until = ? WHERE id IN (
+				SELECT id FROM ingest_queue WHERE lease_owner IS NULL AND not_before <= ? ORDER BY priority, id LIMIT ?)
 			RETURNING infohash, priority, id`,
 			owner, now.Add(d).UnixMilli(), now.UnixMilli(), n)
 		if err != nil {
@@ -285,20 +251,20 @@ func (q *Queue) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 
 // Release frees every lease owner holds.
 func (q *Queue) Release(ctx context.Context, owner int64) error {
-	_, err := q.db.W.ExecContext(ctx, "UPDATE queue SET lease_owner = NULL, lease_until = NULL WHERE lease_owner = ?", owner)
+	_, err := q.db.W.ExecContext(ctx, "UPDATE ingest_queue SET lease_owner = NULL, lease_until = NULL WHERE lease_owner = ?", owner)
 	return err
 }
 
 // Reset frees every lease.
 func (q *Queue) Reset(ctx context.Context) error {
-	_, err := q.db.W.ExecContext(ctx, "UPDATE queue SET lease_owner = NULL, lease_until = NULL WHERE lease_owner IS NOT NULL")
+	_, err := q.db.W.ExecContext(ctx, "UPDATE ingest_queue SET lease_owner = NULL, lease_until = NULL WHERE lease_owner IS NOT NULL")
 	return err
 }
 
 // Discovery returns how the queued hash was sighted, or ErrNotQueued.
 func (q *Queue) Discovery(ctx context.Context, h Hash) (string, error) {
 	var p int
-	err := q.db.R.QueryRowContext(ctx, "SELECT priority FROM queue WHERE infohash = ?", h[:]).Scan(&p)
+	err := q.db.R.QueryRowContext(ctx, "SELECT priority FROM ingest_queue WHERE infohash = ?", h[:]).Scan(&p)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrNotQueued
 	}
@@ -307,7 +273,7 @@ func (q *Queue) Discovery(ctx context.Context, h Hash) (string, error) {
 
 // Complete drops the hash from the queue.
 func (q *Queue) Complete(ctx context.Context, h Hash) error {
-	_, err := q.db.W.ExecContext(ctx, "DELETE FROM queue WHERE infohash = ?", h[:])
+	_, err := q.db.W.ExecContext(ctx, "DELETE FROM ingest_queue WHERE infohash = ?", h[:])
 	return err
 }
 
@@ -320,7 +286,7 @@ func (q *Queue) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 	var dropped bool
 	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
 		var attempts int
-		err := tx.QueryRowContext(ctx, "SELECT attempts FROM queue WHERE infohash = ? AND lease_owner = ?", h[:], owner).Scan(&attempts)
+		err := tx.QueryRowContext(ctx, "SELECT attempts FROM ingest_queue WHERE infohash = ? AND lease_owner = ?", h[:], owner).Scan(&attempts)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -330,11 +296,11 @@ func (q *Queue) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 		attempts++
 		if attempts >= maxAttempts {
 			dropped = true
-			_, err := evict(ctx, tx, "SELECT id FROM queue WHERE infohash = ?", now.Add(q.opts.DeadFor).UnixMilli(), h[:])
+			_, err := evict(ctx, tx, "SELECT id FROM ingest_queue WHERE infohash = ?", now.Add(q.opts.DeadFor).UnixMilli(), h[:])
 			return err
 		}
 		retry := now.Add(backoff << (attempts - 1))
-		_, err = tx.ExecContext(ctx, "UPDATE queue SET attempts = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE infohash = ?",
+		_, err = tx.ExecContext(ctx, "UPDATE ingest_queue SET attempts = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE infohash = ?",
 			attempts, retry.UnixMilli(), h[:])
 		return err
 	})
@@ -348,7 +314,7 @@ func (q *Queue) NoPeers(ctx context.Context, h Hash, owner int64, now time.Time)
 	var n int
 	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
 		var err error
-		n, err = evict(ctx, tx, "SELECT id FROM queue WHERE infohash = ? AND lease_owner = ?", now.Add(q.opts.NoPeersFor).UnixMilli(), h[:], owner)
+		n, err = evict(ctx, tx, "SELECT id FROM ingest_queue WHERE infohash = ? AND lease_owner = ?", now.Add(q.opts.NoPeersFor).UnixMilli(), h[:], owner)
 		return err
 	})
 	if err != nil {
@@ -359,7 +325,7 @@ func (q *Queue) NoPeers(ctx context.Context, h Hash, owner int64, now time.Time)
 }
 
 func (q *Queue) observe(mp metric.MeterProvider) error {
-	m := mp.Meter("github.com/mikluko/sniffarr/internal/queue")
+	m := mp.Meter("github.com/mikluko/sniffarr/internal/store")
 	var err error
 	q.evictions, err = m.Int64Counter("sniffarr.queue.evictions", metric.WithUnit("{infohash}"),
 		metric.WithDescription("Infohashes evicted from the queue, by why."))
@@ -383,7 +349,7 @@ func (q *Queue) observe(mp metric.MeterProvider) error {
 	}
 	_, err = m.RegisterCallback(func(ctx context.Context, o metric.Observer) error {
 		var n int64
-		if err := q.db.R.QueryRowContext(ctx, "SELECT count(*) FROM dead").Scan(&n); err != nil {
+		if err := q.db.R.QueryRowContext(ctx, "SELECT count(*) FROM ingest_dead").Scan(&n); err != nil {
 			return err
 		}
 		o.ObserveInt64(dead, n)
@@ -393,7 +359,7 @@ func (q *Queue) observe(mp metric.MeterProvider) error {
 		return err
 	}
 	_, err = m.RegisterCallback(func(ctx context.Context, o metric.Observer) error {
-		rows, err := q.db.R.QueryContext(ctx, "SELECT priority, count(*), count(lease_owner) FROM queue GROUP BY priority")
+		rows, err := q.db.R.QueryContext(ctx, "SELECT priority, count(*), count(lease_owner) FROM ingest_queue GROUP BY priority")
 		if err != nil {
 			return err
 		}
@@ -421,6 +387,6 @@ func (q *Queue) observe(mp metric.MeterProvider) error {
 // Len returns how many hashes are queued.
 func (q *Queue) Len(ctx context.Context) (int, error) {
 	var n int
-	err := q.db.R.QueryRowContext(ctx, "SELECT count(*) FROM queue").Scan(&n)
+	err := q.db.R.QueryRowContext(ctx, "SELECT count(*) FROM ingest_queue").Scan(&n)
 	return n, err
 }

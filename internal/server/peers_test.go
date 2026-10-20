@@ -17,7 +17,6 @@ import (
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/memconn"
-	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/sketch"
@@ -35,7 +34,7 @@ func serveMem(t *testing.T) (*store.Store, sniffarrv1connect.IngestServiceClient
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
-	q, err := queue.New(ctx, db, queue.Options{})
+	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
 	require.NoError(t, err)
 	_, _, err = s.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Alien.1979.1080p", Size: 8 << 30, Discovery: "sample", SeenAt: time.Now(),
 		Files: []rules.File{{Path: "Alien.mkv", Size: 8 << 30}}})

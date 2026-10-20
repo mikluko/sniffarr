@@ -58,7 +58,7 @@ func (s *Store) UnmatchedTitles(ctx context.Context, keys []string, before time.
 			args = append(args, k)
 		}
 	}
-	rows, err := s.r.QueryContext(ctx, `SELECT t.title_key, t.kind, t.name, max(t.id) FROM torrents t
+	rows, err := s.r.QueryContext(ctx, `SELECT t.title_key, t.kind, t.name, max(t.id) FROM torrent_releases t
 		LEFT JOIN tmdb_works ti ON ti.title_key = t.title_key WHERE `+where+`
 		GROUP BY t.title_key ORDER BY max(t.id) DESC LIMIT ?`, append(args, limit)...)
 	if err != nil {
@@ -158,18 +158,4 @@ func (s *Store) tmdb(ctx context.Context, rs []Release) error {
 		}
 	}
 	return nil
-}
-
-func nullInt(n int) any {
-	if n == 0 {
-		return nil
-	}
-	return n
-}
-
-func nullFloat(valid bool, f float64) any {
-	if !valid {
-		return nil
-	}
-	return f
 }

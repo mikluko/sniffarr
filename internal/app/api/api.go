@@ -17,7 +17,6 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/memconn"
-	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/server"
@@ -124,7 +123,7 @@ func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 	return c
 }
 
-func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *queue.Queue, c *classifiers, mem *memconn.Listener) error {
+func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, mem *memconn.Listener) error {
 	handler, err := server.New(server.Config{
 		Store:        s,
 		Queue:        q,
@@ -148,7 +147,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 	return nil
 }
 
-func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *queue.Queue, c *classifiers) {
+func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers) {
 	app.Go(lc, sd, log, "maintenance", func(ctx context.Context) error {
 		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, log) })
 		return nil
@@ -177,12 +176,12 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *st
 
 // maintain trims the queue and deletes the torrents not seen within
 // retention.
-func maintain(ctx context.Context, q *queue.Queue, s *store.Store, retention time.Duration, log *slog.Logger) {
+func maintain(ctx context.Context, q *store.Queue, s *store.Store, retention time.Duration, log *slog.Logger) {
 	now := time.Now()
 	t, err := q.Trim(ctx, now)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.ErrorContext(ctx, "trim queue", "err", err)
-	} else if t != (queue.Trimmed{}) {
+	} else if t != (store.Trimmed{}) {
 		log.Info("trimmed queue", "aged", t.Aged, "oversize", t.Oversize, "dead_expired", t.Expired)
 	}
 	n, err := s.Sweep(ctx, now.Add(-retention), sweepBatch)

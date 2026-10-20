@@ -20,7 +20,6 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/ingest"
-	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	sniffer "github.com/mikluko/sniffarr/internal/sniff"
@@ -219,16 +218,16 @@ func loadAPI(lookup func(string) (string, bool), langs []audio.Language) (api.Co
 	if a.Backoff, err = duration(getenv, "SNIFFARR_FETCH_BACKOFF", ingest.DefaultBackoff); err != nil {
 		return a, d, err
 	}
-	if d.Queue.MaxSize, err = positive(getenv, "SNIFFARR_QUEUE_MAX_SIZE", queue.DefaultMaxSize); err != nil {
+	if d.Queue.MaxSize, err = positive(getenv, "SNIFFARR_QUEUE_MAX_SIZE", store.DefaultMaxSize); err != nil {
 		return a, d, err
 	}
-	if d.Queue.MaxAge, err = duration(getenv, "SNIFFARR_QUEUE_MAX_AGE", queue.DefaultMaxAge); err != nil {
+	if d.Queue.MaxAge, err = duration(getenv, "SNIFFARR_QUEUE_MAX_AGE", store.DefaultMaxAge); err != nil {
 		return a, d, err
 	}
-	if d.Queue.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", queue.DefaultDeadFor); err != nil {
+	if d.Queue.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", store.DefaultDeadFor); err != nil {
 		return a, d, err
 	}
-	if d.Queue.NoPeersFor, err = duration(getenv, "SNIFFARR_QUEUE_NO_PEERS_FOR", queue.DefaultNoPeersFor); err != nil {
+	if d.Queue.NoPeersFor, err = duration(getenv, "SNIFFARR_QUEUE_NO_PEERS_FOR", store.DefaultNoPeersFor); err != nil {
 		return a, d, err
 	}
 	if d.Store.MaxFiles, err = positive(getenv, "SNIFFARR_STORE_MAX_FILES", store.DefaultMaxFiles); err != nil {

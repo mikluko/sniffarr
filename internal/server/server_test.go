@@ -21,12 +21,11 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-func start(t *testing.T, cfg Config, qopts ...queue.Options) (*httptest.Server, *http.Client) {
+func start(t *testing.T, cfg Config, qopts ...store.QueueOptions) (*httptest.Server, *http.Client) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
@@ -34,12 +33,12 @@ func start(t *testing.T, cfg Config, qopts ...queue.Options) (*httptest.Server, 
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(cfg.Languages)})
 	require.NoError(t, err)
-	var qo queue.Options
+	var qo store.QueueOptions
 	if len(qopts) > 0 {
 		qo = qopts[0]
 	}
 	qo.Meter = cfg.Meter
-	q, err := queue.New(ctx, db, qo)
+	q, err := store.NewQueue(ctx, db, qo)
 	require.NoError(t, err)
 	cfg.Queue = q
 	cfg.Store, cfg.IngestToken, cfg.SearchToken, cfg.Log = s, "ingest", "search", slog.New(slog.DiscardHandler)
@@ -374,7 +373,7 @@ func TestFetchLeaseExpiry(t *testing.T) {
 }
 
 func TestFetchRetryAndForget(t *testing.T) {
-	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, Poll: 20 * time.Millisecond}, queue.Options{DeadFor: 300 * time.Millisecond})
+	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, Poll: 20 * time.Millisecond}, store.QueueOptions{DeadFor: 300 * time.Millisecond})
 	ingest := ingestClient(srv, hc)
 	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 	require.NoError(t, err)
