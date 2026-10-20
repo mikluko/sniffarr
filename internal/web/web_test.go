@@ -109,7 +109,7 @@ func get(t *testing.T, h http.Handler, path, target string, header ...string) *h
 	return w
 }
 
-var untranslated = regexp.MustCompile(`\b(?:kind|layer|source|drop|voiceband|voicemode|script|via|d|card|col)\.[a-z_]+\b`)
+var untranslated = regexp.MustCompile(`\b(?:kind|layer|source|drop|voiceband|voicemode|script|via|d|card|col|home|sort|nav|f)\.[a-z_]+\b`)
 
 func page(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
@@ -119,15 +119,34 @@ func page(t *testing.T, w *httptest.ResponseRecorder) string {
 	return body
 }
 
-func TestSearch(t *testing.T) {
+func TestHome(t *testing.T) {
 	h := handler(t, nil)
 	body := page(t, get(t, h, "/", ""))
+	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
+	require.Contains(t, body, `<div class="home">`)
+	require.Contains(t, body, "<span>4 torrents</span>", "every stored release, adult ones too")
+	require.Contains(t, body, "<span>+3 in 24 h</span>", "first seen within the last 24 hours")
+	require.Contains(t, body, "<span>classifier pending: 1</span>")
+	require.NotContains(t, body, "Alien.1979")
+	require.NotContains(t, body, `href="/top`, "the top is not served yet")
+	for _, path := range []string{"/?q=", "/?kind=movie", "/?vl=ru", "/?voice=any", "/?source=", "/?layer=", "/?min=", "/?sort=size", "/?o=50"} {
+		require.Contains(t, page(t, get(t, h, path, "")), `id="results"`, "%s is a search", path)
+	}
+	require.NotContains(t, page(t, get(t, h, "/?lang=ru", "")), `id="results"`, "lang alone is not a search")
+}
+
+func TestSearch(t *testing.T) {
+	h := handler(t, nil)
+	body := page(t, get(t, h, "/?q=", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	for _, name := range []string{"Alien.1979.Rus.1080p.BluRay", "Severance.S02.1080p.WEB-DL", "Сборник"} {
 		require.Contains(t, body, name)
 	}
 	require.NotContains(t, body, "Hidden.Thing", "adult releases are hidden")
 	require.Less(t, strings.Index(body, "Alien.1979"), strings.Index(body, "Сборник"), "latest first")
+	require.NotContains(t, body, "hx-trigger=\"every", "no auto-refresh")
+	require.NotContains(t, body, `href="/top`, "the top is not served yet")
+	require.Contains(t, body, `<a href="/" class="reset">`)
 
 	frag := page(t, get(t, h, "/?kind=series", "results"))
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<section id="results"`))
@@ -164,9 +183,23 @@ func TestSearchFilters(t *testing.T) {
 }
 
 func TestSearchURL(t *testing.T) {
-	require.Equal(t, "/", searchURL("", s0.filters(nil), 0, "ru"))
+	require.Equal(t, "/?q=", searchURL("", s0.filters(nil), 0, "ru"), "a search, not the home page")
 	require.Equal(t, "/?kind=movie&o=50&q=alien&voice=p50", searchURL("alien", s0.filters(map[string][]string{"kind": {"movie"}, "voice": {"p50"}, "vl": {"ru"}}), 50, "ru"))
-	require.Equal(t, "/?kind=movie", searchURL("", s0.filters(map[string][]string{"kind": {"movie"}, "source": {"bogus"}}), 0, "ru"), "invalid values are dropped")
+	require.Equal(t, "/?kind=movie", searchURL("", s0.filters(map[string][]string{"kind": {"movie"}, "source": {"bogus"}, "sort": {"last_seen"}}), 0, "ru"), "invalid and default values are dropped")
+	require.Equal(t, "/?sort=size", searchURL("", s0.filters(map[string][]string{"sort": {"size"}}), 0, "ru"))
+}
+
+func TestSort(t *testing.T) {
+	h := handler(t, nil)
+	body := page(t, get(t, h, "/?q=&sort=size", ""))
+	require.Contains(t, body, `<option value="size" selected>`)
+	require.NotContains(t, body, `<option value="last_seen" selected>`)
+	body = page(t, get(t, h, "/?q=alien", ""))
+	require.Contains(t, body, `<option value="last_seen" selected>`, "the default")
+	body = page(t, get(t, h, "/?q=alien&sort=peers", ""))
+	require.Contains(t, body, `<option value="last_seen" selected>`, "an unknown sort is the default")
+	require.Equal(t, "last_seen", s0.filters(map[string][]string{"sort": {"peers"}}).Sort)
+	require.Equal(t, "size", s0.filters(map[string][]string{"sort": {"size"}}).Sort)
 }
 
 var s0 = &server{tags: []string{"ru"}}
@@ -218,4 +251,20 @@ func TestLanguage(t *testing.T) {
 	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, "ru-token")), `<html lang="ru">`, "the person's locale")
 	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, "other")), `<html lang="en">`, "a failed lookup falls back")
 	require.Contains(t, page(t, get(t, h, "/data?lang=C", "", TokenHeader, "ru-token")), `<html lang="en">`, "the language picked wins")
+
+	w := get(t, h, "/?lang=ru", "")
+	require.Contains(t, page(t, w), `<html lang="ru">`)
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "lang" {
+			cookie = c
+		}
+	}
+	require.NotNil(t, cookie, "the pick is remembered")
+	require.Equal(t, "ru", cookie.Value)
+	require.Equal(t, 365*24*3600, cookie.MaxAge, "for a year")
+	require.Contains(t, page(t, get(t, h, "/", "", "Cookie", "lang=ru")), `<html lang="ru">`, "the cookie")
+	require.Contains(t, page(t, get(t, h, "/", "", "Cookie", "lang=en", TokenHeader, "ru-token")), `<html lang="en">`, "the cookie beats the person's locale")
+	require.Contains(t, page(t, get(t, h, "/?lang=en", "", "Cookie", "lang=ru")), `<html lang="en">`, "the pick beats the cookie")
+	require.Empty(t, get(t, h, "/", "", "Cookie", "lang=ru").Result().Cookies(), "no cookie without a pick")
 }
