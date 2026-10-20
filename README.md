@@ -380,11 +380,15 @@ another. With `api.litestream.enabled`, `api.litestream.existingConfigMap` is
 required too. Every value is described in
 [`values.yaml`](charts/sniffarr/values.yaml).
 
-The chart runs a Deployment per component, each of the one image.
-`<release>-api` runs `sniffarr -api` behind a Service of the same name.
-`<release>-sniff` runs `sniffarr -sniff`, `sniff.discover` and `sniff.fetch`
-rendering `-sniff` and `-fetch`, in the host's network by default so that
-`announce_peer` queries reach its DHT port. `<release>-fetch` runs
+The chart installs in one of two modes, both of the one image.
+
+### A Deployment per component
+
+By default each component is a Deployment of its own, reaching the API at the
+Service `<release>-api`. `<release>-api` runs `sniffarr -api` behind that
+Service. `<release>-sniff` runs `sniffarr -sniff`, `sniff.discover` and
+`sniff.fetch` rendering `-sniff` and `-fetch`, in the host's network by default
+so that `announce_peer` queries reach its DHT port. `<release>-fetch` runs
 `sniffarr -fetch`, in the pod network by default, with `fetch.replicas`
 replicas and the URL and token Secret of `sniff` unless its own are set. A
 fetcher's DHT node is passive and the fetcher dials the peers it fetches from,
@@ -405,6 +409,31 @@ TCP and UDP, `NodePort` by default. With `service.nodePort` the pod listens on
 that port, rendered as `-port`, so the port peers reach the node on is the
 port it uses; `flags.port` must then be unset or equal. `<component>.upnp`
 renders `-upnp`.
+
+### One process
+
+With `single.enabled`, the chart renders one Deployment, `<release>`, in place
+of the component Deployments. Its container runs `sniffarr -api`, and `-ui`,
+`-sniff` and `-fetch` for each of `ui`, `sniff` and `fetch` with `enabled`
+true, `sniff.discover` and `sniff.fetch` still deciding the sniff component's
+flags. The Services `<release>-api` and, with `ui.enabled`, `<release>-ui`
+select that pod. The components keep their values and the pod takes the union
+of them: `api.persistence`, `api.litestream`, `api.existingSecret`, the `env`
+of every enabled component, `ui.addr`, the `flags` and `upnp` of `sniff` and
+`fetch`, their `hostNetwork`, and the `extraContainers` and `extraVolumes` of
+`api` and `ui`. The pod's `resources`, `podAnnotations`, `podLabels`,
+`nodeSelector`, `tolerations` and `affinity` come from the `single` block; the
+components' own are not read. With `sniff.hostNetwork`, every listener binds on
+the host, the API's and the UI's too.
+
+One process has one DHT node, so `sniff.service` or `fetch.service`, not both,
+exposes it as the Service `<release>-dht`. The chart refuses values the one
+process cannot honour: `single.replicas` other than 1, since the process owns
+the SQLite database; `ui.url`, `sniff.url` or `fetch.url`, since the clients
+reach the API in-process and the binary refuses `SNIFFARR_URL` with `-api`;
+`ui.existingSecret`, `sniff.existingSecret` or `fetch.existingSecret`, since
+the process reads each token once, from `api.existingSecret`; and one `env` or
+`flags` key set to different values by two components.
 
 ## Generating code
 

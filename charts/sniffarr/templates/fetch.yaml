@@ -1,4 +1,4 @@
-{{- if .Values.fetch.enabled }}
+{{- if and .Values.fetch.enabled (not .Values.single.enabled) }}
 {{- $v := .Values.fetch }}
 {{- $d := .Values.sniff }}
 {{- include "sniffarr.dht" (dict "root" . "component" "fetch" "v" $v "sniff" false "fetch" true "url" ($v.url | default $d.url) "existingSecret" ($v.existingSecret | default $d.existingSecret) "secretKey" ($v.secretKey | default $d.secretKey) "secretRequired" "fetch.existingSecret, sniff.existingSecret or api.existingSecret is required") }}

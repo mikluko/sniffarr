@@ -1,0 +1,207 @@
+{{- if .Values.single.enabled }}
+{{- $s := .Values.single }}
+{{- $api := .Values.api }}
+{{- $ui := .Values.ui }}
+{{- $sniff := .Values.sniff }}
+{{- $fetch := .Values.fetch }}
+{{- $ls := $api.litestream }}
+{{- $name := .Release.Name }}
+{{- if ne (int $s.replicas) 1 }}
+{{- fail (printf "single.replicas is %v: the process owns the SQLite database, so it runs in one replica" $s.replicas) }}
+{{- end }}
+{{- range $c := list "ui" "sniff" "fetch" }}
+{{- $cv := index $.Values $c }}
+{{- if $cv.enabled }}
+{{- if $cv.url }}
+{{- fail (printf "%s.url is set, but single.enabled serves the API in the same process: unset it" $c) }}
+{{- end }}
+{{- if $cv.existingSecret }}
+{{- fail (printf "%s.existingSecret is set, but single.enabled reads every token from api.existingSecret: unset it" $c) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if and $sniff.enabled (not (or $sniff.discover $sniff.fetch)) }}
+{{- fail "sniff.discover and sniff.fetch are both false: the sniff component would have nothing to do" }}
+{{- end }}
+{{- $discover := and $sniff.enabled $sniff.discover }}
+{{- $fetching := or $fetch.enabled (and $sniff.enabled $sniff.fetch) }}
+{{- $dhtOn := or $discover $fetching }}
+{{- $hostNetwork := or (and $sniff.enabled $sniff.hostNetwork) (and $fetch.enabled $fetch.hostNetwork) }}
+{{- $upnp := or (and $sniff.enabled $sniff.upnp) (and $fetch.enabled $fetch.upnp) }}
+{{- $env := dict }}
+{{- $flags := dict }}
+{{- range $c := list "api" "ui" "sniff" "fetch" }}
+{{- $cv := index $.Values $c }}
+{{- if or (eq $c "api") $cv.enabled }}
+{{- range $k, $val := $cv.env }}
+{{- if and (hasKey $env $k) (ne (toString (index $env $k)) (toString $val)) }}
+{{- fail (printf "%s.env.%s is %v, but another component sets it to %v: one process has one environment" $c $k $val (index $env $k)) }}
+{{- end }}
+{{- $_ := set $env $k $val }}
+{{- end }}
+{{- if hasKey $cv "flags" }}
+{{- range $k, $val := $cv.flags }}
+{{- if and (hasKey $flags $k) (ne (toString (index $flags $k)) (toString $val)) }}
+{{- fail (printf "%s.flags.%s is %v, but another component sets it to %v: one process has one DHT node" $c $k $val (index $flags $k)) }}
+{{- end }}
+{{- $_ := set $flags $k $val }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $svcOwner := "" }}
+{{- if and $sniff.enabled $sniff.service.enabled }}
+{{- $svcOwner = "sniff" }}
+{{- end }}
+{{- if and $fetch.enabled $fetch.service.enabled }}
+{{- if $svcOwner }}
+{{- fail "sniff.service.enabled and fetch.service.enabled are both true, but single.enabled has one DHT node: enable one of them" }}
+{{- end }}
+{{- $svcOwner = "fetch" }}
+{{- end }}
+{{- $svc := dict "enabled" false }}
+{{- if $svcOwner }}
+{{- $svc = (index .Values $svcOwner).service }}
+{{- end }}
+{{- $dht := include "sniffarr.dhtPort" (dict "component" ($svcOwner | default "sniff") "flags" $flags "service" $svc) | fromYaml }}
+{{- $port := int $dht.port }}
+{{- $nodePort := int $dht.nodePort }}
+{{- $loopback := include "sniffarr.uiLoopback" $ui.addr }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sniffarr.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "sniffarr.selector" (dict "root" . "component" "") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sniffarr.selector" (dict "root" . "component" "") | nindent 8 }}
+        {{- with $s.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $s.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $hostNetwork }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      securityContext:
+        {{- include "sniffarr.podSecurityContext" . | nindent 8 }}
+      {{- if $ls.enabled }}
+      initContainers:
+        {{- include "sniffarr.litestreamInitContainers" (dict "root" . "litestream" $ls) | trim | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: sniffarr
+          image: {{ include "sniffarr.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/sniffarr]
+          args:
+            - "-api"
+            {{- if $ui.enabled }}
+            - "-ui"
+            {{- end }}
+            {{- if $discover }}
+            - "-sniff"
+            {{- end }}
+            {{- if $fetching }}
+            - "-fetch"
+            {{- end }}
+            {{- if $dhtOn }}
+            {{- with include "sniffarr.dhtArgs" (dict "flags" $flags "nodePort" $nodePort "upnp" $upnp) | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+          env:
+            - name: SNIFFARR_DB
+              value: /data/sniffarr.db
+            {{- if $ui.enabled }}
+            - name: SNIFFARR_UI_ADDR
+              value: {{ $ui.addr | quote }}
+            {{- end }}
+            {{- with include "sniffarr.env" (dict "root" . "env" $env) | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ required "api.existingSecret is required" $api.existingSecret }}
+          ports:
+            - name: http
+              containerPort: 8080
+            {{- if and $ui.enabled (not $loopback) }}
+            - name: ui
+              containerPort: {{ include "sniffarr.uiPort" $ui.addr }}
+            {{- end }}
+            {{- if and $dhtOn $port (or $discover $hostNetwork $svc.enabled) }}
+            {{- include "sniffarr.dhtContainerPorts" (dict "port" $port) | trim | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 15
+          {{- with $s.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- include "sniffarr.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+        {{- with $api.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if $ui.enabled }}
+        {{- with $ui.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- end }}
+      volumes:
+        {{- include "sniffarr.dataVolumes" (dict "root" . "claim" (printf "%s-api" $name)) | trim | nindent 8 }}
+        {{- with $api.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if $ui.enabled }}
+        {{- with $ui.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- end }}
+      {{- with $s.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $s.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $s.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if $svc.enabled }}
+---
+{{ include "sniffarr.dhtService" (dict "root" . "name" (printf "%s-dht" $name) "component" "dht" "service" $svc "port" $port "nodePort" $nodePort) }}
+{{- end }}
+{{- end }}
