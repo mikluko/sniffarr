@@ -11,7 +11,7 @@ import (
 var _ storage.ClientImplCloser = noStorage{}
 
 // errNoStorage is returned by every read and write of noStorage.
-var errNoStorage = errors.New("sniffdht stores no torrent data")
+var errNoStorage = errors.New("sniffarr stores no torrent data")
 
 // noStorage is torrent storage that does no I/O: every piece is incomplete,
 // and reads, writes and marks fail.
