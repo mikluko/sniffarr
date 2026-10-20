@@ -74,3 +74,10 @@ func TestKnown(t *testing.T) {
 	require.Panics(t, func() { compile(Language{Tag: "xx", Scripts: []string{"Klingon"}}) })
 	require.False(t, compile(Language{Tag: "xx"}).Marker("Anything", nil), "no words, no marker")
 }
+
+func TestMark(t *testing.T) {
+	ru := russian(t)
+	require.Equal(t, "LostFilm", ru.Mark("Severance.S02.1080p.LostFilm", nil))
+	require.Equal(t, "Rus", ru.Mark("Alien.1979.1080p", []rules.File{{Path: "Audio/Rus.ac3"}}), "a file path when the name has none")
+	require.Empty(t, ru.Mark("Alien.1979.1080p", []rules.File{{Path: "Russian.Doll.mkv"}}), "whole words only")
+}

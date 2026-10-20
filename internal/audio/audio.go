@@ -62,7 +62,7 @@ func compile(l Language) Language {
 		alts = append(alts, regexp.QuoteMeta(w))
 	}
 	if len(alts) > 0 {
-		l.marker = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:` + strings.Join(alts, "|") + `)(?:$|[^\p{L}\p{N}])`)
+		l.marker = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(` + strings.Join(alts, "|") + `)(?:$|[^\p{L}\p{N}])`)
 	}
 	for _, s := range l.Scripts {
 		t, ok := unicode.Scripts[s]
@@ -122,6 +122,28 @@ func Tags(langs []Language) []string {
 // Words or Studios.
 func (l Language) Marker(name string, files []rules.File) bool {
 	return l.marker != nil && anyName(name, files, l.marker.MatchString)
+}
+
+// Mark returns the first of the language's Words or Studios in the name, or
+// else in a file path, as written there; "" when there is none.
+func (l Language) Mark(name string, files []rules.File) string {
+	if l.marker == nil {
+		return ""
+	}
+	for _, s := range append([]string{name}, paths(files)...) {
+		if m := l.marker.FindStringSubmatch(s); m != nil {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+func paths(files []rules.File) []string {
+	out := make([]string, len(files))
+	for i, f := range files {
+		out[i] = f.Path
+	}
+	return out
 }
 
 // ScriptHint reports whether the name or a file path has a letter of one of
