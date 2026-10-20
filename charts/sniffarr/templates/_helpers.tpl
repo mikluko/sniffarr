@@ -41,3 +41,109 @@ capabilities:
   value: {{ $v | toString | quote }}
 {{- end }}
 {{- end }}
+
+{{- /*
+sniffarr.sniffdht is a Deployment of the sniffdht binary. It takes root, component, v (the
+component's values), discover, fetch, url, existingSecret and secretKey.
+*/}}
+{{- define "sniffarr.sniffdht" -}}
+{{- $root := .root }}
+{{- $v := .v }}
+{{- $port := 42069 }}
+{{- if hasKey $v.flags "port" }}
+{{- $port = $v.flags.port }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $root.Release.Name }}-{{ .component }}
+  labels:
+    {{- include "sniffarr.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ .component }}
+spec:
+  replicas: {{ $v.replicas }}
+  {{- if $v.hostNetwork }}
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sniffarr.selector" (dict "root" $root "component" .component) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sniffarr.selector" (dict "root" $root "component" .component) | nindent 8 }}
+        {{- with $v.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $v.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $v.hostNetwork }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      securityContext:
+        {{- include "sniffarr.podSecurityContext" $root | nindent 8 }}
+      containers:
+        - name: sniffdht
+          image: {{ include "sniffarr.image" $root }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          command: [/sniffdht]
+          args:
+            - {{ printf "-discover=%v" .discover | quote }}
+            - {{ printf "-fetch=%v" .fetch | quote }}
+            {{- range $k, $f := $v.flags }}
+            - {{ printf "-%s=%v" $k $f | quote }}
+            {{- end }}
+          env:
+            - name: SNIFFARR_URL
+              value: {{ .url | default (printf "http://%s-sniffapi:8080" $root.Release.Name) | quote }}
+            - name: SNIFFARR_INGEST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required (printf "%s.existingSecret or sniffapi.existingSecret is required" .component) (.existingSecret | default $root.Values.sniffapi.existingSecret) }}
+                  key: {{ .secretKey }}
+            {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
+          {{- if and $port (or .discover $v.hostNetwork) }}
+          ports:
+            - name: dht
+              containerPort: {{ $port }}
+              protocol: UDP
+            - name: peers
+              containerPort: {{ $port }}
+              protocol: TCP
+          {{- end }}
+          {{- with $v.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- include "sniffarr.securityContext" $root | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -60,8 +60,12 @@ sniffapi:
   affinity: {}
 
 sniffdht:
-  # Deploys sniffdht.
+  # Deploys sniffdht, the discoverer.
   enabled: true
+  # Rendered as -discover; the node needs a reachable port to receive announce_peer.
+  discover: true
+  # Rendered as -fetch; true runs a combined discoverer and fetcher.
+  fetch: false
   # Replicas of sniffdht.
   replicas: 1
   # Runs the pod in the host's network namespace; the strategy is Recreate when true.
@@ -72,7 +76,7 @@ sniffdht:
   existingSecret: ""
   # Key of the ingest token in that Secret.
   secretKey: SNIFFARR_INGEST_TOKEN
-  # Command-line flags, name to value, rendered as -name=value.
+  # Command-line flags, name to value, rendered as -name=value after -discover and -fetch.
   flags: {}
   # Extra environment variables, name to value.
   env: {}
@@ -87,4 +91,34 @@ sniffdht:
   # Tolerations of the sniffdht pod.
   tolerations: []
   # Affinity of the sniffdht pod.
+  affinity: {}
+
+snifffetch:
+  # Deploys snifffetch, sniffdht with -discover=false -fetch=true.
+  enabled: true
+  # Replicas of snifffetch.
+  replicas: 1
+  # Runs the pod in the host's network namespace; the strategy is Recreate when true.
+  hostNetwork: false
+  # SNIFFARR_URL; sniffdht.url when empty.
+  url: ""
+  # Secret holding the ingest token; sniffdht.existingSecret when empty.
+  existingSecret: ""
+  # Key of the ingest token in that Secret; sniffdht.secretKey when empty.
+  secretKey: ""
+  # Command-line flags, name to value, rendered as -name=value after -discover and -fetch.
+  flags: {}
+  # Extra environment variables, name to value.
+  env: {}
+  # Resources of the snifffetch container.
+  resources: {}
+  # Annotations of the snifffetch pod.
+  podAnnotations: {}
+  # Labels of the snifffetch pod.
+  podLabels: {}
+  # Node selector of the snifffetch pod.
+  nodeSelector: {}
+  # Tolerations of the snifffetch pod.
+  tolerations: []
+  # Affinity of the snifffetch pod.
   affinity: {}

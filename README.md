@@ -236,6 +236,13 @@ another. With `sniffapi.litestream.enabled`, `sniffapi.litestream.existingConfig
 is required too. Every value is described in
 [`values.yaml`](charts/sniffarr/values.yaml).
 
+The chart runs sniffdht as two Deployments. `<release>-sniffdht` discovers,
+in the host's network by default so that `announce_peer` queries reach its
+DHT port; `<release>-snifffetch` fetches, in the pod network by default, with
+`snifffetch.replicas` replicas and the URL and token Secret of `sniffdht`
+unless its own are set. A fetcher's DHT node is passive and the fetcher dials
+the peers it fetches from, so it needs no open port.
+
 ## Generating code
 
 The generated code under `internal/apis` is committed. After changing a `.proto` file,

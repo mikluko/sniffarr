@@ -23,6 +23,15 @@ sniffdht:
     port: 51000
     fetchers: 500
     rate: 1000
-    discover: true
   env:
     OTEL_SERVICE_NAME: sniffdht
+
+snifffetch:
+  replicas: 3
+  flags:
+    fetchers: 1000
+    min-peers: 2
+  env:
+    OTEL_SERVICE_NAME: snifffetch
+  nodeSelector:
+    kubernetes.io/os: linux
