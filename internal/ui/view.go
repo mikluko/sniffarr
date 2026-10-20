@@ -76,6 +76,7 @@ type Results struct {
 type Row struct {
 	InfoHash   string
 	Name       string
+	Peers      int64 // unique peers, 7 days
 	Size       int64
 	Kind       string
 	Layer      string

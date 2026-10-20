@@ -19,12 +19,12 @@ func SampleSearch(b Base, q string) SearchPage {
 	v := func(explicit bool, p *float64) []VoiceCell { return []VoiceCell{{Explicit: explicit, Prob: p}} }
 	day := 24 * time.Hour
 	rows := []Row{
-		{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Name: "Дюна. Часть вторая / Dune: Part Two (2024) WEB-DL 2160p HDR | D | Atmos", Size: 26629001216, Kind: "movie", Layer: "classifier", Confidence: fp(.93), Voice: v(true, fp(.97)), Source: "web", FirstSeen: at(41 * time.Hour), LastSeen: at(3 * time.Minute)},
-		{InfoHash: "91a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4", Name: "Dune.Part.Two.2024.UHD.BluRay.2160p.REMUX.HEVC.Rus.Eng", Size: 74 * gb, Kind: "movie", Layer: "rules", Voice: v(true, fp(.95)), Source: "remux", FirstSeen: at(475 * day), LastSeen: at(4 * time.Minute)},
-		{InfoHash: "a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5", Name: "Дюна: Часть вторая (2024) BDRip 1080p | D", Size: 14 * gb, Kind: "movie", Layer: "title_repeat", Voice: v(true, fp(.98)), Source: "rip", FirstSeen: at(478 * day), LastSeen: at(6 * time.Minute)},
-		{InfoHash: "b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6", Name: "Dune.Part.Two.2024.1080p.WEB-DL.DDP5.1.H.264", Size: 10 * gb, Kind: "movie", Layer: "rules", Voice: v(false, fp(.12)), Source: "web", FirstSeen: at(524 * day), LastSeen: at(7 * time.Minute)},
-		{InfoHash: "c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7", Name: "Dune.Prophecy.S01.2160p.MAX.WEB-DL.DDP5.1.DV.HDR", Size: 41 * gb, Kind: "series", Layer: "rules", Voice: v(false, fp(.05)), Source: "web", FirstSeen: at(302 * day), LastSeen: at(11 * time.Minute)},
-		{InfoHash: "d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708", Name: "Herbert F. - Dune (1965) EPUB", Size: 1 * mb, Kind: "book", Layer: "classifier", Confidence: fp(.89), Voice: v(false, nil), Source: "other", FirstSeen: at(597 * day), LastSeen: at(25 * time.Minute)},
+		{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Name: "Дюна. Часть вторая / Dune: Part Two (2024) WEB-DL 2160p HDR | D | Atmos", Peers: 12480, Size: 26629001216, Kind: "movie", Layer: "classifier", Confidence: fp(.93), Voice: v(true, fp(.97)), Source: "web", FirstSeen: at(41 * time.Hour), LastSeen: at(3 * time.Minute)},
+		{InfoHash: "91a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4", Name: "Dune.Part.Two.2024.UHD.BluRay.2160p.REMUX.HEVC.Rus.Eng", Peers: 11020, Size: 74 * gb, Kind: "movie", Layer: "rules", Voice: v(true, fp(.95)), Source: "remux", FirstSeen: at(475 * day), LastSeen: at(4 * time.Minute)},
+		{InfoHash: "a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5", Name: "Дюна: Часть вторая (2024) BDRip 1080p | D", Peers: 9870, Size: 14 * gb, Kind: "movie", Layer: "title_repeat", Voice: v(true, fp(.98)), Source: "rip", FirstSeen: at(478 * day), LastSeen: at(6 * time.Minute)},
+		{InfoHash: "b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6", Name: "Dune.Part.Two.2024.1080p.WEB-DL.DDP5.1.H.264", Peers: 6430, Size: 10 * gb, Kind: "movie", Layer: "rules", Voice: v(false, fp(.12)), Source: "web", FirstSeen: at(524 * day), LastSeen: at(7 * time.Minute)},
+		{InfoHash: "c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7", Name: "Dune.Prophecy.S01.2160p.MAX.WEB-DL.DDP5.1.DV.HDR", Peers: 2940, Size: 41 * gb, Kind: "series", Layer: "rules", Voice: v(false, fp(.05)), Source: "web", FirstSeen: at(302 * day), LastSeen: at(11 * time.Minute)},
+		{InfoHash: "d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708", Name: "Herbert F. - Dune (1965) EPUB", Peers: 410, Size: 1 * mb, Kind: "book", Layer: "classifier", Confidence: fp(.89), Voice: v(false, nil), Source: "other", FirstSeen: at(597 * day), LastSeen: at(25 * time.Minute)},
 	}
 	works := []WorkHit{
 		{Ref: WorkRef{ID: "m-dune-part-two-2024", Kind: "movie", Title: "Дюна: Часть вторая", Sub: "2024", Rank: 3}, Peers: 48230, Releases: 6},
