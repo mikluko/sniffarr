@@ -110,7 +110,7 @@ func (b *Browser) Work(ctx context.Context, req *connect.Request[sniffarrv1.Work
 	if err != nil {
 		return nil, err
 	}
-	w, peers, releases, err := b.Store.Work(ctx, m.GetKey(), window, voice, b.now())
+	v, err := b.Store.Work(ctx, m.GetKey(), window, voice, b.now())
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -118,8 +118,11 @@ func (b *Browser) Work(ctx context.Context, req *connect.Request[sniffarrv1.Work
 		b.Log.ErrorContext(ctx, "work", "err", err)
 		return nil, connect.NewError(connect.CodeInternal, errors.New("work failed"))
 	}
-	res := &sniffarrv1.WorkResponse{Work: work(w), Peers: peers}
-	for _, r := range releases {
+	res := &sniffarrv1.WorkResponse{Work: work(v.Work), Peers: v.Peers, Rank: int32(v.Rank)}
+	if v.Delta != nil {
+		res.Delta = new(float32(*v.Delta))
+	}
+	for _, r := range v.Releases {
 		res.Releases = append(res.Releases, &sniffarrv1.WorkRelease{Release: release(r.Release), Peers: r.Peers})
 	}
 	return connect.NewResponse(res), nil

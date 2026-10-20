@@ -240,6 +240,12 @@ message WorkResponse {
   int64 peers = 2;
   // The releases the voice admits, most peers over the window first.
   repeated WorkRelease releases = 3;
+  // The work's place in the top of its kind for the window and voice, 1
+  // first; 0 when it is not in it.
+  int32 rank = 4;
+  // TopEntry.delta of that place; absent when the work is not in the top or
+  // had no peers the window before.
+  optional float delta = 5;
 }
 
 // WorkRelease is a release of a work with its peers.
