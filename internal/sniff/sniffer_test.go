@@ -250,6 +250,29 @@ func TestFetcherCredit(t *testing.T) {
 	require.Equal(t, sniffarrv1.Failure_FAILURE_TIMEOUT, ingest.results[hash(3)].GetFailure())
 }
 
+// fixedSource gives every hash the same metadata.
+type fixedSource Metadata
+
+func (s fixedSource) Metadata(context.Context, Hash) (Metadata, error) {
+	return Metadata(s), nil
+}
+
+func TestFetcherInvalidUTF8(t *testing.T) {
+	ingest := newFake()
+	ingest.todo = []Hash{hash(1)}
+	src := fixedSource{Name: "Movie.\xff2020", Size: 1 << 30, Files: []File{{Path: "a/\xfe\xfeb.mkv", Size: 1 << 30}}}
+	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 1}, src)
+	run(t, f.Run)
+
+	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 1 }, 5*time.Second, 5*time.Millisecond)
+	ingest.mu.Lock()
+	defer ingest.mu.Unlock()
+	tr := ingest.results[hash(1)].GetTorrent()
+	require.Equal(t, "Movie.\uFFFD2020", tr.GetName())
+	require.Equal(t, "a/\uFFFDb.mkv", tr.GetFiles()[0].GetPath(), "a run of invalid bytes is one replacement")
+	require.Len(t, ingest.credits, 1, "the stream survives")
+}
+
 func TestFetcherMetrics(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	ingest := newFake()

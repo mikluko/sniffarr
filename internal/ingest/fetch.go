@@ -16,6 +16,9 @@ import (
 // releaseTimeout bounds freeing a finished stream's leases.
 const releaseTimeout = 5 * time.Second
 
+// resultTimeout bounds recording one received result.
+const resultTimeout = 5 * time.Second
+
 func (s *Service) Fetch(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse]) error {
 	owner := s.owners.Add(1)
 	defer s.release(ctx, owner)
@@ -133,7 +136,11 @@ func (s *Service) lease(ctx context.Context, stream *connect.BidiStream[sniffarr
 	return len(hashes), nil
 }
 
+// result records a received result, to completion even when the stream ends
+// meanwhile.
 func (s *Service) result(ctx context.Context, owner int64, r *sniffarrv1.Result) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resultTimeout)
+	defer cancel()
 	h, err := hash(r.GetInfohash())
 	if err != nil {
 		return err

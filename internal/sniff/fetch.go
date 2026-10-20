@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -245,15 +246,16 @@ func (f *Fetcher) signal() {
 	}
 }
 
-// result returns the task's result and the name of its outcome.
+// result returns the task's result and the name of its outcome. Invalid UTF-8
+// in the name and paths is replaced by U+FFFD, which a proto string requires.
 func (f *Fetcher) result(h Hash, m Metadata, err error) (*sniffarrv1.Result, string) {
 	r := &sniffarrv1.Result{Infohash: h[:]}
 	switch {
 	case err == nil:
 		f.stats.torrents.Add(1)
-		t := &sniffarrv1.Torrent{Name: m.Name, Size: m.Size, Files: make([]*sniffarrv1.File, len(m.Files))}
+		t := &sniffarrv1.Torrent{Name: strings.ToValidUTF8(m.Name, "\uFFFD"), Size: m.Size, Files: make([]*sniffarrv1.File, len(m.Files))}
 		for i, file := range m.Files {
-			t.Files[i] = &sniffarrv1.File{Path: file.Path, Size: file.Size}
+			t.Files[i] = &sniffarrv1.File{Path: strings.ToValidUTF8(file.Path, "\uFFFD"), Size: file.Size}
 		}
 		r.Outcome = &sniffarrv1.Result_Torrent{Torrent: t}
 		return r, "torrent"
