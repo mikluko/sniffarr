@@ -654,6 +654,209 @@ func (x *Task) GetInfohash() []byte {
 	return nil
 }
 
+type HashKeyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HashKeyRequest) Reset() {
+	*x = HashKeyRequest{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HashKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HashKeyRequest) ProtoMessage() {}
+
+func (x *HashKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HashKeyRequest.ProtoReflect.Descriptor instead.
+func (*HashKeyRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{9}
+}
+
+type HashKeyResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The SipHash-2-4 key, 16 bytes: k0 is the first 8 in little-endian order,
+	// k1 the last 8.
+	Key           []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HashKeyResponse) Reset() {
+	*x = HashKeyResponse{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HashKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HashKeyResponse) ProtoMessage() {}
+
+func (x *HashKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HashKeyResponse.ProtoReflect.Descriptor instead.
+func (*HashKeyResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *HashKeyResponse) GetKey() []byte {
+	if x != nil {
+		return x.Key
+	}
+	return nil
+}
+
+// PeersRequest is a sketch of the peers of one torrent seen in one hour.
+type PeersRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	// Start of the UTC hour the peers were seen in, in seconds since the Unix
+	// epoch; a time within the hour is rounded down to it.
+	Hour int64 `protobuf:"varint,2,opt,name=hour,proto3" json:"hour,omitempty"`
+	// A HyperLogLog sketch in the Aggregate Knowledge storage specification
+	// v1.0.0 with log2m 10 and regwidth 5, of peers hashed with the HashKey
+	// key: SipHash-2-4 of the IP, 4 bytes for IPv4 and 16 for IPv6, followed
+	// by the port in big-endian order.
+	Sketch        []byte `protobuf:"bytes,3,opt,name=sketch,proto3" json:"sketch,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeersRequest) Reset() {
+	*x = PeersRequest{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeersRequest) ProtoMessage() {}
+
+func (x *PeersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeersRequest.ProtoReflect.Descriptor instead.
+func (*PeersRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *PeersRequest) GetInfohash() []byte {
+	if x != nil {
+		return x.Infohash
+	}
+	return nil
+}
+
+func (x *PeersRequest) GetHour() int64 {
+	if x != nil {
+		return x.Hour
+	}
+	return 0
+}
+
+func (x *PeersRequest) GetSketch() []byte {
+	if x != nil {
+		return x.Sketch
+	}
+	return nil
+}
+
+type PeersResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Sketches merged into a stored torrent's.
+	Merged int64 `protobuf:"varint,1,opt,name=merged,proto3" json:"merged,omitempty"`
+	// Sketches of infohashes not stored.
+	Dropped       int64 `protobuf:"varint,2,opt,name=dropped,proto3" json:"dropped,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PeersResponse) Reset() {
+	*x = PeersResponse{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PeersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PeersResponse) ProtoMessage() {}
+
+func (x *PeersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PeersResponse.ProtoReflect.Descriptor instead.
+func (*PeersResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *PeersResponse) GetMerged() int64 {
+	if x != nil {
+		return x.Merged
+	}
+	return 0
+}
+
+func (x *PeersResponse) GetDropped() int64 {
+	if x != nil {
+		return x.Dropped
+	}
+	return 0
+}
+
 var File_sniffarr_v1_ingest_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_ingest_proto_rawDesc = "" +
@@ -686,7 +889,17 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\rFetchResponse\x12%\n" +
 	"\x04task\x18\x01 \x01(\v2\x11.sniffarr.v1.TaskR\x04task\"\"\n" +
 	"\x04Task\x12\x1a\n" +
-	"\binfohash\x18\x01 \x01(\fR\binfohash*H\n" +
+	"\binfohash\x18\x01 \x01(\fR\binfohash\"\x10\n" +
+	"\x0eHashKeyRequest\"#\n" +
+	"\x0fHashKeyResponse\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\fR\x03key\"V\n" +
+	"\fPeersRequest\x12\x1a\n" +
+	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
+	"\x04hour\x18\x02 \x01(\x03R\x04hour\x12\x16\n" +
+	"\x06sketch\x18\x03 \x01(\fR\x06sketch\"A\n" +
+	"\rPeersResponse\x12\x16\n" +
+	"\x06merged\x18\x01 \x01(\x03R\x06merged\x12\x18\n" +
+	"\adropped\x18\x02 \x01(\x03R\adropped*H\n" +
 	"\x06Source\x12\x16\n" +
 	"\x12SOURCE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSOURCE_SAMPLE\x10\x01\x12\x13\n" +
@@ -694,10 +907,12 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\aFailure\x12\x17\n" +
 	"\x13FAILURE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10FAILURE_NO_PEERS\x10\x01\x12\x13\n" +
-	"\x0fFAILURE_TIMEOUT\x10\x022\x95\x01\n" +
+	"\x0fFAILURE_TIMEOUT\x10\x022\x9d\x02\n" +
 	"\rIngestService\x12@\n" +
 	"\x05Sight\x12\x19.sniffarr.v1.SightRequest\x1a\x1a.sniffarr.v1.SightResponse(\x01\x12B\n" +
-	"\x05Fetch\x12\x19.sniffarr.v1.FetchRequest\x1a\x1a.sniffarr.v1.FetchResponse(\x010\x01BBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
+	"\x05Fetch\x12\x19.sniffarr.v1.FetchRequest\x1a\x1a.sniffarr.v1.FetchResponse(\x010\x01\x12D\n" +
+	"\aHashKey\x12\x1b.sniffarr.v1.HashKeyRequest\x1a\x1c.sniffarr.v1.HashKeyResponse\x12@\n" +
+	"\x05Peers\x12\x19.sniffarr.v1.PeersRequest\x1a\x1a.sniffarr.v1.PeersResponse(\x01BBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
 
 var (
 	file_sniffarr_v1_ingest_proto_rawDescOnce sync.Once
@@ -712,19 +927,23 @@ func file_sniffarr_v1_ingest_proto_rawDescGZIP() []byte {
 }
 
 var file_sniffarr_v1_ingest_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_sniffarr_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_sniffarr_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_sniffarr_v1_ingest_proto_goTypes = []any{
-	(Source)(0),           // 0: sniffarr.v1.Source
-	(Failure)(0),          // 1: sniffarr.v1.Failure
-	(*SightRequest)(nil),  // 2: sniffarr.v1.SightRequest
-	(*SightResponse)(nil), // 3: sniffarr.v1.SightResponse
-	(*FetchRequest)(nil),  // 4: sniffarr.v1.FetchRequest
-	(*Credit)(nil),        // 5: sniffarr.v1.Credit
-	(*Result)(nil),        // 6: sniffarr.v1.Result
-	(*Torrent)(nil),       // 7: sniffarr.v1.Torrent
-	(*File)(nil),          // 8: sniffarr.v1.File
-	(*FetchResponse)(nil), // 9: sniffarr.v1.FetchResponse
-	(*Task)(nil),          // 10: sniffarr.v1.Task
+	(Source)(0),             // 0: sniffarr.v1.Source
+	(Failure)(0),            // 1: sniffarr.v1.Failure
+	(*SightRequest)(nil),    // 2: sniffarr.v1.SightRequest
+	(*SightResponse)(nil),   // 3: sniffarr.v1.SightResponse
+	(*FetchRequest)(nil),    // 4: sniffarr.v1.FetchRequest
+	(*Credit)(nil),          // 5: sniffarr.v1.Credit
+	(*Result)(nil),          // 6: sniffarr.v1.Result
+	(*Torrent)(nil),         // 7: sniffarr.v1.Torrent
+	(*File)(nil),            // 8: sniffarr.v1.File
+	(*FetchResponse)(nil),   // 9: sniffarr.v1.FetchResponse
+	(*Task)(nil),            // 10: sniffarr.v1.Task
+	(*HashKeyRequest)(nil),  // 11: sniffarr.v1.HashKeyRequest
+	(*HashKeyResponse)(nil), // 12: sniffarr.v1.HashKeyResponse
+	(*PeersRequest)(nil),    // 13: sniffarr.v1.PeersRequest
+	(*PeersResponse)(nil),   // 14: sniffarr.v1.PeersResponse
 }
 var file_sniffarr_v1_ingest_proto_depIdxs = []int32{
 	0,  // 0: sniffarr.v1.SightRequest.source:type_name -> sniffarr.v1.Source
@@ -736,10 +955,14 @@ var file_sniffarr_v1_ingest_proto_depIdxs = []int32{
 	10, // 6: sniffarr.v1.FetchResponse.task:type_name -> sniffarr.v1.Task
 	2,  // 7: sniffarr.v1.IngestService.Sight:input_type -> sniffarr.v1.SightRequest
 	4,  // 8: sniffarr.v1.IngestService.Fetch:input_type -> sniffarr.v1.FetchRequest
-	3,  // 9: sniffarr.v1.IngestService.Sight:output_type -> sniffarr.v1.SightResponse
-	9,  // 10: sniffarr.v1.IngestService.Fetch:output_type -> sniffarr.v1.FetchResponse
-	9,  // [9:11] is the sub-list for method output_type
-	7,  // [7:9] is the sub-list for method input_type
+	11, // 9: sniffarr.v1.IngestService.HashKey:input_type -> sniffarr.v1.HashKeyRequest
+	13, // 10: sniffarr.v1.IngestService.Peers:input_type -> sniffarr.v1.PeersRequest
+	3,  // 11: sniffarr.v1.IngestService.Sight:output_type -> sniffarr.v1.SightResponse
+	9,  // 12: sniffarr.v1.IngestService.Fetch:output_type -> sniffarr.v1.FetchResponse
+	12, // 13: sniffarr.v1.IngestService.HashKey:output_type -> sniffarr.v1.HashKeyResponse
+	14, // 14: sniffarr.v1.IngestService.Peers:output_type -> sniffarr.v1.PeersResponse
+	11, // [11:15] is the sub-list for method output_type
+	7,  // [7:11] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -764,7 +987,7 @@ func file_sniffarr_v1_ingest_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_ingest_proto_rawDesc), len(file_sniffarr_v1_ingest_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -12,6 +12,8 @@ require (
 	connectrpc.com/otelconnect v0.12.0
 	github.com/anacrolix/dht/v2 v2.24.0
 	github.com/anacrolix/torrent v1.61.0
+	github.com/dchest/siphash v1.2.3
+	github.com/segmentio/go-hll v1.0.1
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/contrib/exporters/autoexport v0.72.0
 	go.opentelemetry.io/otel v1.47.0

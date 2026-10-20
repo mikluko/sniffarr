@@ -2,24 +2,41 @@ syntax = "proto3";
 
 package sniffarr.v1;
 
+import "google/protobuf/timestamp.proto";
 import "sniffarr/v1/ingest.proto";
 import "sniffarr/v1/search.proto";
 
 option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
 // BrowseService reads the store as the web UI shows it: pages of releases
-// under its filters, a release with its stored files, and counts. Unlike
-// SearchService it classifies nothing before answering.
+// under its filters, a release with its stored files, counts, and the works
+// most peers share. Unlike SearchService it classifies nothing before
+// answering.
+//
+// A work groups the releases of one movie, one season of a series, or one
+// album: releases of the same title and year for a movie or an album, of the
+// same title and season for a series, episodes and season packs alike. Peers
+// are counted per torrent and hour in HyperLogLog sketches, so every count
+// is an estimate within a few percent, and a work's peers are the distinct
+// peers of all its releases over the window.
 service BrowseService {
-  // Page returns one page of the releases the filters select, best text
-  // match first, or most recently seen first without a query, and how many
-  // they select in all. Without kind or unknown_kind, adult releases are
-  // left out.
+  // Page returns one page of the releases the filters select, in the order
+  // sort asks for, and how many they select in all. Without kind or
+  // unknown_kind, adult releases are left out.
   rpc Page(PageRequest) returns (PageResponse);
-  // Card returns one release with every stored file, or NOT_FOUND.
+  // Card returns one release with every stored file, its peers and its
+  // work, or NOT_FOUND.
   rpc Card(CardRequest) returns (CardResponse);
   // Stats returns the store's counts.
   rpc Stats(StatsRequest) returns (StatsResponse);
+  // Home returns the counts the home page shows.
+  rpc Home(HomeRequest) returns (HomeResponse);
+  // Top returns one page of the 100 works of a kind with the most peers over
+  // a window, as last computed; the server recomputes every 10 minutes.
+  rpc Top(TopRequest) returns (TopResponse);
+  // Work returns one work with its releases, most peers over the window
+  // first, or NOT_FOUND.
+  rpc Work(WorkRequest) returns (WorkResponse);
 }
 
 message PageRequest {
@@ -47,12 +64,37 @@ message PageRequest {
   int32 offset = 10;
   // At most this many releases: 50 when unset, never more than 500.
   int32 limit = 11;
+  Sort sort = 12;
+}
+
+// Sort is the order of a page.
+enum Sort {
+  // Best text match first with a query, most recently seen first without.
+  SORT_UNSPECIFIED = 0;
+  // Most peers over the last 7 days first, as last computed.
+  SORT_PEERS = 1;
+  SORT_LAST_SEEN = 2;
+  // Largest first.
+  SORT_SIZE = 3;
 }
 
 message PageResponse {
   repeated Release releases = 1;
   // How many releases the filters select in all.
   int64 total = 2;
+  // On the first page of a query, up to 10 works of movies, series or music
+  // whose releases match it, most peers over the last 7 days first; empty
+  // otherwise.
+  repeated WorkMatch works = 3;
+}
+
+// WorkMatch is a work among the releases a query matches.
+message WorkMatch {
+  WorkRef work = 1;
+  // Distinct peers of the work's releases over the last 7 days.
+  int64 peers = 2;
+  // Stored releases of the work.
+  int64 releases = 3;
 }
 
 message CardRequest {
@@ -65,6 +107,146 @@ message CardResponse {
   Source discovery = 2;
   // The stored files, the largest of the release's, in stored order.
   repeated File files = 3;
+  // Distinct peers of the release over the last day, 7 days and 30 days.
+  PeerCounts peers = 4;
+  // The release's work; absent when its name yields none.
+  WorkRef work = 5;
+  // Stored releases of the work, and this release's place among them by
+  // peers over the last 7 days, 1 first; both 0 without a work.
+  int64 releases = 6;
+  int32 release_rank = 7;
+}
+
+// PeerCounts are distinct peers over three sliding windows ending now.
+message PeerCounts {
+  int64 day = 1;
+  int64 week = 2;
+  int64 month = 3;
+}
+
+// WorkRef names a work.
+message WorkRef {
+  // The key under which the work's releases meet, for Work.
+  string key = 1;
+  // The kind of the work's releases: KIND_MOVIE, KIND_SERIES or KIND_MUSIC,
+  // or KIND_UNSPECIFIED while undecided.
+  Kind kind = 2;
+  // The title of the release with the most peers over the last 7 days, as
+  // its name gives it.
+  string title = 3;
+  // The year the name gives, 0 when none.
+  int32 year = 4;
+  // The season of a series, 0 when the names give none.
+  int32 season = 5;
+  // The work's place in the last 7 days' top of its kind among all voices,
+  // 1 first; 0 when it is not in it.
+  int32 rank = 6;
+}
+
+// Work is a work with what is known of its releases together.
+message Work {
+  WorkRef ref = 1;
+  // Stored releases of the work that the voice admits.
+  int64 releases = 2;
+  // At most one entry per audio language the server is configured with, in
+  // tag order: the highest probability among the releases, and marker and
+  // script_hint when any release has them.
+  repeated Audio audio = 3;
+  // The sources of the releases, each once, in enum order; a release
+  // without a source adds none.
+  repeated VideoSource sources = 4;
+  // The first sighting of the earliest release.
+  google.protobuf.Timestamp first_seen = 5;
+}
+
+// Window is a sliding period ending now.
+enum Window {
+  // WINDOW_WEEK.
+  WINDOW_UNSPECIFIED = 0;
+  // The last 24 hours, by the hour.
+  WINDOW_DAY = 1;
+  // The last 7 days, by the hour.
+  WINDOW_WEEK = 2;
+  // The last 30 days: the last 8 days by the hour, the rest by the day.
+  WINDOW_MONTH = 3;
+}
+
+// Voice narrows a work's releases by their audio in the first language the
+// server is configured with; without audio languages every narrowing admits
+// no release.
+enum Voice {
+  // Every release.
+  VOICE_UNSPECIFIED = 0;
+  // Releases whose probability of an audio track in the language is known
+  // and at least 0.5.
+  VOICE_LIKELY = 1;
+  // Releases with a marker of the language.
+  VOICE_MARKER = 2;
+}
+
+message HomeRequest {}
+
+message HomeResponse {
+  // Stored releases.
+  int64 total = 1;
+  // Releases first seen in the last 24 hours.
+  int64 new_day = 2;
+  // Releases awaiting the background classifier.
+  int64 pending = 3;
+}
+
+message TopRequest {
+  // KIND_MOVIE, KIND_SERIES or KIND_MUSIC; required.
+  Kind kind = 1;
+  Window window = 2;
+  Voice voice = 3;
+  // Entries to skip.
+  int32 offset = 4;
+  // At most this many entries: 20 when unset, never more than 100.
+  int32 limit = 5;
+}
+
+message TopResponse {
+  repeated TopEntry entries = 1;
+  // Entries in the top in all, at most 100.
+  int64 total = 2;
+  // When the top was computed; absent while it never was.
+  google.protobuf.Timestamp computed_at = 3;
+}
+
+// TopEntry is one work of a top.
+message TopEntry {
+  // The work's place, 1 first.
+  int32 rank = 1;
+  Work work = 2;
+  // Distinct peers of the releases the voice admits over the window.
+  int64 peers = 3;
+  // Change of peers against the window of the same length before it, as a
+  // fraction of the earlier count: 0.5 is half as many more; absent when the
+  // work had no peers then.
+  optional float delta = 4;
+}
+
+message WorkRequest {
+  // WorkRef.key.
+  string key = 1;
+  Window window = 2;
+  Voice voice = 3;
+}
+
+message WorkResponse {
+  Work work = 1;
+  // Distinct peers of the releases the voice admits over the window.
+  int64 peers = 2;
+  // The releases the voice admits, most peers over the window first.
+  repeated WorkRelease releases = 3;
+}
+
+// WorkRelease is a release of a work with its peers.
+message WorkRelease {
+  Release release = 1;
+  // Distinct peers of the release over the window.
+  int64 peers = 2;
 }
 
 message StatsRequest {

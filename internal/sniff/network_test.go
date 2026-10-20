@@ -64,7 +64,7 @@ func TestMetadataTouchesNoFiles(t *testing.T) {
 			{Path: []string{long, "_____padding_file_1_____"}, Length: 1 << 13},
 		},
 	})
-	n, err := Start(NetworkConfig{Port: freePort(t), FetchTimeout: 10 * time.Second}, nil)
+	n, err := Start(NetworkConfig{Port: freePort(t), FetchTimeout: 10 * time.Second}, nil, nil)
 	require.NoError(t, err)
 	t.Cleanup(n.Close)
 
@@ -99,7 +99,7 @@ func TestClientConfig(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.cfg.defaults()
-			c := clientConfig(tt.cfg, tt.offer)
+			c := clientConfig(tt.cfg, tt.offer, nil)
 			require.Equal(t, 6881, c.ListenPort)
 			require.Equal(t, !tt.cfg.UPnP, c.NoDefaultPortForwarding, "UPnP alone decides port forwarding")
 			var sc dht.ServerConfig
@@ -112,7 +112,7 @@ func TestClientConfig(t *testing.T) {
 }
 
 func TestStartPassiveOnAnyPort(t *testing.T) {
-	n, err := Start(NetworkConfig{Passive: true}, nil)
+	n, err := Start(NetworkConfig{Passive: true}, nil, nil)
 	require.NoError(t, err)
 	t.Cleanup(n.Close)
 	require.Positive(t, n.Port(), "port 0 has the system pick one")

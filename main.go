@@ -20,6 +20,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/app/db"
 	"github.com/mikluko/sniffarr/internal/app/dht"
 	"github.com/mikluko/sniffarr/internal/app/fetch"
+	"github.com/mikluko/sniffarr/internal/app/peers"
 	"github.com/mikluko/sniffarr/internal/app/sniff"
 	"github.com/mikluko/sniffarr/internal/app/ui"
 	"github.com/mikluko/sniffarr/internal/cli"
@@ -42,7 +43,7 @@ func options(cfg config, log *slog.Logger) []fx.Option {
 		opts = append(opts, fx.Supply(cfg.ui), ui.Module)
 	}
 	if cfg.on.dht() {
-		opts = append(opts, fx.Supply(cfg.dht), dht.Module)
+		opts = append(opts, fx.Supply(cfg.dht), dht.Module, peers.Module)
 	}
 	if cfg.on.sniff {
 		opts = append(opts, fx.Supply(cfg.sniff), sniff.Module)

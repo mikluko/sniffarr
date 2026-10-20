@@ -37,6 +37,10 @@ const (
 	IngestServiceSightProcedure = "/sniffarr.v1.IngestService/Sight"
 	// IngestServiceFetchProcedure is the fully-qualified name of the IngestService's Fetch RPC.
 	IngestServiceFetchProcedure = "/sniffarr.v1.IngestService/Fetch"
+	// IngestServiceHashKeyProcedure is the fully-qualified name of the IngestService's HashKey RPC.
+	IngestServiceHashKeyProcedure = "/sniffarr.v1.IngestService/HashKey"
+	// IngestServicePeersProcedure is the fully-qualified name of the IngestService's Peers RPC.
+	IngestServicePeersProcedure = "/sniffarr.v1.IngestService/Peers"
 )
 
 // IngestServiceClient is a client for the sniffarr.v1.IngestService service.
@@ -50,6 +54,14 @@ type IngestServiceClient interface {
 	// takes the results back on it. A lease returns to the queue when the
 	// stream ends without its result or when the lease expires.
 	Fetch(context.Context) *connect.BidiStreamForClient[v1.FetchRequest, v1.FetchResponse]
+	// HashKey returns the key every client hashes peers with before adding
+	// them to a sketch. The server generates it once and keeps it for the life
+	// of its store, so sketches from any client and any time merge.
+	HashKey(context.Context, *connect.Request[v1.HashKeyRequest]) (*connect.Response[v1.HashKeyResponse], error)
+	// Peers merges each sketch of the stream into the stored sketch of its
+	// torrent and hour, and reports the totals when the client closes the
+	// stream. A sketch of an infohash that is not stored is dropped.
+	Peers(context.Context) *connect.ClientStreamForClient[v1.PeersRequest, v1.PeersResponse]
 }
 
 // NewIngestServiceClient constructs a client for the sniffarr.v1.IngestService service. By default,
@@ -75,13 +87,27 @@ func NewIngestServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(ingestServiceMethods.ByName("Fetch")),
 			connect.WithClientOptions(opts...),
 		),
+		hashKey: connect.NewClient[v1.HashKeyRequest, v1.HashKeyResponse](
+			httpClient,
+			baseURL+IngestServiceHashKeyProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("HashKey")),
+			connect.WithClientOptions(opts...),
+		),
+		peers: connect.NewClient[v1.PeersRequest, v1.PeersResponse](
+			httpClient,
+			baseURL+IngestServicePeersProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("Peers")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // ingestServiceClient implements IngestServiceClient.
 type ingestServiceClient struct {
-	sight *connect.Client[v1.SightRequest, v1.SightResponse]
-	fetch *connect.Client[v1.FetchRequest, v1.FetchResponse]
+	sight   *connect.Client[v1.SightRequest, v1.SightResponse]
+	fetch   *connect.Client[v1.FetchRequest, v1.FetchResponse]
+	hashKey *connect.Client[v1.HashKeyRequest, v1.HashKeyResponse]
+	peers   *connect.Client[v1.PeersRequest, v1.PeersResponse]
 }
 
 // Sight calls sniffarr.v1.IngestService.Sight.
@@ -92,6 +118,16 @@ func (c *ingestServiceClient) Sight(ctx context.Context) *connect.ClientStreamFo
 // Fetch calls sniffarr.v1.IngestService.Fetch.
 func (c *ingestServiceClient) Fetch(ctx context.Context) *connect.BidiStreamForClient[v1.FetchRequest, v1.FetchResponse] {
 	return c.fetch.CallBidiStream(ctx)
+}
+
+// HashKey calls sniffarr.v1.IngestService.HashKey.
+func (c *ingestServiceClient) HashKey(ctx context.Context, req *connect.Request[v1.HashKeyRequest]) (*connect.Response[v1.HashKeyResponse], error) {
+	return c.hashKey.CallUnary(ctx, req)
+}
+
+// Peers calls sniffarr.v1.IngestService.Peers.
+func (c *ingestServiceClient) Peers(ctx context.Context) *connect.ClientStreamForClient[v1.PeersRequest, v1.PeersResponse] {
+	return c.peers.CallClientStream(ctx)
 }
 
 // IngestServiceHandler is an implementation of the sniffarr.v1.IngestService service.
@@ -105,6 +141,14 @@ type IngestServiceHandler interface {
 	// takes the results back on it. A lease returns to the queue when the
 	// stream ends without its result or when the lease expires.
 	Fetch(context.Context, *connect.BidiStream[v1.FetchRequest, v1.FetchResponse]) error
+	// HashKey returns the key every client hashes peers with before adding
+	// them to a sketch. The server generates it once and keeps it for the life
+	// of its store, so sketches from any client and any time merge.
+	HashKey(context.Context, *connect.Request[v1.HashKeyRequest]) (*connect.Response[v1.HashKeyResponse], error)
+	// Peers merges each sketch of the stream into the stored sketch of its
+	// torrent and hour, and reports the totals when the client closes the
+	// stream. A sketch of an infohash that is not stored is dropped.
+	Peers(context.Context, *connect.ClientStream[v1.PeersRequest]) (*connect.Response[v1.PeersResponse], error)
 }
 
 // NewIngestServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -126,12 +170,28 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(ingestServiceMethods.ByName("Fetch")),
 		connect.WithHandlerOptions(opts...),
 	)
+	ingestServiceHashKeyHandler := connect.NewUnaryHandler(
+		IngestServiceHashKeyProcedure,
+		svc.HashKey,
+		connect.WithSchema(ingestServiceMethods.ByName("HashKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	ingestServicePeersHandler := connect.NewClientStreamHandler(
+		IngestServicePeersProcedure,
+		svc.Peers,
+		connect.WithSchema(ingestServiceMethods.ByName("Peers")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sniffarr.v1.IngestService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IngestServiceSightProcedure:
 			ingestServiceSightHandler.ServeHTTP(w, r)
 		case IngestServiceFetchProcedure:
 			ingestServiceFetchHandler.ServeHTTP(w, r)
+		case IngestServiceHashKeyProcedure:
+			ingestServiceHashKeyHandler.ServeHTTP(w, r)
+		case IngestServicePeersProcedure:
+			ingestServicePeersHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -147,4 +207,12 @@ func (UnimplementedIngestServiceHandler) Sight(context.Context, *connect.ClientS
 
 func (UnimplementedIngestServiceHandler) Fetch(context.Context, *connect.BidiStream[v1.FetchRequest, v1.FetchResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.Fetch is not implemented"))
+}
+
+func (UnimplementedIngestServiceHandler) HashKey(context.Context, *connect.Request[v1.HashKeyRequest]) (*connect.Response[v1.HashKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.HashKey is not implemented"))
+}
+
+func (UnimplementedIngestServiceHandler) Peers(context.Context, *connect.ClientStream[v1.PeersRequest]) (*connect.Response[v1.PeersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.Peers is not implemented"))
 }

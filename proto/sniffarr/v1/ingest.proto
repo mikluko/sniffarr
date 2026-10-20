@@ -5,7 +5,8 @@ package sniffarr.v1;
 option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
 // IngestService is the work queue between sniffers: discoverers report the
-// infohashes they sight, fetchers take them as tasks and return metadata.
+// infohashes they sight, fetchers take them as tasks and return metadata,
+// and both report the peers they see as sketches.
 service IngestService {
   // Sight queues every infohash the server has neither stored, rejected nor
   // queued, and reports the totals when the client closes the stream. A
@@ -16,6 +17,14 @@ service IngestService {
   // takes the results back on it. A lease returns to the queue when the
   // stream ends without its result or when the lease expires.
   rpc Fetch(stream FetchRequest) returns (stream FetchResponse);
+  // HashKey returns the key every client hashes peers with before adding
+  // them to a sketch. The server generates it once and keeps it for the life
+  // of its store, so sketches from any client and any time merge.
+  rpc HashKey(HashKeyRequest) returns (HashKeyResponse);
+  // Peers merges each sketch of the stream into the stored sketch of its
+  // torrent and hour, and reports the totals when the client closes the
+  // stream. A sketch of an infohash that is not stored is dropped.
+  rpc Peers(stream PeersRequest) returns (PeersResponse);
 }
 
 message SightRequest {
@@ -91,4 +100,32 @@ message FetchResponse {
 // Task asks for the metadata of one infohash.
 message Task {
   bytes infohash = 1;
+}
+
+message HashKeyRequest {}
+
+message HashKeyResponse {
+  // The SipHash-2-4 key, 16 bytes: k0 is the first 8 in little-endian order,
+  // k1 the last 8.
+  bytes key = 1;
+}
+
+// PeersRequest is a sketch of the peers of one torrent seen in one hour.
+message PeersRequest {
+  bytes infohash = 1;
+  // Start of the UTC hour the peers were seen in, in seconds since the Unix
+  // epoch; a time within the hour is rounded down to it.
+  int64 hour = 2;
+  // A HyperLogLog sketch in the Aggregate Knowledge storage specification
+  // v1.0.0 with log2m 10 and regwidth 5, of peers hashed with the HashKey
+  // key: SipHash-2-4 of the IP, 4 bytes for IPv4 and 16 for IPv6, followed
+  // by the port in big-endian order.
+  bytes sketch = 3;
+}
+
+message PeersResponse {
+  // Sketches merged into a stored torrent's.
+  int64 merged = 1;
+  // Sketches of infohashes not stored.
+  int64 dropped = 2;
 }

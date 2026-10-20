@@ -9,7 +9,7 @@ import (
 const scope = "github.com/mikluko/sniffarr/internal/ingest"
 
 type metrics struct {
-	sightings, expiries, results, rejections, stored, classifications metric.Int64Counter
+	sightings, expiries, results, rejections, stored, classifications, sketches metric.Int64Counter
 }
 
 func newMetrics(mp metric.MeterProvider) *metrics {
@@ -32,6 +32,7 @@ func newMetrics(mp metric.MeterProvider) *metrics {
 		stored:     counter("sniffarr.ingest.stored", "{torrent}", "Fetched torrents stored."),
 		classifications: counter("sniffarr.classify.classifications", "{torrent}",
 			"Torrents whose kind was decided, by kind and by the layer that decided it."),
+		sketches: counter("sniffarr.ingest.sketches", "{sketch}", "Peer sketches received, by whether their infohash was stored."),
 	}
 }
 
@@ -40,8 +41,10 @@ func layerAttrs(layer, kind string) metric.AddOption {
 }
 
 var (
-	resultNew   = metric.WithAttributes(attribute.String("sniffarr.sighting.result", "new"))
-	resultKnown = metric.WithAttributes(attribute.String("sniffarr.sighting.result", "known"))
+	resultNew     = metric.WithAttributes(attribute.String("sniffarr.sighting.result", "new"))
+	resultKnown   = metric.WithAttributes(attribute.String("sniffarr.sighting.result", "known"))
+	sketchMerged  = metric.WithAttributes(attribute.String("sniffarr.sketch.result", "merged"))
+	sketchDropped = metric.WithAttributes(attribute.String("sniffarr.sketch.result", "dropped"))
 )
 
 func outcome(o string) metric.AddOption {
