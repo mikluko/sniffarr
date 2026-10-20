@@ -5,9 +5,7 @@
 {{- if hasKey $v "ui" }}
 {{- fail "api.ui is not a value: the UI is the ui component, ui.enabled, with ui.addr and ui.service.targetPort in place of api.ui.addr and api.ui.targetPort" }}
 {{- end }}
-{{- if not (has $p.type (list "emptyDir" "hostPath" "pvc")) }}
-{{- fail (printf "api.persistence.type: want emptyDir, hostPath or pvc, not %q" $p.type) }}
-{{- end }}
+{{- if not .Values.single.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,36 +40,7 @@ spec:
         {{- include "sniffarr.podSecurityContext" . | nindent 8 }}
       {{- if $ls.enabled }}
       initContainers:
-        {{- range list "restore" "replicate" }}
-        - name: {{ . }}
-          image: {{ $ls.image.repository }}:{{ $ls.image.tag }}
-          imagePullPolicy: {{ $ls.image.pullPolicy }}
-          {{- if eq . "restore" }}
-          args: [restore, -if-db-not-exists, -if-replica-exists, /data/sniffarr.db]
-          {{- else }}
-          args: [replicate]
-          restartPolicy: Always
-          {{- end }}
-          {{- with $ls.existingSecret }}
-          envFrom:
-            - secretRef:
-                name: {{ . }}
-          {{- end }}
-          {{- with $ls.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          securityContext:
-            {{- include "sniffarr.securityContext" $ | nindent 12 }}
-          volumeMounts:
-            - name: data
-              mountPath: /data
-            - name: tmp
-              mountPath: /tmp
-            - name: litestream-config
-              mountPath: /etc/litestream.yml
-              subPath: litestream.yml
-        {{- end }}
+        {{- include "sniffarr.litestreamInitContainers" (dict "root" . "litestream" $ls) | trim | nindent 8 }}
       {{- end }}
       containers:
         - name: api
@@ -116,24 +85,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       volumes:
-        - name: tmp
-          emptyDir: {}
-        - name: data
-          {{- if eq $p.type "hostPath" }}
-          hostPath:
-            path: {{ required "api.persistence.hostPath.path is required for type hostPath" $p.hostPath.path }}
-            type: DirectoryOrCreate
-          {{- else if eq $p.type "pvc" }}
-          persistentVolumeClaim:
-            claimName: {{ $p.existingClaim | default $name }}
-          {{- else }}
-          emptyDir: {}
-          {{- end }}
-        {{- if $ls.enabled }}
-        - name: litestream-config
-          configMap:
-            name: {{ required "api.litestream.existingConfigMap is required when litestream is enabled" $ls.existingConfigMap }}
-        {{- end }}
+        {{- include "sniffarr.dataVolumes" (dict "root" . "claim" $name) | trim | nindent 8 }}
         {{- with $v.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -150,6 +102,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 ---
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:

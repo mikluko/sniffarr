@@ -1,0 +1,37 @@
+single:
+  enabled: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  nodeSelector:
+    kubernetes.io/os: linux
+
+api:
+  existingSecret: sniffarr-tokens
+  env:
+    SNIFFARR_AUDIO_LANGUAGES: ru,en
+  persistence:
+    type: pvc
+    size: 20Gi
+  litestream:
+    enabled: true
+    existingConfigMap: sniffarr-litestream
+    existingSecret: sniffarr-litestream
+
+ui:
+  enabled: true
+  env:
+    SNIFFARR_OIDC_ISSUER: https://id.example.com
+
+sniff:
+  hostNetwork: true
+  upnp: true
+  flags:
+    port: 51000
+    fetchers: 500
+
+fetch:
+  flags:
+    fetchers: 500
+    min-peers: 2

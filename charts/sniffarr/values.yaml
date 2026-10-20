@@ -102,6 +102,24 @@ ui:
   # Affinity of the ui pod.
   affinity: {}
 
+single:
+  # Runs every enabled component in one Deployment, <release>, in place of the component Deployments: -api, and -ui, -sniff and -fetch for each of ui, sniff and fetch with enabled true.
+  enabled: false
+  # Replicas of <release>; only 1, the process owns the SQLite database.
+  replicas: 1
+  # Resources of the sniffarr container.
+  resources: {}
+  # Annotations of the pod.
+  podAnnotations: {}
+  # Labels of the pod.
+  podLabels: {}
+  # Node selector of the pod.
+  nodeSelector: {}
+  # Tolerations of the pod.
+  tolerations: []
+  # Affinity of the pod.
+  affinity: {}
+
 sniff:
   # Deploys <release>-sniff, sniffarr -sniff.
   enabled: true

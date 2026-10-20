@@ -1,4 +1,4 @@
-{{- if .Values.sniff.enabled }}
+{{- if and .Values.sniff.enabled (not .Values.single.enabled) }}
 {{- $v := .Values.sniff }}
 {{- if not (or $v.discover $v.fetch) }}
 {{- fail "sniff.discover and sniff.fetch are both false: the sniff pod would have nothing to do" }}
