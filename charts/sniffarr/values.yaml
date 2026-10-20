@@ -46,13 +46,6 @@ api:
     existingSecret: ""
     # Resources of the litestream containers.
     resources: {}
-  ui:
-    # Serves the web UI on addr, with Service port ui (8081).
-    enabled: false
-    # SNIFFARR_UI_ADDR; the container port ui is declared unless it is a loopback address.
-    addr: ":8081"
-    # Target of the Service port ui; with a loopback addr, the port of an authenticating proxy in extraContainers.
-    targetPort: ui
   # Containers added to the api pod, rendered as given.
   extraContainers: []
   # Volumes added to the api pod, rendered as given.
@@ -68,6 +61,45 @@ api:
   # Tolerations of the api pod.
   tolerations: []
   # Affinity of the api pod.
+  affinity: {}
+
+ui:
+  # Deploys <release>-ui, sniffarr -ui, behind the Service <release>-ui.
+  enabled: false
+  # Replicas of <release>-ui.
+  replicas: 1
+  # SNIFFARR_URL; the release's api Service when empty.
+  url: ""
+  # Secret holding the search token; api.existingSecret when empty.
+  existingSecret: ""
+  # Key of the search token in that Secret.
+  secretKey: SNIFFARR_SEARCH_TOKEN
+  # SNIFFARR_UI_ADDR; the container port ui is declared unless it is a loopback address.
+  addr: ":8081"
+  service:
+    # Port of the Service.
+    port: 8081
+    # Target of the Service port: ui, or, with a loopback addr, the port of an authenticating proxy in extraContainers.
+    targetPort: ui
+    # Annotations of the Service.
+    annotations: {}
+  # Extra environment variables, name to value: SNIFFARR_OIDC_ISSUER, SNIFFARR_AUDIO_LANGUAGES when the API's are not the default.
+  env: {}
+  # Containers added to the ui pod, rendered as given.
+  extraContainers: []
+  # Volumes added to the ui pod, rendered as given.
+  extraVolumes: []
+  # Resources of the ui container.
+  resources: {}
+  # Annotations of the ui pod.
+  podAnnotations: {}
+  # Labels of the ui pod.
+  podLabels: {}
+  # Node selector of the ui pod.
+  nodeSelector: {}
+  # Tolerations of the ui pod.
+  tolerations: []
+  # Affinity of the ui pod.
   affinity: {}
 
 sniff:

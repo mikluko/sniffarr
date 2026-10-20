@@ -42,6 +42,16 @@ capabilities:
 {{- end }}
 {{- end }}
 
+{{- /* sniffarr.uiLoopback is "true" when the UI address is reachable only from its own pod. */}}
+{{- define "sniffarr.uiLoopback" -}}
+{{- if or (hasPrefix "127." .) (hasPrefix "localhost" .) (hasPrefix "[::1]" .) }}true{{- end }}
+{{- end }}
+
+{{- /* sniffarr.uiPort is the container port of the UI address. */}}
+{{- define "sniffarr.uiPort" -}}
+{{ splitList ":" . | last | atoi }}
+{{- end }}
+
 {{- /*
 sniffarr.dht is a Deployment of sniffarr with its DHT components, and the Service of its DHT
 port when v.service.enabled. It takes root, component, v (the component's values), sniff and

@@ -1,0 +1,115 @@
+{{- if .Values.ui.enabled }}
+{{- $v := .Values.ui }}
+{{- $name := printf "%s-ui" .Release.Name }}
+{{- $loopback := include "sniffarr.uiLoopback" $v.addr }}
+{{- if and $loopback (eq (toString $v.service.targetPort) "ui") }}
+{{- fail (printf "ui.addr %q is a loopback address the Service cannot reach: set ui.service.targetPort to a port of ui.extraContainers" $v.addr) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sniffarr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sniffarr.selector" (dict "root" . "component" "ui") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sniffarr.selector" (dict "root" . "component" "ui") | nindent 8 }}
+        {{- with $v.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $v.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "sniffarr.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: ui
+          image: {{ include "sniffarr.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/sniffarr]
+          args:
+            - "-ui"
+          env:
+            - name: SNIFFARR_URL
+              value: {{ $v.url | default (printf "http://%s-api:8080" .Release.Name) | quote }}
+            - name: SNIFFARR_UI_ADDR
+              value: {{ $v.addr | quote }}
+            - name: SNIFFARR_SEARCH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "ui.existingSecret or api.existingSecret is required" ($v.existingSecret | default .Values.api.existingSecret) }}
+                  key: {{ $v.secretKey }}
+            {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
+          {{- if not $loopback }}
+          ports:
+            - name: ui
+              containerPort: {{ include "sniffarr.uiPort" $v.addr }}
+          readinessProbe:
+            tcpSocket:
+              port: ui
+          {{- end }}
+          {{- with $v.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- include "sniffarr.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+        {{- with $v.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- with $v.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $v.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sniffarr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+  {{- with $v.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    {{- include "sniffarr.selector" (dict "root" . "component" "ui") | nindent 4 }}
+  ports:
+    - name: ui
+      port: {{ $v.service.port }}
+      targetPort: {{ $v.service.targetPort }}
+{{- end }}

@@ -13,9 +13,11 @@ api:
     existingSecret: sniffarr-litestream
   nodeSelector:
     kubernetes.io/os: linux
-  ui:
-    enabled: true
-    addr: 127.0.0.1:8081
+
+ui:
+  enabled: true
+  addr: 127.0.0.1:8081
+  service:
     targetPort: proxy
   extraContainers:
     - name: oauth2-proxy

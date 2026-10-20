@@ -1,0 +1,35 @@
+api:
+  existingSecret: sniffarr-tokens
+
+ui:
+  enabled: true
+  replicas: 2
+  addr: 127.0.0.1:8081
+  service:
+    port: 80
+    targetPort: proxy
+    annotations:
+      example.com/expose: "true"
+  env:
+    SNIFFARR_OIDC_ISSUER: https://id.example.com
+  extraContainers:
+    - name: oauth2-proxy
+      image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+      args:
+        - --http-address=0.0.0.0:4180
+        - --upstream=http://127.0.0.1:8081
+        - --pass-access-token=true
+      envFrom:
+        - secretRef:
+            name: sniffarr-oauth2-proxy
+      ports:
+        - name: proxy
+          containerPort: 4180
+      volumeMounts:
+        - name: proxy-templates
+          mountPath: /templates
+  extraVolumes:
+    - name: proxy-templates
+      emptyDir: {}
+  nodeSelector:
+    kubernetes.io/os: linux
