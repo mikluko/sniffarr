@@ -37,6 +37,8 @@ message SearchRequest {
   optional float min_audio_probability = 6;
   // Only releases of the work with this ID; query may be empty then.
   optional ExternalId id = 7;
+  // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+  string lang = 8;
 }
 
 message SearchResponse {
@@ -45,6 +47,8 @@ message SearchResponse {
 
 message GetRequest {
   bytes infohash = 1;
+  // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+  string lang = 2;
 }
 
 message GetResponse {
@@ -86,6 +90,9 @@ message Release {
   // Distinct peers of the release over the last 7 days, as last computed by
   // the server; what SORT_PEERS orders by.
   int64 peers_week = 19;
+  // What TMDB knows of the work the release's title is matched to; absent
+  // while the title was never looked up or without title matching.
+  TMDBWork tmdb = 20;
 }
 
 // ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
@@ -93,6 +100,48 @@ message Release {
 message ExternalId {
   string provider = 1;
   string id = 2;
+}
+
+// TMDBWork is the outcome of looking a title up on TMDB: the work it matched,
+// with what TMDB tells of it, or, with id 0, that nothing matched. Texts are
+// in the language the request asked for, falling back to the other stored
+// language, and the title to original_title last.
+message TMDBWork {
+  // TMDB's ID of the work; 0 when the title matched nothing.
+  int64 id = 1;
+  // "movie" or "tv".
+  string type = 2;
+  // IMDb's ID, "tt" first; empty when TMDB has none.
+  string imdb_id = 3;
+  string title = 4;
+  string original_title = 5;
+  // The year of release or first air, 0 when unknown.
+  int32 year = 6;
+  // TMDB's poster path, to append to its image base URL and a size; empty
+  // without a poster.
+  string poster_path = 7;
+  string overview = 8;
+  repeated string genres = 9;
+  // TMDB's average vote, 0 to 10, and how many votes.
+  double rating = 10;
+  int32 votes = 11;
+  // Minutes: a movie's runtime, a typical episode's for a series; 0 when
+  // unknown.
+  int32 runtime = 12;
+  // A series' status as TMDB names it, such as "Returning Series" or
+  // "Ended", and its seasons; empty and 0 for a movie.
+  string status = 13;
+  int32 seasons = 14;
+  // ISO 3166-1 alpha-2 codes of the origin countries.
+  repeated string countries = 15;
+  // ISO 639-1 code of the original language.
+  string language = 16;
+  // What matched the title; TMDB_LAYER_UNSPECIFIED when nothing matched.
+  TMDBLayer layer = 17;
+  // Confidence in the match, 0 when nothing matched.
+  float confidence = 18;
+  // When the title was looked up.
+  google.protobuf.Timestamp checked_at = 19;
 }
 
 // TMDBLayer is what matched a release's title to a work.

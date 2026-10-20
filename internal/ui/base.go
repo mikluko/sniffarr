@@ -254,3 +254,6 @@ func (b Base) Date(t time.Time) string {
 	}
 	return t.Format("2006-01-02")
 }
+
+// Prob2 is Prob for a plain value.
+func (b Base) Prob2(p float64) string { return b.dec(p, 2) }

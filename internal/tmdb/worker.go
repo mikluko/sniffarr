@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -20,27 +22,36 @@ type Budget interface {
 }
 
 // Worker matches in the background the title keys Matcher.Unmatched
-// returns, newest first.
+// returns, newest first, and fetches the details of the matches that lack
+// them, oldest match first.
 type Worker struct {
 	Matcher     *Matcher
 	Concurrency int
 	// Poll is how long the Worker waits when nothing is due or after a
-	// failed match.
+	// failed match or fetch.
 	Poll time.Duration
-	// Budget, when set, holds the Worker back while its spending leaves no
-	// room outside Reserve percent.
+	// Budget, when set, holds matching back while its spending leaves no
+	// room outside Reserve percent; fetching details spends none.
 	Budget  Budget
 	Reserve int
 	Log     *slog.Logger
 }
 
-// Run matches until ctx is done.
+// Run matches and fetches details until ctx is done.
 func (w *Worker) Run(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error { return w.match(ctx) })
+	g.Go(func() error { return w.backfill(ctx) })
+	return g.Wait()
+}
+
+// match matches the title keys due for a match until ctx is done.
+func (w *Worker) match(ctx context.Context) error {
 	for {
 		if err := w.waitBudget(ctx); err != nil {
 			return err
 		}
-		keys, err := w.Matcher.Unmatched(ctx, nil, 4*max(w.Concurrency, 1))
+		keys, err := w.Matcher.Unmatched(ctx, nil, w.batch())
 		if err != nil && ctx.Err() == nil {
 			w.Log.Error("list unmatched titles", "err", err)
 		}
@@ -52,15 +63,50 @@ func (w *Worker) Run(ctx context.Context) error {
 	}
 }
 
+// backfill fetches the details of the matches that lack them until ctx is
+// done.
+func (w *Worker) backfill(ctx context.Context) error {
+	for {
+		due, err := w.Matcher.Store.WithoutDetails(ctx, w.batch())
+		if err != nil && ctx.Err() == nil {
+			w.Log.Error("list matches without details", "err", err)
+		}
+		failed := run(ctx, w.Concurrency, due, w.Matcher.Details, func(k store.Matched, err error) {
+			w.Log.Warn("fetch details", "key", k.Key, "err", err)
+		})
+		if len(due) == 0 || err != nil || failed {
+			if err := sleep(ctx, w.Poll); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// batch is how many keys a round takes.
+func (w *Worker) batch() int {
+	return 4 * max(w.Concurrency, 1)
+}
+
 // matchAll matches the keys and reports whether any match failed.
 func (w *Worker) matchAll(ctx context.Context, keys []store.TitleKey) bool {
+	return run(ctx, w.Concurrency, keys, w.Matcher.Match, func(k store.TitleKey, err error) {
+		if !errors.Is(err, classify.ErrBudget) {
+			w.Log.Warn("match title", "key", k.Key, "err", err)
+		}
+	})
+}
+
+// run calls f on every item, at most concurrency at a time, tells fail of
+// each call that failed, and reports whether any did. Failures after ctx is
+// done are not failures.
+func run[T any](ctx context.Context, concurrency int, items []T, f func(context.Context, T) error, fail func(T, error)) bool {
 	var (
 		wg     sync.WaitGroup
 		mu     sync.Mutex
 		failed bool
 	)
-	sem := make(chan struct{}, max(w.Concurrency, 1))
-	for _, k := range keys {
+	sem := make(chan struct{}, max(concurrency, 1))
+	for _, item := range items {
 		select {
 		case <-ctx.Done():
 		case sem <- struct{}{}:
@@ -70,13 +116,11 @@ func (w *Worker) matchAll(ctx context.Context, keys []store.TitleKey) bool {
 		}
 		wg.Go(func() {
 			defer func() { <-sem }()
-			err := w.Matcher.Match(ctx, k)
+			err := f(ctx, item)
 			if err == nil || ctx.Err() != nil {
 				return
 			}
-			if !errors.Is(err, classify.ErrBudget) {
-				w.Log.Warn("match title", "key", k.Key, "err", err)
-			}
+			fail(item, err)
 			mu.Lock()
 			failed = true
 			mu.Unlock()

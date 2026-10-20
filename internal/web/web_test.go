@@ -16,6 +16,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
@@ -28,6 +29,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/sketch"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/ui"
 )
 
 var now = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
@@ -43,12 +45,23 @@ func hexOf(b byte) string {
 const (
 	alien     = "Alien.1979.Rus.1080p.BluRay"
 	severance = "Severance.S02.1080p.WEB-DL"
+	heat      = "Heat.1995.1080p.BluRay"
 )
 
 var (
 	alienID     = workID(names.Parse(alien).Work)
 	severanceID = workID(names.Parse(severance).Work)
+	heatID      = workID(names.Parse(heat).Work)
 )
+
+// alienTMDB is Alien's match, with texts in both languages.
+var alienTMDB = store.Title{Year: 1979, Confidence: 0.8, Layer: store.LayerJev,
+	IDs: []store.ExternalID{{Provider: store.ProviderTMDB, ID: "348"}, {Provider: store.ProviderIMDb, ID: "tt0078748"}},
+	Details: &store.Details{Type: "movie", OriginalTitle: "Alien", PosterPath: "/p.jpg", Rating: 8.176, Votes: 16995, Runtime: 117, Countries: []string{"US"}, Language: "en",
+		Texts: map[string]store.Text{
+			"en": {Title: "Alien", Overview: "Nostromo intercepts a distress signal.", Genres: []string{"Horror", "Science Fiction"}},
+			"ru": {Title: "Чужой", Overview: "Корабль перехватывает сигнал.", Genres: []string{"ужасы", "фантастика"}},
+		}}}
 
 // peers returns a sketch of n peers numbered from first.
 func peers(k sketch.Key, first, n int) []byte {
@@ -60,16 +73,18 @@ func peers(k sketch.Key, first, n int) []byte {
 }
 
 // handler serves, with l, the UI over an in-process browse API whose store
-// holds a Russian-marked movie with ten files and 100 peers, a classified
-// series with 30 peers now and 40 the day before, a torrent of unknown kind
-// with 10 peers and an adult one, with the tops computed at now.
+// holds a Russian-marked movie with ten files and 100 peers, matched on
+// TMDB; a classified series with 30 peers now and 40 the day before, looked
+// up on TMDB and not found; a torrent of unknown kind with 10 peers; an
+// adult one; and a movie seen two days ago, never looked up; with the tops
+// computed at now.
 func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})
+	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}, TMDB: true})
 	require.NoError(t, err)
 	var files []rules.File
 	for i := range 10 {
@@ -83,12 +98,15 @@ func handler(t *testing.T, l Locales) http.Handler {
 		{Hash: hash(3), Name: "Сборник", Size: 1 << 30, Discovery: "sample", SeenAt: now.Add(-2 * time.Hour),
 			Audio: []store.Audio{{Language: "ru", ScriptHint: true}}},
 		{Hash: hash(4), Name: "Hidden.Thing", Size: 1 << 30, Discovery: "sample", SeenAt: now.Add(-time.Minute), Kind: "adult", KindLayer: store.LayerRules},
+		{Hash: hash(5), Name: heat, Size: 2 << 30, Discovery: "sample", SeenAt: now.Add(-50 * time.Hour), Kind: "movie", KindLayer: store.LayerRules},
 	} {
 		p := names.Parse(tr.Name)
 		tr.TitleKey, tr.WorkKey, tr.Year, tr.Season = p.Key, p.Work, p.Year, p.Season
 		_, _, err := st.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
+	require.NoError(t, st.RecordTitle(ctx, names.Parse(alien).Key, alienTMDB, now.Add(-time.Hour)))
+	require.NoError(t, st.RecordTitle(ctx, names.Parse(severance).Key, store.Title{}, now.Add(-2*time.Hour)))
 	r, err := st.Get(ctx, hash(2))
 	require.NoError(t, err)
 	_, err = st.Classify(ctx, r.ID, store.Classification{Kind: "series", KindConfidence: 0.9, Source: "web", SourceConfidence: 0.8,
@@ -146,7 +164,8 @@ func get(t *testing.T, h http.Handler, path, target string, header ...string) *h
 	return w
 }
 
-var untranslated = regexp.MustCompile(`\b(?:kind|layer|source|drop|voiceband|voicemode|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results)\.[a-z_]+\b`)
+var untranslated = regexp.MustCompile(`\b(?:(?:kind|layer|source|drop|voiceband|voicemode|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results|unit|attr)\.[a-z_]+` +
+	`|tmdb\.(?:votes|noposter|unmatched|unchecked|search|checked|tv|seasons|episode|method|low|key|conf)|tvstatus\.[A-Z][a-zA-Z ]*)\b`)
 
 func page(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
@@ -161,11 +180,14 @@ func TestHome(t *testing.T) {
 	body := page(t, get(t, h, "/", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, `<div class="home">`)
-	require.Contains(t, body, "<span>4 torrents</span>", "every stored release, adult ones too")
+	require.Contains(t, body, "<span>5 torrents</span>", "every stored release, adult ones too")
 	require.Contains(t, body, "<span>+3 in 24 h</span>", "first seen within the last 24 hours")
 	require.Contains(t, body, "<span>classifier pending: 1</span>")
 	require.NotContains(t, body, "Alien.1979")
 	require.Contains(t, body, `<a href="/top?kind=movie">`)
+	require.Contains(t, body, `<img src="/static/vendor/tmdb.svg" alt="TMDB" height="12">`, "the attribution")
+	require.Contains(t, body, "This product uses the TMDB API but is not endorsed or certified by TMDB.")
+	require.Equal(t, http.StatusOK, get(t, h, "/static/vendor/tmdb.svg", "").Code)
 	for _, path := range []string{"/?q=", "/?kind=movie", "/?vl=ru", "/?voice=any", "/?source=", "/?layer=", "/?min=", "/?sort=size", "/?o=50"} {
 		require.Contains(t, page(t, get(t, h, path, "")), `id="results"`, "%s is a search", path)
 	}
@@ -196,8 +218,13 @@ func TestSearch(t *testing.T) {
 
 	frag = page(t, get(t, h, "/?q=alien", "results"))
 	require.Contains(t, frag, `<div class="works">`)
-	require.Contains(t, frag, `<a href="/top/w/eTphbGllbiAxOTc5?open=1">Alien (1979)</a>`, "the work by title and year, opening its releases")
+	require.Contains(t, frag, `<a href="/top/w/eTphbGllbiAxOTc5?open=1">Alien</a> <span class="mu">1979</span>`, "the work by its TMDB title and year, opening its releases")
+	require.Contains(t, frag, `<img class="th th-l" src="https://image.tmdb.org/t/p/w92/p.jpg"`, "its poster")
 	require.Contains(t, frag, "№1", "its place in the movie top")
+	require.Contains(t, page(t, get(t, h, "/?q=alien&lang=ru", "results")), `?open=1">Чужой</a>`, "the title in the page's language")
+	frag = page(t, get(t, h, "/?q=1080p", "results"))
+	require.Contains(t, frag, `<a href="/top/w/`+heatID+`?open=1" class="key">Heat</a> <span class="mu">1995</span>`, "an unchecked work by its key")
+	require.Contains(t, frag, `<a href="/top/w/`+severanceID+`?open=1" class="key">Severance</a> <span class="mu">S02</span>`, "an unmatched one too")
 	require.NotContains(t, page(t, get(t, h, "/?q=alien&o=50", "results")), `<div class="works">`, "works on the first page only")
 }
 
@@ -258,7 +285,9 @@ func TestTop(t *testing.T) {
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, `aria-current="page">movies</a>`, "movies without a kind")
 	require.Contains(t, body, `<tbody id="work-`+alienID+`">`)
-	require.Contains(t, body, `>Alien</a> <span class="mu">1979</span>`, "a movie's title and year")
+	require.Contains(t, body, `>Alien</a> <span class="mu">1979</span>`, "a movie's TMDB title and year")
+	require.Contains(t, body, `<img class="th" src="https://image.tmdb.org/t/p/w92/p.jpg" width="28" height="42"`, "its poster")
+	require.Contains(t, page(t, get(t, h, "/top?lang=ru", "")), `>Чужой</a> <span class="mu">1979</span>`, "the title in the page's language")
 	require.Contains(t, body, `<td class="r mu">1</td>`, "its place")
 	require.Contains(t, body, `<td class="r dl">new</td>`, "no peers the week before")
 	require.Contains(t, body, `>explicit</td>`, "the marker of its release")
@@ -271,7 +300,8 @@ func TestTop(t *testing.T) {
 
 	body = page(t, get(t, h, "/top?kind=series&win=24h&voice=p50&all=1", ""))
 	require.Contains(t, body, `aria-current="page">series</a>`)
-	require.Contains(t, body, `>Severance</a> <span class="mu">S02</span>`, "a series' title and season")
+	require.Contains(t, body, `class="key">Severance</a> <span class="mu">S02</span>`, "a series' title and season, by its key while unmatched")
+	require.Contains(t, body, `<span class="th th-none" aria-hidden="true"></span>`, "an empty poster slot")
 	require.Contains(t, body, `href="/top?all=1&amp;kind=series&amp;voice=p50&amp;win=24h" hx-get="/top?all=1&amp;kind=series&amp;voice=p50&amp;win=24h" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true" aria-current="true">24 h</a>`)
 	require.Regexp(t, `<td class="r dl">−\d+%</td>`, body, "fewer peers than the day before")
 	require.Contains(t, body, "WEB", "its source")
@@ -336,10 +366,37 @@ func TestTorrent(t *testing.T) {
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, "magnet:?xt=urn:btih:"+hexOf(1))
 	require.Contains(t, body, `<td class="r">Rus</td>`, "the matched word")
-	require.Contains(t, body, `<a href="https://www.themoviedb.org/search?query=alien&#43;1979" rel="noreferrer" target="_blank">TMDB</a> · <a href="https://www.imdb.com/find/?q=alien&#43;1979" rel="noreferrer" target="_blank">IMDb</a>`, "searches when no ID is known")
 	require.Regexp(t, `<th>peers</th><td>\d+ in 7 days <span class="mu">· \d+ in 24 h · \d+ in 30 days</span></td>`, body)
-	require.Regexp(t, `<a href="/top/w/[A-Za-z0-9_-]+\?open=1">Alien \(1979\)</a> <span class="mu">· №1 among movies · 1 releases, this one by peers #1</span>`, body, "the work link opens the work's releases")
-	require.NotContains(t, page(t, get(t, h, "/t/"+hexOf(3), "")), "<th>work</th>", "a release whose name yields no work")
+	require.Contains(t, body, `<section class="tm tm-matched" aria-label="TMDB">`, "the match")
+	require.Contains(t, body, `<img class="tm-poster" src="https://image.tmdb.org/t/p/w342/p.jpg" width="150" height="225"`)
+	require.Contains(t, body, `<a class="tm-stretch" href="/top/w/`+alienID+`?open=1">Alien</a> <span class="mu">1979</span>`, "the title opens the work's releases")
+	require.Contains(t, body, "Horror, Science Fiction")
+	require.Contains(t, body, "movie · 1 h 57 min · US · en")
+	require.Contains(t, body, `TMDB 8.2 <span class="mu">· 16,995 votes</span>`)
+	require.Contains(t, body, `<p class="tm-over">Nostromo intercepts a distress signal.</p>`)
+	require.Contains(t, body, `№1 among movies · 1 releases, this one by peers #1`)
+	require.Contains(t, body, `<a href="https://www.themoviedb.org/movie/348" rel="noreferrer" target="_blank">TMDB</a> · <a href="https://www.imdb.com/title/tt0078748/" rel="noreferrer" target="_blank">IMDb</a>`, "links by ID")
+	require.Contains(t, body, `picked by the classifier among candidates · confidence 0.80 · Oct 20`, "how it was matched")
+	require.NotContains(t, body, "tm-orig", "the original title is the title")
+	ru := page(t, get(t, h, "/t/"+hexOf(1)+"?lang=ru", ""))
+	require.Contains(t, ru, `?open=1">Чужой</a>`)
+	require.Contains(t, ru, `<div class="tm-orig">Alien</div>`, "the original title when it differs")
+	require.Contains(t, ru, "ужасы, фантастика")
+
+	body = page(t, get(t, h, "/t/"+hexOf(2), ""))
+	require.Contains(t, body, `<section class="tm tm-unmatched" aria-label="TMDB">`, "looked up and not found")
+	require.Contains(t, body, `<a class="tm-stretch mono" href="/top/w/`+severanceID+`?open=1">Severance</a> <span class="mu">S02</span>`, "the key")
+	require.Contains(t, body, "Not found on TMDB.")
+	require.Contains(t, body, `<a href="https://www.themoviedb.org/search?query=severance" rel="noreferrer" target="_blank">search TMDB</a> · <a href="https://www.imdb.com/find/?q=severance" rel="noreferrer" target="_blank">IMDb</a>`, "searches for the title")
+	require.Contains(t, body, "checked Oct 20")
+	body = page(t, get(t, h, "/t/"+hexOf(5), ""))
+	require.Contains(t, body, `<section class="tm tm-unchecked" aria-label="TMDB">`, "never looked up")
+	require.Contains(t, body, "Not checked against TMDB yet.")
+	require.Contains(t, body, `https://www.themoviedb.org/search?query=heat&#43;1995`)
+	require.NotContains(t, body, "checked Oct")
+	require.NotContains(t, page(t, get(t, h, "/t/"+hexOf(3), "")), `class="tm `, "a release whose name yields no work")
+
+	body = page(t, get(t, h, "/t/"+hexOf(1), ""))
 	require.Equal(t, 8, strings.Count(body, `<td class="mono wrapc">`), "the first eight files")
 	require.Contains(t, body, "?files=all")
 
@@ -351,29 +408,19 @@ func TestTorrent(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz", "").Code)
 }
 
-func TestLookups(t *testing.T) {
-	ids := []*sniffarrv1.ExternalId{{Provider: "tmdb", Id: "348"}, {Provider: "imdb", Id: "tt0078748"}}
-	for _, tt := range []struct {
-		name       string
-		r          *sniffarrv1.Release
-		tmdb, imdb string
-	}{
-		{"movie by ID", &sniffarrv1.Release{Name: "Alien.1979.1080p", Kind: sniffarrv1.Kind_KIND_MOVIE, Ids: ids},
-			"https://www.themoviedb.org/movie/348", "https://www.imdb.com/title/tt0078748/"},
-		{"series by ID", &sniffarrv1.Release{Name: "Severance S02E01", Kind: sniffarrv1.Kind_KIND_SERIES, Ids: ids},
-			"https://www.themoviedb.org/tv/348", "https://www.imdb.com/title/tt0078748/"},
-		{"search without IDs", &sniffarrv1.Release{Name: "Alien.1979.1080p", Kind: sniffarrv1.Kind_KIND_MOVIE},
-			"https://www.themoviedb.org/search?query=alien+1979", "https://www.imdb.com/find/?q=alien+1979"},
-		{"one ID, the other searched", &sniffarrv1.Release{Name: "Alien.1979.1080p", Ids: ids[:1]},
-			"https://www.themoviedb.org/movie/348", "https://www.imdb.com/find/?q=alien+1979"},
-		{"no title", &sniffarrv1.Release{Name: "1080p"}, "", ""},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			tmdb, imdb := lookups(tt.r)
-			require.Equal(t, tt.tmdb, tmdb)
-			require.Equal(t, tt.imdb, imdb)
-		})
-	}
+func TestTMDBWork(t *testing.T) {
+	require.Nil(t, tmdbWork(nil), "unchecked")
+	at := timestamppb.New(now)
+	require.Equal(t, &ui.TMDBWork{State: ui.TMDBUnmatched, CheckedAt: now}, tmdbWork(&sniffarrv1.TMDBWork{CheckedAt: at}), "checked, nothing matched")
+	got := tmdbWork(&sniffarrv1.TMDBWork{Id: 1399, Type: "tv", ImdbId: "tt0944947", Title: "Игра престолов", OriginalTitle: "Game of Thrones", Year: 2011,
+		PosterPath: "/g.jpg", Overview: "Winter.", Genres: []string{"драма"}, Rating: 8.5, Votes: 25000, Runtime: 60, Status: "Ended", Seasons: 8,
+		Countries: []string{"US"}, Language: "en", Layer: sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH, Confidence: 0.9, CheckedAt: at})
+	require.Equal(t, &ui.TMDBWork{State: ui.TMDBMatched, CheckedAt: now, ID: 1399, Type: "tv", IMDbID: "tt0944947", Title: "Игра престолов", OriginalTitle: "Game of Thrones",
+		Year: 2011, PosterPath: "/g.jpg", Overview: "Winter.", Genres: []string{"драма"}, Rating: 8.5, Votes: 25000, Runtime: 60, Status: "Ended", Seasons: 8,
+		Countries: []string{"US"}, Language: "en", Method: "search", Confidence: float64(float32(0.9))}, got, "matched")
+	require.Equal(t, "classifier", tmdbWork(&sniffarrv1.TMDBWork{Id: 1, Layer: sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER, CheckedAt: at}).Method)
+	require.Equal(t, "alien 1979", title("Alien.1979.1080p"))
+	require.Empty(t, title("1080p"), "no title")
 }
 
 func TestData(t *testing.T) {

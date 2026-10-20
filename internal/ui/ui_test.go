@@ -28,27 +28,29 @@ func TestRenderAll(t *testing.T) {
 		data                     func(Base) any
 	}
 	oneWork := func(b Base) any {
-		p := SampleTop(b, "movie", "m-dune-part-two-2024", false)
-		p.Works = p.Works[2:3]
+		p := SampleTop(b, "movie", SampleOpenID, false)
+		p.Works = p.Works[:1]
 		return p
 	}
 	cases := []tc{
 		{"home", "home", "/", "", func(b Base) any { b.Nav = "home"; return SampleHome(b) }},
 		{"search", "search", "/?q=dune", "", func(b Base) any { b.Nav = "search"; return SampleSearch(b, "dune") }},
 		{"search-results", "search", "/?q=dune", "results", func(b Base) any { return SampleSearch(b, "dune") }},
-		{"top", "top", "/top", "", func(b Base) any { b.Nav = "top"; return SampleTop(b, "movie", "m-dune-part-two-2024", false) }},
+		{"top", "top", "/top", "", func(b Base) any { b.Nav = "top"; return SampleTop(b, "movie", SampleOpenID, false) }},
 		{"top-series", "top", "/top?kind=series", "", func(b Base) any { b.Nav = "top"; return SampleTop(b, "series", "", true) }},
 		{"top-frag", "top", "/top?kind=series", "top", func(b Base) any { return SampleTop(b, "series", "", false) }},
-		{"top-work", "top", "/top/w/m-dune-part-two-2024?open=1", "work-m-dune-part-two-2024", oneWork},
-		{"torrent", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false) }},
-		{"torrent-files", "torrent", "/t/x?files=all", "files", func(b Base) any { return SampleTorrent(b, true) }},
+		{"top-work", "top", "/top/w/" + SampleOpenID + "?open=1", "work-" + SampleOpenID, oneWork},
+		{"torrent-poster", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "poster") }},
+		{"torrent-noposter", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "noposter") }},
+		{"torrent-unmatched", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "unmatched") }},
+		{"torrent-unchecked", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "unchecked") }},
+		{"torrent-files", "torrent", "/t/x?files=all", "files", func(b Base) any { return SampleTorrent(b, true, "poster") }},
 		{"data", "data", "/data", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
 		{"data-frag", "data", "/data", "data", func(b Base) any { return SampleData(b) }},
 	}
 	dir := os.Getenv("PREVIEW_DIR")
 	for _, lang := range []string{"ru", "en"} {
 		for _, c := range cases {
-			name := lang + "/" + c.name
 			req := httptest.NewRequest("GET", c.path, nil)
 			if c.target != "" {
 				req.Header.Set("HX-Request", "true")
@@ -58,18 +60,18 @@ func TestRenderAll(t *testing.T) {
 			b.Now = now
 			w := httptest.NewRecorder()
 			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
-				t.Fatalf("%s: %v", name, err)
+				t.Fatalf("%s/%s: %v", lang, c.name, err)
 			}
 			body := w.Body.String()
 			full := strings.HasPrefix(body, "<!doctype html>")
 			if full != (c.target == "") {
-				t.Errorf("%s: full page = %v, want %v", name, full, c.target == "")
+				t.Errorf("%s/%s: full page = %v, want %v", lang, c.name, full, c.target == "")
 			}
 			if c.target != "" && !strings.Contains(body, `id="`+c.target+`"`) {
-				t.Errorf("%s: fragment lacks id=%q", name, c.target)
+				t.Errorf("%s/%s: fragment lacks id=%q", lang, c.name, c.target)
 			}
-			if c.name == "top-work" && !strings.HasPrefix(strings.TrimSpace(body), "<tbody") {
-				t.Errorf("%s: the fragment is not a bare <tbody>", name)
+			if c.name == "top-work" && !strings.HasPrefix(body, "<tbody") {
+				t.Errorf("%s/%s: the fragment is not a bare <tbody>", lang, c.name)
 			}
 			if dir != "" && full {
 				_ = os.WriteFile(filepath.Join(dir, lang+"-"+c.name+".html"), w.Body.Bytes(), 0o644)

@@ -248,7 +248,7 @@ func TestMigrateModules(t *testing.T) {
 		"torrent_releases_unclassified", "torrent_releases_last_seen", "torrent_releases_title_key", "torrent_releases_background",
 		"torrent_releases_titled", "torrent_releases_work_key", "torrent_releases_peers_week", "torrent_releases_size",
 		"ingest_queue_order", "ingest_queue_lease_owner", "ingest_queue_lease_until", "ingest_queue_queued_at", "ingest_queue_evict",
-		"ingest_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id",
+		"ingest_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id", "tmdb_works_details",
 	}
 	var gotIndexes []string
 	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
@@ -268,7 +268,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 7, version)
+	require.Equal(t, 8, version)
 	var queueRows int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations WHERE component = 'queue'").Scan(&queueRows))
 	require.Zero(t, queueRows, "the queue component is gone")

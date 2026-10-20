@@ -65,6 +65,8 @@ message PageRequest {
   // At most this many releases: 50 when unset, never more than 500.
   int32 limit = 11;
   Sort sort = 12;
+  // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+  string lang = 13;
 }
 
 // Sort is the order of a page.
@@ -95,10 +97,15 @@ message WorkMatch {
   int64 peers = 2;
   // Stored releases of the work.
   int64 releases = 3;
+  // What TMDB knows of the work, by the title of its release with the most
+  // peers; absent while that title was never looked up.
+  TMDBWork tmdb = 4;
 }
 
 message CardRequest {
   bytes infohash = 1;
+  // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+  string lang = 2;
 }
 
 message CardResponse {
@@ -157,6 +164,9 @@ message Work {
   repeated VideoSource sources = 4;
   // The first sighting of the earliest release.
   google.protobuf.Timestamp first_seen = 5;
+  // What TMDB knows of the work, by the title of its release with the most
+  // peers; absent while that title was never looked up.
+  TMDBWork tmdb = 6;
 }
 
 // Window is a sliding period ending now.
@@ -204,6 +214,8 @@ message TopRequest {
   int32 offset = 4;
   // At most this many entries: 20 when unset, never more than 100.
   int32 limit = 5;
+  // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+  string lang = 6;
 }
 
 message TopResponse {
@@ -232,6 +244,8 @@ message WorkRequest {
   string key = 1;
   Window window = 2;
   Voice voice = 3;
+  // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+  string lang = 4;
 }
 
 message WorkResponse {

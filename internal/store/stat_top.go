@@ -321,6 +321,9 @@ type Work struct {
 	// Sources are the releases' sources, each once, in enum order.
 	Sources   []string
 	FirstSeen time.Time
+	// TMDB is the match of the title key of the release Title comes from,
+	// when Options.TMDB is set.
+	TMDB Title
 }
 
 // WorkMatch is a work among the releases a query matches.
@@ -370,11 +373,12 @@ func (s *Store) works(ctx context.Context, kind string, keys []string, v Voice) 
 		where += " AND t.kind = ?"
 		args = append(args, kind)
 	}
+	titleKeys := map[string]string{}
 	if err := s.each(ctx, func(rows *sql.Rows) error {
-		var key, name, source string
+		var key, name, source, titleKey string
 		var year, season int
 		var first int64
-		if err := rows.Scan(&key, &name, &year, &season, &first, &source); err != nil {
+		if err := rows.Scan(&key, &name, &year, &season, &first, &source, &titleKey); err != nil {
 			return err
 		}
 		w, ok := out[key]
@@ -385,6 +389,7 @@ func (s *Store) works(ctx context.Context, kind string, keys []string, v Voice) 
 			} else {
 				w.Title = name
 			}
+			titleKeys[key] = titleKey
 		}
 		w.Releases++
 		if at := time.Unix(first, 0).UTC(); at.Before(w.FirstSeen) {
@@ -395,8 +400,11 @@ func (s *Store) works(ctx context.Context, kind string, keys []string, v Voice) 
 		}
 		out[key] = w
 		return nil
-	}, `SELECT t.work_key, t.name, coalesce(t.year, 0), coalesce(t.season, 0), t.first_seen, coalesce(t.source, '')
+	}, `SELECT t.work_key, t.name, coalesce(t.year, 0), coalesce(t.season, 0), t.first_seen, coalesce(t.source, ''), coalesce(t.title_key, '')
 		FROM torrent_releases t`+where+` ORDER BY t.work_key, t.peers_week DESC, t.id DESC`, args...); err != nil {
+		return nil, err
+	}
+	if err := s.workTitles(ctx, out, titleKeys); err != nil {
 		return nil, err
 	}
 	for k, w := range out {

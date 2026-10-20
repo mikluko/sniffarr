@@ -116,8 +116,13 @@ func (s *server) locale(req *http.Request) string {
 	return l
 }
 
-func (s *server) base(w http.ResponseWriter, req *http.Request, nav string) ui.Base {
-	b := s.ui.Base(req, ui.Lang(w, req, s.locale(req)), nav, s.tags, s.cfg.Location)
+// lang resolves the language of the page, setting the cookie of a pick.
+func (s *server) lang(w http.ResponseWriter, req *http.Request) string {
+	return ui.Lang(w, req, s.locale(req))
+}
+
+func (s *server) base(req *http.Request, lang, nav string) ui.Base {
+	b := s.ui.Base(req, lang, nav, s.tags, s.cfg.Location)
 	b.Now = s.cfg.Now()
 	return b
 }
@@ -148,7 +153,28 @@ var (
 	sorts       = map[sniffarrv1.Sort]string{sniffarrv1.Sort_SORT_PEERS: "peers", sniffarrv1.Sort_SORT_LAST_SEEN: "last_seen", sniffarrv1.Sort_SORT_SIZE: "size"}
 	windows     = map[sniffarrv1.Window]string{sniffarrv1.Window_WINDOW_DAY: "24h", sniffarrv1.Window_WINDOW_WEEK: "7d", sniffarrv1.Window_WINDOW_MONTH: "30d"}
 	voices      = map[sniffarrv1.Voice]string{sniffarrv1.Voice_VOICE_UNSPECIFIED: "any", sniffarrv1.Voice_VOICE_LIKELY: "p50", sniffarrv1.Voice_VOICE_MARKER: "explicit"}
+	tmdbMethods = map[sniffarrv1.TMDBLayer]string{sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH: "search", sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER: "classifier"}
 )
+
+// tmdbWork is the UI's view of a title's TMDB lookup: nil while unchecked,
+// unmatched when nothing matched, else the match.
+func tmdbWork(t *sniffarrv1.TMDBWork) *ui.TMDBWork {
+	if t == nil {
+		return nil
+	}
+	out := &ui.TMDBWork{State: ui.TMDBUnmatched, CheckedAt: t.GetCheckedAt().AsTime()}
+	if t.GetId() == 0 {
+		return out
+	}
+	out.State = ui.TMDBMatched
+	out.ID, out.Type, out.IMDbID = t.GetId(), t.GetType(), t.GetImdbId()
+	out.Title, out.OriginalTitle, out.Year = t.GetTitle(), t.GetOriginalTitle(), int(t.GetYear())
+	out.PosterPath, out.Overview, out.Genres = t.GetPosterPath(), t.GetOverview(), t.GetGenres()
+	out.Rating, out.Votes, out.Runtime = t.GetRating(), int(t.GetVotes()), int(t.GetRuntime())
+	out.Status, out.Seasons, out.Countries, out.Language = t.GetStatus(), int(t.GetSeasons()), t.GetCountries(), t.GetLanguage()
+	out.Method, out.Confidence = tmdbMethods[t.GetLayer()], float64(t.GetConfidence())
+	return out
+}
 
 // uiOr returns m's value for k, or "none".
 func uiOr[K comparable](m map[K]string, k K) string {
@@ -192,7 +218,7 @@ func (s *server) home(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	h := res.Msg
-	s.render(w, req, "home", ui.HomePage{Base: s.base(w, req, "home"), Summary: ui.Summary{Total: h.GetTotal(), NewDay: h.GetNewDay(), Pending: h.GetPending()}})
+	s.render(w, req, "home", ui.HomePage{Base: s.base(req, s.lang(w, req), "home"), Summary: ui.Summary{Total: h.GetTotal(), NewDay: h.GetNewDay(), Pending: h.GetPending()}})
 }
 
 // filters reads the search filters from the query, keeping valid values only.
@@ -270,7 +296,8 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 	if err != nil || offset < 0 {
 		offset = 0
 	}
-	b := &sniffarrv1.PageRequest{Query: q, MinSize: minSize(f.MinSizeGB), Offset: int32(offset), Limit: PageSize}
+	lang := s.lang(w, req)
+	b := &sniffarrv1.PageRequest{Query: q, MinSize: minSize(f.MinSizeGB), Offset: int32(offset), Limit: PageSize, Lang: lang}
 	switch f.Kind {
 	case "":
 	case "unknown":
@@ -330,9 +357,9 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 	}
 	var works []ui.WorkHit
 	for _, m := range page.Msg.GetWorks() {
-		works = append(works, ui.WorkHit{Ref: workRef(m.GetWork()), Peers: m.GetPeers(), Releases: int(m.GetReleases())})
+		works = append(works, ui.WorkHit{Ref: workRef(m.GetWork()), Peers: m.GetPeers(), Releases: int(m.GetReleases()), TMDB: tmdbWork(m.GetTmdb())})
 	}
-	s.render(w, req, "search", ui.SearchPage{Base: s.base(w, req, "search"), Q: q, Filters: f, Works: works, Results: res})
+	s.render(w, req, "search", ui.SearchPage{Base: s.base(req, lang, "search"), Q: q, Filters: f, Works: works, Results: res})
 }
 
 // audioOf is the audio entry for the language, or nil.
@@ -389,7 +416,7 @@ func workRef(w *sniffarrv1.WorkRef) ui.WorkRef {
 
 // uiWork is the UI's row of a work, without its place and peers.
 func (s *server) uiWork(w *sniffarrv1.Work) ui.Work {
-	out := ui.Work{Ref: workRef(w.GetRef()), Releases: int(w.GetReleases()), Voice: s.voiceCells(w.GetAudio()), FirstSeen: w.GetFirstSeen().AsTime()}
+	out := ui.Work{Ref: workRef(w.GetRef()), Releases: int(w.GetReleases()), Voice: s.voiceCells(w.GetAudio()), FirstSeen: w.GetFirstSeen().AsTime(), TMDB: tmdbWork(w.GetTmdb())}
 	for _, src := range w.GetSources() {
 		if k, ok := sources[src]; ok {
 			out.Sources = append(out.Sources, k)
@@ -429,12 +456,13 @@ func (s *server) top(w http.ResponseWriter, req *http.Request) {
 		limit = topSize
 	}
 	pk, _ := key(kinds, kind)
-	res, err := s.cfg.Browse.Top(req.Context(), connect.NewRequest(&sniffarrv1.TopRequest{Kind: pk, Window: window, Voice: v, Limit: int32(limit)}))
+	lang := s.lang(w, req)
+	res, err := s.cfg.Browse.Top(req.Context(), connect.NewRequest(&sniffarrv1.TopRequest{Kind: pk, Window: window, Voice: v, Limit: int32(limit), Lang: lang}))
 	if err != nil {
 		s.fail(w, req, "top", err)
 		return
 	}
-	page := ui.TopPage{Base: s.base(w, req, "top"), Kind: kind, Window: win, VoiceMode: voice, Limit: topSize, All: all}
+	page := ui.TopPage{Base: s.base(req, lang, "top"), Kind: kind, Window: win, VoiceMode: voice, Limit: topSize, All: all}
 	if at := res.Msg.GetComputedAt(); at != nil {
 		page.Computed = at.AsTime()
 	}
@@ -464,7 +492,8 @@ func (s *server) work(w http.ResponseWriter, req *http.Request) {
 	}
 	qs := req.URL.Query()
 	win, voice, window, v := topQuery(qs)
-	res, err := s.cfg.Browse.Work(req.Context(), connect.NewRequest(&sniffarrv1.WorkRequest{Key: k, Window: window, Voice: v}))
+	lang := s.lang(w, req)
+	res, err := s.cfg.Browse.Work(req.Context(), connect.NewRequest(&sniffarrv1.WorkRequest{Key: k, Window: window, Voice: v, Lang: lang}))
 	if connect.CodeOf(err) == connect.CodeNotFound {
 		http.NotFound(w, req)
 		return
@@ -490,7 +519,7 @@ func (s *server) work(w http.ResponseWriter, req *http.Request) {
 	if !slices.Contains(ui.TopKinds, kind) {
 		kind = ui.TopKinds[0]
 	}
-	s.render(w, req, "top", ui.TopPage{Base: s.base(w, req, "top"), Kind: kind, Window: win, VoiceMode: voice, Limit: topSize, All: true, Works: []ui.Work{wk}})
+	s.render(w, req, "top", ui.TopPage{Base: s.base(req, lang, "top"), Kind: kind, Window: win, VoiceMode: voice, Limit: topSize, All: true, Works: []ui.Work{wk}})
 }
 
 // probability is the classifier's probability of an audio track, or nil
@@ -508,7 +537,8 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		http.NotFound(w, req)
 		return
 	}
-	card, err := s.cfg.Browse.Card(req.Context(), connect.NewRequest(&sniffarrv1.CardRequest{Infohash: raw}))
+	lang := s.lang(w, req)
+	card, err := s.cfg.Browse.Card(req.Context(), connect.NewRequest(&sniffarrv1.CardRequest{Infohash: raw, Lang: lang}))
 	if connect.CodeOf(err) == connect.CodeNotFound {
 		http.NotFound(w, req)
 		return
@@ -531,10 +561,11 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		Kind:          ui.Answer{Value: uiOr(kinds, r.GetKind()), Layer: uiOr(kindLayers, r.GetLayer())},
 		Source:        ui.Answer{Value: uiOr(sources, r.GetSource()), Layer: "none"},
 		Peers:         ui.PeerCounts{Day: c.GetPeers().GetDay(), Week: c.GetPeers().GetWeek(), Month: c.GetPeers().GetMonth()},
+		TMDB:          tmdbWork(r.GetTmdb()),
+		TMDBQuery:     title(r.GetName()),
 		WorkRels:      int(c.GetReleases()),
 		RankInWork:    int(c.GetReleaseRank()),
 	}
-	t.TMDBURL, t.IMDbURL = lookups(r)
 	if c.Work != nil {
 		ref := workRef(c.GetWork())
 		t.Work = &ref
@@ -572,45 +603,17 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	for _, f := range files {
 		t.Files.Files = append(t.Files.Files, ui.File{Path: f.Path, Size: f.Size})
 	}
-	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(w, req, ""), BackURL: backURL(req), Torrent: t})
+	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, ""), BackURL: backURL(req), Torrent: t})
 }
 
-// title is the release's title key without its prefix, or "".
+// title is the release's title key without its prefix, or "": what the
+// card's TMDB and IMDb searches look for while the title is unmatched.
 func title(name string) string {
 	k := names.Parse(name).Key
 	if _, t, ok := strings.Cut(k, ":"); ok {
 		return t
 	}
 	return k
-}
-
-// lookups returns the release's TMDB and IMDb links: its work's pages where
-// the IDs are known, else searches for its title; both "" when the name
-// yields no title.
-func lookups(r *sniffarrv1.Release) (tmdb, imdb string) {
-	for _, id := range r.GetIds() {
-		switch id.GetProvider() {
-		case "tmdb":
-			kind := "movie"
-			if r.GetKind() == sniffarrv1.Kind_KIND_SERIES {
-				kind = "tv"
-			}
-			tmdb = "https://www.themoviedb.org/" + kind + "/" + url.PathEscape(id.GetId())
-		case "imdb":
-			imdb = "https://www.imdb.com/title/" + url.PathEscape(id.GetId()) + "/"
-		}
-	}
-	t := title(r.GetName())
-	if t == "" {
-		return tmdb, imdb
-	}
-	if tmdb == "" {
-		tmdb = "https://www.themoviedb.org/search?query=" + url.QueryEscape(t)
-	}
-	if imdb == "" {
-		imdb = "https://www.imdb.com/find/?q=" + url.QueryEscape(t)
-	}
-	return tmdb, imdb
 }
 
 // backURL is the search page the request came from, or "".
@@ -687,7 +690,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 		return cmp.Or(cmp.Compare(b.N, a.N), cmp.Compare(slices.Index(ui.DropReasons, a.Key), slices.Index(ui.DropReasons, b.Key)))
 	})
 	out.Daily, out.Weekly = s.charts(now, days)
-	s.render(w, req, "data", ui.DataPage{Base: s.base(w, req, "data"), Stats: out})
+	s.render(w, req, "data", ui.DataPage{Base: s.base(req, s.lang(w, req), "data"), Stats: out})
 }
 
 // charts are the bar charts of the last 30 days and of the 26 weeks in days,

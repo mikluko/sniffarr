@@ -56,6 +56,13 @@ func New() (*Renderer, error) {
 		"chartArgs": func(b Base, c Chart, label string) chartArgs {
 			return chartArgs{B: b, C: c, Label: label}
 		},
+		"tmdbState":   StateOf,
+		"lowConf":     func(c float64) bool { return c < LowConfidence },
+		"tmdbImg":     TMDBImg,
+		"tmdbSearch":  TMDBSearchURL,
+		"imdbSearch":  IMDbSearchURL,
+		"posterThumb": func() string { return PosterThumb },
+		"posterCard":  func() string { return PosterCard },
 		"pathEscape":  url.PathEscape,
 		"queryEscape": url.QueryEscape,
 	}

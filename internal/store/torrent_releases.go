@@ -622,7 +622,7 @@ func (s *Store) Page(ctx context.Context, b Browse) ([]Release, int64, error) {
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return nil, 0, err
 	}
-	return out, total, s.audio(ctx, out)
+	return out, total, errors.Join(s.audio(ctx, out), s.tmdb(ctx, out))
 }
 
 // Card is a stored release with what its page shows besides.

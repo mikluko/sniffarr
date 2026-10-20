@@ -39,7 +39,13 @@ const none = "none"
 type Store interface {
 	UnmatchedTitles(ctx context.Context, keys []string, before time.Time, limit int) ([]store.TitleKey, error)
 	RecordTitle(ctx context.Context, key string, t store.Title, at time.Time) error
+	WithoutDetails(ctx context.Context, limit int) ([]store.Matched, error)
+	RecordDetails(ctx context.Context, key string, d store.Details, ids []store.ExternalID, at time.Time) error
 }
+
+// languages are the languages details are stored in, each with the tag TMDB
+// is asked for it by; the first one's details are the work's.
+var languages = []struct{ lang, tag string }{{"en", "en-US"}, {"ru", "ru-RU"}}
 
 // Chooser answers a choice question; classify.Jev is one.
 type Chooser interface {
@@ -88,7 +94,9 @@ func (m *Matcher) Unmatched(ctx context.Context, keys []string, limit int) ([]st
 // plausible candidate, under layer tmdb; the Chooser's pick among several,
 // under layer jev; or no match. It records nothing when it fails, except
 // for a request TMDB refuses for good, which is recorded as a failed match.
-// It returns classify.ErrBudget when the Chooser's budget is spent.
+// It returns classify.ErrBudget when the Chooser's budget is spent. A match
+// recorded, it fetches the work's details as Details does; when that fails
+// the match stays without them for Worker's backfill.
 func (m *Matcher) Match(ctx context.Context, k store.TitleKey) error {
 	_, err, _ := m.group.Do(k.Key, func() (any, error) {
 		return nil, m.match(ctx, k)
@@ -97,7 +105,7 @@ func (m *Matcher) Match(ctx context.Context, k store.TitleKey) error {
 }
 
 func (m *Matcher) match(ctx context.Context, k store.TitleKey) error {
-	t, err := m.find(ctx, k)
+	t, id, err := m.find(ctx, k)
 	var tErr *Error
 	switch {
 	case errors.As(err, &tErr) && tErr.Permanent():
@@ -113,7 +121,67 @@ func (m *Matcher) match(ctx context.Context, k store.TitleKey) error {
 		layer = "none"
 	}
 	m.count(ctx, layer)
+	if id == 0 {
+		return nil
+	}
+	err = m.Details(ctx, store.Matched{Key: k.Key, Kind: k.Kind, ID: id})
+	switch {
+	case ctx.Err() != nil:
+		return ctx.Err()
+	case err != nil:
+		m.Log.Warn("fetch details", "key", k.Key, "err", err)
+	}
 	return nil
+}
+
+// Details fetches the details of the matched work in every language and
+// records them, with the work's IDs with other providers. A request TMDB
+// refuses for good records empty details, so the work is not asked about
+// again.
+func (m *Matcher) Details(ctx context.Context, k store.Matched) error {
+	d, ids, err := m.details(ctx, k.Kind == names.Series, k.ID)
+	var tErr *Error
+	switch {
+	case errors.As(err, &tErr) && tErr.Permanent():
+		m.Log.Warn("tmdb refuses the work", "key", k.Key, "err", err)
+		d, ids = store.Details{}, nil
+	case err != nil:
+		return err
+	}
+	if err := m.Store.RecordDetails(ctx, k.Key, d, ids, m.now()); err != nil {
+		return fmt.Errorf("record details: %w", err)
+	}
+	return nil
+}
+
+// details fetches the work in every language: the details and IDs of the
+// first language, and the texts of each.
+func (m *Matcher) details(ctx context.Context, series bool, id int) (store.Details, []store.ExternalID, error) {
+	d := store.Details{Type: "movie", Texts: map[string]store.Text{}}
+	if series {
+		d.Type = "tv"
+	}
+	ids := []store.ExternalID{{Provider: store.ProviderTMDB, ID: strconv.Itoa(id)}}
+	for i, l := range languages {
+		r, err := m.Client.Details(ctx, series, id, l.tag)
+		if err != nil {
+			return store.Details{}, nil, err
+		}
+		switch {
+		case i == 0:
+			d.OriginalTitle, d.PosterPath, d.Rating, d.Votes, d.Runtime = r.OriginalTitle, r.PosterPath, r.Rating, r.Votes, r.Runtime
+			d.Status, d.Seasons, d.Countries, d.Language = r.Status, r.Seasons, r.Countries, r.Language
+			for _, p := range []string{store.ProviderIMDb, store.ProviderTVDB, store.ProviderWikidata} {
+				if id := r.IDs[p]; id != "" {
+					ids = append(ids, store.ExternalID{Provider: p, ID: id})
+				}
+			}
+		case d.PosterPath == "":
+			d.PosterPath = r.PosterPath
+		}
+		d.Texts[l.lang] = store.Text{Title: r.Title, Overview: r.Overview, Genres: r.Genres}
+	}
+	return d, ids, nil
 }
 
 // work is a title key's title, year and kind.
@@ -140,12 +208,13 @@ func workOf(k store.TitleKey) work {
 	return w
 }
 
-// find returns the match of the key, with an empty Layer when there is none.
-func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Title, error) {
+// find returns the match of the key and the TMDB ID of the work, with an
+// empty Layer and 0 when there is none.
+func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Title, int, error) {
 	w := workOf(k)
 	found, err := m.search(ctx, w)
 	if err != nil {
-		return store.Title{}, err
+		return store.Title{}, 0, err
 	}
 	var fits []fit
 	for _, c := range found {
@@ -156,30 +225,21 @@ func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Title, erro
 	var pick fit
 	switch {
 	case len(fits) == 0:
-		return store.Title{}, nil
+		return store.Title{}, 0, nil
 	case len(fits) == 1:
 		pick = fits[0]
 		pick.layer = store.LayerTMDB
 	case m.Chooser == nil:
-		return store.Title{}, nil
+		return store.Title{}, 0, nil
 	default:
 		var ok bool
 		if pick, ok, err = m.choose(ctx, k, fits); err != nil || !ok {
-			return store.Title{}, err
+			return store.Title{}, 0, err
 		}
-	}
-	ids, err := m.Client.ExternalIDs(ctx, w.series, pick.c.ID)
-	if err != nil {
-		return store.Title{}, err
 	}
 	t := store.Title{Year: pick.c.Year, Confidence: pick.confidence, Layer: pick.layer,
 		IDs: []store.ExternalID{{Provider: store.ProviderTMDB, ID: strconv.Itoa(pick.c.ID)}}}
-	for _, p := range []string{store.ProviderIMDb, store.ProviderTVDB, store.ProviderWikidata} {
-		if id := ids[p]; id != "" {
-			t.IDs = append(t.IDs, store.ExternalID{Provider: p, ID: id})
-		}
-	}
-	return t, nil
+	return t, pick.c.ID, nil
 }
 
 // candidate is a TMDB work with every title it was found under.

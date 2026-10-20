@@ -49,8 +49,14 @@
     <div class="mu">{{.T "results.works"}}</div>
     <div class="workhits">
     {{range .Works}}
-      <span><a href="/top/w/{{.Ref.ID}}?open=1">{{$.Work .Ref}}</a>
-      <span class="mu">· {{$.T (concat "kind." .Ref.Kind)}}{{if .Ref.Rank}} · №{{.Ref.Rank}}{{end}} · {{$.Num .Peers}} {{$.T "top.peers_lc"}} · {{.Releases}} {{$.T "top.releases_lc"}}</span></span>
+      <div class="hit">
+        {{- if .TMDB.HasPoster}}<img class="th th-l" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="40" height="60" alt="" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="th th-l th-none" aria-hidden="true"></span>{{end -}}
+        <div class="hit-t">
+          <div><a href="/top/w/{{.Ref.ID}}?open=1"{{if not .TMDB.Matched}} class="key"{{end}}>{{$.Title .Ref .TMDB}}</a>{{with $.TitleSub .Ref .TMDB}} <span class="mu">{{.}}</span>{{end}}</div>
+          {{if .TMDB.ShowOriginal}}<div class="mu">{{.TMDB.OriginalTitle}}</div>{{end}}
+          <div class="mu">{{$.T (concat "kind." .Ref.Kind)}}{{if .Ref.Rank}} · №{{.Ref.Rank}}{{end}} · {{$.Num .Peers}} {{$.T "top.peers_lc"}} · {{.Releases}} {{$.T "top.releases_lc"}}</div>
+        </div>
+      </div>
     {{end}}
     </div>
   </div>

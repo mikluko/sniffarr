@@ -268,7 +268,9 @@ type SearchRequest struct {
 	// known and at least this.
 	MinAudioProbability *float32 `protobuf:"fixed32,6,opt,name=min_audio_probability,json=minAudioProbability,proto3,oneof" json:"min_audio_probability,omitempty"`
 	// Only releases of the work with this ID; query may be empty then.
-	Id            *ExternalId `protobuf:"bytes,7,opt,name=id,proto3,oneof" json:"id,omitempty"`
+	Id *ExternalId `protobuf:"bytes,7,opt,name=id,proto3,oneof" json:"id,omitempty"`
+	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+	Lang          string `protobuf:"bytes,8,opt,name=lang,proto3" json:"lang,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -345,6 +347,13 @@ func (x *SearchRequest) GetId() *ExternalId {
 	return nil
 }
 
+func (x *SearchRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
 type SearchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Releases      []*Release             `protobuf:"bytes,1,rep,name=releases,proto3" json:"releases,omitempty"`
@@ -390,8 +399,10 @@ func (x *SearchResponse) GetReleases() []*Release {
 }
 
 type GetRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Infohash      []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+	Lang          string `protobuf:"bytes,2,opt,name=lang,proto3" json:"lang,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -431,6 +442,13 @@ func (x *GetRequest) GetInfohash() []byte {
 		return x.Infohash
 	}
 	return nil
+}
+
+func (x *GetRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
 }
 
 type GetResponse struct {
@@ -510,7 +528,10 @@ type Release struct {
 	TmdbConfidence float32 `protobuf:"fixed32,18,opt,name=tmdb_confidence,json=tmdbConfidence,proto3" json:"tmdb_confidence,omitempty"`
 	// Distinct peers of the release over the last 7 days, as last computed by
 	// the server; what SORT_PEERS orders by.
-	PeersWeek     int64 `protobuf:"varint,19,opt,name=peers_week,json=peersWeek,proto3" json:"peers_week,omitempty"`
+	PeersWeek int64 `protobuf:"varint,19,opt,name=peers_week,json=peersWeek,proto3" json:"peers_week,omitempty"`
+	// What TMDB knows of the work the release's title is matched to; absent
+	// while the title was never looked up or without title matching.
+	Tmdb          *TMDBWork `protobuf:"bytes,20,opt,name=tmdb,proto3" json:"tmdb,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -671,6 +692,13 @@ func (x *Release) GetPeersWeek() int64 {
 	return 0
 }
 
+func (x *Release) GetTmdb() *TMDBWork {
+	if x != nil {
+		return x.Tmdb
+	}
+	return nil
+}
+
 // ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
 // "wikidata".
 type ExternalId struct {
@@ -725,6 +753,214 @@ func (x *ExternalId) GetId() string {
 	return ""
 }
 
+// TMDBWork is the outcome of looking a title up on TMDB: the work it matched,
+// with what TMDB tells of it, or, with id 0, that nothing matched. Texts are
+// in the language the request asked for, falling back to the other stored
+// language, and the title to original_title last.
+type TMDBWork struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// TMDB's ID of the work; 0 when the title matched nothing.
+	Id int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// "movie" or "tv".
+	Type string `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	// IMDb's ID, "tt" first; empty when TMDB has none.
+	ImdbId        string `protobuf:"bytes,3,opt,name=imdb_id,json=imdbId,proto3" json:"imdb_id,omitempty"`
+	Title         string `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	OriginalTitle string `protobuf:"bytes,5,opt,name=original_title,json=originalTitle,proto3" json:"original_title,omitempty"`
+	// The year of release or first air, 0 when unknown.
+	Year int32 `protobuf:"varint,6,opt,name=year,proto3" json:"year,omitempty"`
+	// TMDB's poster path, to append to its image base URL and a size; empty
+	// without a poster.
+	PosterPath string   `protobuf:"bytes,7,opt,name=poster_path,json=posterPath,proto3" json:"poster_path,omitempty"`
+	Overview   string   `protobuf:"bytes,8,opt,name=overview,proto3" json:"overview,omitempty"`
+	Genres     []string `protobuf:"bytes,9,rep,name=genres,proto3" json:"genres,omitempty"`
+	// TMDB's average vote, 0 to 10, and how many votes.
+	Rating float64 `protobuf:"fixed64,10,opt,name=rating,proto3" json:"rating,omitempty"`
+	Votes  int32   `protobuf:"varint,11,opt,name=votes,proto3" json:"votes,omitempty"`
+	// Minutes: a movie's runtime, a typical episode's for a series; 0 when
+	// unknown.
+	Runtime int32 `protobuf:"varint,12,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	// A series' status as TMDB names it, such as "Returning Series" or
+	// "Ended", and its seasons; empty and 0 for a movie.
+	Status  string `protobuf:"bytes,13,opt,name=status,proto3" json:"status,omitempty"`
+	Seasons int32  `protobuf:"varint,14,opt,name=seasons,proto3" json:"seasons,omitempty"`
+	// ISO 3166-1 alpha-2 codes of the origin countries.
+	Countries []string `protobuf:"bytes,15,rep,name=countries,proto3" json:"countries,omitempty"`
+	// ISO 639-1 code of the original language.
+	Language string `protobuf:"bytes,16,opt,name=language,proto3" json:"language,omitempty"`
+	// What matched the title; TMDB_LAYER_UNSPECIFIED when nothing matched.
+	Layer TMDBLayer `protobuf:"varint,17,opt,name=layer,proto3,enum=sniffarr.v1.TMDBLayer" json:"layer,omitempty"`
+	// Confidence in the match, 0 when nothing matched.
+	Confidence float32 `protobuf:"fixed32,18,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	// When the title was looked up.
+	CheckedAt     *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TMDBWork) Reset() {
+	*x = TMDBWork{}
+	mi := &file_sniffarr_v1_search_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TMDBWork) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TMDBWork) ProtoMessage() {}
+
+func (x *TMDBWork) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_search_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TMDBWork.ProtoReflect.Descriptor instead.
+func (*TMDBWork) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TMDBWork) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *TMDBWork) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *TMDBWork) GetImdbId() string {
+	if x != nil {
+		return x.ImdbId
+	}
+	return ""
+}
+
+func (x *TMDBWork) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *TMDBWork) GetOriginalTitle() string {
+	if x != nil {
+		return x.OriginalTitle
+	}
+	return ""
+}
+
+func (x *TMDBWork) GetYear() int32 {
+	if x != nil {
+		return x.Year
+	}
+	return 0
+}
+
+func (x *TMDBWork) GetPosterPath() string {
+	if x != nil {
+		return x.PosterPath
+	}
+	return ""
+}
+
+func (x *TMDBWork) GetOverview() string {
+	if x != nil {
+		return x.Overview
+	}
+	return ""
+}
+
+func (x *TMDBWork) GetGenres() []string {
+	if x != nil {
+		return x.Genres
+	}
+	return nil
+}
+
+func (x *TMDBWork) GetRating() float64 {
+	if x != nil {
+		return x.Rating
+	}
+	return 0
+}
+
+func (x *TMDBWork) GetVotes() int32 {
+	if x != nil {
+		return x.Votes
+	}
+	return 0
+}
+
+func (x *TMDBWork) GetRuntime() int32 {
+	if x != nil {
+		return x.Runtime
+	}
+	return 0
+}
+
+func (x *TMDBWork) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *TMDBWork) GetSeasons() int32 {
+	if x != nil {
+		return x.Seasons
+	}
+	return 0
+}
+
+func (x *TMDBWork) GetCountries() []string {
+	if x != nil {
+		return x.Countries
+	}
+	return nil
+}
+
+func (x *TMDBWork) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *TMDBWork) GetLayer() TMDBLayer {
+	if x != nil {
+		return x.Layer
+	}
+	return TMDBLayer_TMDB_LAYER_UNSPECIFIED
+}
+
+func (x *TMDBWork) GetConfidence() float32 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+func (x *TMDBWork) GetCheckedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CheckedAt
+	}
+	return nil
+}
+
 // Audio is what is known of a release's audio track in one language.
 type Audio struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -743,7 +979,7 @@ type Audio struct {
 
 func (x *Audio) Reset() {
 	*x = Audio{}
-	mi := &file_sniffarr_v1_search_proto_msgTypes[6]
+	mi := &file_sniffarr_v1_search_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -755,7 +991,7 @@ func (x *Audio) String() string {
 func (*Audio) ProtoMessage() {}
 
 func (x *Audio) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_search_proto_msgTypes[6]
+	mi := &file_sniffarr_v1_search_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +1004,7 @@ func (x *Audio) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Audio.ProtoReflect.Descriptor instead.
 func (*Audio) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{6}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Audio) GetLanguage() string {
@@ -803,24 +1039,26 @@ var File_sniffarr_v1_search_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\n" +
-	"\x18sniffarr/v1/search.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc4\x02\n" +
+	"\x18sniffarr/v1/search.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd8\x02\n" +
 	"\rSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12'\n" +
 	"\x05kinds\x18\x02 \x03(\x0e2\x11.sniffarr.v1.KindR\x05kinds\x12\x14\n" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12*\n" +
 	"\x0eaudio_language\x18\x05 \x01(\tH\x00R\raudioLanguage\x88\x01\x01\x127\n" +
 	"\x15min_audio_probability\x18\x06 \x01(\x02H\x01R\x13minAudioProbability\x88\x01\x01\x12,\n" +
-	"\x02id\x18\a \x01(\v2\x17.sniffarr.v1.ExternalIdH\x02R\x02id\x88\x01\x01B\x11\n" +
+	"\x02id\x18\a \x01(\v2\x17.sniffarr.v1.ExternalIdH\x02R\x02id\x88\x01\x01\x12\x12\n" +
+	"\x04lang\x18\b \x01(\tR\x04langB\x11\n" +
 	"\x0f_audio_languageB\x18\n" +
 	"\x16_min_audio_probabilityB\x05\n" +
 	"\x03_idJ\x04\b\x03\x10\x04R\x11min_russian_audio\"B\n" +
 	"\x0eSearchResponse\x120\n" +
-	"\breleases\x18\x01 \x03(\v2\x14.sniffarr.v1.ReleaseR\breleases\"(\n" +
+	"\breleases\x18\x01 \x03(\v2\x14.sniffarr.v1.ReleaseR\breleases\"<\n" +
 	"\n" +
 	"GetRequest\x12\x1a\n" +
-	"\binfohash\x18\x01 \x01(\fR\binfohash\"=\n" +
+	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\"=\n" +
 	"\vGetResponse\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xda\x05\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\x85\x06\n" +
 	"\aRelease\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -846,11 +1084,37 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"tmdb_layer\x18\x11 \x01(\x0e2\x16.sniffarr.v1.TMDBLayerR\ttmdbLayer\x12'\n" +
 	"\x0ftmdb_confidence\x18\x12 \x01(\x02R\x0etmdbConfidence\x12\x1d\n" +
 	"\n" +
-	"peers_week\x18\x13 \x01(\x03R\tpeersWeekJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
+	"peers_week\x18\x13 \x01(\x03R\tpeersWeek\x12)\n" +
+	"\x04tmdb\x18\x14 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdbJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
 	"\n" +
 	"ExternalId\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id\"\x93\x01\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"\xaa\x04\n" +
+	"\bTMDBWork\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x17\n" +
+	"\aimdb_id\x18\x03 \x01(\tR\x06imdbId\x12\x14\n" +
+	"\x05title\x18\x04 \x01(\tR\x05title\x12%\n" +
+	"\x0eoriginal_title\x18\x05 \x01(\tR\roriginalTitle\x12\x12\n" +
+	"\x04year\x18\x06 \x01(\x05R\x04year\x12\x1f\n" +
+	"\vposter_path\x18\a \x01(\tR\n" +
+	"posterPath\x12\x1a\n" +
+	"\boverview\x18\b \x01(\tR\boverview\x12\x16\n" +
+	"\x06genres\x18\t \x03(\tR\x06genres\x12\x16\n" +
+	"\x06rating\x18\n" +
+	" \x01(\x01R\x06rating\x12\x14\n" +
+	"\x05votes\x18\v \x01(\x05R\x05votes\x12\x18\n" +
+	"\aruntime\x18\f \x01(\x05R\aruntime\x12\x16\n" +
+	"\x06status\x18\r \x01(\tR\x06status\x12\x18\n" +
+	"\aseasons\x18\x0e \x01(\x05R\aseasons\x12\x1c\n" +
+	"\tcountries\x18\x0f \x03(\tR\tcountries\x12\x1a\n" +
+	"\blanguage\x18\x10 \x01(\tR\blanguage\x12,\n" +
+	"\x05layer\x18\x11 \x01(\x0e2\x16.sniffarr.v1.TMDBLayerR\x05layer\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x12 \x01(\x02R\n" +
+	"confidence\x129\n" +
+	"\n" +
+	"checked_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\"\x93\x01\n" +
 	"\x05Audio\x12\x1a\n" +
 	"\blanguage\x18\x01 \x01(\tR\blanguage\x12%\n" +
 	"\vprobability\x18\x02 \x01(\x02H\x00R\vprobability\x88\x01\x01\x12\x16\n" +
@@ -904,7 +1168,7 @@ func file_sniffarr_v1_search_proto_rawDescGZIP() []byte {
 }
 
 var file_sniffarr_v1_search_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_sniffarr_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_sniffarr_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_sniffarr_v1_search_proto_goTypes = []any{
 	(TMDBLayer)(0),                // 0: sniffarr.v1.TMDBLayer
 	(Layer)(0),                    // 1: sniffarr.v1.Layer
@@ -916,8 +1180,9 @@ var file_sniffarr_v1_search_proto_goTypes = []any{
 	(*GetResponse)(nil),           // 7: sniffarr.v1.GetResponse
 	(*Release)(nil),               // 8: sniffarr.v1.Release
 	(*ExternalId)(nil),            // 9: sniffarr.v1.ExternalId
-	(*Audio)(nil),                 // 10: sniffarr.v1.Audio
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(*TMDBWork)(nil),              // 10: sniffarr.v1.TMDBWork
+	(*Audio)(nil),                 // 11: sniffarr.v1.Audio
+	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
 }
 var file_sniffarr_v1_search_proto_depIdxs = []int32{
 	2,  // 0: sniffarr.v1.SearchRequest.kinds:type_name -> sniffarr.v1.Kind
@@ -926,21 +1191,24 @@ var file_sniffarr_v1_search_proto_depIdxs = []int32{
 	8,  // 3: sniffarr.v1.GetResponse.release:type_name -> sniffarr.v1.Release
 	2,  // 4: sniffarr.v1.Release.kind:type_name -> sniffarr.v1.Kind
 	3,  // 5: sniffarr.v1.Release.source:type_name -> sniffarr.v1.VideoSource
-	11, // 6: sniffarr.v1.Release.first_seen:type_name -> google.protobuf.Timestamp
-	11, // 7: sniffarr.v1.Release.last_seen:type_name -> google.protobuf.Timestamp
+	12, // 6: sniffarr.v1.Release.first_seen:type_name -> google.protobuf.Timestamp
+	12, // 7: sniffarr.v1.Release.last_seen:type_name -> google.protobuf.Timestamp
 	1,  // 8: sniffarr.v1.Release.layer:type_name -> sniffarr.v1.Layer
-	10, // 9: sniffarr.v1.Release.audio:type_name -> sniffarr.v1.Audio
+	11, // 9: sniffarr.v1.Release.audio:type_name -> sniffarr.v1.Audio
 	9,  // 10: sniffarr.v1.Release.ids:type_name -> sniffarr.v1.ExternalId
 	0,  // 11: sniffarr.v1.Release.tmdb_layer:type_name -> sniffarr.v1.TMDBLayer
-	4,  // 12: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
-	6,  // 13: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
-	5,  // 14: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
-	7,  // 15: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
-	14, // [14:16] is the sub-list for method output_type
-	12, // [12:14] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	10, // 12: sniffarr.v1.Release.tmdb:type_name -> sniffarr.v1.TMDBWork
+	0,  // 13: sniffarr.v1.TMDBWork.layer:type_name -> sniffarr.v1.TMDBLayer
+	12, // 14: sniffarr.v1.TMDBWork.checked_at:type_name -> google.protobuf.Timestamp
+	4,  // 15: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
+	6,  // 16: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
+	5,  // 17: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
+	7,  // 18: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
+	17, // [17:19] is the sub-list for method output_type
+	15, // [15:17] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_search_proto_init() }
@@ -949,14 +1217,14 @@ func file_sniffarr_v1_search_proto_init() {
 		return
 	}
 	file_sniffarr_v1_search_proto_msgTypes[0].OneofWrappers = []any{}
-	file_sniffarr_v1_search_proto_msgTypes[6].OneofWrappers = []any{}
+	file_sniffarr_v1_search_proto_msgTypes[7].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_search_proto_rawDesc), len(file_sniffarr_v1_search_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
