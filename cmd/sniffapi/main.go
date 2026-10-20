@@ -28,10 +28,12 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/telemetry"
 	"github.com/mikluko/sniffarr/internal/titles"
+	"github.com/mikluko/sniffarr/internal/web"
 )
 
 type config struct {
 	addr, db                 string
+	uiAddr                   string
 	ingestToken, searchToken string
 	typesafeKey              string
 	tmdbKey                  string
@@ -84,6 +86,7 @@ func load(lookup func(string) (string, bool)) (config, error) {
 		searchToken: getenv("SNIFFARR_SEARCH_TOKEN"),
 		typesafeKey: getenv("TYPESAFE_API_KEY"),
 		tmdbKey:     getenv("TMDB_API_KEY"),
+		uiAddr:      getenv("SNIFFARR_UI_ADDR"),
 	}
 	var err error
 	if c.concurrency, err = positive(getenv, "SNIFFARR_CLASSIFY_CONCURRENCY", 4); err != nil {
@@ -280,6 +283,11 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		defer cancel()
 		return srv.Shutdown(shutdown)
 	})
+	if cfg.uiAddr != "" {
+		if err := serveUI(ctx, g, cfg, s, log); err != nil {
+			return err
+		}
+	}
 	g.Go(func() error {
 		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.retention, log) })
 		return nil
@@ -342,4 +350,31 @@ func every(ctx context.Context, d time.Duration, f func()) {
 			f()
 		}
 	}
+}
+
+// serveUI serves the web UI on cfg.uiAddr in g until ctx is done.
+func serveUI(ctx context.Context, g *errgroup.Group, cfg config, s *store.Store, log *slog.Logger) error {
+	h, err := web.New(web.Config{Store: s, Languages: cfg.languages, DailyTokens: cfg.dailyTokens, Log: log})
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
+	l, err := net.Listen("tcp", cfg.uiAddr)
+	if err != nil {
+		return err
+	}
+	g.Go(func() error {
+		log.Info("serving the UI", "addr", l.Addr().String())
+		if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdown)
+	})
+	return nil
 }

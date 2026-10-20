@@ -126,6 +126,24 @@ in the `Authorization` header; `/healthz` needs none.
   that work.
 - `Get` returns one release by infohash.
 
+## Web UI
+
+With `SNIFFARR_UI_ADDR` set, sniffapi also serves a web UI on that address,
+in English or Russian.
+
+| Route               | Page                                                                                                                                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /`             | Search over names and file paths, filtered by kind, audio language and mark or probability, source, the layer that decided the kind, and size; without a query, the latest sightings, refreshed every 15 s |
+| `GET /t/{infohash}` | A release: its magnet link, classification, audio signs per language and stored files                                                                                                                      |
+| `GET /data`         | The store's counts: kinds, layers, sources, audio per language, rejections by reason, the classifier's pending torrents and tokens used, and new torrents per day and per week                             |
+| `GET /static/…`     | Stylesheet and scripts                                                                                                                                                                                     |
+
+The UI authenticates nobody: an authenticating proxy, such as oauth2-proxy,
+goes in front of it. Its language is the one picked with `?lang=ru` or
+`?lang=C`, remembered in a cookie, else the `locale` claim of the JWT in the
+`X-Forwarded-Access-Token` header, which oauth2-proxy can pass on; the token
+is read, not verified. Adult releases do not show in its search.
+
 ## Configuration
 
 ### sniffapi
@@ -136,6 +154,7 @@ in the `Authorization` header; `/healthz` needs none.
 | `SNIFFARR_INGEST_TOKEN`            |                  | Bearer token of `IngestService`; required                                                                              |
 | `SNIFFARR_SEARCH_TOKEN`            |                  | Bearer token of `SearchService`; required                                                                              |
 | `SNIFFARR_ADDR`                    | `:8080`          | Listen address                                                                                                         |
+| `SNIFFARR_UI_ADDR`                 |                  | Listen address of the web UI; empty serves none                                                                        |
 | `TYPESAFE_API_KEY`                 |                  | TypeSafe API key; when unset, only rules and reuse classify                                                            |
 | `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |
 | `SNIFFARR_CLASSIFY_DAILY_TOKENS`   | `2000000`        | Classifier tokens per UTC day at most; `0` is no limit                                                                 |
