@@ -1,6 +1,7 @@
 // Command sniffapi serves the ingest work queue and the search API over a
-// SQLite database and classifies stored torrents with TypeSafe's Jev. It is
-// configured by environment variables; see the README.
+// SQLite database, classifies stored torrents with TypeSafe's Jev, and serves
+// the web UI as a client of its own API. It is configured by environment
+// variables; see the README.
 package main
 
 import (
@@ -10,17 +11,22 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
 
+	"connectrpc.com/connect"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
+	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/cli"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/ingest"
+	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/queue"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
@@ -35,6 +41,7 @@ import (
 type config struct {
 	addr, db                 string
 	uiAddr, oidcIssuer       string
+	uiURL                    *url.URL
 	ingestToken, searchToken string
 	typesafeKey              string
 	tmdbKey                  string
@@ -148,6 +155,16 @@ func load(lookup func(string) (string, bool)) (config, error) {
 	}
 	if c.scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
 		return c, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
+	}
+	if raw := getenv("SNIFFARR_URL"); raw != "" {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return c, fmt.Errorf("SNIFFARR_URL: %w", err)
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return c, errors.New("SNIFFARR_URL: want an http or https URL")
+		}
+		c.uiURL = u
 	}
 	if key, ok := lookup("TMDB_API_KEY"); ok {
 		c.tmdbKey = key
@@ -269,6 +286,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		Log:          log,
 		Lazy:         lazy,
 		TorznabToken: cfg.torznabToken,
+		DailyTokens:  cfg.dailyTokens,
 	})
 	if err != nil {
 		return err
@@ -278,10 +296,17 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	mem := memconn.Listen()
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		log.Info("listening", "addr", l.Addr().String())
 		if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := srv.Serve(mem); !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
@@ -293,7 +318,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		return srv.Shutdown(shutdown)
 	})
 	if cfg.uiAddr != "" {
-		if err := serveUI(ctx, g, cfg, s, log); err != nil {
+		if err := serveUI(ctx, g, cfg, browseClient(cfg, mem), log); err != nil {
 			return err
 		}
 	}
@@ -365,9 +390,19 @@ func every(ctx context.Context, d time.Duration, f func()) {
 // provider again.
 const localeTTL = 10 * time.Minute
 
+// browseClient is the UI's client of the browse API: the one at cfg.uiURL
+// when set, else this process's own over mem.
+func browseClient(cfg config, mem *memconn.Listener) sniffarrv1connect.BrowseServiceClient {
+	hc, base := mem.Client(), memconn.URL
+	if cfg.uiURL != nil {
+		hc, base = &http.Client{Timeout: 30 * time.Second}, cfg.uiURL.String()
+	}
+	return sniffarrv1connect.NewBrowseServiceClient(hc, base, connect.WithInterceptors(auth.Client(cfg.searchToken)))
+}
+
 // serveUI serves the web UI on cfg.uiAddr in g until ctx is done.
-func serveUI(ctx context.Context, g *errgroup.Group, cfg config, s *store.Store, log *slog.Logger) error {
-	wc := web.Config{Store: s, Languages: cfg.languages, DailyTokens: cfg.dailyTokens, Log: log}
+func serveUI(ctx context.Context, g *errgroup.Group, cfg config, browse sniffarrv1connect.BrowseServiceClient, log *slog.Logger) error {
+	wc := web.Config{Browse: browse, Languages: cfg.languages, Log: log}
 	if cfg.oidcIssuer != "" {
 		wc.Locales = userinfo.New(cfg.oidcIssuer, &http.Client{Timeout: 10 * time.Second}, localeTTL)
 	}

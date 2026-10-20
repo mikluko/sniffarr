@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -12,11 +13,16 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
+	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
+	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/rules"
+	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -29,8 +35,9 @@ func hexOf(b byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-// handler serves, with l, a store holding a Russian-marked movie with ten files, a
-// classified series, a torrent of unknown kind and an adult one.
+// handler serves, with l, the UI over an in-process browse API whose store
+// holds a Russian-marked movie with ten files, a classified series, a torrent
+// of unknown kind and an adult one.
 func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
 	ctx := context.Background()
@@ -65,9 +72,25 @@ func handler(t *testing.T, l Locales) http.Handler {
 	require.NoError(t, st.AddTokens(ctx, now.Format(time.DateOnly), 250))
 	langs, err := audio.Parse("ru")
 	require.NoError(t, err)
-	h, err := New(Config{Store: st, Languages: langs, DailyTokens: 1000, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
+	h, err := New(Config{Browse: browse(t, st), Languages: langs, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
+}
+
+// browse serves BrowseService over st behind the token "search" in-process,
+// and returns a client holding the token.
+func browse(t *testing.T, st *store.Store) sniffarrv1connect.BrowseServiceClient {
+	t.Helper()
+	mux := http.NewServeMux()
+	b := &search.Browser{Store: st, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, Now: func() time.Time { return now }}
+	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b, connect.WithInterceptors(auth.NewBearer("search"))))
+	var p http.Protocols
+	p.SetUnencryptedHTTP2(true)
+	srv := &http.Server{Handler: mux, Protocols: &p}
+	l := memconn.Listen()
+	go func() { _ = srv.Serve(l) }()
+	t.Cleanup(func() { require.NoError(t, srv.Shutdown(context.Background())) })
+	return sniffarrv1connect.NewBrowseServiceClient(l.Client(), memconn.URL, connect.WithInterceptors(auth.Client("search")))
 }
 
 // get serves the path, as htmx asking for target when it is not "".

@@ -112,6 +112,9 @@ in the `Authorization` header; `/healthz` needs none.
 | `sniffarr.v1.IngestService` | `Fetch`  | `SNIFFARR_INGEST_TOKEN` |
 | `sniffarr.v1.SearchService` | `Search` | `SNIFFARR_SEARCH_TOKEN` |
 | `sniffarr.v1.SearchService` | `Get`    | `SNIFFARR_SEARCH_TOKEN` |
+| `sniffarr.v1.BrowseService` | `Page`   | `SNIFFARR_SEARCH_TOKEN` |
+| `sniffarr.v1.BrowseService` | `Card`   | `SNIFFARR_SEARCH_TOKEN` |
+| `sniffarr.v1.BrowseService` | `Stats`  | `SNIFFARR_SEARCH_TOKEN` |
 
 - `Sight` is client-streaming: it queues every infohash the server has neither
   stored, rejected nor queued, and returns how many were new and how many
@@ -127,6 +130,14 @@ in the `Authorization` header; `/healthz` needs none.
   entries, and its work's IDs; given one ID, `Search` returns the releases of
   that work.
 - `Get` returns one release by infohash.
+- `BrowseService` reads the store as the web UI shows it and classifies
+  nothing first. `Page` returns one page of releases under the UI's filters,
+  kind or unknown kind, an audio language's marker or probability, source,
+  layer and size, with their total; without a kind, adult releases are left
+  out. `Card` returns one release with its discovery and every stored file.
+  `Stats` returns the store's counts: by kind, layer, source and audio
+  language, rejections by reason, the classifier's pending torrents, tokens
+  spent today and the day's limit, and new torrents per day.
 
 ## Torznab
 
@@ -165,7 +176,10 @@ In Prowlarr, add an indexer of type Generic Torznab with URL
 ## Web UI
 
 With `SNIFFARR_UI_ADDR` set, sniffapi also serves a web UI on that address,
-in English or Russian.
+in English or Russian. The UI touches no database: it reads `BrowseService`
+with `SNIFFARR_SEARCH_TOKEN`, over an in-process connection to sniffapi's own
+API, or over the network to the API at `SNIFFARR_URL` when that is set. Its
+`SNIFFARR_AUDIO_LANGUAGES` must then be the API's.
 
 | Route               | Page                                                                                                                                                                                                       |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -198,6 +212,7 @@ reachable only through that proxy.
 | `SNIFFARR_SEARCH_TOKEN`            |                  | Bearer token of `SearchService`; required                                                                              |
 | `SNIFFARR_ADDR`                    | `:8080`          | Listen address                                                                                                         |
 | `SNIFFARR_UI_ADDR`                 |                  | Listen address of the web UI; empty serves none                                                                        |
+| `SNIFFARR_URL`                     |                  | Base URL of the API the web UI reads, such as `http://sniffapi:8080`; empty reads this process's own                   |
 | `SNIFFARR_OIDC_ISSUER`             |                  | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none                                   |
 | `TYPESAFE_API_KEY`                 |                  | TypeSafe API key; when unset, only rules and reuse classify                                                            |
 | `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |

@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ func TestLoad(t *testing.T) {
 			queue:     queue.Options{MaxSize: queue.DefaultMaxSize, MaxAge: queue.DefaultMaxAge, DeadFor: queue.DefaultDeadFor, NoPeersFor: queue.DefaultNoPeersFor},
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}},
 			retention: defaultRetention, scripts: defaultScripts, languages: russian}},
-		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
+		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_URL", "http://sniffapi:8080", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
 			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
@@ -63,7 +64,7 @@ func TestLoad(t *testing.T) {
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
 			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_LOG_LEVEL", "debug", "SNIFFARR_AUDIO_LANGUAGES", "ru",
 			"TMDB_API_KEY", "tm", "SNIFFARR_TORZNAB_TOKEN", "tz", "SNIFFARR_TITLES_CONCURRENCY", "3", "SNIFFARR_TITLES_RATE", "10", "SNIFFARR_TITLES_RETRY", "240h", "SNIFFARR_SEARCH_TITLES_MAX", "7"),
-			want: config{addr: ":9000", uiAddr: ":9001", oidcIssuer: "https://id.example.com", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", typesafeKey: "ts", tmdbKey: "tm", torznabToken: "tz", concurrency: 8,
+			want: config{addr: ":9000", uiAddr: ":9001", uiURL: &url.URL{Scheme: "http", Host: "sniffapi:8080"}, oidcIssuer: "https://id.example.com", db: "/data/sniffarr.db", ingestToken: "in", searchToken: "se", typesafeKey: "ts", tmdbKey: "tm", torznabToken: "tz", concurrency: 8,
 				titlesConcurrency: 3, titlesRate: 10, titlesRetry: 240 * time.Hour, lazyTitles: 7, dailyTokens: 1000000, searchReserve: 40,
 				lease: 2 * time.Minute, attempts: 5, backoff: time.Hour,
 				queue:     queue.Options{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour},
@@ -80,6 +81,7 @@ func TestLoad(t *testing.T) {
 			store:     store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}, Titles: true},
 			retention: defaultRetention, scripts: defaultScripts, languages: russian}},
 		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
+		{name: "UI URL without a scheme", env: with("SNIFFARR_URL", "sniffapi:8080"), err: "SNIFFARR_URL: want an http or https URL"},
 		{name: "nothing set", env: map[string]string{}, err: "SNIFFARR_DB is not set"},
 		{name: "no ingest token", env: with("SNIFFARR_INGEST_TOKEN", ""), err: "SNIFFARR_INGEST_TOKEN is not set"},
 		{name: "no search token", env: with("SNIFFARR_SEARCH_TOKEN", ""), err: "SNIFFARR_SEARCH_TOKEN is not set"},
@@ -125,16 +127,21 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+// freeAddr is a loopback address nothing listens on.
+func freeAddr(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	require.NoError(t, l.Close())
+	return l.Addr().String()
+}
+
 func TestRunWithTelemetryOff(t *testing.T) {
 	t.Setenv("OTEL_SDK_DISABLED", "true")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	addr := l.Addr().String()
-	require.NoError(t, l.Close())
-
+	addr, uiAddr := freeAddr(t), freeAddr(t)
 	env := map[string]string{
-		"SNIFFARR_DB": filepath.Join(t.TempDir(), "sniffarr.db"), "SNIFFARR_ADDR": addr,
+		"SNIFFARR_DB": filepath.Join(t.TempDir(), "sniffarr.db"), "SNIFFARR_ADDR": addr, "SNIFFARR_UI_ADDR": uiAddr,
 		"SNIFFARR_INGEST_TOKEN": "in", "SNIFFARR_SEARCH_TOKEN": "se",
 	}
 	cfg, err := load(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
@@ -143,14 +150,18 @@ func TestRunWithTelemetryOff(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- run(ctx, cfg, slog.New(slog.DiscardHandler)) }()
 
-	require.Eventually(t, func() bool {
-		res, err := http.Get("http://" + addr + "/healthz")
-		if err != nil {
-			return false
+	ok := func(url string) func() bool {
+		return func() bool {
+			res, err := http.Get(url)
+			if err != nil {
+				return false
+			}
+			res.Body.Close()
+			return res.StatusCode == http.StatusOK
 		}
-		res.Body.Close()
-		return res.StatusCode == http.StatusOK
-	}, 5*time.Second, 10*time.Millisecond)
+	}
+	require.Eventually(t, ok("http://"+addr+"/healthz"), 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, ok("http://"+uiAddr+"/data"), 5*time.Second, 10*time.Millisecond, "the UI reads the API in-process")
 	cancel()
 	select {
 	case err := <-done:
