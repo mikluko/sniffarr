@@ -109,7 +109,6 @@
   "d.max": "max",
   "d.min": "min",
   "d.lastweek": "last 7 days:",
-  "d.grafana": "Queue rate, leases, replicas and other telemetry: see Grafana.",
   "nav.top": "Top",
   "nav.totop": "to top",
   "f.sort": "sort",

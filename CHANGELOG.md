@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** `-public-ip` is gone. `-sniff` asks a STUN server for its public address at start, `-stun`, default `stun.l.google.com:19302`; the node ID takes the BEP 42 prefix of the answer, and is used as stored when the server does not answer within 5 seconds or `-stun` is empty.
 
+### Removed
+
+- The line under the charts of the data page that pointed at Grafana for the rest of the telemetry.
+
 ## [0.9.0] - 2026-10-20
 
 ### Added
