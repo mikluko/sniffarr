@@ -1,6 +1,6 @@
-// Package web serves the web UI as a client of the browse API: search, a
-// release's card, and the store's counts. It authenticates nobody; that is
-// left to a proxy in front of it.
+// Package web serves the web UI as a client of the browse API: the home
+// page, search, a release's card, and the store's counts. It authenticates
+// nobody; that is left to a proxy in front of it.
 package web
 
 import (
@@ -86,7 +86,7 @@ func New(cfg Config) (http.Handler, error) {
 	s := &server{cfg: cfg, ui: r, tags: audio.Tags(cfg.Languages)}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", ui.Static())
-	mux.HandleFunc("GET /{$}", s.search)
+	mux.HandleFunc("GET /{$}", s.index)
 	mux.HandleFunc("GET /t/{infohash}", s.torrent)
 	mux.HandleFunc("GET /data", s.data)
 	return mux, nil
@@ -156,9 +156,39 @@ func key[K comparable](m map[K]string, v string) (K, bool) {
 	return zero, false
 }
 
+// searchKeys are the query parameters whose presence makes GET / a search.
+var searchKeys = []string{"q", "kind", "vl", "voice", "source", "layer", "min", "sort", "o"}
+
+// index serves GET /: the home page, or the search once any of searchKeys is
+// in the query.
+func (s *server) index(w http.ResponseWriter, req *http.Request) {
+	qs := req.URL.Query()
+	for _, k := range searchKeys {
+		if qs.Has(k) {
+			s.search(w, req)
+			return
+		}
+	}
+	s.home(w, req)
+}
+
+func (s *server) home(w http.ResponseWriter, req *http.Request) {
+	res, err := s.cfg.Browse.Stats(req.Context(), connect.NewRequest(&sniffarrv1.StatsRequest{Days: 1}))
+	if err != nil {
+		s.fail(w, req, "stats", err)
+		return
+	}
+	st := res.Msg
+	sum := ui.Summary{Total: st.GetTotal(), Pending: st.GetPending()}
+	if d := st.GetDays(); len(d) > 0 {
+		sum.NewDay = d[0]
+	}
+	s.render(w, req, "home", ui.HomePage{Base: s.base(w, req, "home"), Summary: sum})
+}
+
 // filters reads the search filters from the query, keeping valid values only.
 func (s *server) filters(q url.Values) ui.Filters {
-	f := ui.Filters{VoiceLang: q.Get("vl"), Voice: q.Get("voice"), MinSizeGB: strings.TrimSpace(q.Get("min"))}
+	f := ui.Filters{VoiceLang: q.Get("vl"), Voice: q.Get("voice"), MinSizeGB: strings.TrimSpace(q.Get("min")), Sort: q.Get("sort")}
 	if k := q.Get("kind"); slices.Contains(ui.Kinds, k) {
 		f.Kind = k
 	}
@@ -177,8 +207,14 @@ func (s *server) filters(q url.Values) ui.Filters {
 	if !slices.Contains(ui.VoiceModes, f.Voice) {
 		f.Voice = "any"
 	}
+	if !slices.Contains(ui.Sorts, f.Sort) {
+		f.Sort = defaultSort
+	}
 	return f
 }
+
+// defaultSort is the order of a search that names none.
+const defaultSort = "last_seen"
 
 // minSize is the size in bytes of a size in GiB as typed, with a point or a
 // comma; 0 when it is not a positive number.
@@ -190,7 +226,9 @@ func minSize(gb string) int64 {
 	return int64(math.Min(v*(1<<30), math.MaxInt64))
 }
 
-// searchURL is the search page's URL for the query, filters and offset.
+// searchURL is the search page's URL for the query, filters and offset; it
+// carries q even empty, since GET / without a search parameter is the home
+// page.
 func searchURL(q string, f ui.Filters, offset int, voiceDefault string) string {
 	v := url.Values{}
 	set := func(k, x, def string) {
@@ -205,11 +243,12 @@ func searchURL(q string, f ui.Filters, offset int, voiceDefault string) string {
 	set("source", f.Source, "")
 	set("layer", f.Layer, "")
 	set("min", f.MinSizeGB, "")
+	set("sort", f.Sort, defaultSort)
 	if offset > 0 {
 		v.Set("o", strconv.Itoa(offset))
 	}
 	if len(v) == 0 {
-		return "/"
+		return "/?q="
 	}
 	return "/?" + v.Encode()
 }
@@ -254,13 +293,7 @@ func (s *server) search(w http.ResponseWriter, req *http.Request) {
 	if len(s.tags) > 0 {
 		voiceDefault = s.tags[0]
 	}
-	res := ui.Results{
-		Fresh:   q == "" && offset == 0,
-		SelfURL: searchURL(q, f, offset, voiceDefault),
-		Offset:  offset,
-		Shown:   len(releases),
-		Total:   total,
-	}
+	res := ui.Results{Offset: offset, Shown: len(releases), Total: total}
 	if offset > 0 {
 		res.PrevURL = searchURL(q, f, max(0, offset-PageSize), voiceDefault)
 	}
