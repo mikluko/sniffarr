@@ -76,9 +76,9 @@ func TestSweep(t *testing.T) {
 	_, _, err := s.Known(ctx, []Hash{hash(1)}, t0.Add(10*time.Hour))
 	require.NoError(t, err)
 
-	n, err := s.Sweep(ctx, t0.Add(4*time.Hour+time.Minute), 2)
+	sw, err := s.Sweep(ctx, t0.Add(4*time.Hour+time.Minute), t0, 2)
 	require.NoError(t, err)
-	require.Equal(t, 3, n, "2, 3 and 4, in two batches; 1 was seen again")
+	require.Equal(t, Swept{Expired: 3}, sw, "2, 3 and 4, in two batches; 1 was seen again")
 	for b, stored := range map[byte]bool{1: true, 2: false, 3: false, 4: false, 5: true} {
 		_, err := s.Get(ctx, hash(b))
 		if stored {
@@ -96,6 +96,57 @@ func TestSweep(t *testing.T) {
 	var audio int
 	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_audio").Scan(&audio))
 	require.Equal(t, 2, audio, "and their audio")
+}
+
+func TestSweepIdle(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for i, name := range []string{"Alien.1979.mkv", "Unknown.Thing.mkv", "Alien.1979.REMUX.mkv", "Fresh.Thing.mkv", "Heat.1995.mkv"} {
+		tr := torrent(byte(i+1), name)
+		tr.TitleKey = map[int]string{0: "y:alien 1979", 2: "y:alien 1979", 4: "y:heat 1995"}[i]
+		_, _, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	matchTo(t, s, "y:alien 1979", "movie", 348, "Alien")
+	_, _, err := s.Known(ctx, []Hash{hash(3), hash(4)}, t0.Add(8*24*time.Hour))
+	require.NoError(t, err)
+	_, _, err = s.Known(ctx, []Hash{hash(5)}, t0.Add(9*24*time.Hour))
+	require.NoError(t, err)
+
+	now := t0.Add(9 * 24 * time.Hour)
+	sw, err := s.Sweep(ctx, now.Add(-90*24*time.Hour), now.Add(-7*24*time.Hour), 1)
+	require.NoError(t, err)
+	require.Equal(t, Swept{Idle: 1}, sw, "2 alone: 1 has a work, 4 and 5 were seen within the week")
+	for b, stored := range map[byte]bool{1: true, 2: false, 3: true, 4: true, 5: true} {
+		_, err := s.Get(ctx, hash(b))
+		if stored {
+			require.NoError(t, err, "torrent %d", b)
+		} else {
+			require.ErrorIs(t, err, ErrNotFound, "torrent %d", b)
+		}
+	}
+
+	sw, err = s.Sweep(ctx, t0.Add(time.Minute), t0.Add(time.Minute), 10)
+	require.NoError(t, err)
+	require.Equal(t, Swept{Expired: 1}, sw, "1 outlives the idle retention for its work, not the full one")
+}
+
+func TestSweepPlans(t *testing.T) {
+	s := open(t)
+	for ids, index := range map[string]string{idleIDs: "torrent_releases_idle", expiredIDs: "torrent_releases_last_seen"} {
+		var plan []string
+		require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
+			var id, parent, unused int
+			var detail string
+			if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+				return err
+			}
+			plan = append(plan, detail)
+			return nil
+		}, "EXPLAIN QUERY PLAN "+ids, 0, 1))
+		require.Len(t, plan, 1, ids)
+		require.Contains(t, plan[0], "INDEX "+index+" (last_seen<?)", "searches the index rather than scanning past the others")
+	}
 }
 
 func TestMigrateAudio(t *testing.T) {
@@ -249,7 +300,7 @@ func TestMigrateModules(t *testing.T) {
 		"torrent_releases_titled", "torrent_releases_work", "torrent_releases_peers_week", "torrent_releases_size",
 		"ingest_queue_order", "ingest_queue_lease_owner", "ingest_queue_lease_until", "ingest_queue_queued_at", "ingest_queue_evict",
 		"ingest_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id", "tmdb_works_details",
-		"tmdb_matches_work",
+		"tmdb_matches_work", "torrent_releases_idle",
 	}
 	var gotIndexes []string
 	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
@@ -269,7 +320,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 10, version)
+	require.Equal(t, 11, version)
 	var queueRows int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations WHERE component = 'queue'").Scan(&queueRows))
 	require.Zero(t, queueRows, "the queue component is gone")

@@ -383,6 +383,7 @@ the same to each.
 | `SNIFFARR_QUEUE_NO_PEERS_FOR`      | `24h`            | How long an infohash dropped for having no peers stays out                                                             |
 | `SNIFFARR_STORE_MAX_FILES`         | `20`             | Files stored per torrent, the largest ones                                                                             |
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
+| `SNIFFARR_RETENTION_IDLE`          | `168h`           | How long a stored torrent with no TMDB work is kept without being seen                                                 |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
 | `SNIFFARR_AUDIO_LANGUAGES`         |                  | Audio languages, BCP-47 tags and comma-separated; unset or empty leaves the extension off. An unknown tag fails startup |
 | `TMDB_API_KEY`                     | built-in token   | TMDB API key or read access token; set empty, no titles are matched                                                    |
@@ -396,11 +397,12 @@ The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start. A torrent keeps its true file
 count, but only its largest files are stored and searched. Once a minute the
 API deletes, in small batches, the torrents nobody has sighted within the
-retention period, with their peer sketches; a later sighting queues them
-again. Once an hour it unions the hour sketches older than 8 days into day
-sketches and deletes the day sketches older than 65 days, and every 10
-minutes, and once at start, it recomputes the tops of works and every
-torrent's peers over the last 7 days.
+retention period, or within the idle retention period for those matched to no
+TMDB work, with their peer sketches; a later sighting queues them again.
+Once an hour it unions the hour sketches older than 8 days into day sketches
+and deletes the day sketches older than 65 days, and every 10 minutes, and
+once at start, it recomputes the tops of works and every torrent's peers over
+the last 7 days.
 
 ### `-ui`
 
@@ -496,7 +498,7 @@ BitTorrent peer address appears in spans, attributes or logs.
 | `-api`     | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
 | `-api`     | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
 | `-api`     | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
-| `-api`     | `sniffarr.store.retention.deletions`   | `{torrent}`  |                                            |
+| `-api`     | `sniffarr.store.retention.deletions`   | `{torrent}`  | `sniffarr.store.retention.class`           |
 | `-api`     | `sniffarr.ingest.results`              | `{result}`   | `sniffarr.fetch.outcome`                   |
 | `-api`     | `sniffarr.ingest.rejections`           | `{torrent}`  | `sniffarr.rules.reason`                    |
 | `-api`     | `sniffarr.ingest.stored`               | `{torrent}`  |                                            |
@@ -523,6 +525,7 @@ BitTorrent peer address appears in spans, attributes or logs.
 `sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
+`sniffarr.store.retention.class` is `idle` or `expired`;
 `sniffarr.classify.layer` is `rules`, `reuse` or `jev`;
 `sniffarr.search.lazy.result` is `in_time`, `late` or `failed`;
 `sniffarr.tmdb.layer` is `tmdb`, `jev` or `none`; `sniffarr.tmdb.status` is

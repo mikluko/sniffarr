@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/mikluko/sniffarr/internal/database"
@@ -91,7 +92,7 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 		return nil, err
 	}
 	deleted, err := opts.Meter.Meter("github.com/mikluko/sniffarr/internal/store").Int64Counter("sniffarr.store.retention.deletions",
-		metric.WithUnit("{torrent}"), metric.WithDescription("Stored torrents deleted for not being seen within the retention period."))
+		metric.WithUnit("{torrent}"), metric.WithDescription("Stored torrents deleted for not being seen within the retention period, by which period."))
 	if err != nil {
 		return nil, err
 	}
@@ -105,15 +106,47 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	return s, nil
 }
 
-// Sweep deletes, with their files and search entries, the torrents last seen
-// before before, in transactions of at most batch torrents each, and returns
-// how many it deleted.
-func (s *Store) Sweep(ctx context.Context, before time.Time, batch int) (int, error) {
+// Swept is what one Sweep deleted.
+type Swept struct {
+	// Idle is how many torrents with no TMDB work were deleted for not being
+	// seen since idleBefore.
+	Idle int
+	// Expired is how many torrents were deleted for not being seen since
+	// before.
+	Expired int
+}
+
+// idleIDs and expiredIDs select, given a time and a limit, the oldest
+// torrents last seen before the time, those with no TMDB work and any.
+const (
+	idleIDs    = "SELECT id FROM torrent_releases WHERE work IS NULL AND last_seen < ? ORDER BY last_seen LIMIT ?"
+	expiredIDs = "SELECT id FROM torrent_releases WHERE last_seen < ? ORDER BY last_seen LIMIT ?"
+)
+
+// Sweep deletes, with their files and search entries, the torrents with no
+// TMDB work last seen before idleBefore, then every torrent last seen before
+// before, in transactions of at most batch torrents each. A torrent is never
+// first seen after it is last seen, so none is deleted as idle before it has
+// been stored for as long as idleBefore leaves it.
+func (s *Store) Sweep(ctx context.Context, before, idleBefore time.Time, batch int) (Swept, error) {
+	var sw Swept
+	var err error
+	sw.Idle, err = s.sweep(ctx, idleIDs, idleBefore, batch, "idle")
+	if err != nil {
+		return sw, err
+	}
+	sw.Expired, err = s.sweep(ctx, expiredIDs, before, batch, "expired")
+	return sw, err
+}
+
+// sweep deletes the torrents ids selects, given before and batch, until it
+// selects fewer than batch, and returns how many it deleted.
+func (s *Store) sweep(ctx context.Context, ids string, before time.Time, batch int, class string) (int, error) {
+	attr := metric.WithAttributes(attribute.String("sniffarr.store.retention.class", class))
 	total := 0
 	for {
 		var n int
 		err := s.tx(ctx, func(tx *sql.Tx) error {
-			const ids = "SELECT id FROM torrent_releases WHERE last_seen < ? ORDER BY last_seen LIMIT ?"
 			if _, err := tx.ExecContext(ctx, "DELETE FROM torrent_releases_fts WHERE rowid IN ("+ids+")", before.Unix(), batch); err != nil {
 				return err
 			}
@@ -129,7 +162,7 @@ func (s *Store) Sweep(ctx context.Context, before time.Time, batch int) (int, er
 			return total, err
 		}
 		total += n
-		s.deleted.Add(ctx, int64(n))
+		s.deleted.Add(ctx, int64(n), attr)
 		if n < batch {
 			return total, nil
 		}

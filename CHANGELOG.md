@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SNIFFARR_RETENTION_IDLE`, default `168h`: a stored torrent matched to no TMDB work is deleted once it has not been seen for that long; the others keep `SNIFFARR_RETENTION`. `sniffarr.store.retention.deletions` carries `sniffarr.store.retention.class`, `idle` or `expired`.
+
 ## [0.18.1] - 2026-10-21
 
 ### Fixed

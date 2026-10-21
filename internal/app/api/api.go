@@ -52,6 +52,8 @@ type Config struct {
 	Backoff  time.Duration
 	// Retention is how long a stored torrent is kept without being seen.
 	Retention time.Duration
+	// RetentionIdle is Retention for a torrent with no TMDB work.
+	RetentionIdle time.Duration
 	// LazyMax, LazyWait and LazyTMDB are those of search.Lazy.
 	LazyMax  int
 	LazyWait time.Duration
@@ -154,7 +156,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 
 func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers) {
 	app.Go(lc, sd, log, "maintenance", func(ctx context.Context) error {
-		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, log) })
+		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, cfg.RetentionIdle, log) })
 		return nil
 	})
 	app.Go(lc, sd, log, "peers rollup", func(ctx context.Context) error {
@@ -180,8 +182,8 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *st
 }
 
 // maintain trims the queue and deletes the torrents not seen within
-// retention.
-func maintain(ctx context.Context, q *store.Queue, s *store.Store, retention time.Duration, log *slog.Logger) {
+// retention, or within idle for those with no TMDB work.
+func maintain(ctx context.Context, q *store.Queue, s *store.Store, retention, idle time.Duration, log *slog.Logger) {
 	now := time.Now()
 	t, err := q.Trim(ctx, now)
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -189,12 +191,12 @@ func maintain(ctx context.Context, q *store.Queue, s *store.Store, retention tim
 	} else if t != (store.Trimmed{}) {
 		log.Info("trimmed queue", "aged", t.Aged, "oversize", t.Oversize, "dead_expired", t.Expired)
 	}
-	n, err := s.Sweep(ctx, now.Add(-retention), sweepBatch)
+	sw, err := s.Sweep(ctx, now.Add(-retention), now.Add(-idle), sweepBatch)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.ErrorContext(ctx, "sweep store", "err", err)
 	}
-	if n > 0 {
-		log.Info("swept store", "deleted", n)
+	if sw != (store.Swept{}) {
+		log.Info("swept store", "idle", sw.Idle, "expired", sw.Expired)
 	}
 }
 

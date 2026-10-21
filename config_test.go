@@ -150,7 +150,7 @@ func TestLoadAPI(t *testing.T) {
 				DailyTokens: classify.DefaultDailyTokens, SearchReserve: classify.DefaultSearchReserve, LazyMax: search.DefaultLazyMax, LazyWait: search.DefaultLazyWait,
 				LazyTMDB: search.DefaultLazyTMDB, TMDBConcurrency: tmdb.DefaultConcurrency, TMDBRate: tmdb.DefaultRate, TMDBRetry: tmdb.DefaultRetry,
 				Lease: ingest.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff,
-				Retention: defaultRetention, Scripts: defaultScripts},
+				Retention: defaultRetention, RetentionIdle: defaultRetentionIdle, Scripts: defaultScripts},
 			db.Config{Path: "/data/sniffarr.db",
 				Queue: store.QueueOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor},
 				Store: store.Options{MaxFiles: store.DefaultMaxFiles, TMDB: true}}
@@ -167,14 +167,14 @@ func TestLoadAPI(t *testing.T) {
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
 			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
-			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h",
+			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h", "SNIFFARR_RETENTION_IDLE", "72h",
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
 			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_AUDIO_LANGUAGES", "ru",
 			"TMDB_API_KEY", "tm", "SNIFFARR_TORZNAB_TOKEN", "tz", "SNIFFARR_TMDB_CONCURRENCY", "3", "SNIFFARR_TMDB_RATE", "10", "SNIFFARR_TMDB_RETRY", "240h", "SNIFFARR_SEARCH_TMDB_MAX", "7"),
 			want: func(a *api.Config, d *db.Config) {
 				*a = api.Config{Addr: ":9000", IngestToken: "in", SearchToken: "se", TypesafeKey: "ts", TMDBKey: "tm", TorznabToken: "tz", ClassifyConcurrency: 8,
 					TMDBConcurrency: 3, TMDBRate: 10, TMDBRetry: 240 * time.Hour, LazyTMDB: 7, DailyTokens: 1000000, SearchReserve: 40,
-					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, LazyMax: 5, LazyWait: 500 * time.Millisecond,
+					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, RetentionIdle: 72 * time.Hour, LazyMax: 5, LazyWait: 500 * time.Millisecond,
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian}
 				d.Queue = store.QueueOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour}
 				d.Store = store.Options{MaxFiles: 50, Languages: []string{"ru"}, TMDB: true}
@@ -195,6 +195,7 @@ func TestLoadAPI(t *testing.T) {
 		{name: "lease not a duration", env: with("SNIFFARR_FETCH_LEASE", "60"), err: "SNIFFARR_FETCH_LEASE: want a positive duration"},
 		{name: "zero attempts", env: with("SNIFFARR_FETCH_ATTEMPTS", "0"), err: "SNIFFARR_FETCH_ATTEMPTS: want a positive integer"},
 		{name: "negative backoff", env: with("SNIFFARR_FETCH_BACKOFF", "-1m"), err: "SNIFFARR_FETCH_BACKOFF: want a positive duration"},
+		{name: "idle retention not a duration", env: with("SNIFFARR_RETENTION_IDLE", "7d"), err: "SNIFFARR_RETENTION_IDLE: want a positive duration"},
 		{name: "no-peers window not a duration", env: with("SNIFFARR_QUEUE_NO_PEERS_FOR", "1d"), err: "SNIFFARR_QUEUE_NO_PEERS_FOR: want a positive duration"},
 		{name: "reserve over 100", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "101"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
 		{name: "reserve a fraction", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0.25"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
