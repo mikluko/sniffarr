@@ -102,10 +102,11 @@ language every stored torrent records a marker, a word or studio of the
 language in its name or file paths (`Rus`, `Дубляж`, `LostFilm` for `ru`), and
 a script hint, letters of the language's script there (Cyrillic for `ru`). A
 marker sets the probability of an audio track in the language to 1; otherwise
-Jev answers it, one question per language. A marker records its mark, the
-word or studio as written in the name, or else in a stored file path:
-`Rus`, `LostFilm`; markers stored without one get theirs once, at the first
-start that records marks. While the extension is off, nothing
+Jev answers it, one question per language. A marker records its mark as
+written in the name, or else in a stored file path: a studio when there is
+one, wherever it stands, else a word, so `Silo.S03E10.rus.LostFilm` marks
+`LostFilm`; stored markers get their marks recomputed once, at the first start
+of a version whose marking changed. While the extension is off, nothing
 about audio is recorded or returned, Jev is asked about kind and source only,
 the background classifier has nothing to select, `BrowseService.Settings`
 returns no languages, and the web UI shows no voice filter, no per-language

@@ -77,6 +77,9 @@ func TestMark(t *testing.T) {
 	require.Equal(t, "LostFilm", ru.Mark("Severance.S02.1080p.LostFilm", nil))
 	require.Equal(t, "Rus", ru.Mark("Alien.1979.1080p", []rules.File{{Path: "Audio/Rus.ac3"}}), "a file path when the name has none")
 	require.Empty(t, ru.Mark("Alien.1979.1080p", []rules.File{{Path: "Russian.Doll.mkv"}}), "whole words only")
+	require.Equal(t, "LostFilm", ru.Mark("Silo.S03E10.1080p.rus.LostFilm.TV.mkv", nil), "a studio over a word before it")
+	require.Equal(t, "HDRezka", ru.Mark("Silo.S02.rus.1080p", []rules.File{{Path: "Silo.S02E01.HDRezka.mkv"}}), "a studio in a file over a word in the name")
+	require.Equal(t, "rus", ru.Mark("Silo.S03E06.720p.rus.mkv", nil), "a word when there is no studio")
 }
 
 func TestLookup(t *testing.T) {

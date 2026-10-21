@@ -31,6 +31,7 @@ type Language struct {
 	Signs string
 
 	marker  *regexp.Regexp
+	studio  *regexp.Regexp
 	scripts []*unicode.RangeTable
 }
 
@@ -50,16 +51,24 @@ var known = []Language{
 	}),
 }
 
+// wholeWords matches any of words as a whole word regardless of case and
+// captures it; nil for no words.
+func wholeWords(words []string) *regexp.Regexp {
+	if len(words) == 0 {
+		return nil
+	}
+	alts := make([]string, len(words))
+	for i, w := range words {
+		alts[i] = regexp.QuoteMeta(w)
+	}
+	return regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(` + strings.Join(alts, "|") + `)(?:$|[^\p{L}\p{N}])`)
+}
+
 // compile prepares l's matchers; it panics on a script name unicode.Scripts
 // does not have.
 func compile(l Language) Language {
-	var alts []string
-	for _, w := range append(append([]string{}, l.Words...), l.Studios...) {
-		alts = append(alts, regexp.QuoteMeta(w))
-	}
-	if len(alts) > 0 {
-		l.marker = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(` + strings.Join(alts, "|") + `)(?:$|[^\p{L}\p{N}])`)
-	}
+	l.marker = wholeWords(append(append([]string{}, l.Words...), l.Studios...))
+	l.studio = wholeWords(l.Studios)
 	for _, s := range l.Scripts {
 		t, ok := unicode.Scripts[s]
 		if !ok {
@@ -125,15 +134,20 @@ func (l Language) Marker(name string, files []rules.File) bool {
 	return l.marker != nil && anyName(name, files, l.marker.MatchString)
 }
 
-// Mark returns the first of the language's Words or Studios in the name, or
-// else in a file path, as written there; "" when there is none.
+// Mark returns the first of the language's Studios in the name, or else in a
+// file path, as written there; without a studio, the first of its Words the
+// same way; "" when there is neither. A studio names the track more
+// precisely than a word that only names the language.
 func (l Language) Mark(name string, files []rules.File) string {
-	if l.marker == nil {
-		return ""
-	}
-	for _, s := range append([]string{name}, paths(files)...) {
-		if m := l.marker.FindStringSubmatch(s); m != nil {
-			return m[1]
+	texts := append([]string{name}, paths(files)...)
+	for _, re := range []*regexp.Regexp{l.studio, l.marker} {
+		if re == nil {
+			continue
+		}
+		for _, s := range texts {
+			if m := re.FindStringSubmatch(s); m != nil {
+				return m[1]
+			}
 		}
 	}
 	return ""

@@ -243,6 +243,10 @@ func TestFillFeaturesAndMarks(t *testing.T) {
 	tr.Audio = []Audio{{Language: "ru", Marker: true}}
 	_, _, err := s.Insert(ctx, tr)
 	require.NoError(t, err)
+	silo := torrent(2, "Silo.S03E10.1080p.rus.LostFilm.TV.mkv", "Silo.S03E10.1080p.rus.LostFilm.TV.mkv")
+	silo.Audio = []Audio{{Language: "ru", Marker: true, Mark: "rus"}}
+	_, _, err = s.Insert(ctx, silo)
+	require.NoError(t, err)
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)
 	require.Zero(t, r.Episode, "Insert takes the features it is given")
@@ -261,6 +265,9 @@ func TestFillFeaturesAndMarks(t *testing.T) {
 	require.Equal(t, 5, r.Episode)
 	require.Equal(t, "1080p", r.Quality)
 	require.Equal(t, "Rus", r.Audio[0].Mark, "the mark of a stored marker")
+	r, err = s.Get(ctx, hash(2))
+	require.NoError(t, err)
+	require.Equal(t, "LostFilm", r.Audio[0].Mark, "a stored mark is recomputed: the studio over the word")
 
 	_, err = db.W.ExecContext(ctx, "UPDATE torrent_releases SET quality = NULL, episode = NULL")
 	require.NoError(t, err)

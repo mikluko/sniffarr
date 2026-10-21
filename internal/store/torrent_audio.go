@@ -57,12 +57,13 @@ func (s *Store) audio(ctx context.Context, rs []Release) error {
 }
 
 // marksFilled is the prefix of the settings key that records, per language,
-// that fillMarks has run.
-const marksFilled = "audio_marks_filled:"
+// that fillMarks has run. A new prefix makes every database recompute its
+// marks once more, which a change to audio.Language.Mark needs.
+const marksFilled = "audio_marks_studios_first:"
 
 // fillMarks records, once per language of Options.Languages, the mark of
-// every stored marker that has none, from the torrent's name and stored
-// files.
+// every stored marker as audio.Language.Mark gives it from the torrent's
+// name and stored files.
 func (s *Store) fillMarks(ctx context.Context) error {
 	for _, tag := range s.opts.Languages {
 		l, ok := audio.Lookup(tag)
@@ -91,7 +92,7 @@ func (s *Store) fillMarks(ctx context.Context) error {
 				batch = append(batch, r)
 				return nil
 			}, `SELECT t.id, t.name FROM torrent_audio a JOIN torrent_releases t ON t.id = a.torrent_id
-				WHERE a.language = ? AND a.marker AND a.mark IS NULL AND a.torrent_id > ? ORDER BY a.torrent_id LIMIT 1000`, l.Tag, after); err != nil {
+				WHERE a.language = ? AND a.marker AND a.torrent_id > ? ORDER BY a.torrent_id LIMIT 1000`, l.Tag, after); err != nil {
 				return err
 			}
 			if len(batch) == 0 {
@@ -110,7 +111,7 @@ func (s *Store) fillMarks(ctx context.Context) error {
 					if marks[i] == "" {
 						continue
 					}
-					if _, err := tx.ExecContext(ctx, "UPDATE torrent_audio SET mark = ? WHERE torrent_id = ? AND language = ?", marks[i], r.id, l.Tag); err != nil {
+					if _, err := tx.ExecContext(ctx, "UPDATE torrent_audio SET mark = ? WHERE torrent_id = ? AND language = ? AND mark IS NOT ?", marks[i], r.id, l.Tag, marks[i]); err != nil {
 						return err
 					}
 				}
