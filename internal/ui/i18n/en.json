@@ -24,7 +24,7 @@
   "source.disc": "disc image",
   "source.remux": "remux",
   "source.rip": "rip",
-  "source.web": "WEB",
+  "source.web": "web",
   "source.other": "other",
   "source.none": "—",
   "layer.rules": "rules",
