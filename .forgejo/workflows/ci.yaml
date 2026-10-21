@@ -12,13 +12,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: bufbuild/buf-action@v1
+      - uses: https://github.com/bufbuild/buf-action@v1
         with:
           version: 1.73.0
           setup_only: true
@@ -28,7 +28,7 @@ jobs:
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - run: go test ./...
-      - uses: azure/setup-helm@v5
+      - uses: https://github.com/azure/setup-helm@v5
         with:
           version: v4.3.1
       - name: Chart lints and renders
@@ -42,19 +42,8 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: mikluko/action-changelog@v1
-
-  renovate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-      - run: npx --yes --package renovate@44.171.2 -- renovate-config-validator --strict --no-global .github/renovate.json
+      - uses: https://github.com/mikluko/action-changelog@v1

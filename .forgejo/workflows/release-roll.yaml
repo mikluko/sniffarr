@@ -14,8 +14,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: ghcr.io/mikluko/sniffarr
-  CHART_REPOSITORY: oci://ghcr.io/mikluko/charts
+  REGISTRY: sarak.sh
+  IMAGE: sarak.sh/arr/sniffarr
+  CHART_REPOSITORY: oci://sarak.sh/arr/charts
 
 jobs:
   plan:
@@ -28,12 +29,12 @@ jobs:
       notes: ${{ steps.changelog.outputs.notes }}
       publish: ${{ steps.version.outputs.publish }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
       - id: changelog
-        uses: mikluko/action-changelog@v1
+        uses: https://github.com/mikluko/action-changelog@v1
         with:
           due-prerelease: true
       - id: version
@@ -74,29 +75,28 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - if: needs.plan.outputs.publish == 'true'
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE }}
-          tags: type=semver,pattern={{version}},value=${{ needs.plan.outputs.version }}
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: ${{ needs.plan.outputs.publish == 'true' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Log in
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: printf '%s' "$TOKEN" | docker login "$REGISTRY" --username agent --password-stdin
+      - name: Build
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          PUBLISH: ${{ needs.plan.outputs.publish }}
+        run: |
+          push=
+          if [ "$PUBLISH" = true ]; then push=--push; fi
+          docker buildx build $push \
+            --platform linux/amd64,linux/arm64 \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --tag "$IMAGE:$VERSION" \
+            .
 
   chart:
     needs: [plan, image]
@@ -106,10 +106,10 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: azure/setup-helm@v5
+      - uses: https://github.com/azure/setup-helm@v5
         with:
           version: v4.3.1
       - name: Package
@@ -123,10 +123,9 @@ jobs:
         if: needs.plan.outputs.publish == 'true'
         env:
           VERSION: ${{ needs.plan.outputs.version }}
-          ACTOR: ${{ github.actor }}
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
-          printf '%s' "$TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
+          printf '%s' "$TOKEN" | helm registry login "$REGISTRY" --username agent --password-stdin
           helm push "$RUNNER_TEMP/chart/sniffarr-$VERSION.tgz" "$CHART_REPOSITORY"
 
   # Last, so a release exists only once every artifact it names does.
@@ -148,12 +147,12 @@ jobs:
       - name: Release
         if: needs.plan.outputs.publish == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.plan.outputs.tag }}
           PRERELEASE: ${{ needs.plan.outputs.prerelease }}
         run: |
-          flags=
-          if [ "$PRERELEASE" = true ]; then flags=--prerelease; fi
-          gh release create "$TAG" --verify-tag --title "$TAG" \
-            --notes-file "$RUNNER_TEMP/notes.md" $flags
+          jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes.md" --argjson pre "$PRERELEASE" \
+            '{tag_name: $tag, name: $tag, body: $body, prerelease: $pre}' |
+            curl --fail-with-body -sS -X POST \
+              -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
+              -d @- "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"

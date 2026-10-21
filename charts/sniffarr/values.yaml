@@ -1,6 +1,6 @@
 image:
   # Image of the sniffarr binary.
-  repository: ghcr.io/mikluko/sniffarr
+  repository: sarak.sh/arr/sniffarr
   # Image tag; the chart's appVersion when empty.
   tag: ""
   # Pull policy of the image.

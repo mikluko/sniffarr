@@ -540,11 +540,11 @@ docker run -e SNIFFARR_DB=/data/sniffarr.db -e SNIFFARR_INGEST_TOKEN=… -e SNIF
 
 ## Helm
 
-Each `vX.Y.Z` tag publishes the image as `ghcr.io/mikluko/sniffarr:X.Y.Z`
+Each `vX.Y.Z` tag publishes the image as `sarak.sh/arr/sniffarr:X.Y.Z`
 and the chart in `charts/sniffarr` at the same version, without the `v`.
 
 ```shell
-helm install sniffarr oci://ghcr.io/mikluko/charts/sniffarr --version X.Y.Z \
+helm install sniffarr oci://sarak.sh/arr/charts/sniffarr --version X.Y.Z \
   --set api.existingSecret=sniffarr
 ```
 
@@ -629,40 +629,26 @@ go generate ./...
 on the date you wrote. `mikluko/action-changelog` validates the file on every
 pull request.
 
-On a push to `main`, `release-cut.yaml` runs CI, then tags the commit `vX.Y.Z`
-as the GitHub App when the newest entry names a version no tag carries. The tag
-starts `release-roll.yaml`, which fails unless the tag is the newest entry of
-`CHANGELOG.md` at that commit, then builds and pushes the image
-`ghcr.io/mikluko/sniffarr:X.Y.Z` and the chart
-`oci://ghcr.io/mikluko/charts/sniffarr` at `X.Y.Z`, and creates the GitHub
+The repository lives at `https://forge.sarak.sh/arr/sniffarr`, and its
+workflows in `.forgejo/workflows` run on Forgejo Actions. On a push to `main`,
+`release-cut.yaml` runs CI, then tags the commit `vX.Y.Z` when the newest entry
+names a version no tag carries. The tag starts `release-roll.yaml`, which fails
+unless the tag is the newest entry of `CHANGELOG.md` at that commit, then
+builds and pushes the image `sarak.sh/arr/sniffarr:X.Y.Z` and the chart
+`oci://sarak.sh/arr/charts/sniffarr` at `X.Y.Z`, and creates the Forgejo
 release from the entry last. A tag whose `release-roll.yaml` run failed is not
 cut again: re-run that run. Run by hand, `release-roll.yaml` builds the newest
 version, a prerelease included, and publishes nothing. Nothing else sets a
 version.
 
-Renovate opens its pull requests labelled `bot`, three days after the upstream
-release, per `.github/renovate.json`. Once a day, `upgrade-agent.yaml` runs
-goose on Kimi K3 through `.github/upgrade-agent.md`: it stacks the open `bot`
-pull requests whose checks passed, runs the CI checks on the stack, and merges
-it. When the stack changes what ships, a module in `go.mod`, the `Dockerfile`
-or the chart, it cuts the version in `CHANGELOG.md` on a `release/vX.Y.Z`
-branch on top, so the merge releases. It merges no pull request without the
-`bot` label, none whose checks failed, and none that conflicts outside `go.mod`,
-`go.sum` and `[Unreleased]` or breaks the build in a way that needs a judgement
-about behaviour; those it leaves open with a comment saying why. Run by hand
-with `dry_run`, it opens the stack's pull requests and merges nothing.
-
 ### Setting up
 
-Once, a human:
+The `arr` organisation holds two Actions secrets, both tokens of the Forgejo
+user `agent`:
 
-- installs a GitHub App on the repository, sets the repository variable
-  `APP_CLIENT_ID` to its client id and the secret `APP_PRIVATE_KEY` to a
-  private key of it. `release-cut.yaml` tags as the app so that the tag starts
-  `release-roll.yaml`; `upgrade-agent.yaml` pushes, comments and merges as it.
-- sets the secret `MOONSHOT_API_KEY` to a Kimi Code key.
-- installs the Renovate GitHub App on the repository. It reads
-  `.github/renovate.json`.
+- `RELEASE_TOKEN`, with `write:repository`. `release-cut.yaml` pushes the tag
+  with it, since a tag pushed with the automatic token starts no workflow.
+- `REGISTRY_TOKEN`, with `write:package`, which pushes the image and the chart.
 
 ## License
 
