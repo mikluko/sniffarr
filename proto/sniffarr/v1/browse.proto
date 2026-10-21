@@ -8,22 +8,35 @@ import "sniffarr/v1/search.proto";
 
 option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
-// BrowseService reads the store as the web UI shows it: pages of releases
-// under its filters, a release with its stored files, counts, and the works
-// most peers share. Unlike SearchService it classifies nothing before
-// answering.
+// BrowseService reads the store as the web UI shows it: movies and series
+// by TMDB, from the store and from TMDB's search, each with its releases;
+// the releases under their filters; a release with its stored files;
+// counts; and the movies and series most peers share. Unlike
+// SearchService it classifies nothing before answering.
 //
-// A work groups the releases of one movie, one season of a series, or one
-// album: releases of the same title and year for a movie or an album, of the
-// same title and season for a series, episodes and season packs alike. Peers
-// are counted per torrent and hour in HyperLogLog sketches, so every count
-// is an estimate within a few percent, and a work's peers are the distinct
-// peers of all its releases over the window.
+// A work is a movie or series on TMDB. A release belongs to the work its
+// title key is matched to; several title keys, such as a title in Russian
+// and in English, can be matched to one work. Peers are counted per torrent
+// and hour in HyperLogLog sketches, so every count is an estimate within a
+// few percent, and a work's peers are the distinct peers of all its
+// releases over the window.
 service BrowseService {
-  // Page returns one page of the releases the filters select, in the order
-  // sort asks for, and how many they select in all. Without kind or
-  // unknown_kind, adult releases are left out.
-  rpc Page(PageRequest) returns (PageResponse);
+  // SearchTitles returns the works whose titles, or whose releases' names
+  // and file paths, contain every word of the query, and the works TMDB's
+  // search finds for it, which it stores: first those with releases, most
+  // peers over the last 7 days first, then the rest, most popular on TMDB
+  // first. A failing TMDB leaves the answer to the store.
+  rpc SearchTitles(SearchTitlesRequest) returns (SearchTitlesResponse);
+  // Title returns one work with its places in the tops, peers and audio, or
+  // NOT_FOUND.
+  rpc Title(TitleRequest) returns (TitleResponse);
+  // TitleReleases returns one page of the releases of a work the filters
+  // select, or NOT_FOUND.
+  rpc TitleReleases(TitleReleasesRequest) returns (TitleReleasesResponse);
+  // Torrents returns one page of the releases the filters select, matched
+  // to a work or not, in the order sort asks for, and how many they select
+  // in all. Adult releases are left out.
+  rpc Torrents(TorrentsRequest) returns (TorrentsResponse);
   // Card returns one release with every stored file, its peers and its
   // work, or NOT_FOUND.
   rpc Card(CardRequest) returns (CardResponse);
@@ -31,12 +44,10 @@ service BrowseService {
   rpc Stats(StatsRequest) returns (StatsResponse);
   // Home returns the counts the home page shows.
   rpc Home(HomeRequest) returns (HomeResponse);
-  // Top returns one page of the 100 works of a kind with the most peers over
-  // a window, as last computed; the server recomputes every 10 minutes.
+  // Top returns one page of the 100 movies or series with the most peers
+  // over a window, as last computed; the server recomputes every 10
+  // minutes.
   rpc Top(TopRequest) returns (TopResponse);
-  // Work returns one work with its releases, most peers over the window
-  // first, or NOT_FOUND.
-  rpc Work(WorkRequest) returns (WorkResponse);
   // Settings returns what the server is configured with that a client
   // showing its answers needs to know.
   rpc Settings(SettingsRequest) returns (SettingsResponse);
@@ -50,67 +61,177 @@ message SettingsResponse {
   repeated string audio_languages = 1;
 }
 
-message PageRequest {
-  // Words that the name or stored file paths must all contain.
+// WorkSummary is a work as lists show it.
+message WorkSummary {
+  // The work's ID: "m" and the TMDB ID for a movie, "tv" and the TMDB ID
+  // for a series, as movies and series are numbered apart on TMDB.
+  string id = 1;
+  // KIND_MOVIE or KIND_SERIES.
+  Kind kind = 2;
+  // What TMDB tells of the work, with its texts in the request's lang;
+  // layer, confidence and checked_at are a release's match and set on a
+  // card only.
+  TMDBWork tmdb = 3;
+  // Stored releases of the work; 0 for a work known from TMDB's search
+  // only.
+  int64 releases = 4;
+  // Distinct peers of the work's releases over the last 7 days, as last
+  // computed.
+  int64 peers = 5;
+  // The work's place in the last 7 days' top of its kind among all voices,
+  // 1 first; 0 when it is not in it.
+  int32 rank = 6;
+}
+
+// WorkAudio sums up the audio in one language of a work's releases.
+message WorkAudio {
+  // BCP-47 tag.
+  string language = 1;
+  // Releases with a marker of the language, and their marks, each once,
+  // most frequent first.
+  int64 marked = 2;
+  repeated string marks = 3;
+  // Releases without a marker whose probability of an audio track in the
+  // language is at least 0.5.
+  int64 likely = 4;
+}
+
+message SearchTitlesRequest {
+  // Words the titles, or the release names and paths, must all contain.
   string query = 1;
-  // Only releases of this kind; KIND_UNSPECIFIED is any.
+  // KIND_MOVIE or KIND_SERIES; KIND_UNSPECIFIED is both.
+  Kind kind = 2;
+  // The language of TMDBWork texts and of TMDB's search, "ru" or "en";
+  // "en" when empty.
+  string lang = 3;
+}
+
+message SearchTitlesResponse {
+  // The works with releases, then those without.
+  repeated WorkSummary works = 1;
+  // How many of works have releases, and how many have none.
+  int32 ours = 2;
+  int32 tmdb_only = 3;
+}
+
+message TitleRequest {
+  // WorkSummary.id.
+  string id = 1;
+  // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+  string lang = 2;
+}
+
+message TitleResponse {
+  WorkSummary work = 1;
+  // The work's places in the top of its kind among all voices, 0 where it
+  // is not in it.
+  WindowRanks ranks = 2;
+  // Distinct peers of all the work's releases over each window.
+  PeerCounts peers = 3;
+  // One entry per audio language the server is configured with, in its
+  // order.
+  repeated WorkAudio audio = 4;
+}
+
+// WindowRanks are places in the tops over each window.
+message WindowRanks {
+  int32 day = 1;
+  int32 week = 2;
+  int32 month = 3;
+}
+
+message TitleReleasesRequest {
+  // WorkSummary.id.
+  string id = 1;
+  // Only releases of this quality; QUALITY_UNSPECIFIED is any.
+  Quality quality = 2;
+  // Only releases of this source; VIDEO_SOURCE_UNSPECIFIED is any.
+  VideoSource source = 3;
+  // Only releases of at least and at most this many bytes; 0 is no bound.
+  int64 min_size = 4;
+  int64 max_size = 5;
+  // The language, a BCP-47 tag, voice applies to; required with a voice.
+  optional string audio_language = 6;
+  Voice voice = 7;
+  // Only releases of this season and this episode; 0 is any. A whole
+  // season has no episode.
+  int32 season = 8;
+  int32 episode = 9;
+  // SORT_PEERS, SORT_FIRST_SEEN or SORT_SIZE; SORT_UNSPECIFIED is
+  // SORT_PEERS.
+  Sort sort = 10;
+  // Releases to skip.
+  int32 offset = 11;
+  // At most this many releases: 50 when unset, never more than 500.
+  int32 limit = 12;
+}
+
+message TitleReleasesResponse {
+  // The releases selected, each with its audio, without tmdb.
+  repeated Release releases = 1;
+  // The work's releases, and those the filters select.
+  int64 total = 2;
+  int64 matched = 3;
+  // The seasons among the work's releases, in order.
+  repeated int32 seasons = 4;
+}
+
+message TorrentsRequest {
+  // Words that the name or stored file paths must all contain, or the 40
+  // hex digits of an infohash.
+  string query = 1;
+  // Only releases of this kind; KIND_OTHER takes music, books and software
+  // in. KIND_UNSPECIFIED is any.
   Kind kind = 2;
   // Only releases whose kind is unknown; kind must be KIND_UNSPECIFIED.
   bool unknown_kind = 3;
-  // The language, a BCP-47 tag, that audio_marker and
-  // min_audio_probability apply to; required with either.
-  optional string audio_language = 4;
-  // Only releases with a marker of audio_language.
-  bool audio_marker = 5;
-  // Only releases whose probability of an audio track in audio_language is
-  // known and at least this.
-  optional float min_audio_probability = 6;
+  // Only releases matched to a work, or only those matched to none.
+  optional bool matched = 4;
+  // Only releases of this quality; QUALITY_UNSPECIFIED is any.
+  Quality quality = 5;
+  // The language, a BCP-47 tag, voice applies to; required with a voice.
+  optional string audio_language = 6;
+  Voice voice = 7;
   // Only releases of this source; VIDEO_SOURCE_UNSPECIFIED is any.
-  VideoSource source = 7;
+  VideoSource source = 8;
   // Only releases whose kind this layer decided; LAYER_UNSPECIFIED is any.
-  Layer layer = 8;
+  Layer layer = 9;
   // Only releases of at least this many bytes.
-  int64 min_size = 9;
+  int64 min_size = 10;
+  Sort sort = 11;
   // Releases to skip.
-  int32 offset = 10;
+  int32 offset = 12;
   // At most this many releases: 50 when unset, never more than 500.
-  int32 limit = 11;
-  Sort sort = 12;
+  int32 limit = 13;
   // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
-  string lang = 13;
+  string lang = 14;
 }
 
-// Sort is the order of a page.
+message TorrentsResponse {
+  repeated TorrentRow rows = 1;
+  // How many releases the filters select in all.
+  int64 total = 2;
+}
+
+// TorrentRow is a release with its work.
+message TorrentRow {
+  Release release = 1;
+  // Absent while the release's title key is matched to no work.
+  WorkSummary work = 2;
+}
+
+// Sort is the order of releases.
 enum Sort {
-  // Best text match first with a query, most recently seen first without.
+  // Best text match first with a query, most recently seen first without;
+  // most peers first for a work's releases.
   SORT_UNSPECIFIED = 0;
   // Most peers over the last 7 days first, as last computed.
   SORT_PEERS = 1;
   SORT_LAST_SEEN = 2;
   // Largest first.
   SORT_SIZE = 3;
-}
-
-message PageResponse {
-  repeated Release releases = 1;
-  // How many releases the filters select in all.
-  int64 total = 2;
-  // On the first page of a query, up to 10 works of movies, series or music
-  // whose releases match it, most peers over the last 7 days first; empty
-  // otherwise.
-  repeated WorkMatch works = 3;
-}
-
-// WorkMatch is a work among the releases a query matches.
-message WorkMatch {
-  WorkRef work = 1;
-  // Distinct peers of the work's releases over the last 7 days.
-  int64 peers = 2;
-  // Stored releases of the work.
-  int64 releases = 3;
-  // What TMDB knows of the work, by the title of its release with the most
-  // peers; absent while that title was never looked up.
-  TMDBWork tmdb = 4;
+  // Most recently first seen first.
+  SORT_FIRST_SEEN = 4;
 }
 
 message CardRequest {
@@ -120,6 +241,7 @@ message CardRequest {
 }
 
 message CardResponse {
+  // The release; its tmdb is the state of its title key's match.
   Release release = 1;
   // How the release's infohash was first learned of.
   Source discovery = 2;
@@ -127,12 +249,14 @@ message CardResponse {
   repeated File files = 3;
   // Distinct peers of the release over the last day, 7 days and 30 days.
   PeerCounts peers = 4;
-  // The release's work; absent when its name yields none.
-  WorkRef work = 5;
-  // Stored releases of the work, and this release's place among them by
-  // peers over the last 7 days, 1 first; both 0 without a work.
-  int64 releases = 6;
-  int32 release_rank = 7;
+  reserved 5, 6, 7;
+  reserved "releases", "release_rank";
+  // The release's work, with tmdb carrying the match's layer, confidence
+  // and checked_at; absent while its title key is matched to none.
+  WorkSummary work = 8;
+  // The release's place among its work's releases by peers over the last
+  // 7 days, 1 first; 0 without a work.
+  int32 rank_in_work = 9;
 }
 
 // PeerCounts are distinct peers over three sliding windows ending now.
@@ -140,44 +264,6 @@ message PeerCounts {
   int64 day = 1;
   int64 week = 2;
   int64 month = 3;
-}
-
-// WorkRef names a work.
-message WorkRef {
-  // The key under which the work's releases meet, for Work.
-  string key = 1;
-  // The kind of the work's releases: KIND_MOVIE, KIND_SERIES or KIND_MUSIC,
-  // or KIND_UNSPECIFIED while undecided.
-  Kind kind = 2;
-  // The title of the release with the most peers over the last 7 days, as
-  // its name gives it.
-  string title = 3;
-  // The year the name gives, 0 when none.
-  int32 year = 4;
-  // The season of a series, 0 when the names give none.
-  int32 season = 5;
-  // The work's place in the last 7 days' top of its kind among all voices,
-  // 1 first; 0 when it is not in it.
-  int32 rank = 6;
-}
-
-// Work is a work with what is known of its releases together.
-message Work {
-  WorkRef ref = 1;
-  // Stored releases of the work that the voice admits.
-  int64 releases = 2;
-  // At most one entry per audio language the server is configured with, in
-  // tag order: the highest probability among the releases, and marker and
-  // script_hint when any release has them.
-  repeated Audio audio = 3;
-  // The sources of the releases, each once, in enum order; a release
-  // without a source adds none.
-  repeated VideoSource sources = 4;
-  // The first sighting of the earliest release.
-  google.protobuf.Timestamp first_seen = 5;
-  // What TMDB knows of the work, by the title of its release with the most
-  // peers; absent while that title was never looked up.
-  TMDBWork tmdb = 6;
 }
 
 // Window is a sliding period ending now.
@@ -192,14 +278,13 @@ enum Window {
   WINDOW_MONTH = 3;
 }
 
-// Voice narrows a work's releases by their audio in the first language the
-// server is configured with; without audio languages every narrowing admits
-// no release.
+// Voice narrows a work's releases by their audio in one language; without
+// the language among the server's every narrowing admits no release.
 enum Voice {
   // Every release.
   VOICE_UNSPECIFIED = 0;
-  // Releases whose probability of an audio track in the language is known
-  // and at least 0.5.
+  // Releases with a marker of the language, and those whose probability of
+  // an audio track in it is known and at least 0.5.
   VOICE_LIKELY = 1;
   // Releases with a marker of the language.
   VOICE_MARKER = 2;
@@ -217,7 +302,7 @@ message HomeResponse {
 }
 
 message TopRequest {
-  // KIND_MOVIE, KIND_SERIES or KIND_MUSIC; required.
+  // KIND_MOVIE or KIND_SERIES; required.
   Kind kind = 1;
   Window window = 2;
   Voice voice = 3;
@@ -227,6 +312,9 @@ message TopRequest {
   int32 limit = 5;
   // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
   string lang = 6;
+  // The audio language, a BCP-47 tag, voice applies to; the server's first
+  // when empty.
+  string voice_language = 7;
 }
 
 message TopResponse {
@@ -237,47 +325,27 @@ message TopResponse {
   google.protobuf.Timestamp computed_at = 3;
 }
 
-// TopEntry is one work of a top.
+// TopEntry is one work of a top, over the releases the voice admits.
 message TopEntry {
   // The work's place, 1 first.
   int32 rank = 1;
-  Work work = 2;
+  reserved 2;
   // Distinct peers of the releases the voice admits over the window.
   int64 peers = 3;
   // Change of peers against the window of the same length before it, as a
   // fraction of the earlier count: 0.5 is half as many more; absent when the
   // work had no peers then.
   optional float delta = 4;
-}
-
-message WorkRequest {
-  // WorkRef.key.
-  string key = 1;
-  Window window = 2;
-  Voice voice = 3;
-  // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
-  string lang = 4;
-}
-
-message WorkResponse {
-  Work work = 1;
-  // Distinct peers of the releases the voice admits over the window.
-  int64 peers = 2;
-  // The releases the voice admits, most peers over the window first.
-  repeated WorkRelease releases = 3;
-  // The work's place in the top of its kind for the window and voice, 1
-  // first; 0 when it is not in it.
-  int32 rank = 4;
-  // TopEntry.delta of that place; absent when the work is not in the top or
-  // had no peers the window before.
-  optional float delta = 5;
-}
-
-// WorkRelease is a release of a work with its peers.
-message WorkRelease {
-  Release release = 1;
-  // Distinct peers of the release over the window.
-  int64 peers = 2;
+  // The work; releases counts those the voice admits.
+  WorkSummary work = 5;
+  // One entry per audio language the server is configured with, in its
+  // order.
+  repeated WorkAudio audio = 6;
+  // The sources of the releases, each once, in enum order; a release
+  // without a source adds none.
+  repeated VideoSource sources = 7;
+  // The first sighting of the earliest release.
+  google.protobuf.Timestamp first_seen = 8;
 }
 
 message StatsRequest {
@@ -289,8 +357,9 @@ message StatsRequest {
 message StatsResponse {
   // Stored releases.
   int64 total = 1;
-  // Stored releases by kind, KIND_UNSPECIFIED for unknown; by the layer
-  // that decided the kind, LAYER_UNSPECIFIED for none; and by source,
+  // Stored releases by kind, KIND_UNSPECIFIED for unknown, with music,
+  // books and software counted as KIND_OTHER; by the layer that decided the
+  // kind, LAYER_UNSPECIFIED for none; and by source,
   // VIDEO_SOURCE_UNSPECIFIED for none. A value with no releases is absent.
   repeated KindCount kinds = 2;
   repeated LayerCount layers = 3;

@@ -267,9 +267,9 @@ func TestAudioHints(t *testing.T) {
 	}{
 		{"ru", russian, map[string][]*sniffarrv1.Audio{
 			"Нечто (1982) BDRip":            {{Language: "ru", ScriptHint: true}},
-			"The.Thing.1982.BDRip.Rus":      {{Language: "ru", Marker: true, Probability: new(float32(1))}},
+			"The.Thing.1982.BDRip.Rus":      {{Language: "ru", Marker: true, Mark: "Rus", Probability: new(float32(1))}},
 			"The.Thing.1982.BDRip":          {{Language: "ru"}},
-			"The.Thing.1982.BDRip.LostFilm": {{Language: "ru", Marker: true, Probability: new(float32(1))}},
+			"The.Thing.1982.BDRip.LostFilm": {{Language: "ru", Marker: true, Mark: "LostFilm", Probability: new(float32(1))}},
 		}},
 		{"none", nil, map[string][]*sniffarrv1.Audio{
 			"Нечто (1982) BDRip":            nil,
@@ -442,10 +442,10 @@ func TestAuth(t *testing.T) {
 	_, err := search.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{}))
 	require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
 	browse := sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("ingest")))
-	_, err = browse.Page(ctx, connect.NewRequest(&sniffarrv1.PageRequest{}))
+	_, err = browse.Torrents(ctx, connect.NewRequest(&sniffarrv1.TorrentsRequest{}))
 	require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
 	browse = sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("search")))
-	_, err = browse.Page(ctx, connect.NewRequest(&sniffarrv1.PageRequest{}))
+	_, err = browse.Torrents(ctx, connect.NewRequest(&sniffarrv1.TorrentsRequest{}))
 	require.NoError(t, err, "the search token opens BrowseService")
 
 	res, err := hc.Get(srv.URL + "/healthz")

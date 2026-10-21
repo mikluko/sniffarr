@@ -235,15 +235,12 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 	return nil
 }
 
-// kind sets the torrent's title key, work key, year and season, and its kind
-// when the name tells it or a stored torrent of the same title key has one.
-// A name whose work key is empty takes its title key.
+// kind sets the torrent's title key, year, season, episode and quality, and
+// its kind when the name tells it or a stored torrent of the same title key
+// has one.
 func (s *Service) kind(ctx context.Context, t *store.Torrent) error {
 	p := names.Parse(t.Name)
-	t.TitleKey, t.WorkKey, t.Year, t.Season = p.Key, p.Work, p.Year, p.Season
-	if t.WorkKey == "" {
-		t.WorkKey = t.TitleKey
-	}
+	t.TitleKey, t.Year, t.Season, t.Episode, t.Quality = p.Key, p.Year, p.Season, p.Episode, p.Quality
 	if p.Kind != "" {
 		t.Kind, t.KindLayer = p.Kind, store.LayerRules
 		return nil
@@ -262,13 +259,13 @@ func (s *Service) kind(ctx context.Context, t *store.Torrent) error {
 }
 
 // audioEntries returns an entry per language for a torrent of the name and
-// files; a marker decides the probability as 1.
+// files; a marker decides the probability as 1 and carries its mark.
 func audioEntries(langs []audio.Language, name string, files []rules.File) []store.Audio {
 	out := make([]store.Audio, len(langs))
 	for i, l := range langs {
 		out[i] = store.Audio{Language: l.Tag, Marker: l.Marker(name, files), ScriptHint: l.ScriptHint(name, files)}
 		if out[i].Marker {
-			out[i].Probability, out[i].Layer = new(1.0), store.LayerRules
+			out[i].Mark, out[i].Probability, out[i].Layer = l.Mark(name, files), new(1.0), store.LayerRules
 		}
 	}
 	return out

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -160,11 +161,25 @@ func (f *fakeTMDB) Match(ctx context.Context, k store.TitleKey) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	t := store.Title{}
-	if ids, ok := f.ids[k.Key]; ok {
-		t = store.Title{Confidence: 1, Layer: store.LayerTMDB, IDs: ids}
+	ids, ok := f.ids[k.Key]
+	if !ok {
+		_, _, err := f.store.RecordMatch(ctx, k.Key, store.Found{}, time.Now())
+		return err
 	}
-	return f.store.RecordTitle(ctx, k.Key, t, time.Now())
+	var tmdbID int
+	var others []store.ExternalID
+	for _, id := range ids {
+		if id.Provider == store.ProviderTMDB {
+			tmdbID, _ = strconv.Atoi(id.ID)
+		} else {
+			others = append(others, id)
+		}
+	}
+	work, _, err := f.store.RecordMatch(ctx, k.Key, store.Found{Hit: &store.Hit{Type: store.TypeOf(k.Kind), TMDBID: tmdbID}, Confidence: 1, Layer: store.LayerTMDB}, time.Now())
+	if err != nil {
+		return err
+	}
+	return f.store.RecordDetails(ctx, work, store.Details{Type: store.TypeOf(k.Kind)}, others, time.Now())
 }
 
 func TestLazyTMDB(t *testing.T) {

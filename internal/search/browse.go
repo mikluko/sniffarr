@@ -20,10 +20,18 @@ import (
 // MaxStatsDays is the most days Browser.Stats counts.
 const MaxStatsDays = 3660
 
+// TitleSearch searches TMDB for works and stores what it finds;
+// tmdb.Matcher is one.
+type TitleSearch interface {
+	SearchWorks(ctx context.Context, typ, query, lang string) ([]int64, error)
+}
+
 // Browser implements sniffarrv1connect.BrowseServiceHandler.
 type Browser struct {
 	Store *store.Store
-	Log   *slog.Logger
+	// TMDB, when set, has SearchTitles search TMDB as well as the store.
+	TMDB TitleSearch
+	Log  *slog.Logger
 	// DailyTokens is the classifier's daily token limit Stats reports; 0 is
 	// none.
 	DailyTokens int64
@@ -60,6 +68,9 @@ var rejections = map[rules.Reason]sniffarrv1.Rejection{
 	rules.Script:   sniffarrv1.Rejection_REJECTION_SCRIPT,
 }
 
+// others are the kinds the UI shows as other.
+var others = []string{"other", "music", "book", "software"}
+
 // name returns the key of m whose value is v.
 func name[K comparable, V comparable](m map[K]V, v V) (K, bool) {
 	for k, x := range m {
@@ -71,60 +82,84 @@ func name[K comparable, V comparable](m map[K]V, v V) (K, bool) {
 	return zero, false
 }
 
-func (b *Browser) Page(ctx context.Context, req *connect.Request[sniffarrv1.PageRequest]) (*connect.Response[sniffarrv1.PageResponse], error) {
+// enum returns the store's name of the API's value v by m, "" for the
+// unspecified value, or an INVALID_ARGUMENT error naming what for a value
+// absent from m.
+func enum[V comparable](m map[string]V, v V, what string) (string, error) {
+	var zero V
+	if v == zero {
+		return "", nil
+	}
+	n, ok := name(m, v)
+	if !ok {
+		return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown %s %v", what, v))
+	}
+	return n, nil
+}
+
+// pageLimit reads a page's limit and offset: DefaultLimit for none, at most
+// MaxLimit.
+func pageLimit(limit, offset int32) (int, int, error) {
+	if limit < 0 || offset < 0 {
+		return 0, 0, connect.NewError(connect.CodeInvalidArgument, errors.New("negative limit or offset"))
+	}
+	if limit == 0 {
+		limit = DefaultLimit
+	}
+	return min(int(limit), MaxLimit), int(offset), nil
+}
+
+// voiceOf reads a voice and the language it applies to, which a narrowing
+// voice requires.
+func voiceOf(v sniffarrv1.Voice, lang *string) (store.Voice, string, error) {
+	voice, ok := voices[v]
+	if !ok {
+		return "", "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown voice %d", v))
+	}
+	if voice != store.VoiceAny && (lang == nil || *lang == "") {
+		return "", "", connect.NewError(connect.CodeInvalidArgument, errors.New("voice without audio_language"))
+	}
+	if lang == nil {
+		return voice, "", nil
+	}
+	return voice, *lang, nil
+}
+
+func (b *Browser) Torrents(ctx context.Context, req *connect.Request[sniffarrv1.TorrentsRequest]) (*connect.Response[sniffarrv1.TorrentsResponse], error) {
 	m := req.Msg
 	lang, err := language(m.GetLang())
 	if err != nil {
 		return nil, err
 	}
-	q := store.Browse{Text: m.GetQuery(), MinSize: m.GetMinSize(), Offset: int(m.GetOffset()), Limit: int(m.GetLimit())}
-	switch {
-	case q.Limit < 0:
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("negative limit"))
-	case q.Limit == 0:
-		q.Limit = DefaultLimit
-	case q.Limit > MaxLimit:
-		q.Limit = MaxLimit
+	q := store.Browse{Text: m.GetQuery(), MinSize: m.GetMinSize(), Exclude: []string{"adult"}, Matched: m.Matched}
+	if q.Limit, q.Offset, err = pageLimit(m.GetLimit(), m.GetOffset()); err != nil {
+		return nil, err
 	}
-	if q.Offset < 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("negative offset"))
-	}
-	switch {
-	case m.GetUnknownKind() && m.GetKind() != sniffarrv1.Kind_KIND_UNSPECIFIED:
+	switch k := m.GetKind(); {
+	case m.GetUnknownKind() && k != sniffarrv1.Kind_KIND_UNSPECIFIED:
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("unknown_kind with a kind"))
 	case m.GetUnknownKind():
-		q.UnknownKind = true
-	case m.GetKind() != sniffarrv1.Kind_KIND_UNSPECIFIED:
-		kind, ok := kinds[m.GetKind()]
+		q.Kinds = []string{""}
+	case k == sniffarrv1.Kind_KIND_OTHER:
+		q.Kinds = others
+	case k != sniffarrv1.Kind_KIND_UNSPECIFIED:
+		kind, ok := kinds[k]
 		if !ok {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown kind %d", m.GetKind()))
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown kind %d", k))
 		}
-		q.Kind = kind
-	default:
-		q.Exclude = []string{"adult"}
+		q.Kinds = []string{kind}
 	}
-	if m.GetAudioMarker() || m.MinAudioProbability != nil {
-		if m.GetAudioLanguage() == "" {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("audio filter without audio_language"))
-		}
-		q.AudioLanguage, q.AudioMarker = m.GetAudioLanguage(), m.GetAudioMarker()
-		if m.MinAudioProbability != nil {
-			q.MinAudioProbability = new(float64(m.GetMinAudioProbability()))
-		}
+	if q.Voice, q.AudioLanguage, err = voiceOf(m.GetVoice(), m.AudioLanguage); err != nil {
+		return nil, err
 	}
-	if s := m.GetSource(); s != sniffarrv1.VideoSource_VIDEO_SOURCE_UNSPECIFIED {
-		source, ok := name(sources, s)
-		if !ok {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown source %d", s))
-		}
-		q.Source = source
+	if q.Quality, err = enum(qualities, m.GetQuality(), "quality"); err != nil {
+		return nil, err
 	}
-	if l := m.GetLayer(); l != sniffarrv1.Layer_LAYER_UNSPECIFIED {
-		layer, ok := name(layers, l)
-		if !ok {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown layer %d", l))
-		}
-		q.KindLayer = layer
+	if q.Source, err = enum(sources, m.GetSource(), "source"); err != nil {
+		return nil, err
+	}
+	if q.KindLayer, err = enum(layers, m.GetLayer(), "layer"); err != nil {
+		return nil, err
 	}
 	sort, ok := sorts[m.GetSort()]
 	if !ok {
@@ -133,22 +168,25 @@ func (b *Browser) Page(ctx context.Context, req *connect.Request[sniffarrv1.Page
 	q.Sort = sort
 	found, total, err := b.Store.Page(ctx, q)
 	if err != nil {
-		b.Log.ErrorContext(ctx, "page", "err", err)
-		return nil, connect.NewError(connect.CodeInternal, errors.New("page failed"))
+		return nil, b.internal(ctx, "torrents", err)
 	}
-	res := &sniffarrv1.PageResponse{Releases: make([]*sniffarrv1.Release, len(found)), Total: total}
-	for i, r := range found {
-		res.Releases[i] = release(r, lang)
+	var ids []int64
+	for _, r := range found {
+		if r.Work != 0 && !slices.Contains(ids, r.Work) {
+			ids = append(ids, r.Work)
+		}
 	}
-	if q.Text != "" && q.Offset == 0 {
-		works, err := b.Store.Works(ctx, q.Text, b.now(), PageWorks)
-		if err != nil {
-			b.Log.ErrorContext(ctx, "works", "err", err)
-			return nil, connect.NewError(connect.CodeInternal, errors.New("page failed"))
+	sums, err := b.Store.Summaries(ctx, ids)
+	if err != nil {
+		return nil, b.internal(ctx, "torrents", err)
+	}
+	res := &sniffarrv1.TorrentsResponse{Total: total}
+	for _, r := range found {
+		row := &sniffarrv1.TorrentRow{Release: release(r, lang)}
+		if sum, ok := sums[r.Work]; ok {
+			row.Work = summary(sum, lang)
 		}
-		for _, w := range works {
-			res.Works = append(res.Works, &sniffarrv1.WorkMatch{Work: workRef(w.Work), Peers: w.Peers, Releases: w.Work.Releases, Tmdb: tmdbWork(w.Work.TMDB, w.Work.Kind, lang)})
-		}
+		res.Rows = append(res.Rows, row)
 	}
 	return connect.NewResponse(res), nil
 }
@@ -167,16 +205,18 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 	if err != nil {
-		b.Log.ErrorContext(ctx, "card", "err", err)
-		return nil, connect.NewError(connect.CodeInternal, errors.New("card failed"))
+		return nil, b.internal(ctx, "card", err)
 	}
 	res := &sniffarrv1.CardResponse{Release: release(c.Release, lang), Discovery: discoveries[c.Discovery],
 		Peers: &sniffarrv1.PeerCounts{Day: c.Peers.Day, Week: c.Peers.Week, Month: c.Peers.Month}}
 	for _, f := range c.Files {
 		res.Files = append(res.Files, &sniffarrv1.File{Path: f.Path, Size: f.Size})
 	}
-	if c.Work.Key != "" {
-		res.Work, res.Releases, res.ReleaseRank = workRef(c.Work), c.Releases, int32(c.ReleaseRank)
+	if c.Work != nil {
+		res.Work, res.RankInWork = summary(*c.Work, lang), int32(c.RankInWork)
+		if t := res.GetRelease().GetTmdb(); t != nil {
+			res.Work.Tmdb.Layer, res.Work.Tmdb.Confidence, res.Work.Tmdb.CheckedAt = t.GetLayer(), t.GetConfidence(), t.GetCheckedAt()
+		}
 	}
 	return connect.NewResponse(res), nil
 }
@@ -189,18 +229,23 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	now := b.now()
 	st, err := b.Store.Stats(ctx, now, days)
 	if err != nil {
-		b.Log.ErrorContext(ctx, "stats", "err", err)
-		return nil, connect.NewError(connect.CodeInternal, errors.New("stats failed"))
+		return nil, b.internal(ctx, "stats", err)
 	}
 	used, err := b.Store.TokensUsed(ctx, now.UTC().Format(time.DateOnly))
 	if err != nil {
-		b.Log.ErrorContext(ctx, "tokens used", "err", err)
-		return nil, connect.NewError(connect.CodeInternal, errors.New("stats failed"))
+		return nil, b.internal(ctx, "stats", err)
 	}
 	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Days: st.Days, TokensUsedDay: used, TokensLimitDay: b.DailyTokens}
-	for _, kind := range slices.Sorted(maps.Keys(st.Kinds)) {
+	byKind := map[sniffarrv1.Kind]int64{}
+	for kind, n := range st.Kinds {
+		if slices.Contains(others, kind) {
+			kind = "other"
+		}
 		k, _ := name(kinds, kind)
-		res.Kinds = append(res.Kinds, &sniffarrv1.KindCount{Kind: k, Count: st.Kinds[kind]})
+		byKind[k] += n
+	}
+	for _, k := range slices.Sorted(maps.Keys(byKind)) {
+		res.Kinds = append(res.Kinds, &sniffarrv1.KindCount{Kind: k, Count: byKind[k]})
 	}
 	for _, layer := range slices.Sorted(maps.Keys(st.Layers)) {
 		res.Layers = append(res.Layers, &sniffarrv1.LayerCount{Layer: layers[layer], Count: st.Layers[layer]})
@@ -216,4 +261,11 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 		res.Rejected = append(res.Rejected, &sniffarrv1.RejectionCount{Reason: rejections[rules.Reason(reason)], Count: st.Rejected[reason]})
 	}
 	return connect.NewResponse(res), nil
+}
+
+// internal logs a failure of the operation and returns the INTERNAL error
+// the client gets for it.
+func (b *Browser) internal(ctx context.Context, op string, err error) error {
+	b.Log.ErrorContext(ctx, op, "err", err)
+	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s failed", op))
 }

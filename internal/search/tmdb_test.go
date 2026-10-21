@@ -17,7 +17,7 @@ import (
 )
 
 // matched holds Alien matched with details in both languages, Severance
-// looked up and not found, and Heat never looked up, with the tops computed.
+// looked up and not found, and Heat never looked up.
 func matched(t *testing.T) *Browser {
 	t.Helper()
 	ctx := context.Background()
@@ -29,19 +29,17 @@ func matched(t *testing.T) *Browser {
 	for b, x := range map[byte]struct{ name, kind string }{1: {"Alien.1979.1080p.BluRay", "movie"}, 2: {"Severance.S02E01.1080p", "series"}, 3: {"Heat.1995.1080p", "movie"}} {
 		p := titles.Parse(x.name)
 		_, _, err := s.Insert(ctx, store.Torrent{Hash: hash(b), Name: x.name, Size: int64(b) << 30, Discovery: "sample", SeenAt: now.Add(-time.Duration(b) * time.Hour),
-			Kind: x.kind, KindLayer: store.LayerRules, TitleKey: p.Key, WorkKey: p.Work, Year: p.Year, Season: p.Season})
+			Kind: x.kind, KindLayer: store.LayerRules, TitleKey: p.Key, Year: p.Year, Season: p.Season})
 		require.NoError(t, err)
 	}
-	require.NoError(t, s.RecordTitle(ctx, "y:alien 1979", store.Title{Year: 1979, Confidence: 0.8, Layer: store.LayerJev,
-		IDs: []store.ExternalID{{Provider: store.ProviderTMDB, ID: "348"}, {Provider: store.ProviderIMDb, ID: "tt0078748"}},
-		Details: &store.Details{Type: "movie", OriginalTitle: "Alien", PosterPath: "/p.jpg", Rating: 8.2, Votes: 16995, Runtime: 117, Countries: []string{"US"}, Language: "en",
-			Texts: map[string]store.Text{"en": {Title: "Alien", Overview: "Nostromo.", Genres: []string{"Horror"}, PosterPath: "/p.jpg"}, "ru": {Title: "Чужой", Genres: []string{"ужасы"}, PosterPath: "/r.jpg"}}}}, now.Add(-time.Hour)))
-	require.NoError(t, s.RecordTitle(ctx, "s:severance", store.Title{}, now.Add(-2*time.Hour)))
-	k, err := s.HashKey(ctx)
+	w, _, err := s.RecordMatch(ctx, "y:alien 1979", store.Found{Hit: &store.Hit{Type: store.TypeMovie, TMDBID: 348}, Confidence: 0.8, Layer: store.LayerJev}, now.Add(-time.Hour))
 	require.NoError(t, err)
-	_, _, err = s.MergePeers(ctx, []store.PeerSketch{{Hash: hash(1), Hour: now, Sketch: peers(k, 0, 10)}, {Hash: hash(2), Hour: now, Sketch: peers(k, 0, 5)}})
+	require.NoError(t, s.RecordDetails(ctx, w, store.Details{Type: "movie", OriginalTitle: "Alien", Year: 1979, PosterPath: "/p.jpg", Rating: 8.2, Votes: 16995,
+		Runtime: 117, Countries: []string{"US"}, Language: "en",
+		Texts: map[string]store.Text{"en": {Title: "Alien", Overview: "Nostromo.", Genres: []string{"Horror"}, PosterPath: "/p.jpg"}, "ru": {Title: "Чужой", Genres: []string{"ужасы"}, PosterPath: "/r.jpg"}}},
+		[]store.ExternalID{{Provider: store.ProviderIMDb, ID: "tt0078748"}}, now))
+	_, _, err = s.RecordMatch(ctx, "s:severance", store.Found{}, now.Add(-2*time.Hour))
 	require.NoError(t, err)
-	require.NoError(t, s.ComputeTop(ctx, now))
 	return &Browser{Store: s, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
 }
 
@@ -55,11 +53,11 @@ func TestTMDBWork(t *testing.T) {
 		Layer: sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER, Confidence: 0.8, CheckedAt: res.Msg.GetRelease().GetTmdb().GetCheckedAt()}
 	require.Equal(t, want.String(), res.Msg.GetRelease().GetTmdb().String(), "matched: Russian texts and poster, the overview from English where Russian has none")
 	require.Equal(t, now.Add(-time.Hour), res.Msg.GetRelease().GetTmdb().GetCheckedAt().AsTime())
+	require.Equal(t, "m348", res.Msg.GetRelease().GetWork())
 
 	res, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: infohash(1)}))
 	require.NoError(t, err)
 	require.Equal(t, "Alien", res.Msg.GetRelease().GetTmdb().GetTitle(), "English by default")
-	require.Equal(t, []string{"Horror"}, res.Msg.GetRelease().GetTmdb().GetGenres())
 	require.Equal(t, "/p.jpg", res.Msg.GetRelease().GetTmdb().GetPosterPath(), "the English poster")
 
 	res, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: infohash(2)}))
@@ -68,7 +66,7 @@ func TestTMDBWork(t *testing.T) {
 	require.NotNil(t, unmatched, "looked up")
 	require.Zero(t, unmatched.GetId(), "nothing matched")
 	require.Equal(t, now.Add(-2*time.Hour), unmatched.GetCheckedAt().AsTime())
-	require.Empty(t, unmatched.GetTitle())
+	require.Empty(t, res.Msg.GetRelease().GetWork())
 
 	res, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: infohash(3)}))
 	require.NoError(t, err)
@@ -77,62 +75,35 @@ func TestTMDBWork(t *testing.T) {
 	_, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: infohash(1), Lang: "de"}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 
-	top, err := b.Top(ctx, connect.NewRequest(&sniffarrv1.TopRequest{Kind: sniffarrv1.Kind_KIND_MOVIE, Lang: "ru"}))
-	require.NoError(t, err)
-	require.Len(t, top.Msg.GetEntries(), 1)
-	require.Equal(t, "Чужой", top.Msg.GetEntries()[0].GetWork().GetTmdb().GetTitle(), "a top entry carries its work's match")
-	top, err = b.Top(ctx, connect.NewRequest(&sniffarrv1.TopRequest{Kind: sniffarrv1.Kind_KIND_SERIES}))
-	require.NoError(t, err)
-	require.Len(t, top.Msg.GetEntries(), 1)
-	require.Zero(t, top.Msg.GetEntries()[0].GetWork().GetTmdb().GetId())
-	require.NotNil(t, top.Msg.GetEntries()[0].GetWork().GetTmdb())
-
-	wk, err := b.Work(ctx, connect.NewRequest(&sniffarrv1.WorkRequest{Key: "y:alien 1979", Lang: "ru"}))
-	require.NoError(t, err)
-	require.Equal(t, "Чужой", wk.Msg.GetWork().GetTmdb().GetTitle())
-	require.Equal(t, "Чужой", wk.Msg.GetReleases()[0].GetRelease().GetTmdb().GetTitle(), "and so do its releases")
-	wk, err = b.Work(ctx, connect.NewRequest(&sniffarrv1.WorkRequest{Key: "y:heat 1995"}))
-	require.NoError(t, err)
-	require.Nil(t, wk.Msg.GetWork().GetTmdb())
-
-	page, err := b.Page(ctx, connect.NewRequest(&sniffarrv1.PageRequest{Query: "1080p", Lang: "ru"}))
-	require.NoError(t, err)
-	byKey := map[string]*sniffarrv1.TMDBWork{}
-	for _, w := range page.Msg.GetWorks() {
-		byKey[w.GetWork().GetKey()] = w.GetTmdb()
-	}
-	require.Equal(t, "Чужой", byKey["y:alien 1979"].GetTitle(), "the works of a page carry their matches")
-	require.Zero(t, byKey["s:severance/2"].GetId())
-	require.Contains(t, byKey, "y:heat 1995")
-	require.Nil(t, byKey["y:heat 1995"])
-	for _, r := range page.Msg.GetReleases() {
-		if r.GetName() == "Alien.1979.1080p.BluRay" {
-			require.Equal(t, "Чужой", r.GetTmdb().GetTitle(), "a page's releases carry theirs")
-		}
-	}
-	for _, req := range []any{&sniffarrv1.PageRequest{Lang: "xx"}, &sniffarrv1.TopRequest{Kind: sniffarrv1.Kind_KIND_MOVIE, Lang: "xx"}, &sniffarrv1.WorkRequest{Key: "y:alien 1979", Lang: "xx"}} {
-		var err error
-		switch m := req.(type) {
-		case *sniffarrv1.PageRequest:
-			_, err = b.Page(ctx, connect.NewRequest(m))
-		case *sniffarrv1.TopRequest:
-			_, err = b.Top(ctx, connect.NewRequest(m))
-		case *sniffarrv1.WorkRequest:
-			_, err = b.Work(ctx, connect.NewRequest(m))
-		}
-		require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "%v", req)
-	}
-
 	svc := &Service{Store: b.Store, Log: b.Log}
 	got, err := svc.Get(ctx, connect.NewRequest(&sniffarrv1.GetRequest{Infohash: infohash(1), Lang: "ru"}))
 	require.NoError(t, err)
 	require.Equal(t, "Чужой", got.Msg.GetRelease().GetTmdb().GetTitle())
+	require.Equal(t, []*sniffarrv1.ExternalId{{Provider: "imdb", Id: "tt0078748"}, {Provider: "tmdb", Id: "348"}}, got.Msg.GetRelease().GetIds())
 	found, err := svc.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{Query: "alien"}))
 	require.NoError(t, err)
 	require.Equal(t, "Alien", found.Msg.GetReleases()[0].GetTmdb().GetTitle())
+	require.Equal(t, "m348", found.Msg.GetReleases()[0].GetWork())
 	_, err = svc.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{Lang: "xx"}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
 
-	require.Equal(t, "tv", tmdbWork(store.Title{Layer: store.LayerTMDB, MatchedAt: now, IDs: []store.ExternalID{{Provider: "tmdb", ID: "7"}}}, "series", "en").GetType(),
-		"a match without details is typed by its kind")
+func TestWorkID(t *testing.T) {
+	require.Equal(t, "m348", WorkID(store.Work{TMDBID: 348, Details: store.Details{Type: store.TypeMovie}}))
+	require.Equal(t, "tv1399", WorkID(store.Work{TMDBID: 1399, Details: store.Details{Type: store.TypeTV}}))
+	for id, want := range map[string]struct {
+		typ string
+		n   int
+		ok  bool
+	}{
+		"m348": {store.TypeMovie, 348, true}, "tv1399": {store.TypeTV, 1399, true},
+		"348": {}, "m": {}, "tv": {}, "m0": {}, "m-1": {}, "m+1": {}, "m01": {}, "x348": {},
+	} {
+		typ, n, ok := ParseWorkID(id)
+		require.Equal(t, want, struct {
+			typ string
+			n   int
+			ok  bool
+		}{typ, n, ok}, id)
+	}
 }

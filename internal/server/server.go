@@ -49,6 +49,8 @@ type Config struct {
 	Meter metric.MeterProvider
 	// Lazy, when set, has Search classify its candidates first.
 	Lazy *search.Lazy
+	// TMDB, when set, has BrowseService.SearchTitles search TMDB too.
+	TMDB search.TitleSearch
 	// TorznabToken, when set, serves the Torznab API at /torznab/api to
 	// requests with it as their apikey.
 	TorznabToken string
@@ -80,7 +82,7 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
-		&search.Browser{Store: c.Store, Log: c.Log, DailyTokens: c.DailyTokens, Languages: audio.Tags(c.Languages)},
+		&search.Browser{Store: c.Store, TMDB: c.TMDB, Log: c.Log, DailyTokens: c.DailyTokens, Languages: audio.Tags(c.Languages)},
 		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -155,42 +156,69 @@ func (s *Service) Get(ctx context.Context, req *connect.Request[sniffarrv1.GetRe
 	return connect.NewResponse(&sniffarrv1.GetResponse{Release: release(r, lang)}), nil
 }
 
-// tmdbWork is the API's view of a title match with texts and poster in lang,
-// or nil while the title was never looked up. A match without details takes
-// its type from kind, movie or series.
-func tmdbWork(t store.Title, kind, lang string) *sniffarrv1.TMDBWork {
-	if t.MatchedAt.IsZero() {
-		return nil
+// WorkID is the API's ID of a work: "m" and its TMDB ID for a movie, "tv"
+// and its TMDB ID for a series.
+func WorkID(w store.Work) string {
+	if w.Type == store.TypeTV {
+		return "tv" + strconv.Itoa(w.TMDBID)
 	}
-	out := &sniffarrv1.TMDBWork{CheckedAt: timestamppb.New(t.MatchedAt)}
-	if t.Layer == "" {
-		return out
+	return "m" + strconv.Itoa(w.TMDBID)
+}
+
+// ParseWorkID returns the TMDB type and ID of an ID WorkID made, or false.
+func ParseWorkID(id string) (typ string, tmdbID int, ok bool) {
+	num, isTV := strings.CutPrefix(id, "tv")
+	typ = store.TypeTV
+	if !isTV {
+		var isMovie bool
+		if num, isMovie = strings.CutPrefix(id, "m"); !isMovie {
+			return "", 0, false
+		}
+		typ = store.TypeMovie
 	}
-	out.Layer, out.Confidence, out.Year = tmdbLayers[t.Layer], float32(t.Confidence), int32(t.Year)
-	for _, id := range t.IDs {
-		switch id.Provider {
-		case store.ProviderTMDB:
-			out.Id, _ = strconv.ParseInt(id.ID, 10, 64)
-		case store.ProviderIMDb:
+	n, err := strconv.Atoi(num)
+	if err != nil || n <= 0 || strconv.Itoa(n) != num {
+		return "", 0, false
+	}
+	return typ, n, true
+}
+
+// tmdbOf is the API's view of a work with texts and poster in lang.
+func tmdbOf(w store.Work, lang string) *sniffarrv1.TMDBWork {
+	out := &sniffarrv1.TMDBWork{Id: int64(w.TMDBID), Type: w.Type, Year: int32(w.Year)}
+	for _, id := range w.IDs {
+		if id.Provider == store.ProviderIMDb {
 			out.ImdbId = id.ID
 		}
 	}
-	out.Type = "movie"
-	if kind == "series" {
-		out.Type = "tv"
-	}
-	d := t.Details
-	if d == nil {
-		return out
-	}
-	if d.Type != "" {
-		out.Type = d.Type
-	}
-	text := d.Text(lang)
-	out.Title, out.OriginalTitle, out.Overview, out.Genres = text.Title, d.OriginalTitle, text.Overview, text.Genres
-	out.PosterPath, out.Rating, out.Votes, out.Runtime = text.PosterPath, d.Rating, int32(d.Votes), int32(d.Runtime)
-	out.Status, out.Seasons, out.Countries, out.Language = d.Status, int32(d.Seasons), d.Countries, d.Language
+	text := w.Text(lang)
+	out.Title, out.OriginalTitle, out.Overview, out.Genres = text.Title, w.OriginalTitle, text.Overview, text.Genres
+	out.PosterPath, out.Rating, out.Votes, out.Runtime = text.PosterPath, w.Rating, int32(w.Votes), int32(w.Runtime)
+	out.Status, out.Seasons, out.Countries, out.Language = w.Status, int32(w.Seasons), w.Countries, w.Language
 	return out
+}
+
+// tmdbWork is the API's view of a title match with texts and poster in lang,
+// or nil while the title was never looked up.
+func tmdbWork(m store.Match, lang string) *sniffarrv1.TMDBWork {
+	if m.MatchedAt.IsZero() {
+		return nil
+	}
+	out := &sniffarrv1.TMDBWork{}
+	if m.Work != nil {
+		out = tmdbOf(*m.Work, lang)
+		out.Layer, out.Confidence = tmdbLayers[m.Layer], float32(m.Confidence)
+	}
+	out.CheckedAt = timestamppb.New(m.MatchedAt)
+	return out
+}
+
+// qualities are the API's qualities of names.Qualities.
+var qualities = map[string]sniffarrv1.Quality{
+	names.Quality2160p: sniffarrv1.Quality_QUALITY_2160P,
+	names.Quality1080p: sniffarrv1.Quality_QUALITY_1080P,
+	names.Quality720p:  sniffarrv1.Quality_QUALITY_720P,
+	names.QualitySD:    sniffarrv1.Quality_QUALITY_SD,
 }
 
 // release is the API's view of a release, with TMDBWork texts in lang.
@@ -208,13 +236,19 @@ func release(r store.Release, lang string) *sniffarrv1.Release {
 		Magnet:           Magnet(r.Hash, r.Name),
 		Layer:            layers[r.KindLayer],
 		Classified:       r.Classified,
-		TmdbLayer:        tmdbLayers[r.Title.Layer],
-		TmdbConfidence:   float32(r.Title.Confidence),
+		TmdbLayer:        tmdbLayers[r.Match.Layer],
+		TmdbConfidence:   float32(r.Match.Confidence),
 		PeersWeek:        r.PeersWeek,
-		Tmdb:             tmdbWork(r.Title, r.Kind, lang),
+		Tmdb:             tmdbWork(r.Match, lang),
+		Quality:          qualities[r.Quality],
+		Season:           int32(r.Season),
+		Episode:          int32(r.Episode),
 	}
-	for _, id := range r.Title.IDs {
-		out.Ids = append(out.Ids, &sniffarrv1.ExternalId{Provider: id.Provider, Id: id.ID})
+	if w := r.Match.Work; w != nil {
+		out.Work = WorkID(*w)
+		for _, id := range w.ExternalIDs() {
+			out.Ids = append(out.Ids, &sniffarrv1.ExternalId{Provider: id.Provider, Id: id.ID})
+		}
 	}
 	for k, name := range kinds {
 		if name == r.Kind {
@@ -222,7 +256,7 @@ func release(r store.Release, lang string) *sniffarrv1.Release {
 		}
 	}
 	for _, a := range r.Audio {
-		pa := &sniffarrv1.Audio{Language: a.Language, Marker: a.Marker, ScriptHint: a.ScriptHint}
+		pa := &sniffarrv1.Audio{Language: a.Language, Marker: a.Marker, ScriptHint: a.ScriptHint, Mark: a.Mark}
 		if a.Probability != nil {
 			pa.Probability = new(float32(*a.Probability))
 		}

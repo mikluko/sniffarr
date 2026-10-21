@@ -93,6 +93,27 @@ message Release {
   // What TMDB knows of the work the release's title is matched to; absent
   // while the title was never looked up or without title matching.
   TMDBWork tmdb = 20;
+  // The ID of the work the release's title is matched to, as
+  // BrowseService's WorkSummary.id; empty while it is matched to none.
+  string work = 21;
+  // The resolution the name gives; QUALITY_UNSPECIFIED when it gives none.
+  Quality quality = 22;
+  // The season and episode the name gives, 0 when it gives none; a whole
+  // season has no episode.
+  int32 season = 23;
+  int32 episode = 24;
+}
+
+// Quality is a release's resolution as its name gives it.
+enum Quality {
+  QUALITY_UNSPECIFIED = 0;
+  // 2160p, 4K or UHD.
+  QUALITY_2160P = 1;
+  // 1080p or 1080i.
+  QUALITY_1080P = 2;
+  QUALITY_720P = 3;
+  // 576p, 480p, or an SD source such as a DVD rip.
+  QUALITY_SD = 4;
 }
 
 // ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
@@ -164,6 +185,9 @@ message Audio {
   bool marker = 3;
   // Letters of the language's script are in the release's name or paths.
   bool script_hint = 4;
+  // The marker as written in the name, or else in a stored file path;
+  // empty without a marker, or for one in a path not stored.
+  string mark = 5;
 }
 
 // Layer is what decided a release's kind.
