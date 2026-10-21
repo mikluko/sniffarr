@@ -111,7 +111,7 @@ func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
 		for _, g := range sightings {
 			var dead bool
-			if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM ingest_dead WHERE infohash = ? AND until > ?)", g.Hash[:], now.UnixMilli()).Scan(&dead); err != nil {
+			if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM ingest_dead WHERE key = ? AND until > ?)", deadKey(g.Hash[:]), now.UnixMilli()).Scan(&dead); err != nil {
 				return err
 			}
 			if dead {
@@ -119,7 +119,7 @@ func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 					known++
 					continue
 				}
-				if _, err := tx.ExecContext(ctx, "DELETE FROM ingest_dead WHERE infohash = ?", g.Hash[:]); err != nil {
+				if _, err := tx.ExecContext(ctx, "DELETE FROM ingest_dead WHERE key = ?", deadKey(g.Hash[:])); err != nil {
 					return err
 				}
 			}
