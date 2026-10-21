@@ -257,6 +257,21 @@ message CardResponse {
   // The release's place among its work's releases by peers over the last
   // 7 days, 1 first; 0 without a work.
   int32 rank_in_work = 9;
+  // The rules that recognised features in the release's name or file paths,
+  // recomputed on each call: in the order the name reads, audio markers
+  // last.
+  repeated RuleHit rules = 10;
+}
+
+// RuleHit is a rule and the fragment that made it fire.
+message RuleHit {
+  // The feature recognised: "kind.series", "kind.movie", "year", "season",
+  // "episode", "quality." and the resolution ("2160p", "1080p", "720p",
+  // "sd"), or "audio." and the language tag.
+  string rule = 1;
+  // The fragment of the name, or for audio of a name or file path, as
+  // written there.
+  string match = 2;
 }
 
 // PeerCounts are distinct peers over three sliding windows ending now.
