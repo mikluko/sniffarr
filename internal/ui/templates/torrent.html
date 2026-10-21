@@ -3,11 +3,11 @@
 {{define "main"}}
 {{with .Torrent}}
 <div class="head">
-  <a href="{{if $.BackURL}}{{$.BackURL}}{{else}}/top{{end}}">← {{$.T "card.back"}}</a>
+  <a href="{{if $.BackURL}}{{$.BackURL}}{{else if .Work}}{{.Work.Path}}{{else}}/torrents{{end}}">← {{$.T "card.back"}}</a>
   <h1>{{.Name}}</h1>
 </div>
 
-{{if .Work}}{{template "tmdbcard" $}}{{end}}
+{{template "tmdbcard" $}}
 
 <div class="cols">
 <section class="col">
@@ -32,14 +32,25 @@
     <tbody>
       <tr><td>{{$.T "col.kind"}}</td><td>{{$.T (concat "kind." .Kind.Value)}}</td><td>{{$.T (concat "layer." .Kind.Layer)}}</td><td class="r">{{$.Prob .Kind.Confidence}}</td></tr>
       <tr><td>{{$.T "col.source"}}</td><td>{{$.T (concat "source." .Source.Value)}}</td><td>{{$.T (concat "layer." .Source.Layer)}}</td><td class="r">{{$.Prob .Source.Confidence}}</td></tr>
-      {{range .Voice}}
-      <tr><td>{{$.T "col.voice"}} {{.Lang}}</td><td>{{if .Mark}}{{$.T "voice.mark"}}{{else}}<span class="mu">{{$.T "voice.nomark"}}</span>{{end}}</td><td>{{$.T "voice.layer_mark"}}</td><td class="r">{{if .Mark}}{{.Mark}}{{else}}—{{end}}</td></tr>
-      <tr><td></td><td class="mu">{{$.T "voice.hint"}}</td><td>{{$.T "voice.layer_script"}}</td><td class="r">{{if .ScriptHint}}{{$.T (concat "script." .ScriptHint)}}{{else}}—{{end}}</td></tr>
-      <tr><td></td><td class="mu">{{$.T "voice.prob"}}</td><td>{{$.T "layer.classifier"}}</td><td class="r">{{$.Prob .Prob}}</td></tr>
-      {{end}}
     </tbody>
   </table>
   </div>
+  {{if $.VoiceLangs}}
+  <h3 class="gap">{{$.T "top.audio"}}</h3>
+  <div class="scroll">
+  <table class="t">
+    <thead><tr><th>{{$.T "audio.lang"}}</th><th>{{$.T "audio.markcol"}}</th><th class="r">{{$.T "audio.prob"}}</th><th>{{$.T "audio.script"}}</th></tr></thead>
+    <tbody>
+    {{range $.VoiceLangs}}{{$a := audioOf $.Torrent.Audio .}}
+      <tr><td>{{$.DubLabel .}}</td>
+        <td>{{if $a.Marker}}{{if $a.Mark}}<b>{{$a.Mark}}</b>{{else}}{{$.T "audio.marker"}}{{end}}{{else}}<span class="mu">{{$.T "audio.nomark"}}</span>{{end}}</td>
+        <td class="r">{{$.Prob $a.Probability}}</td>
+        <td>{{if $a.Script}}{{$.T (concat "script." $a.Script)}}{{else}}—{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{end}}
   {{if .Rules}}
   <div class="rules">
     <div class="mu">{{$.T "card.rules"}}</div>
@@ -80,42 +91,44 @@
 {{/* TMDB block of the card. Whole block links to the title in the top (stretched link);
      TMDB/IMDb links sit above it. States: matched with poster, matched without poster,
      unmatched, unchecked (nil). */}}
+{{/* TMDB block of the torrent card. Matched: the whole block links to the title page
+     (stretched link; TMDB/IMDb links sit above it). Not matched: state and search links. */}}
 {{define "tmdbcard"}}
-{{$t := .Torrent}}{{$w := $t.Work}}{{$m := $t.TMDB}}{{$st := tmdbState $m}}
-<section class="tm tm-{{$st}}" aria-label="TMDB">
+{{$t := .Torrent}}{{$w := $t.Work}}
+{{if $w}}{{$m := $w.TMDB}}
+<section class="tm tm-matched" aria-label="TMDB">
   {{if $m.HasPoster}}
   <img class="tm-poster" src="{{tmdbImg posterCard $m.PosterPath}}" width="150" height="225" alt="" loading="lazy" referrerpolicy="no-referrer">
   {{else}}
-  <div class="tm-poster tm-none" aria-hidden="true">{{if $m.Matched}}{{.T "tmdb.noposter"}}{{else}}—{{end}}</div>
+  <div class="tm-poster tm-none" aria-hidden="true">{{.T "tmdb.noposter"}}</div>
   {{end}}
   <div class="tm-body">
-    <h2 class="tm-title">{{if not $m.Matched}}<span class="tm-keyl mu">{{.T "tmdb.key"}}</span> {{end}}<a class="tm-stretch{{if not $m.Matched}} mono{{end}}" href="/top/w/{{$w.ID}}?open=1">{{.Title $w $m}}</a>{{with .TitleSub $w $m}} <span class="mu">{{.}}</span>{{end}}</h2>
-    {{if $m.Matched}}
-      {{if $m.ShowOriginal}}<div class="tm-orig">{{$m.OriginalTitle}}</div>{{end}}
-      <div class="tm-facts">
-        {{- if eq $m.Type "tv"}}{{$.T "tmdb.tv"}}{{if $m.Year}}, {{$m.Year}}{{end}}{{if $m.Seasons}} · {{$m.Seasons}} {{$.T "tmdb.seasons"}}{{end}}{{if $m.Status}} · {{$.T (concat "tvstatus." $m.Status)}}{{end}}{{with $.Runtime $m.Runtime}} · {{$.T "tmdb.episode"}} {{.}}{{end}}
-        {{- else}}{{$.T "kind.movie"}}{{with $.Runtime $m.Runtime}} · {{.}}{{end}}{{end}}
-        {{- if $m.Countries}} · {{$.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}</div>
-      {{if $m.Genres}}<div class="tm-facts">{{$.List $m.Genres}}</div>{{end}}
-      {{if $m.Votes}}<div class="tm-facts">TMDB {{$.Rating $m.Rating}} <span class="mu">· {{$.Num (int64 $m.Votes)}} {{$.T "tmdb.votes"}}</span></div>{{end}}
-      {{if $m.Overview}}<p class="tm-over">{{$m.Overview}}</p>{{end}}
-    {{else if eq $st "unmatched"}}
-      <div class="tm-state">{{$.T "tmdb.unmatched"}}</div>
-    {{else}}
-      <div class="tm-state">{{$.T "tmdb.unchecked"}}</div>
-    {{end}}
-    <div class="mu">{{if $w.Rank}}№{{$w.Rank}} {{$.T (concat "card.intop." $w.Kind)}} · {{end}}{{$t.WorkRels}} {{$.T "top.releases_lc"}}, {{$.T "card.thisis"}}{{$t.RankInWork}}</div>
+    <h2 class="tm-title"><a class="tm-stretch" href="{{$w.Path}}">{{$m.Title}}</a>{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h2>
+    {{if $m.ShowOriginal}}<div class="tm-orig">{{$m.OriginalTitle}}</div>{{end}}
+    <div class="tm-facts">{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}</div>
+    {{if $m.Genres}}<div class="tm-facts">{{.List $m.Genres}}</div>{{end}}
+    {{if $m.Votes}}<div class="tm-facts">TMDB {{.Rating $m.Rating}} <span class="mu">· {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span></div>{{end}}
+    {{if $m.Overview}}<p class="tm-over">{{$m.Overview}}</p>{{end}}
+    <div class="mu">{{if $w.Rank}}№{{$w.Rank}} {{.T (concat "card.intop." $w.Kind)}} · {{end}}{{$w.Releases}} {{.T "top.releases_lc"}}, {{.T "card.thisis"}}{{$t.RankInWork}}</div>
     <div class="tm-links">
-      {{if $m.Matched}}
-        <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}
-      {{else if $t.TMDBQuery}}
-        <a href="{{tmdbSearch $t.TMDBQuery}}" rel="noreferrer" target="_blank">{{$.T "tmdb.search"}} TMDB</a> · <a href="{{imdbSearch $t.TMDBQuery}}" rel="noreferrer" target="_blank">IMDb</a> <span class="mu">«{{$t.TMDBQuery}}»</span>
-      {{end}}
+      <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}
     </div>
-    <div class="tm-op mu">
-      {{- if $m.Matched}}{{$.T (concat "tmdb.method." $m.Method)}} · {{$.T "tmdb.conf"}} {{$.Prob2 $m.Confidence}}{{if lowConf $m.Confidence}} <b class="warn">{{$.T "tmdb.low"}}</b>{{end}}{{if $m.CheckedAt.IsZero | not}} · {{$.Date $m.CheckedAt}}{{end}}
-      {{- else if eq $st "unmatched"}}{{$.T "tmdb.checked"}} {{$.Date $m.CheckedAt}}
-      {{- end}}</div>
+    <div class="tm-op mu">{{.T (concat "tmdb.method." $m.Method)}} · {{.T "tmdb.conf"}} {{.Prob2 $m.Confidence}}{{if lowConf $m.Confidence}} <b class="warn">{{.T "tmdb.low"}}</b>{{end}}{{if $m.CheckedAt.IsZero | not}} · {{.Date $m.CheckedAt}}{{end}}</div>
   </div>
 </section>
+{{else}}{{$m := $t.TMDB}}{{$st := tmdbState $m}}
+<section class="tm tm-{{$st}}" aria-label="TMDB">
+  <div class="tm-poster tm-none" aria-hidden="true">—</div>
+  <div class="tm-body">
+    {{if $t.TMDBQuery}}<h2 class="tm-title"><span class="tm-keyl mu">{{.T "tmdb.key"}}</span> <span class="mono">{{$t.TMDBQuery}}</span></h2>{{end}}
+    <div class="tm-state">{{if eq $st "unmatched"}}{{.T "tmdb.unmatched"}}{{else}}{{.T "tmdb.unchecked"}}{{end}}</div>
+    {{if $t.TMDBQuery}}
+    <div class="tm-links">
+      <a href="{{tmdbSearch $t.TMDBQuery}}" rel="noreferrer" target="_blank">{{.T "tmdb.search"}} TMDB</a> · <a href="{{imdbSearch $t.TMDBQuery}}" rel="noreferrer" target="_blank">IMDb</a>
+    </div>
+    {{end}}
+    {{if eq $st "unmatched"}}<div class="tm-op mu">{{.T "tmdb.checked"}} {{.Date $m.CheckedAt}}</div>{{end}}
+  </div>
+</section>
+{{end}}
 {{end}}

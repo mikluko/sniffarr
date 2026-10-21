@@ -18,6 +18,7 @@
 <header class="top">
   <a href="/" class="brand">sniffarr</a>
   <nav>
+    <a href="/torrents"{{if eq .Nav "torrents"}} class="on" aria-current="page"{{end}}>{{.T "nav.torrents"}}</a>
     <a href="/top"{{if eq .Nav "top"}} class="on" aria-current="page"{{end}}>{{.T "nav.top"}}</a>
     <a href="/data"{{if eq .Nav "data"}} class="on" aria-current="page"{{end}}>{{.T "nav.data"}}</a>
   </nav>
@@ -41,3 +42,20 @@
   <button type="submit">{{.T "search.submit"}}</button>
 </form>
 {{end}}
+
+{{/* Dub cell of one release: per configured language the mark, else the probability, else "—".
+     The language code is shown only when several languages are configured. */}}
+{{define "relaudio"}}{{$b := .B}}{{$list := .A}}
+  {{- range $i, $l := $b.VoiceLangs}}{{if $i}} · {{end}}{{if gt (len $b.VoiceLangs) 1}}<span class="mu">{{$l}}</span> {{end}}
+  {{- $a := audioOf $list $l}}{{if $a.Marker}}<b>{{$b.AudioCell $a}}</b>{{else}}{{$b.AudioCell $a}}{{end}}{{end}}
+{{- end}}
+
+{{/* Dub summary of a title: per configured language, how many of its N releases carry it and how. */}}
+{{define "workaudio"}}{{$b := .B}}{{$list := .A}}{{$n := .N}}
+  {{- range $b.VoiceLangs}}{{$a := workAudio $list .}}
+  <div><span class="mu">{{.}}:</span>
+    {{- if $a.Marked}} {{$b.T "audio.marked_in"}} {{$a.Marked}} {{$b.T "results.of"}} {{$n}}{{with $a.Marks}} <span class="mu">({{$b.Marks .}})</span>{{end}}{{end}}
+    {{- if $a.Likely}}{{if $a.Marked}},{{end}} {{if $a.Marked}}{{$b.T "audio.likely_more"}}{{else}}{{$b.T "audio.likely_in"}}{{end}} {{$a.Likely}}{{if not $a.Marked}} {{$b.T "results.of"}} {{$n}}{{end}}{{end}}
+    {{- if not (or $a.Marked $a.Likely)}} <span class="mu">{{$b.T "audio.none"}}</span>{{end}}</div>
+  {{- end}}
+{{- end}}

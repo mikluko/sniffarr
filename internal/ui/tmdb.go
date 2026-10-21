@@ -91,19 +91,54 @@ func (b Base) Rating(r float64) string { return b.dec(r, 1) }
 // List joins strings with ", ".
 func (b Base) List(xs []string) string { return strings.Join(xs, ", ") }
 
-// Title is the display name of a title key: the TMDB title when matched, else the key.
-func (b Base) Title(ref WorkRef, t *TMDBWork) string {
-	if t.Matched() && t.Title != "" {
-		return t.Title
+// WorkID is the URL id of a title: "m318846" for a movie, "tv1399" for a series.
+// TMDB numbers movies and series separately, so the bare TMDB id is ambiguous.
+func WorkID(kind string, tmdbID int64) string {
+	if kind == "series" {
+		return "tv" + strconv.FormatInt(tmdbID, 10)
 	}
-	return ref.Title
+	return "m" + strconv.FormatInt(tmdbID, 10)
 }
 
-// TitleSub is what follows the title: the TMDB year for movies, the season for series,
-// the key's sub otherwise.
-func (b Base) TitleSub(ref WorkRef, t *TMDBWork) string {
-	if t.Matched() && ref.Kind == "movie" && t.Year > 0 {
-		return strconv.Itoa(t.Year)
+// ParseWorkID reverses WorkID; ok=false for anything else.
+func ParseWorkID(id string) (kind string, tmdbID int64, ok bool) {
+	num := ""
+	switch {
+	case strings.HasPrefix(id, "tv"):
+		kind, num = "series", id[2:]
+	case strings.HasPrefix(id, "m"):
+		kind, num = "movie", id[1:]
+	default:
+		return "", 0, false
 	}
-	return ref.Sub
+	n, err := strconv.ParseInt(num, 10, 64)
+	if err != nil || n <= 0 {
+		return "", 0, false
+	}
+	return kind, n, true
+}
+
+// WorkPath is the title page of a summary.
+func (w WorkSummary) Path() string { return "/w/" + w.ID }
+
+// Facts is the one-line description under a title: "фильм · 2015 · 2 ч 10 мин",
+// "сериал · 2011 · завершён · 8 сез.".
+func (b Base) Facts(kind string, t *TMDBWork) string {
+	parts := []string{b.T("kind." + kind)}
+	if t.Matched() {
+		if t.Year > 0 {
+			parts = append(parts, strconv.Itoa(t.Year))
+		}
+		if kind == "series" {
+			if t.Status != "" {
+				parts = append(parts, b.T("tvstatus."+t.Status))
+			}
+			if t.Seasons > 0 {
+				parts = append(parts, strconv.Itoa(t.Seasons)+"\u00a0"+b.T("tmdb.seasons"))
+			}
+		} else if r := b.Runtime(t.Runtime); r != "" {
+			parts = append(parts, r)
+		}
+	}
+	return strings.Join(parts, " · ")
 }

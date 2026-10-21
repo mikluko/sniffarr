@@ -13,23 +13,49 @@
   <div class="topctl">
     <span class="mu">{{.T "top.window"}}</span>
     <span class="seg">{{range windows}}<a href="{{$.URL $.Kind . $.VoiceMode $.All}}" hx-get="{{$.URL $.Kind . $.VoiceMode $.All}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.Window}} aria-current="true"{{end}}>{{$.T (concat "win." .)}}</a>{{end}}</span>
-    {{range .VoiceLangs}}
-    <span class="mu">{{$.T "col.voice"}} {{.}}</span>
+    {{if .VoiceLangs}}
+    {{if gt (len .VoiceLangs) 1}}
+    <span class="mu">{{.T "audio.filter"}}</span>
+    <span class="seg">{{range .VoiceLangs}}<a href="{{$.VoiceLangURL .}}" hx-get="{{$.VoiceLangURL .}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.VoiceLang}} aria-current="true"{{end}}>{{$.LangName .}}</a>{{end}}</span>
+    {{else}}
+    <span class="mu">{{.DubLabel .VoiceLang}}</span>
+    {{end}}
     <span class="seg">{{range voiceModes}}<a href="{{$.URL $.Kind $.Window . $.All}}" hx-get="{{$.URL $.Kind $.Window . $.All}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.VoiceMode}} aria-current="true"{{end}}>{{$.T (concat "voicemode." .)}}</a>{{end}}</span>
     {{end}}
     <span class="mu at">{{.T "top.computed"}} {{$.Time .Computed}}</span>
   </div>
+  {{if and .VoiceLangs .VoiceMode (ne .VoiceMode "any")}}
+  <p class="mu">{{.T "top.caption.filtered"}}</p>
+  <p class="hint">{{.Fmt (concat "audio.hint." .VoiceMode) (.DubLabel .VoiceLang)}}</p>
+  {{else}}
   <p class="mu">{{.T "top.caption"}}</p>
+  {{end}}
   {{if .Works}}
   <div class="scroll">
   <table class="t tt">
     <thead><tr>
       <th class="r">#</th><th>{{.T (concat "top.unit." .Kind)}}</th><th class="r">{{.T "top.peers"}}</th><th class="r">{{.T "top.delta"}}</th>
       <th class="r">{{.T "top.releases"}}</th>
-      {{range .VoiceLangs}}<th class="r">{{.}}</th>{{end}}
+      {{if .VoiceLangs}}<th>{{.T "top.audio"}}</th>{{end}}
       <th>{{.T "top.sources"}}</th><th>{{.T "col.first"}}</th>
     </tr></thead>
-    {{template "work" .}}
+    <tbody>
+    {{range .Works}}{{$w := .}}
+    <tr class="wk">
+      <td class="r mu">{{.Rank}}</td>
+      <td class="nm"><span class="tw">
+        {{- if .TMDB.HasPoster}}<img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="28" height="42" alt="" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="th th-none" aria-hidden="true"></span>{{end -}}
+        <span class="tw-t"><a href="{{.Path}}">{{.TMDB.Title}}</a>{{if .TMDB.Year}} <span class="mu">{{.TMDB.Year}}</span>{{end}}
+        {{- if .TMDB.ShowOriginal}}<span class="orig mu">{{.TMDB.OriginalTitle}}</span>{{end}}</span></span></td>
+      <td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>
+      <td class="r dl">{{$.Delta .Delta}}</td>
+      <td class="r rl" data-l="{{$.T "top.releases_lc"}}">{{.Releases}}</td>
+      {{if $.VoiceLangs}}<td class="au">{{template "workaudio" (workAudioArgs $.Base .Audio .Releases)}}</td>{{end}}
+      <td class="src">{{$.SourceList .Sources}}</td>
+      <td class="mu fs">{{$.Date .FirstSeen}}</td>
+    </tr>
+    {{end}}
+    </tbody>
   </table>
   </div>
   <p class="mu">{{.T "top.shown"}} 1–{{len .Works}} {{.T "results.of"}} {{.Limit}}
@@ -38,37 +64,4 @@
   <p>{{.T "top.empty"}}</p>
   {{end}}
 </section>
-{{end}}
-
-{{/* One <tbody> per work, so a work can be swapped alone: GET /top/w/{id} with HX-Target work-{id}. */}}
-{{define "work"}}
-{{- range .Works -}}
-<tbody id="work-{{.Ref.ID}}"{{if .Open}} class="open"{{end}}>
-  <tr class="wk">
-    <td class="r mu">{{.Rank}}</td>
-    <td class="nm"><span class="tw">
-      {{- if .TMDB.HasPoster}}<img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="28" height="42" alt="" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="th th-none" aria-hidden="true"></span>{{end -}}
-      <span class="tw-t"><a href="{{$.WorkURL .Ref.ID (not .Open)}}" hx-get="{{$.WorkURL .Ref.ID (not .Open)}}" hx-target="#work-{{.Ref.ID}}" hx-swap="morph:outerHTML" aria-expanded="{{if .Open}}true{{else}}false{{end}}"{{if not .TMDB.Matched}} class="key"{{end}}>{{$.Title .Ref .TMDB}}</a>{{with $.TitleSub .Ref .TMDB}} <span class="mu">{{.}}</span>{{end}}
-      {{- if .TMDB.ShowOriginal}}<span class="orig mu">{{.TMDB.OriginalTitle}}</span>{{end}}</span></span></td>
-    <td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>
-    <td class="r dl">{{$.Delta .Delta}}</td>
-    <td class="r rl" data-l="{{$.T "top.releases_lc"}}">{{.Releases}}</td>
-    {{range $i, $c := .Voice}}<td class="r v" data-l="{{index $.VoiceLangs $i}}">{{$.Voice $c}}</td>{{end}}
-    <td class="src">{{$.SourceList .Sources}}</td>
-    <td class="mu fs">{{$.Date .FirstSeen}}</td>
-  </tr>
-  {{if .Open}}{{range .Items}}
-  <tr class="rel">
-    <td></td>
-    <td class="nm"><a href="/t/{{.InfoHash}}">{{.Name}}</a></td>
-    <td class="r">{{$.Num .Peers}}</td>
-    <td></td>
-    <td class="r">{{$.Size .Size}}</td>
-    {{range .Voice}}<td class="r">{{$.Voice .}}</td>{{end}}
-    <td>{{$.T (concat "source." .Source)}}</td>
-    <td class="mu">{{$.Date .FirstSeen}}</td>
-  </tr>
-  {{end}}{{end}}
-</tbody>
-{{end}}
 {{end}}
