@@ -78,8 +78,8 @@ func migrate(ctx context.Context, db *database.DB) error {
 }
 
 // New returns the Store in db, applying any pending migrations, and, once
-// after the migration that adds them, deriving the episode and quality of
-// stored torrents from their names and the marks of their audio markers.
+// per database, deriving the episode and quality of stored torrents from
+// their names and the marks of their audio markers.
 func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if opts.MaxFiles <= 0 {
 		opts.MaxFiles = DefaultMaxFiles
