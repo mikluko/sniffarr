@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-21
+
+### Added
+
+- `BrowseService.Settings` returns the API's audio languages, BCP-47 tags in its order; the web UI asks it at start and listens only once it has answered.
+- `TMDBWork.poster_path` is the poster TMDB serves for the request's `lang`, `ru` or `en`, stored per language in `tmdb_texts`; a language without one takes the other's, then the work's `en-US` poster.
+
+### Changed
+
+- **Breaking:** `SNIFFARR_AUDIO_LANGUAGES` has no default: unset or empty, the audio extension is off, and no audio is recorded, asked about or shown. Installs that relied on the default set `SNIFFARR_AUDIO_LANGUAGES=ru`.
+- The migration marks every matched work's details unfetched, so the TMDB worker's backfill fetches each once more, two requests a work, to record both posters; until it has, the work shows its match without details.
+
+### Removed
+
+- `SNIFFARR_AUDIO_LANGUAGES` of `-ui`: the UI takes the languages from the API.
+
 ## [0.14.1] - 2026-10-21
 
 ### Fixed
@@ -202,7 +218,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/mikluko/sniffarr/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/mikluko/sniffarr/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/mikluko/sniffarr/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mikluko/sniffarr/compare/v0.12.0...v0.13.0

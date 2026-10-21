@@ -47,9 +47,11 @@ type Details struct {
 	// Type is "movie" or "tv".
 	Type          string
 	OriginalTitle string
-	PosterPath    string
-	Rating        float64
-	Votes         int
+	// PosterPath is the poster of the first language fetched, shown where no
+	// Text has one.
+	PosterPath string
+	Rating     float64
+	Votes      int
 	// Runtime is in minutes: a movie's, or a typical episode's for a series.
 	Runtime int
 	// Status and Seasons are a series'.
@@ -64,13 +66,15 @@ type Details struct {
 
 // Text is what TMDB tells of a work in one language.
 type Text struct {
-	Title    string
-	Overview string
-	Genres   []string
+	Title      string
+	Overview   string
+	Genres     []string
+	PosterPath string
 }
 
 // Text returns the work's text in lang; each field it lacks there is taken
-// from the other languages in order, and the title from OriginalTitle last.
+// from the other languages in order, and the title from OriginalTitle and
+// the poster from PosterPath last.
 func (d *Details) Text(lang string) Text {
 	if d == nil {
 		return Text{}
@@ -90,9 +94,15 @@ func (d *Details) Text(lang string) Text {
 		if len(out.Genres) == 0 {
 			out.Genres = t.Genres
 		}
+		if out.PosterPath == "" {
+			out.PosterPath = t.PosterPath
+		}
 	}
 	if out.Title == "" {
 		out.Title = d.OriginalTitle
+	}
+	if out.PosterPath == "" {
+		out.PosterPath = d.PosterPath
 	}
 	return out
 }
@@ -240,8 +250,8 @@ func writeDetails(ctx context.Context, tx *sql.Tx, key string, d *Details, at ti
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO tmdb_texts (title_key, lang, title, overview, genres) VALUES (?, ?, ?, ?, ?)",
-			key, lang, null(t.Title), null(t.Overview), genres); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO tmdb_texts (title_key, lang, title, overview, genres, poster_path) VALUES (?, ?, ?, ?, ?, ?)",
+			key, lang, null(t.Title), null(t.Overview), genres, null(t.PosterPath)); err != nil {
 			return err
 		}
 	}
@@ -326,7 +336,7 @@ func (s *Store) titles(ctx context.Context, keys []string) (map[string]Title, er
 	return found, s.each(ctx, func(rows *sql.Rows) error {
 		var k, lang, genres string
 		var x Text
-		if err := rows.Scan(&k, &lang, &x.Title, &x.Overview, &genres); err != nil {
+		if err := rows.Scan(&k, &lang, &x.Title, &x.Overview, &genres, &x.PosterPath); err != nil {
 			return err
 		}
 		var err error
@@ -342,7 +352,7 @@ func (s *Store) titles(ctx context.Context, keys []string) (map[string]Title, er
 		}
 		t.Details.Texts[lang] = x
 		return nil
-	}, "SELECT title_key, lang, coalesce(title, ''), coalesce(overview, ''), coalesce(genres, '') FROM tmdb_texts WHERE title_key IN ("+in+")", args...)
+	}, "SELECT title_key, lang, coalesce(title, ''), coalesce(overview, ''), coalesce(genres, ''), coalesce(poster_path, '') FROM tmdb_texts WHERE title_key IN ("+in+")", args...)
 }
 
 // tmdb fills in the Title of the releases when Options.TMDB is set.

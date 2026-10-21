@@ -59,8 +59,8 @@ var alienTMDB = store.Title{Year: 1979, Confidence: 0.8, Layer: store.LayerJev,
 	IDs: []store.ExternalID{{Provider: store.ProviderTMDB, ID: "348"}, {Provider: store.ProviderIMDb, ID: "tt0078748"}},
 	Details: &store.Details{Type: "movie", OriginalTitle: "Alien", PosterPath: "/p.jpg", Rating: 8.176, Votes: 16995, Runtime: 117, Countries: []string{"US"}, Language: "en",
 		Texts: map[string]store.Text{
-			"en": {Title: "Alien", Overview: "Nostromo intercepts a distress signal.", Genres: []string{"Horror", "Science Fiction"}},
-			"ru": {Title: "Чужой", Overview: "Корабль перехватывает сигнал.", Genres: []string{"ужасы", "фантастика"}},
+			"en": {Title: "Alien", Overview: "Nostromo intercepts a distress signal.", Genres: []string{"Horror", "Science Fiction"}, PosterPath: "/p.jpg"},
+			"ru": {Title: "Чужой", Overview: "Корабль перехватывает сигнал.", Genres: []string{"ужасы", "фантастика"}, PosterPath: "/r.jpg"},
 		}}}
 
 // peers returns a sketch of n peers numbered from first.
@@ -80,11 +80,20 @@ func peers(k sketch.Key, first, n int) []byte {
 // computed at now.
 func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
+	return handlerLangs(t, l, "ru")
+}
+
+// handlerLangs is handler with the audio languages langs, a comma-separated
+// list, in the store and the UI alike; "" leaves the extension off.
+func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
+	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}, TMDB: true})
+	languages, err := audio.Parse(langs)
+	require.NoError(t, err)
+	st, err := store.New(ctx, db, store.Options{Languages: audio.Tags(languages), TMDB: true})
 	require.NoError(t, err)
 	var files []rules.File
 	for i := range 10 {
@@ -125,9 +134,7 @@ func handler(t *testing.T, l Locales) http.Handler {
 	})
 	require.NoError(t, err)
 	require.NoError(t, st.ComputeTop(ctx, now))
-	langs, err := audio.Parse("ru")
-	require.NoError(t, err)
-	h, err := New(Config{Browse: browse(t, st), Languages: langs, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
+	h, err := New(Config{Browse: browse(t, st), Languages: languages, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
 }
@@ -382,6 +389,7 @@ func TestTorrent(t *testing.T) {
 	require.Contains(t, ru, `?open=1">Чужой</a>`)
 	require.Contains(t, ru, `<div class="tm-orig">Alien</div>`, "the original title when it differs")
 	require.Contains(t, ru, "ужасы, фантастика")
+	require.Contains(t, ru, `<img class="tm-poster" src="https://image.tmdb.org/t/p/w342/r.jpg"`, "the poster of the page's language")
 
 	body = page(t, get(t, h, "/t/"+hexOf(2), ""))
 	require.Contains(t, body, `<section class="tm tm-unmatched" aria-label="TMDB">`, "looked up and not found")
@@ -468,4 +476,34 @@ func TestLanguage(t *testing.T) {
 	require.Contains(t, page(t, get(t, h, "/", "", "Cookie", "lang=en", TokenHeader, "ru-token")), `<html lang="en">`, "the cookie beats the person's locale")
 	require.Contains(t, page(t, get(t, h, "/?lang=en", "", "Cookie", "lang=ru")), `<html lang="en">`, "the pick beats the cookie")
 	require.Empty(t, get(t, h, "/", "", "Cookie", "lang=ru").Result().Cookies(), "no cookie without a pick")
+}
+
+func TestNoLanguages(t *testing.T) {
+	h := handlerLangs(t, nil, "")
+	body := page(t, get(t, h, "/?q=", ""))
+	for _, name := range []string{alien, severance, "Сборник"} {
+		require.Contains(t, body, name)
+	}
+	require.NotContains(t, body, `name="vl"`, "no voice filter")
+	require.NotContains(t, body, `name="voice"`)
+	require.NotContains(t, body, `data-l="ru"`, "no voice column")
+	require.NotContains(t, body, `<th class="r" title="dub">`)
+	body = page(t, get(t, h, "/?vl=ru&voice=explicit", "results"))
+	require.Contains(t, body, severance, "a voice filter in the query narrows nothing")
+	require.Equal(t, "/?q=", searchURL("", (&server{}).filters(map[string][]string{"vl": {"ru"}, "voice": {"p50"}}), 0, ""), "and is dropped from the page's links")
+
+	body = page(t, get(t, h, "/top", ""))
+	require.Contains(t, body, `>Alien</a> <span class="mu">1979</span>`)
+	require.NotContains(t, body, `<th class="r">ru</th>`, "no voice column")
+	require.NotContains(t, body, ">explicit</td>")
+	require.NotContains(t, body, `voice=`, "no voice switch")
+
+	body = page(t, get(t, h, "/t/"+hexOf(1), ""))
+	require.Contains(t, body, "magnet:?xt=urn:btih:"+hexOf(1))
+	require.NotContains(t, body, "dub ru", "no audio rows on the card")
+	require.NotContains(t, body, `<td class="r">Rus</td>`)
+
+	body = page(t, get(t, h, "/data", ""))
+	require.Contains(t, body, `<a href="/?kind=movie">`)
+	require.NotContains(t, body, "Dub by language", "no audio table")
 }

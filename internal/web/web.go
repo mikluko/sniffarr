@@ -51,8 +51,9 @@ const infohashLen = 20
 type Config struct {
 	// Browse is the API every page is read from, with its token.
 	Browse sniffarrv1connect.BrowseServiceClient
-	// Languages are the configured audio languages, in their configured
-	// order; they must be the API's.
+	// Languages are the API's audio languages in its order, as
+	// ObtainLanguages returns them; none leaves the voice filter, columns
+	// and card block out of every page.
 	Languages []audio.Language
 	// Locales tells the locale of the person an access token was issued to;
 	// when nil, the language is only the one picked on the page.
@@ -221,7 +222,8 @@ func (s *server) home(w http.ResponseWriter, req *http.Request) {
 	s.render(w, req, "home", ui.HomePage{Base: s.base(req, s.lang(w, req), "home"), Summary: ui.Summary{Total: h.GetTotal(), NewDay: h.GetNewDay(), Pending: h.GetPending()}})
 }
 
-// filters reads the search filters from the query, keeping valid values only.
+// filters reads the search filters from the query, keeping valid values only;
+// without audio languages the voice filter is "any".
 func (s *server) filters(q url.Values) ui.Filters {
 	f := ui.Filters{VoiceLang: q.Get("vl"), Voice: q.Get("voice"), MinSizeGB: strings.TrimSpace(q.Get("min")), Sort: q.Get("sort")}
 	if k := q.Get("kind"); slices.Contains(ui.Kinds, k) {
@@ -239,7 +241,7 @@ func (s *server) filters(q url.Values) ui.Filters {
 			f.VoiceLang = s.tags[0]
 		}
 	}
-	if !slices.Contains(ui.VoiceModes, f.Voice) {
+	if f.VoiceLang == "" || !slices.Contains(ui.VoiceModes, f.Voice) {
 		f.Voice = "any"
 	}
 	if !slices.Contains(ui.Sorts, f.Sort) {

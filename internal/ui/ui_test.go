@@ -83,6 +83,66 @@ func TestRenderAll(t *testing.T) {
 	}
 }
 
+// Renders every page without audio languages: no voice cells anywhere, and
+// nothing of the extension in the output.
+func TestRenderNoLanguages(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loc := time.FixedZone("CEST", 2*3600)
+	cases := []struct {
+		name, page, path string
+		data             func(Base) any
+	}{
+		{"home", "home", "/", func(b Base) any { return SampleHome(b) }},
+		{"search", "search", "/?q=dune", func(b Base) any {
+			p := SampleSearch(b, "dune")
+			p.Filters.VoiceLang = ""
+			for i := range p.Results.Rows {
+				p.Results.Rows[i].Voice = nil
+			}
+			return p
+		}},
+		{"top", "top", "/top", func(b Base) any {
+			p := SampleTop(b, "movie", SampleOpenID, false)
+			for i := range p.Works {
+				p.Works[i].Voice = nil
+				for j := range p.Works[i].Items {
+					p.Works[i].Items[j].Voice = nil
+				}
+			}
+			return p
+		}},
+		{"torrent", "torrent", "/t/x", func(b Base) any {
+			p := SampleTorrent(b, false, "poster")
+			p.Torrent.Voice = nil
+			return p
+		}},
+		{"data", "data", "/data", func(b Base) any {
+			p := SampleData(b)
+			p.Stats.Voice = nil
+			return p
+		}},
+	}
+	for _, lang := range []string{"ru", "en"} {
+		for _, c := range cases {
+			req := httptest.NewRequest("GET", c.path, nil)
+			b := r.Base(req, lang, c.name, nil, loc)
+			w := httptest.NewRecorder()
+			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
+				t.Fatalf("%s/%s: %v", lang, c.name, err)
+			}
+			body := w.Body.String()
+			for _, s := range []string{`name="vl"`, `name="voice"`, `voice=`, `data-l="ru"`, b.T("d.voice"), b.T("voice.layer_mark")} {
+				if strings.Contains(body, s) {
+					t.Errorf("%s/%s: has %q", lang, c.name, s)
+				}
+			}
+		}
+	}
+}
+
 func TestFormat(t *testing.T) {
 	ru := Base{Lang: "ru"}
 	c := Base{Lang: "en"}

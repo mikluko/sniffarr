@@ -26,6 +26,7 @@
       <h3 class="gap">{{$.T "d.bysource"}}</h3>
       <table class="t">{{range .BySource}}<tr><td><a href="/?source={{.Key}}">{{$.T (concat "source." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
     </div>
+    {{if .Voice}}
     <div>
       <h3>{{$.T "d.voice"}}</h3>
       <table class="t">
@@ -38,6 +39,7 @@
         </tbody>
       </table>
     </div>
+    {{end}}
   </div>
 </section>
 

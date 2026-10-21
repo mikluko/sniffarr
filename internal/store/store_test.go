@@ -268,7 +268,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 8, version)
+	require.Equal(t, 9, version)
 	var queueRows int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations WHERE component = 'queue'").Scan(&queueRows))
 	require.Zero(t, queueRows, "the queue component is gone")

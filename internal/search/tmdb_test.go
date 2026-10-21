@@ -35,7 +35,7 @@ func matched(t *testing.T) *Browser {
 	require.NoError(t, s.RecordTitle(ctx, "y:alien 1979", store.Title{Year: 1979, Confidence: 0.8, Layer: store.LayerJev,
 		IDs: []store.ExternalID{{Provider: store.ProviderTMDB, ID: "348"}, {Provider: store.ProviderIMDb, ID: "tt0078748"}},
 		Details: &store.Details{Type: "movie", OriginalTitle: "Alien", PosterPath: "/p.jpg", Rating: 8.2, Votes: 16995, Runtime: 117, Countries: []string{"US"}, Language: "en",
-			Texts: map[string]store.Text{"en": {Title: "Alien", Overview: "Nostromo.", Genres: []string{"Horror"}}, "ru": {Title: "Чужой", Genres: []string{"ужасы"}}}}}, now.Add(-time.Hour)))
+			Texts: map[string]store.Text{"en": {Title: "Alien", Overview: "Nostromo.", Genres: []string{"Horror"}, PosterPath: "/p.jpg"}, "ru": {Title: "Чужой", Genres: []string{"ужасы"}, PosterPath: "/r.jpg"}}}}, now.Add(-time.Hour)))
 	require.NoError(t, s.RecordTitle(ctx, "s:severance", store.Title{}, now.Add(-2*time.Hour)))
 	k, err := s.HashKey(ctx)
 	require.NoError(t, err)
@@ -50,16 +50,17 @@ func TestTMDBWork(t *testing.T) {
 	b := matched(t)
 	res, err := b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: infohash(1), Lang: "ru"}))
 	require.NoError(t, err)
-	want := &sniffarrv1.TMDBWork{Id: 348, Type: "movie", ImdbId: "tt0078748", Title: "Чужой", OriginalTitle: "Alien", Year: 1979, PosterPath: "/p.jpg",
+	want := &sniffarrv1.TMDBWork{Id: 348, Type: "movie", ImdbId: "tt0078748", Title: "Чужой", OriginalTitle: "Alien", Year: 1979, PosterPath: "/r.jpg",
 		Overview: "Nostromo.", Genres: []string{"ужасы"}, Rating: 8.2, Votes: 16995, Runtime: 117, Countries: []string{"US"}, Language: "en",
 		Layer: sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER, Confidence: 0.8, CheckedAt: res.Msg.GetRelease().GetTmdb().GetCheckedAt()}
-	require.Equal(t, want.String(), res.Msg.GetRelease().GetTmdb().String(), "matched: Russian texts, the overview from English where Russian has none")
+	require.Equal(t, want.String(), res.Msg.GetRelease().GetTmdb().String(), "matched: Russian texts and poster, the overview from English where Russian has none")
 	require.Equal(t, now.Add(-time.Hour), res.Msg.GetRelease().GetTmdb().GetCheckedAt().AsTime())
 
 	res, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: infohash(1)}))
 	require.NoError(t, err)
 	require.Equal(t, "Alien", res.Msg.GetRelease().GetTmdb().GetTitle(), "English by default")
 	require.Equal(t, []string{"Horror"}, res.Msg.GetRelease().GetTmdb().GetGenres())
+	require.Equal(t, "/p.jpg", res.Msg.GetRelease().GetTmdb().GetPosterPath(), "the English poster")
 
 	res, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: infohash(2)}))
 	require.NoError(t, err)

@@ -149,3 +149,14 @@ func TestBrowserStats(t *testing.T) {
 	_, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Days: MaxStatsDays + 1}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }
+
+func TestBrowserSettings(t *testing.T) {
+	ctx := context.Background()
+	res, err := (&Browser{}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+	require.NoError(t, err)
+	require.Empty(t, res.Msg.GetAudioLanguages(), "the extension is off")
+	b := &Browser{Languages: []string{"ru", "en"}}
+	res, err = b.Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+	require.NoError(t, err)
+	require.Equal(t, []string{"ru", "en"}, res.Msg.GetAudioLanguages(), "the configured tags in their order")
+}

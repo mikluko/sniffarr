@@ -12,10 +12,6 @@ import (
 	"github.com/mikluko/sniffarr/internal/rules"
 )
 
-// DefaultLanguages is the list of tags the server reads when none is
-// configured.
-const DefaultLanguages = "ru"
-
 // Language is an audio language the extension knows.
 type Language struct {
 	// Tag is the language's BCP-47 tag.

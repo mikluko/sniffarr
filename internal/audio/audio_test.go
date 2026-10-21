@@ -59,9 +59,6 @@ func TestParse(t *testing.T) {
 	require.EqualError(t, err, `unknown audio language "xx"`)
 	_, err = Parse("ru,ru")
 	require.EqualError(t, err, `audio language "ru" listed twice`)
-	langs, err = Parse(DefaultLanguages)
-	require.NoError(t, err)
-	require.NotEmpty(t, langs)
 }
 
 func TestKnown(t *testing.T) {

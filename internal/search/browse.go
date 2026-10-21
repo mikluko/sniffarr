@@ -27,8 +27,15 @@ type Browser struct {
 	// DailyTokens is the classifier's daily token limit Stats reports; 0 is
 	// none.
 	DailyTokens int64
+	// Languages are the audio languages Settings reports, tags in configured
+	// order; nil when the audio extension is off.
+	Languages []string
 	// Now is time.Now when nil.
 	Now func() time.Time
+}
+
+func (b *Browser) Settings(context.Context, *connect.Request[sniffarrv1.SettingsRequest]) (*connect.Response[sniffarrv1.SettingsResponse], error) {
+	return connect.NewResponse(&sniffarrv1.SettingsResponse{AudioLanguages: slices.Clone(b.Languages)}), nil
 }
 
 func (b *Browser) now() time.Time {

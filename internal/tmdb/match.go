@@ -155,7 +155,7 @@ func (m *Matcher) Details(ctx context.Context, k store.Matched) error {
 }
 
 // details fetches the work in every language: the details and IDs of the
-// first language, and the texts of each.
+// first language, and the texts of each with the poster of that language.
 func (m *Matcher) details(ctx context.Context, series bool, id int) (store.Details, []store.ExternalID, error) {
 	d := store.Details{Type: "movie", Texts: map[string]store.Text{}}
 	if series {
@@ -179,7 +179,7 @@ func (m *Matcher) details(ctx context.Context, series bool, id int) (store.Detai
 		case d.PosterPath == "":
 			d.PosterPath = r.PosterPath
 		}
-		d.Texts[l.lang] = store.Text{Title: r.Title, Overview: r.Overview, Genres: r.Genres}
+		d.Texts[l.lang] = store.Text{Title: r.Title, Overview: r.Overview, Genres: r.Genres, PosterPath: r.PosterPath}
 	}
 	return d, ids, nil
 }
