@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-21
+
+### Fixed
+
+- `-fetch` no longer crashes a few times an hour: the BitTorrent and DHT libraries are back at their released versions, v1.61.0 and v2.24.0, whose `sample_infohashes` reply the node frames itself.
+
 ## [0.14.0] - 2026-10-20
 
 ### Changed
@@ -196,7 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.14.1...HEAD
+[0.14.1]: https://github.com/mikluko/sniffarr/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/mikluko/sniffarr/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/mikluko/sniffarr/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/mikluko/sniffarr/compare/v0.11.0...v0.12.0
