@@ -13,9 +13,13 @@ import (
 	"github.com/mikluko/sniffarr/internal/database"
 )
 
+// alienHit is Alien as an English search answer gives it.
+var alienHit = Hit{Type: TypeMovie, TMDBID: 348, Lang: "en", Title: "Alien", OriginalTitle: "Alien", Year: 1979, PosterPath: "/s.jpg", Popularity: 12}
+
 func TestTMDB(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
+	s.opts.TMDB = true
 	for _, tr := range []struct {
 		b         byte
 		name, key string
@@ -49,9 +53,13 @@ func TestTMDB(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, keys)
 
-	alien := Title{Year: 1979, Confidence: 1, Layer: LayerTMDB, IDs: []ExternalID{{ProviderTMDB, "348"}, {ProviderIMDb, "tt0078748"}}}
-	require.NoError(t, s.RecordTitle(ctx, "y:alien 1979", alien, t0))
-	require.NoError(t, s.RecordTitle(ctx, "s:severance", Title{}, t0))
+	alien, detailed, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &alienHit, Confidence: 1, Layer: LayerTMDB}, t0)
+	require.NoError(t, err)
+	require.NotZero(t, alien)
+	require.False(t, detailed)
+	none, _, err := s.RecordMatch(ctx, "s:severance", Found{}, t0)
+	require.NoError(t, err)
+	require.Zero(t, none, "nothing found is no work")
 	keys, err = s.UnmatchedTitles(ctx, nil, t0, 10)
 	require.NoError(t, err)
 	require.Empty(t, keys, "a failed match is not retried before its time")
@@ -61,45 +69,72 @@ func TestTMDB(t *testing.T) {
 
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)
-	require.Equal(t, Title{}, r.Title, "without Options.TMDB")
-	s.opts.TMDB = true
-	r, err = s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, "y:alien 1979", r.TitleKey)
-	require.Equal(t, Title{Year: 1979, Confidence: 1, Layer: LayerTMDB, IDs: []ExternalID{{ProviderIMDb, "tt0078748"}, {ProviderTMDB, "348"}}, MatchedAt: t0}, r.Title)
+	require.Equal(t, alien, r.Work, "every release of the key points at the work")
+	w := Work{ID: alien, TMDBID: 348, Popularity: 12, Details: Details{Type: TypeMovie, OriginalTitle: "Alien", Year: 1979, PosterPath: "/s.jpg",
+		Texts: map[string]Text{"en": {Title: "Alien", PosterPath: "/s.jpg"}}}}
+	require.Equal(t, Match{Work: &w, Confidence: 1, Layer: LayerTMDB, MatchedAt: t0}, r.Match, "the minimal work of the search answer")
+	require.Equal(t, []ExternalID{{ProviderTMDB, "348"}}, r.Match.Work.ExternalIDs())
 	r, err = s.Get(ctx, hash(3))
 	require.NoError(t, err)
-	require.Equal(t, Title{MatchedAt: t0}, r.Title, "looked up, nothing found")
-
-	rs, err := s.Search(ctx, Query{ID: &ExternalID{ProviderIMDb, "tt0078748"}, Limit: 10})
+	require.Zero(t, r.Work)
+	require.Equal(t, Match{MatchedAt: t0}, r.Match, "looked up, nothing found")
+	r, err = s.Get(ctx, hash(5))
 	require.NoError(t, err)
-	require.Len(t, rs, 2, "every release of the key")
-	for _, r := range rs {
-		require.Equal(t, "y:alien 1979", r.TitleKey)
-		require.Len(t, r.Title.IDs, 2)
-	}
+	require.Equal(t, Match{}, r.Match, "never looked up")
+	s.opts.TMDB = false
+	r, err = s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Equal(t, Match{}, r.Match, "without Options.TMDB")
+	require.Equal(t, alien, r.Work, "the work all the same")
+	s.opts.TMDB = true
+
+	x := torrent(6, "Alien.1979.720p")
+	x.TitleKey, x.Kind, x.KindLayer = "y:alien 1979", "movie", LayerRules
+	_, _, err = s.Insert(ctx, x)
+	require.NoError(t, err)
+	r, err = s.Get(ctx, hash(6))
+	require.NoError(t, err)
+	require.Equal(t, alien, r.Work, "a release of a matched key gets its work on insert")
+
+	rs, err := s.Search(ctx, Query{ID: &ExternalID{ProviderTMDB, "348"}, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, rs, 3, "every release of the work")
+	require.NoError(t, s.RecordDetails(ctx, alien, Details{Type: TypeMovie, OriginalTitle: "Alien"}, []ExternalID{{ProviderIMDb, "tt0078748"}, {ProviderTMDB, "348"}}, t0))
+	rs, err = s.Search(ctx, Query{ID: &ExternalID{ProviderIMDb, "tt0078748"}, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, rs, 3)
+	require.Equal(t, []ExternalID{{ProviderIMDb, "tt0078748"}, {ProviderTMDB, "348"}}, rs[0].Match.Work.ExternalIDs())
 	rs, err = s.Search(ctx, Query{ID: &ExternalID{ProviderTMDB, "tt0078748"}, Limit: 10})
 	require.NoError(t, err)
 	require.Empty(t, rs, "the ID of another provider")
 
-	require.NoError(t, s.RecordTitle(ctx, "y:alien 1979", Title{Year: 1979, Confidence: 0.6, Layer: LayerJev, IDs: []ExternalID{{ProviderTMDB, "8077"}}}, t0))
+	other, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 8077}, Confidence: 0.6, Layer: LayerJev}, t0)
+	require.NoError(t, err)
+	require.NotEqual(t, alien, other)
 	r, err = s.Get(ctx, hash(2))
 	require.NoError(t, err)
-	require.Equal(t, []ExternalID{{ProviderTMDB, "8077"}}, r.Title.IDs, "a match replaces the one before")
-
-	_, err = s.w.ExecContext(ctx, "DELETE FROM tmdb_works WHERE title_key = 'y:alien 1979'")
+	require.Equal(t, other, r.Work, "a new match moves the key's releases")
+	require.Equal(t, 0.6, r.Match.Confidence)
+	again, detailed, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 348, Lang: "en", Title: "Renamed"}, Confidence: 1, Layer: LayerTMDB}, t0)
 	require.NoError(t, err)
-	var ids int
+	require.Equal(t, alien, again, "the work stays one row")
+	require.True(t, detailed)
+	ws, err := s.Works(ctx, []int64{alien})
+	require.NoError(t, err)
+	require.Empty(t, ws[alien].Texts, "a search answer leaves fetched details alone")
+
+	_, err = s.w.ExecContext(ctx, "DELETE FROM tmdb_works WHERE id = ?", alien)
+	require.NoError(t, err)
+	var ids, matched int
 	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_ids").Scan(&ids))
-	require.Zero(t, ids, "IDs go with their key")
-	var ddl string
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE name = 'tmdb_ids'").Scan(&ddl))
-	require.Contains(t, ddl, `REFERENCES "tmdb_works"`, "the foreign key follows the renamed table")
+	require.Zero(t, ids, "IDs go with their work")
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_releases WHERE work IS NOT NULL").Scan(&matched))
+	require.Zero(t, matched, "releases let go of a deleted work")
 }
 
 // alienDetails are the details of Alien in both languages.
 var alienDetails = Details{
-	Type: "movie", OriginalTitle: "Alien", PosterPath: "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg", Rating: 8.176, Votes: 16995, Runtime: 117,
+	Type: "movie", OriginalTitle: "Alien", Year: 1979, PosterPath: "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg", Rating: 8.176, Votes: 16995, Runtime: 117,
 	Countries: []string{"US", "GB"}, Language: "en",
 	Texts: map[string]Text{
 		"en": {Title: "Alien", Overview: "During its return to the earth...", Genres: []string{"Horror", "Science Fiction"}, PosterPath: "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg"},
@@ -110,129 +145,224 @@ var alienDetails = Details{
 func TestTMDBDetails(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	s.opts.TMDB = true
-	for _, tr := range []struct {
-		b         byte
-		name, key string
-		kind      string
-	}{
-		{1, "Alien.1979.1080p.BluRay", "y:alien 1979", "movie"},
-		{2, "Severance.S02E01", "s:severance", "series"},
-		{3, "Heat.1995.1080p", "y:heat 1995", "movie"},
-		{4, "Ronin.1998.1080p", "y:ronin 1998", "movie"},
-	} {
-		x := torrent(tr.b, tr.name)
-		x.TitleKey, x.Kind, x.KindLayer, x.WorkKey = tr.key, tr.kind, LayerRules, tr.key
-		x.SeenAt = t0.Add(time.Duration(tr.b) * time.Hour)
-		_, _, err := s.Insert(ctx, x)
-		require.NoError(t, err)
-	}
-	ids := func(id string) []ExternalID { return []ExternalID{{ProviderTMDB, id}} }
-	require.NoError(t, s.RecordTitle(ctx, "s:severance", Title{Year: 2022, Confidence: 0.9, Layer: LayerTMDB, IDs: ids("95396")}, t0))
-	require.NoError(t, s.RecordTitle(ctx, "y:heat 1995", Title{Year: 1995, Confidence: 1, Layer: LayerTMDB, IDs: ids("949")}, t0.Add(time.Hour)))
-	require.NoError(t, s.RecordTitle(ctx, "y:ronin 1998", Title{}, t0))
-	require.NoError(t, s.RecordTitle(ctx, "y:alien 1979", Title{Year: 1979, Confidence: 1, Layer: LayerTMDB, IDs: ids("348"), Details: &alienDetails}, t0.Add(2*time.Hour)))
+	x := torrent(1, "Heat.1995.1080p")
+	x.TitleKey, x.Kind, x.KindLayer = "y:heat 1995", "movie", LayerRules
+	_, _, err := s.Insert(ctx, x)
+	require.NoError(t, err)
+	ids, err := s.RecordSearch(ctx, TypeMovie, "alien", []Hit{alienHit}, t0)
+	require.NoError(t, err)
+	alien := ids[0]
+	heat, _, err := s.RecordMatch(ctx, "y:heat 1995", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 949}, Confidence: 1, Layer: LayerTMDB}, t0.Add(time.Hour))
+	require.NoError(t, err)
 
 	due, err := s.WithoutDetails(ctx, 10)
 	require.NoError(t, err)
-	require.Equal(t, []Matched{{Key: "s:severance", Kind: "series", ID: 95396}, {Key: "y:heat 1995", Kind: "movie", ID: 949}}, due,
-		"matched without details, oldest match first; a failed match and a match with details are not due")
+	require.Equal(t, []Due{{Work: heat, Type: TypeMovie, TMDBID: 949}, {Work: alien, Type: TypeMovie, TMDBID: 348}}, due,
+		"a work with releases first, though it is newer")
 	due, err = s.WithoutDetails(ctx, 1)
 	require.NoError(t, err)
 	require.Len(t, due, 1)
 
-	r, err := s.Get(ctx, hash(1))
+	require.NoError(t, s.RecordDetails(ctx, alien, alienDetails, []ExternalID{{ProviderIMDb, "tt0078748"}, {ProviderTMDB, "348"}}, t0.Add(2*time.Hour)))
+	ws, err := s.Works(ctx, []int64{alien})
 	require.NoError(t, err)
-	want := alienDetails
-	require.Equal(t, Title{Year: 1979, Confidence: 1, Layer: LayerTMDB, IDs: ids("348"), MatchedAt: t0.Add(2 * time.Hour), Details: &want}, r.Title)
+	require.Equal(t, Work{ID: alien, TMDBID: 348, Popularity: 12, Details: alienDetails, IDs: []ExternalID{{ProviderIMDb, "tt0078748"}},
+		DetailsAt: t0.Add(2 * time.Hour)}, ws[alien], "the details replace the search answer's texts; the TMDB ID is the work's own")
+	w := ws[alien]
 	require.Equal(t, Text{Title: "Чужой", Overview: "В далеком будущем...", Genres: []string{"ужасы", "фантастика"}, PosterPath: "/zg4fcO8IuYRllK9wWVNqNlYpueL.jpg"},
-		r.Title.Details.Text("ru"), "the poster of the language")
-	require.Equal(t, alienDetails.Texts["en"], r.Title.Details.Text("en"))
-	r, err = s.Get(ctx, hash(3))
+		w.Text("ru"), "the poster of the language")
+	found, err := s.FindWorks(ctx, "чужой", "")
 	require.NoError(t, err)
-	require.Nil(t, r.Title.Details, "not fetched yet")
+	require.Equal(t, []int64{alien}, found, "the titles of the details are searched")
 
-	heat := Details{Type: "movie", OriginalTitle: "Heat", Runtime: 170, PosterPath: "/w.jpg", Texts: map[string]Text{
+	partial := Details{Type: "movie", OriginalTitle: "Heat", Runtime: 170, PosterPath: "/w.jpg", Texts: map[string]Text{
 		"en": {Title: "Heat", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}, PosterPath: "/h.jpg"},
 		"ru": {Title: "Схватка"},
 	}}
-	require.NoError(t, s.RecordDetails(ctx, "y:heat 1995", heat, []ExternalID{{ProviderIMDb, "tt0113277"}, {ProviderTMDB, "949"}}, t0.Add(3*time.Hour)))
-	r, err = s.Get(ctx, hash(3))
-	require.NoError(t, err)
-	require.Equal(t, []ExternalID{{ProviderIMDb, "tt0113277"}, {ProviderTMDB, "949"}}, r.Title.IDs, "the IDs come with the details")
-	require.Equal(t, &heat, r.Title.Details)
-	require.Equal(t, Text{Title: "Схватка", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}, PosterPath: "/h.jpg"}, r.Title.Details.Text("ru"),
+	require.Equal(t, Text{Title: "Схватка", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}, PosterPath: "/h.jpg"}, partial.Text("ru"),
 		"a field missing in the language comes from the other, the poster too")
-	require.Equal(t, Text{Title: "Heat", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}, PosterPath: "/h.jpg"}, r.Title.Details.Text("de"),
+	require.Equal(t, Text{Title: "Heat", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}, PosterPath: "/h.jpg"}, partial.Text("de"),
 		"an unknown language takes what there is")
 	require.Equal(t, Text{Title: "Nameless", PosterPath: "/n.jpg"}, (&Details{OriginalTitle: "Nameless", PosterPath: "/n.jpg", Texts: map[string]Text{"en": {}}}).Text("ru"),
 		"the original title and the work's poster are the last resort")
 	require.Equal(t, Text{}, (*Details)(nil).Text("ru"))
+
+	require.NoError(t, s.RecordDetails(ctx, heat, Details{}, nil, t0.Add(3*time.Hour)))
 	due, err = s.WithoutDetails(ctx, 10)
 	require.NoError(t, err)
-	require.Equal(t, []Matched{{Key: "s:severance", Kind: "series", ID: 95396}}, due)
+	require.Empty(t, due, "refused details mark the work fetched")
+	ws, err = s.Works(ctx, []int64{heat})
+	require.NoError(t, err)
+	require.Equal(t, t0.Add(3*time.Hour), ws[heat].DetailsAt)
 
-	require.NoError(t, s.RecordDetails(ctx, "s:severance", Details{}, nil, t0))
-	r, err = s.Get(ctx, hash(2))
+	_, err = s.w.ExecContext(ctx, "DELETE FROM tmdb_works WHERE id = ?", alien)
 	require.NoError(t, err)
-	require.Equal(t, &Details{}, r.Title.Details, "empty details are details all the same")
-	due, err = s.WithoutDetails(ctx, 10)
-	require.NoError(t, err)
-	require.Empty(t, due)
-
-	require.NoError(t, s.RecordTitle(ctx, "y:alien 1979", Title{Year: 1979, Confidence: 0.7, Layer: LayerJev, IDs: ids("8077")}, t0.Add(4*time.Hour)))
-	r, err = s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Nil(t, r.Title.Details, "a new match drops the details of the one before")
 	var texts int
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_texts WHERE title_key = 'y:alien 1979'").Scan(&texts))
-	require.Zero(t, texts)
-	due, err = s.WithoutDetails(ctx, 10)
-	require.NoError(t, err)
-	require.Equal(t, []Matched{{Key: "y:alien 1979", Kind: "movie", ID: 8077}}, due, "and puts the key back in line")
-
-	works, err := s.works(ctx, "movie", []string{"y:heat 1995", "y:ronin 1998"}, VoiceAny)
-	require.NoError(t, err)
-	require.Equal(t, &heat, works["y:heat 1995"].TMDB.Details, "a work carries the match of its title key")
-	require.Equal(t, []ExternalID{{ProviderIMDb, "tt0113277"}, {ProviderTMDB, "949"}}, works["y:heat 1995"].TMDB.IDs)
-	require.Equal(t, Title{MatchedAt: t0}, works["y:ronin 1998"].TMDB)
-	s.opts.TMDB = false
-	works, err = s.works(ctx, "movie", []string{"y:heat 1995"}, VoiceAny)
-	require.NoError(t, err)
-	require.Equal(t, Title{}, works["y:heat 1995"].TMDB, "without Options.TMDB")
-
-	_, err = s.w.ExecContext(ctx, "DELETE FROM tmdb_works WHERE title_key = 'y:heat 1995'")
-	require.NoError(t, err)
-	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_texts WHERE title_key = 'y:heat 1995'").Scan(&texts))
-	require.Zero(t, texts, "texts go with their key")
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_texts").Scan(&texts))
+	require.Zero(t, texts, "texts go with their work")
 }
 
-func TestMigrateTMDBDetails(t *testing.T) {
+func TestSearchCache(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	_, ok, err := s.CachedSearch(ctx, TypeMovie, "alien", t0.Add(-SearchTTL))
+	require.NoError(t, err)
+	require.False(t, ok, "nothing recorded")
+
+	ids, err := s.RecordSearch(ctx, TypeMovie, "alien", []Hit{alienHit, {Type: TypeMovie, TMDBID: 679, Lang: "en", Title: "Aliens", Year: 1986, Popularity: 9}}, t0)
+	require.NoError(t, err)
+	require.Len(t, ids, 2)
+	got, ok, err := s.CachedSearch(ctx, TypeMovie, "alien", t0.Add(time.Hour-SearchTTL))
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, ids, got, "in hit order")
+	_, ok, err = s.CachedSearch(ctx, TypeMovie, "alien", t0)
+	require.NoError(t, err)
+	require.False(t, ok, "stale once older than the bound")
+	_, ok, err = s.CachedSearch(ctx, TypeTV, "alien", t0.Add(-SearchTTL))
+	require.NoError(t, err)
+	require.False(t, ok, "per type")
+
+	ids2, err := s.RecordSearch(ctx, TypeMovie, "alien", []Hit{{Type: TypeMovie, TMDBID: 348, Lang: "ru", Title: "Чужой", Popularity: 30}}, t0.Add(time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, ids[:1], ids2, "the same work")
+	ws, err := s.Works(ctx, ids)
+	require.NoError(t, err)
+	require.Equal(t, 30.0, ws[ids[0]].Popularity, "the latest popularity")
+	require.Equal(t, "Alien", ws[ids[0]].Texts["en"].Title)
+	require.Equal(t, "Чужой", ws[ids[0]].Texts["ru"].Title, "a text per language answered in")
+	require.Equal(t, "/s.jpg", ws[ids[0]].PosterPath, "a later answer without a poster keeps the one before")
+	require.True(t, ws[ids[1]].DetailsAt.IsZero())
+}
+
+func TestFillFeaturesAndMarks(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "test.db")
+	s, db := openAt(t, path)
+	tr := torrent(1, "Severance.S02E05.1080p.WEB-DL.Rus", "Severance.S02E05.mkv")
+	tr.Audio = []Audio{{Language: "ru", Marker: true}}
+	_, _, err := s.Insert(ctx, tr)
+	require.NoError(t, err)
+	r, err := s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Zero(t, r.Episode, "Insert takes the features it is given")
+	require.Empty(t, r.Audio[0].Mark)
+	for _, k := range []string{featuresFilled, marksFilled + "ru"} {
+		_, err := db.W.ExecContext(ctx, "DELETE FROM settings WHERE key = ?", k)
+		require.NoError(t, err)
+	}
+	require.NoError(t, db.Close())
+
+	s, db = openAt(t, path)
+	defer db.Close()
+	r, err = s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Equal(t, 2, r.Season)
+	require.Equal(t, 5, r.Episode)
+	require.Equal(t, "1080p", r.Quality)
+	require.Equal(t, "Rus", r.Audio[0].Mark, "the mark of a stored marker")
+
+	_, err = db.W.ExecContext(ctx, "UPDATE torrent_releases SET quality = NULL, episode = NULL")
+	require.NoError(t, err)
+	_, err = New(ctx, db, Options{Languages: []string{"ru"}})
+	require.NoError(t, err)
+	r, err = s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Zero(t, r.Episode, "the backfill runs once")
+}
+
+func TestMigrateWorks(t *testing.T) {
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	defer db.Close()
 	old := fstest.MapFS{}
-	for _, name := range []string{"001_init.sql", "002_layers.sql", "003_audio.sql", "004_titles.sql", "005_peers.sql", "006_tmdb.sql", "007_modules.sql"} {
+	for _, name := range []string{"001_init.sql", "002_layers.sql", "003_audio.sql", "004_titles.sql", "005_peers.sql", "006_tmdb.sql", "007_modules.sql",
+		"008_tmdb_details.sql", "009_tmdb_posters.sql"} {
 		b, err := migrations.ReadFile("migrations/" + name)
 		require.NoError(t, err)
 		old[name] = &fstest.MapFile{Data: b}
 	}
 	require.NoError(t, db.Migrate(ctx, "store", old))
-	for _, stmt := range []string{
-		`INSERT INTO torrent_releases (id, infohash, name, size, file_count, discovery, first_seen, last_seen, kind, kind_layer, title_key, work_key)
-			VALUES (1, x'0100000000000000000000000000000000000000', 'Alien.1979.1080p.BluRay', 1073741824, 1, 'sample', 100, 100, 'movie', 'rules', 'y:alien 1979', 'y:alien 1979')`,
-		"INSERT INTO torrent_releases_fts (rowid, name, paths) VALUES (1, 'Alien.1979.1080p.BluRay', '')",
-		"INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at) VALUES ('y:alien 1979', 1979, 1, 'tmdb', 100)",
-		"INSERT INTO tmdb_ids (title_key, provider, id) VALUES ('y:alien 1979', 'tmdb', '348')",
-		"INSERT INTO tmdb_works (title_key, matched_at) VALUES ('y:heat 1995', 100)",
-	} {
+	release := func(id int, name, key string) []string {
+		return []string{
+			`INSERT INTO torrent_releases (id, infohash, name, size, file_count, discovery, first_seen, last_seen, kind, kind_layer, title_key, work_key)
+				VALUES (` + itoa(id) + `, x'0` + itoa(id) + `00000000000000000000000000000000000000', '` + name + `', 1073741824, 1, 'sample', 100, 100, 'movie', 'rules', '` + key + `', '` + key + `')`,
+			"INSERT INTO torrent_releases_fts (rowid, name, paths) VALUES (" + itoa(id) + ", '" + name + "', '')",
+		}
+	}
+	var stmts []string
+	stmts = append(stmts, release(1, "Dune.Part.Two.2024.1080p.Rus", "y:dune part two 2024")...)
+	stmts = append(stmts, release(2, "Дюна: Часть вторая (2024) WEB-DL 720p", "y:дюна часть вторая 2024")...)
+	stmts = append(stmts, release(3, "Heat.1995.1080p", "y:heat 1995")...)
+	stmts = append(stmts, release(4, "Ronin.1998.1080p", "y:ronin 1998")...)
+	stmts = append(stmts,
+		"INSERT INTO torrent_files (torrent_id, idx, path, size) VALUES (1, 0, 'Dune.mkv', 1073741824)",
+		"INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer) VALUES (1, 'ru', 1, 0, 1.0, 'rules')",
+		`INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at, type, original_title, poster_path, rating, votes, runtime, countries, language, details_at)
+			VALUES ('y:dune part two 2024', 2024, 1, 'tmdb', 100, 'movie', 'Dune: Part Two', '/d.jpg', 8.1, 7000, 167, '["US"]', 'en', 200)`,
+		"INSERT INTO tmdb_ids (title_key, provider, id) VALUES ('y:dune part two 2024', 'tmdb', '693134'), ('y:dune part two 2024', 'imdb', 'tt15239678')",
+		`INSERT INTO tmdb_texts (title_key, lang, title, overview, genres, poster_path) VALUES
+			('y:dune part two 2024', 'en', 'Dune: Part Two', 'Paul.', '["Science Fiction"]', '/d.jpg'),
+			('y:dune part two 2024', 'ru', 'Дюна: Часть вторая', 'Пол.', '["фантастика"]', '/r.jpg')`,
+		"INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at) VALUES ('y:дюна часть вторая 2024', 2024, 0.7, 'jev', 150)",
+		"INSERT INTO tmdb_ids (title_key, provider, id) VALUES ('y:дюна часть вторая 2024', 'tmdb', '693134')",
+		"INSERT INTO tmdb_works (title_key, matched_at, error) VALUES ('y:heat 1995', 120, 'tmdb /3/search/movie: 404 Not Found')",
+		"INSERT INTO stat_top (kind, window, voice, rank, work_key, peers, releases, computed_at) VALUES ('movie', '7d', 'any', 1, 'y:dune part two 2024', 5, 1, 100)",
+	)
+	for _, stmt := range stmts {
 		_, err := db.W.ExecContext(ctx, stmt)
 		require.NoError(t, err, stmt)
 	}
 
-	s, err := New(ctx, db, Options{TMDB: true})
+	s, err := New(ctx, db, Options{Languages: []string{"ru"}, TMDB: true})
 	require.NoError(t, err)
+	var works int
+	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_works").Scan(&works))
+	require.Equal(t, 1, works, "two title keys matched to one TMDB ID are one work")
+	dune, err := s.WorkByTMDB(ctx, TypeMovie, 693134)
+	require.NoError(t, err)
+	ws, err := s.Works(ctx, []int64{dune})
+	require.NoError(t, err)
+	require.Equal(t, Work{ID: dune, TMDBID: 693134, IDs: []ExternalID{{ProviderIMDb, "tt15239678"}}, DetailsAt: time.Unix(200, 0).UTC(),
+		Details: Details{Type: TypeMovie, OriginalTitle: "Dune: Part Two", Year: 2024, PosterPath: "/d.jpg", Rating: 8.1, Votes: 7000, Runtime: 167,
+			Countries: []string{"US"}, Language: "en", Texts: map[string]Text{
+				"en": {Title: "Dune: Part Two", Overview: "Paul.", Genres: []string{"Science Fiction"}, PosterPath: "/d.jpg"},
+				"ru": {Title: "Дюна: Часть вторая", Overview: "Пол.", Genres: []string{"фантастика"}, PosterPath: "/r.jpg"},
+			}}}, ws[dune], "the details, texts and IDs of the row that had them")
+
+	for b, want := range map[byte]int64{1: dune, 2: dune, 3: 0, 4: 0} {
+		r, err := s.Get(ctx, hash(b))
+		require.NoError(t, err)
+		require.Equal(t, want, r.Work, "release %d", b)
+	}
+	r, err := s.Get(ctx, hash(2))
+	require.NoError(t, err)
+	require.Equal(t, 0.7, r.Match.Confidence, "each key keeps its own match")
+	require.Equal(t, LayerJev, r.Match.Layer)
+	require.Equal(t, time.Unix(150, 0).UTC(), r.Match.MatchedAt)
+	require.Equal(t, "720p", r.Quality, "the features are derived")
+	r, err = s.Get(ctx, hash(3))
+	require.NoError(t, err)
+	require.Equal(t, Match{Error: "tmdb /3/search/movie: 404 Not Found", MatchedAt: time.Unix(120, 0).UTC()}, r.Match, "an unmatched key keeps its row")
+	r, err = s.Get(ctx, hash(4))
+	require.NoError(t, err)
+	require.Equal(t, Match{}, r.Match, "a key never looked up has none")
+	r, err = s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Equal(t, "Rus", r.Audio[0].Mark, "the marker's mark is derived")
+	require.Equal(t, "1080p", r.Quality)
+
+	var top int
+	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM stat_top").Scan(&top))
+	require.Zero(t, top, "the tops are recomputed")
+	found, err := s.FindWorks(ctx, "дюна", "")
+	require.NoError(t, err)
+	require.Equal(t, []int64{dune}, found, "titles are searchable")
+	keys, err := s.UnmatchedTitles(ctx, nil, time.Unix(121, 0), 10)
+	require.NoError(t, err)
+	require.Equal(t, []string{"y:ronin 1998", "y:heat 1995"}, titleKeys(keys), "the unmatched key is due again in time")
+
 	var columns []string
 	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
 		var name string
@@ -241,92 +371,24 @@ func TestMigrateTMDBDetails(t *testing.T) {
 		}
 		columns = append(columns, name)
 		return nil
-	}, "SELECT name FROM pragma_table_info('tmdb_works') ORDER BY cid"))
-	require.Equal(t, []string{"title_key", "year", "confidence", "layer", "matched_at", "error", "type", "original_title", "poster_path", "rating", "votes",
-		"runtime", "status", "seasons", "countries", "language", "details_at"}, columns)
-	var ddl string
-	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE name = 'tmdb_texts'").Scan(&ddl))
-	require.Contains(t, ddl, "REFERENCES tmdb_works (title_key) ON DELETE CASCADE")
-	require.Contains(t, ddl, "PRIMARY KEY (title_key, lang)")
-	require.Contains(t, ddl, "WITHOUT ROWID")
+	}, "SELECT name FROM pragma_table_info('torrent_releases') WHERE name IN ('work_key', 'work', 'episode', 'quality') ORDER BY cid"))
+	require.Equal(t, []string{"work", "episode", "quality"}, columns)
+	rows, err := db.R.QueryContext(ctx, "PRAGMA foreign_key_check")
+	require.NoError(t, err)
+	require.False(t, rows.Next(), "no foreign key is broken")
+	require.NoError(t, rows.Close())
 
-	due, err := s.WithoutDetails(ctx, 10)
+	fresh, err := database.Open(ctx, filepath.Join(t.TempDir(), "fresh.db"))
 	require.NoError(t, err)
-	require.Equal(t, []Matched{{Key: "y:alien 1979", Kind: "movie", ID: 348}}, due, "every match from before is due its details")
-	r, err := s.Get(ctx, hash(1))
+	defer fresh.Close()
+	_, err = New(ctx, fresh, Options{})
 	require.NoError(t, err)
-	require.Equal(t, Title{Year: 1979, Confidence: 1, Layer: LayerTMDB, IDs: []ExternalID{{ProviderTMDB, "348"}}, MatchedAt: time.Unix(100, 0).UTC()}, r.Title)
-
-	require.NoError(t, s.RecordDetails(ctx, "y:alien 1979", alienDetails, nil, time.Unix(200, 0)))
-	var texts int
-	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_texts").Scan(&texts))
-	require.Equal(t, 2, texts)
-	_, err = db.W.ExecContext(ctx, "DELETE FROM tmdb_works")
-	require.NoError(t, err)
-	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_texts").Scan(&texts))
-	require.Zero(t, texts, "texts cascade from tmdb_works")
+	require.Equal(t, schema(t, fresh), schema(t, db), "a fresh database has the same schema as a migrated one")
 }
 
-func TestMigrateTMDBPosters(t *testing.T) {
-	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
-	require.NoError(t, err)
-	defer db.Close()
-	old := fstest.MapFS{}
-	for _, name := range []string{"001_init.sql", "002_layers.sql", "003_audio.sql", "004_titles.sql", "005_peers.sql", "006_tmdb.sql", "007_modules.sql", "008_tmdb_details.sql"} {
-		b, err := migrations.ReadFile("migrations/" + name)
-		require.NoError(t, err)
-		old[name] = &fstest.MapFile{Data: b}
-	}
-	require.NoError(t, db.Migrate(ctx, "store", old))
-	for _, stmt := range []string{
-		`INSERT INTO torrent_releases (id, infohash, name, size, file_count, discovery, first_seen, last_seen, kind, kind_layer, title_key, work_key)
-			VALUES (1, x'0100000000000000000000000000000000000000', 'Alien.1979.1080p.BluRay', 1073741824, 1, 'sample', 100, 100, 'movie', 'rules', 'y:alien 1979', 'y:alien 1979')`,
-		"INSERT INTO torrent_releases_fts (rowid, name, paths) VALUES (1, 'Alien.1979.1080p.BluRay', '')",
-		`INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at, type, original_title, poster_path, details_at)
-			VALUES ('y:alien 1979', 1979, 1, 'tmdb', 100, 'movie', 'Alien', '/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg', 200)`,
-		"INSERT INTO tmdb_ids (title_key, provider, id) VALUES ('y:alien 1979', 'tmdb', '348')",
-		"INSERT INTO tmdb_texts (title_key, lang, title) VALUES ('y:alien 1979', 'en', 'Alien'), ('y:alien 1979', 'ru', 'Чужой')",
-		"INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at) VALUES ('y:heat 1995', 1995, 1, 'tmdb', 100)",
-		"INSERT INTO tmdb_works (title_key, matched_at, details_at) VALUES ('y:ronin 1998', 100, 300)",
-	} {
-		_, err := db.W.ExecContext(ctx, stmt)
-		require.NoError(t, err, stmt)
-	}
-
-	s, err := New(ctx, db, Options{TMDB: true})
-	require.NoError(t, err)
-	var columns int
-	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('tmdb_texts') WHERE name = 'poster_path'").Scan(&columns))
-	require.Equal(t, 1, columns, "tmdb_texts has the poster column")
-	detailsAt := map[string]sql.NullInt64{}
-	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
-		var k string
-		var at sql.NullInt64
-		if err := rows.Scan(&k, &at); err != nil {
-			return err
-		}
-		detailsAt[k] = at
-		return nil
-	}, "SELECT title_key, details_at FROM tmdb_works"))
-	require.Equal(t, map[string]sql.NullInt64{
-		"y:alien 1979": {}, "y:heat 1995": {}, "y:ronin 1998": {Int64: 300, Valid: true},
-	}, detailsAt, "matched works are due their details again; an unmatched row is left alone")
-	var texts int
-	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_texts").Scan(&texts))
-	require.Equal(t, 2, texts, "the texts stay until the refetch replaces them")
-	due, err := s.WithoutDetails(ctx, 10)
-	require.NoError(t, err)
-	require.Equal(t, []Matched{{Key: "y:alien 1979", Kind: "movie", ID: 348}}, due)
-	r, err := s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Nil(t, r.Title.Details, "without details until the refetch")
-
-	require.NoError(t, s.RecordDetails(ctx, "y:alien 1979", alienDetails, nil, time.Unix(400, 0)))
-	r, err = s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, "/zg4fcO8IuYRllK9wWVNqNlYpueL.jpg", r.Title.Details.Text("ru").PosterPath)
-	require.Equal(t, "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg", r.Title.Details.Text("en").PosterPath)
+// itoa is the decimal digit of n, 0 to 9.
+func itoa(n int) string {
+	return string(rune('0' + n))
 }
 
 func titleKeys(ks []TitleKey) []string {

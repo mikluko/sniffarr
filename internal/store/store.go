@@ -1,8 +1,9 @@
 // Package store keeps torrents, rejected infohashes, classifications and
-// peer sketches, with full-text search over names and file paths and the
-// tops of works by peers, and the work queue of infohashes awaiting their
-// metadata: sightings enqueue them, fetchers lease them, and a result
-// completes or fails them.
+// peer sketches, with full-text search over names and file paths; the
+// movies and series of TMDB that title keys match, with or without
+// releases, and the tops of them by peers; and the work queue of
+// infohashes awaiting their metadata: sightings enqueue them, fetchers
+// lease them, and a result completes or fails them.
 package store
 
 import (
@@ -76,8 +77,9 @@ func migrate(ctx context.Context, db *database.DB) error {
 	return nil
 }
 
-// New returns the Store in db, applying any pending migrations and deriving
-// the work keys of torrents stored without one.
+// New returns the Store in db, applying any pending migrations, and, once
+// after the migration that adds them, deriving the episode and quality of
+// stored torrents from their names and the marks of their audio markers.
 func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if opts.MaxFiles <= 0 {
 		opts.MaxFiles = DefaultMaxFiles
@@ -94,8 +96,11 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted}
-	if err := s.fillWorkKeys(ctx); err != nil {
-		return nil, fmt.Errorf("work keys: %w", err)
+	if err := s.fillFeatures(ctx); err != nil {
+		return nil, fmt.Errorf("release features: %w", err)
+	}
+	if err := s.fillMarks(ctx); err != nil {
+		return nil, fmt.Errorf("audio marks: %w", err)
 	}
 	return s, nil
 }
