@@ -26,6 +26,8 @@ app.kubernetes.io/component: {{ .component }}
 runAsNonRoot: true
 runAsUser: 65532
 runAsGroup: 65532
+fsGroup: 65532
+fsGroupChangePolicy: OnRootMismatch
 seccompProfile:
   type: RuntimeDefault
 {{- end }}

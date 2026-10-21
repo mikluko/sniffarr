@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-10-21
+
+### Fixed
+
+- The chart's pods take `fsGroup` 65532, so `api.persistence.type: pvc` on a fresh volume owned by root is writable; litestream's restore failed on it with `permission denied`.
+
 ## [0.18.0] - 2026-10-21
 
 ### Changed
@@ -268,7 +274,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.1...HEAD
+[0.18.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.0...v0.18.1
 [0.18.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.17.1...v0.18.0
 [0.17.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.17.0...v0.17.1
 [0.17.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.16.0...v0.17.0
