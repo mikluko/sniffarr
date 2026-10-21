@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-21
+
 ### Added
 
 - The release card lists the rules that recognised features in its name, with the matched fragments, and the audio markers found in the name or file paths; `CardResponse` carries them as `rules`, recomputed when the card is opened.
@@ -254,7 +256,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/mikluko/sniffarr/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/mikluko/sniffarr/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/mikluko/sniffarr/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/mikluko/sniffarr/compare/v0.14.1...v0.15.0
