@@ -93,6 +93,11 @@ func Parse(list string) ([]Language, error) {
 	return out, nil
 }
 
+// Lookup returns the known language with the tag, regardless of case.
+func Lookup(tag string) (Language, bool) {
+	return lookup(tag)
+}
+
 func lookup(tag string) (Language, bool) {
 	for _, l := range known {
 		if strings.EqualFold(l.Tag, tag) {

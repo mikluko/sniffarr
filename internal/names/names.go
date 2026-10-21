@@ -1,7 +1,6 @@
 // Package names reads what a torrent is from its name alone: a series, a
 // movie, or neither, a title key under which releases of the same title
-// meet, and a work key under which releases of the same movie, season or
-// album meet.
+// meet, and the release's year, season, episode and quality.
 package names
 
 import (
@@ -17,6 +16,17 @@ const (
 	Movie  = "movie"
 )
 
+// Qualities Parse can tell, by the resolution the name gives; "" is none.
+const (
+	Quality2160p = "2160p"
+	Quality1080p = "1080p"
+	Quality720p  = "720p"
+	QualitySD    = "sd"
+)
+
+// Qualities are the qualities Parse can tell, highest first.
+var Qualities = []string{Quality2160p, Quality1080p, Quality720p, QualitySD}
+
 // Parsed is what a name says.
 type Parsed struct {
 	// Kind is Series, Movie, or "" when the name does not say for sure.
@@ -25,13 +35,15 @@ type Parsed struct {
 	// the title and year for a titled release with a year, "" when the name
 	// yields no title.
 	Key string
-	// Work is the work key: for a series, Key with "/" and Season when the
-	// name gives one; else Key.
-	Work string
 	// Year is the year in the name, 0 when there is none.
 	Year int
 	// Season is the season number in the name, 0 when there is none.
 	Season int
+	// Episode is the episode number in the name; 0 when there is none, or
+	// when the name gives a range or a whole season.
+	Episode int
+	// Quality is one of Qualities, or "" when the name gives no resolution.
+	Quality string
 }
 
 // words matches any of the alternatives as a whole word, case-insensitively,
@@ -52,19 +64,41 @@ var (
 	groups = regexp.MustCompile(`^(?:\s*\[[^\]]*\])+`)
 	season = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:s(\d{1,2})\s?e\d{1,3}|s(\d{1,2})|(\d{1,2})x\d{2,3}|seasons?\s?(\d{1,2})|` +
 		`temporada\s?(\d{1,2})|staffel\s?(\d{1,2})|(\d{1,2})\s?сезон|сезоны?:?\s?(\d{1,2}))(?:$|[^\p{L}\p{N}])`)
+	episode = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:s\d{1,2}\s?e(\d{1,3})|\d{1,2}x(\d{2,3})|e(\d{2,3})|(?:серия|episode|ep)\s?:?\s?(\d{1,3})|(\d{1,3})\s?серия)`)
+	// episodeRange follows an episode number that starts a range or a
+	// count, "1-8" or "1 of 8".
+	episodeRange = regexp.MustCompile(`(?i)^\s*(?:-\s*\d|(?:of|из)\b)`)
+	// qualities are matched in order; the first to match is the quality.
+	qualities = []struct {
+		re      *regexp.Regexp
+		quality string
+	}{
+		{words(`2160[pр]|4k|uhd`), Quality2160p},
+		{words(`1080[pрi]`), Quality1080p},
+		{words(`720[pр]`), Quality720p},
+		{words(`576[pр]|480[pр]|sd|dvdrip|dvd-rip|dvd5|dvd9|dvdscr|vhsrip|tvrip|satrip|camrip|telesync`), QualitySD},
+	}
 )
 
-// Parse reads the kind, the title key, the work key, the year and the
-// season from a torrent's name.
+// Parse reads the kind, the title key, the year, the season, the episode and
+// the quality from a torrent's name.
 func Parse(name string) Parsed {
 	clean := strings.NewReplacer(".", " ", "_", " ").Replace(name)
-	if m := anime.FindStringSubmatch(name); m != nil {
-		return series(key("s:", cut(m[1], seriesMarker)), clean)
+	var p Parsed
+	switch {
+	case anime.MatchString(name):
+		p = series(key("s:", cut(anime.FindStringSubmatch(name)[1], seriesMarker)), clean)
+	case seriesMarker.MatchString(clean):
+		p = series(key("s:", cut(mainTitle(clean), seriesMarker)), clean)
+	default:
+		p = movie(mainTitle(clean), clean)
 	}
-	title := mainTitle(clean)
-	if loc := seriesMarker.FindStringIndex(clean); loc != nil {
-		return series(key("s:", cut(title, seriesMarker)), clean)
-	}
+	p.Quality = qualityOf(clean)
+	return p
+}
+
+// movie returns the Parsed of a titled release with a year, or nothing.
+func movie(title, clean string) Parsed {
 	m := year.FindStringSubmatchIndex(clean)
 	if m == nil {
 		return Parsed{}
@@ -74,7 +108,6 @@ func Parse(name string) Parsed {
 	if p.Key == "y:"+y {
 		return Parsed{}
 	}
-	p.Work = p.Key
 	p.Year, _ = strconv.Atoi(y)
 	if quality.MatchString(clean) && !music.MatchString(clean) {
 		p.Kind = Movie
@@ -82,10 +115,10 @@ func Parse(name string) Parsed {
 	return p
 }
 
-// series returns the Parsed of a series with the title key, with the season
-// and year the cleaned name gives.
+// series returns the Parsed of a series with the title key, with the season,
+// episode and year the cleaned name gives.
 func series(k, clean string) Parsed {
-	p := Parsed{Kind: Series, Key: k, Work: k}
+	p := Parsed{Kind: Series, Key: k}
 	if k == "" {
 		return p
 	}
@@ -97,13 +130,41 @@ func series(k, clean string) Parsed {
 			}
 		}
 	}
-	if p.Season > 0 {
-		p.Work = k + "/" + strconv.Itoa(p.Season)
-	}
+	p.Episode = episodeOf(clean)
 	if m := year.FindStringSubmatch(clean); m != nil {
 		p.Year, _ = strconv.Atoi(m[1])
 	}
 	return p
+}
+
+// episodeOf returns the episode number the cleaned name gives, 0 when it
+// gives none or a range.
+func episodeOf(clean string) int {
+	m := episode.FindStringSubmatchIndex(clean)
+	if m == nil {
+		return 0
+	}
+	for g := 1; 2*g+1 < len(m); g++ {
+		if m[2*g] < 0 {
+			continue
+		}
+		if episodeRange.MatchString(clean[m[2*g+1]:]) {
+			return 0
+		}
+		n, _ := strconv.Atoi(clean[m[2*g]:m[2*g+1]])
+		return n
+	}
+	return 0
+}
+
+// qualityOf returns the highest quality the cleaned name gives, "" for none.
+func qualityOf(clean string) string {
+	for _, q := range qualities {
+		if q.re.MatchString(clean) {
+			return q.quality
+		}
+	}
+	return ""
 }
 
 // Titles returns the titles a name gives, in name order: each title of a
