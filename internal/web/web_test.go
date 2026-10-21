@@ -311,7 +311,7 @@ func TestTop(t *testing.T) {
 	require.Contains(t, body, `<span class="th th-none" aria-hidden="true"></span>`, "an empty poster slot")
 	require.Contains(t, body, `href="/top?all=1&amp;kind=series&amp;voice=p50&amp;win=24h" hx-get="/top?all=1&amp;kind=series&amp;voice=p50&amp;win=24h" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true" aria-current="true">24 h</a>`)
 	require.Regexp(t, `<td class="r dl">−\d+%</td>`, body, "fewer peers than the day before")
-	require.Contains(t, body, "WEB", "its source")
+	require.Contains(t, body, ">web<", "its source, in lower case")
 	require.NotContains(t, body, ">show all 100</a>", "every work is listed")
 
 	body = page(t, get(t, h, "/top?kind=music", ""))

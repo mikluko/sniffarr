@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-21
+
+### Changed
+
+- The source labels of the web UI are lower case in both languages: `web`, `rip`, `remux`.
+
 ## [0.15.0] - 2026-10-21
 
 ### Added
@@ -218,7 +224,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/mikluko/sniffarr/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/mikluko/sniffarr/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/mikluko/sniffarr/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/mikluko/sniffarr/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/mikluko/sniffarr/compare/v0.13.0...v0.14.0
