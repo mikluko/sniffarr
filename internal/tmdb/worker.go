@@ -22,8 +22,8 @@ type Budget interface {
 }
 
 // Worker matches in the background the title keys Matcher.Unmatched
-// returns, newest first, and fetches the details of the matches that lack
-// them, oldest match first.
+// returns, newest first, and fetches the details of the works that lack
+// them, those with releases first.
 type Worker struct {
 	Matcher     *Matcher
 	Concurrency int
@@ -71,8 +71,8 @@ func (w *Worker) backfill(ctx context.Context) error {
 		if err != nil && ctx.Err() == nil {
 			w.Log.Error("list matches without details", "err", err)
 		}
-		failed := run(ctx, w.Concurrency, due, w.Matcher.Details, func(k store.Matched, err error) {
-			w.Log.Warn("fetch details", "key", k.Key, "err", err)
+		failed := run(ctx, w.Concurrency, due, w.Matcher.Details, func(d store.Due, err error) {
+			w.Log.Warn("fetch details", "type", d.Type, "id", d.TMDBID, "err", err)
 		})
 		if len(due) == 0 || err != nil || failed {
 			if err := sleep(ctx, w.Poll); err != nil {
