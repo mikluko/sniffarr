@@ -97,3 +97,70 @@ func TestTitles(t *testing.T) {
 		})
 	}
 }
+
+func hits(name string) []string {
+	var out []string
+	for _, h := range Explain(name) {
+		out = append(out, h.Rule+" "+h.Match)
+	}
+	return out
+}
+
+func TestExplain(t *testing.T) {
+	tests := []struct {
+		name string
+		want []string
+	}{
+		{"Spider-Man.Brand.New.Day.2026.2160p.WEB-DL.DDP5.1.HDR", []string{"year 2026", "kind.movie 2160p", "quality.2160p 2160p"}},
+		{"Fallout.S02E05.1080p.WEB.h264-ETHEL[EZTVx.to].mkv", []string{"kind.series S02E05", "season S02E05", "episode S02E05", "quality.1080p 1080p"}},
+		{"Law.and.Order.SVU.S28E02.720p.x264-FENiX", []string{"kind.series S28E02", "season S28E02", "episode S28E02", "quality.720p 720p"}},
+		{"Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv", []string{"year 2015", "kind.movie WEB-DL", "quality.1080p 1080р"}},
+		{"The.Wire.Complete.Series.DVDRip", []string{"kind.series Complete.Series", "quality.sd DVDRip"}},
+		{"Сериал (2 сезон, 7 серия) 2019 WEB-DL 1080p", []string{"kind.series 2 сезон", "season 2 сезон", "episode 7 серия", "year 2019", "quality.1080p 1080p"}},
+		{"Show S01 E05 WEB-DL 720p", []string{"kind.series S01 E05", "season S01 E05", "episode S01 E05", "quality.720p 720p"}},
+		{"[SubsPlease] Kuroneko to Majo no Kyoushitsu - 09 (1080p) [0F72F2B7].mkv", []string{"kind.series - 09", "quality.1080p 1080p"}},
+		{"[Erai-raws] Honzuki no Gekokujou S4 - 19 [720p CR WEB-DL AVC AAC][MultiSub][FA2C7C2D].mkv", []string{"season S4", "kind.series - 19", "quality.720p 720p"}},
+		{"Сериал (1 сезон, 1-8 серии из 8) DVDRip", []string{"kind.series 1 сезон", "season 1 сезон", "quality.sd DVDRip"}},
+		{"Some Notes.txt", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, hits(tt.name))
+		})
+	}
+}
+
+func TestExplainPositions(t *testing.T) {
+	name := "Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv"
+	for _, h := range Explain(name) {
+		require.Equal(t, h.Match, name[h.Pos:h.Pos+len(h.Match)], h.Rule)
+	}
+}
+
+func TestExplainAgreesWithParse(t *testing.T) {
+	for _, name := range []string{
+		"Spider-Man.Brand.New.Day.2026.2160p.WEB-DL.DDP5.1.HDR",
+		"Fallout.S02E05.1080p.WEB.h264-ETHEL[EZTVx.to].mkv",
+		"Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv",
+		"[SubsPlease] Kuroneko to Majo no Kyoushitsu - 09 (1080p) [0F72F2B7].mkv",
+		"Сериал (1 сезон, 1-8 серии из 8) DVDRip",
+		"Artist - Album 2001 FLAC 1080p",
+		"Movie.2001.1080p.Upscale.DVDRip",
+		"2001",
+		"",
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := Parse(name)
+			got := map[string]bool{}
+			for _, h := range Explain(name) {
+				got[h.Rule] = true
+			}
+			require.Equal(t, p.Kind == Series, got["kind.series"])
+			require.Equal(t, p.Kind == Movie, got["kind.movie"])
+			require.Equal(t, p.Year != 0, got["year"])
+			require.Equal(t, p.Season != 0, got["season"])
+			require.Equal(t, p.Episode != 0, got["episode"])
+			require.Equal(t, p.Quality != "", got["quality."+p.Quality])
+		})
+	}
+}

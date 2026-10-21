@@ -146,6 +146,14 @@ func TestBrowserCard(t *testing.T) {
 	require.True(t, res.Msg.GetRelease().GetAudio()[0].GetMarker())
 	require.Nil(t, res.Msg.GetWork(), "unmatched")
 	require.Zero(t, res.Msg.GetRankInWork())
+	require.Equal(t, []*sniffarrv1.RuleHit{
+		{Rule: "year", Match: "1979"}, {Rule: "kind.movie", Match: "1080p"}, {Rule: "quality.1080p", Match: "1080p"}, {Rule: "audio.ru", Match: "Rus"},
+	}, res.Msg.GetRules())
+
+	h = hash(3)
+	res, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: h[:]}))
+	require.NoError(t, err)
+	require.Empty(t, res.Msg.GetRules(), "nothing recognised")
 
 	h = hash(9)
 	_, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: h[:]}))

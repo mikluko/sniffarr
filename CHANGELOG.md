@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The release card lists the rules that recognised features in its name, with the matched fragments, and the audio markers found in the name or file paths; `CardResponse` carries them as `rules`, recomputed when the card is opened.
+
 ## [0.16.0] - 2026-10-21
 
 ### Added

@@ -1381,7 +1381,11 @@ type CardResponse struct {
 	Work *WorkSummary `protobuf:"bytes,8,opt,name=work,proto3" json:"work,omitempty"`
 	// The release's place among its work's releases by peers over the last
 	// 7 days, 1 first; 0 without a work.
-	RankInWork    int32 `protobuf:"varint,9,opt,name=rank_in_work,json=rankInWork,proto3" json:"rank_in_work,omitempty"`
+	RankInWork int32 `protobuf:"varint,9,opt,name=rank_in_work,json=rankInWork,proto3" json:"rank_in_work,omitempty"`
+	// The rules that recognised features in the release's name or file paths,
+	// recomputed on each call: in the order the name reads, audio markers
+	// last.
+	Rules         []*RuleHit `protobuf:"bytes,10,rep,name=rules,proto3" json:"rules,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1458,6 +1462,71 @@ func (x *CardResponse) GetRankInWork() int32 {
 	return 0
 }
 
+func (x *CardResponse) GetRules() []*RuleHit {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+// RuleHit is a rule and the fragment that made it fire.
+type RuleHit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The feature recognised: "kind.series", "kind.movie", "year", "season",
+	// "episode", "quality." and the resolution ("2160p", "1080p", "720p",
+	// "sd"), or "audio." and the language tag.
+	Rule string `protobuf:"bytes,1,opt,name=rule,proto3" json:"rule,omitempty"`
+	// The fragment of the name, or for audio of a name or file path, as
+	// written there.
+	Match         string `protobuf:"bytes,2,opt,name=match,proto3" json:"match,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RuleHit) Reset() {
+	*x = RuleHit{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RuleHit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RuleHit) ProtoMessage() {}
+
+func (x *RuleHit) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RuleHit.ProtoReflect.Descriptor instead.
+func (*RuleHit) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RuleHit) GetRule() string {
+	if x != nil {
+		return x.Rule
+	}
+	return ""
+}
+
+func (x *RuleHit) GetMatch() string {
+	if x != nil {
+		return x.Match
+	}
+	return ""
+}
+
 // PeerCounts are distinct peers over three sliding windows ending now.
 type PeerCounts struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1470,7 +1539,7 @@ type PeerCounts struct {
 
 func (x *PeerCounts) Reset() {
 	*x = PeerCounts{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[16]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1482,7 +1551,7 @@ func (x *PeerCounts) String() string {
 func (*PeerCounts) ProtoMessage() {}
 
 func (x *PeerCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[16]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1495,7 +1564,7 @@ func (x *PeerCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerCounts.ProtoReflect.Descriptor instead.
 func (*PeerCounts) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{16}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PeerCounts) GetDay() int64 {
@@ -1527,7 +1596,7 @@ type HomeRequest struct {
 
 func (x *HomeRequest) Reset() {
 	*x = HomeRequest{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[17]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1539,7 +1608,7 @@ func (x *HomeRequest) String() string {
 func (*HomeRequest) ProtoMessage() {}
 
 func (x *HomeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[17]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1552,7 +1621,7 @@ func (x *HomeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HomeRequest.ProtoReflect.Descriptor instead.
 func (*HomeRequest) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{17}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{18}
 }
 
 type HomeResponse struct {
@@ -1569,7 +1638,7 @@ type HomeResponse struct {
 
 func (x *HomeResponse) Reset() {
 	*x = HomeResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[18]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1581,7 +1650,7 @@ func (x *HomeResponse) String() string {
 func (*HomeResponse) ProtoMessage() {}
 
 func (x *HomeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[18]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1594,7 +1663,7 @@ func (x *HomeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HomeResponse.ProtoReflect.Descriptor instead.
 func (*HomeResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{18}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *HomeResponse) GetTotal() int64 {
@@ -1639,7 +1708,7 @@ type TopRequest struct {
 
 func (x *TopRequest) Reset() {
 	*x = TopRequest{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[19]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1651,7 +1720,7 @@ func (x *TopRequest) String() string {
 func (*TopRequest) ProtoMessage() {}
 
 func (x *TopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[19]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1664,7 +1733,7 @@ func (x *TopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopRequest.ProtoReflect.Descriptor instead.
 func (*TopRequest) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{19}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *TopRequest) GetKind() Kind {
@@ -1729,7 +1798,7 @@ type TopResponse struct {
 
 func (x *TopResponse) Reset() {
 	*x = TopResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[20]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1741,7 +1810,7 @@ func (x *TopResponse) String() string {
 func (*TopResponse) ProtoMessage() {}
 
 func (x *TopResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[20]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1754,7 +1823,7 @@ func (x *TopResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopResponse.ProtoReflect.Descriptor instead.
 func (*TopResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{20}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *TopResponse) GetEntries() []*TopEntry {
@@ -1805,7 +1874,7 @@ type TopEntry struct {
 
 func (x *TopEntry) Reset() {
 	*x = TopEntry{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[21]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1817,7 +1886,7 @@ func (x *TopEntry) String() string {
 func (*TopEntry) ProtoMessage() {}
 
 func (x *TopEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[21]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1830,7 +1899,7 @@ func (x *TopEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopEntry.ProtoReflect.Descriptor instead.
 func (*TopEntry) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{21}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *TopEntry) GetRank() int32 {
@@ -1893,7 +1962,7 @@ type StatsRequest struct {
 
 func (x *StatsRequest) Reset() {
 	*x = StatsRequest{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[22]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1905,7 +1974,7 @@ func (x *StatsRequest) String() string {
 func (*StatsRequest) ProtoMessage() {}
 
 func (x *StatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[22]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1918,7 +1987,7 @@ func (x *StatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatsRequest.ProtoReflect.Descriptor instead.
 func (*StatsRequest) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{22}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *StatsRequest) GetDays() int32 {
@@ -1958,7 +2027,7 @@ type StatsResponse struct {
 
 func (x *StatsResponse) Reset() {
 	*x = StatsResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[23]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1970,7 +2039,7 @@ func (x *StatsResponse) String() string {
 func (*StatsResponse) ProtoMessage() {}
 
 func (x *StatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[23]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1983,7 +2052,7 @@ func (x *StatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatsResponse.ProtoReflect.Descriptor instead.
 func (*StatsResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{23}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *StatsResponse) GetTotal() int64 {
@@ -2066,7 +2135,7 @@ type KindCount struct {
 
 func (x *KindCount) Reset() {
 	*x = KindCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[24]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2078,7 +2147,7 @@ func (x *KindCount) String() string {
 func (*KindCount) ProtoMessage() {}
 
 func (x *KindCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[24]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2091,7 +2160,7 @@ func (x *KindCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KindCount.ProtoReflect.Descriptor instead.
 func (*KindCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{24}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *KindCount) GetKind() Kind {
@@ -2118,7 +2187,7 @@ type LayerCount struct {
 
 func (x *LayerCount) Reset() {
 	*x = LayerCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[25]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2130,7 +2199,7 @@ func (x *LayerCount) String() string {
 func (*LayerCount) ProtoMessage() {}
 
 func (x *LayerCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[25]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2143,7 +2212,7 @@ func (x *LayerCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LayerCount.ProtoReflect.Descriptor instead.
 func (*LayerCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{25}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *LayerCount) GetLayer() Layer {
@@ -2170,7 +2239,7 @@ type SourceCount struct {
 
 func (x *SourceCount) Reset() {
 	*x = SourceCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[26]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2182,7 +2251,7 @@ func (x *SourceCount) String() string {
 func (*SourceCount) ProtoMessage() {}
 
 func (x *SourceCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[26]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2195,7 +2264,7 @@ func (x *SourceCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceCount.ProtoReflect.Descriptor instead.
 func (*SourceCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{26}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *SourceCount) GetSource() VideoSource {
@@ -2227,7 +2296,7 @@ type AudioCounts struct {
 
 func (x *AudioCounts) Reset() {
 	*x = AudioCounts{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[27]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2239,7 +2308,7 @@ func (x *AudioCounts) String() string {
 func (*AudioCounts) ProtoMessage() {}
 
 func (x *AudioCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[27]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2252,7 +2321,7 @@ func (x *AudioCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AudioCounts.ProtoReflect.Descriptor instead.
 func (*AudioCounts) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{27}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AudioCounts) GetLanguage() string {
@@ -2293,7 +2362,7 @@ type RejectionCount struct {
 
 func (x *RejectionCount) Reset() {
 	*x = RejectionCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[28]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2305,7 +2374,7 @@ func (x *RejectionCount) String() string {
 func (*RejectionCount) ProtoMessage() {}
 
 func (x *RejectionCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[28]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2318,7 +2387,7 @@ func (x *RejectionCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectionCount.ProtoReflect.Descriptor instead.
 func (*RejectionCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{28}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RejectionCount) GetReason() Rejection {
@@ -2423,7 +2492,7 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x04work\x18\x02 \x01(\v2\x18.sniffarr.v1.WorkSummaryR\x04work\"=\n" +
 	"\vCardRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
-	"\x04lang\x18\x02 \x01(\tR\x04lang\"\xc3\x02\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\"\xef\x02\n" +
 	"\fCardResponse\x12.\n" +
 	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\x121\n" +
 	"\tdiscovery\x18\x02 \x01(\x0e2\x13.sniffarr.v1.SourceR\tdiscovery\x12'\n" +
@@ -2431,7 +2500,12 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x05peers\x18\x04 \x01(\v2\x17.sniffarr.v1.PeerCountsR\x05peers\x12,\n" +
 	"\x04work\x18\b \x01(\v2\x18.sniffarr.v1.WorkSummaryR\x04work\x12 \n" +
 	"\frank_in_work\x18\t \x01(\x05R\n" +
-	"rankInWorkJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\breleasesR\frelease_rank\"H\n" +
+	"rankInWork\x12*\n" +
+	"\x05rules\x18\n" +
+	" \x03(\v2\x14.sniffarr.v1.RuleHitR\x05rulesJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\breleasesR\frelease_rank\"3\n" +
+	"\aRuleHit\x12\x12\n" +
+	"\x04rule\x18\x01 \x01(\tR\x04rule\x12\x14\n" +
+	"\x05match\x18\x02 \x01(\tR\x05match\"H\n" +
 	"\n" +
 	"PeerCounts\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\x03R\x03day\x12\x12\n" +
@@ -2548,7 +2622,7 @@ func file_sniffarr_v1_browse_proto_rawDescGZIP() []byte {
 }
 
 var file_sniffarr_v1_browse_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_sniffarr_v1_browse_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_sniffarr_v1_browse_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_sniffarr_v1_browse_proto_goTypes = []any{
 	(Sort)(0),                     // 0: sniffarr.v1.Sort
 	(Window)(0),                   // 1: sniffarr.v1.Window
@@ -2570,98 +2644,100 @@ var file_sniffarr_v1_browse_proto_goTypes = []any{
 	(*TorrentRow)(nil),            // 17: sniffarr.v1.TorrentRow
 	(*CardRequest)(nil),           // 18: sniffarr.v1.CardRequest
 	(*CardResponse)(nil),          // 19: sniffarr.v1.CardResponse
-	(*PeerCounts)(nil),            // 20: sniffarr.v1.PeerCounts
-	(*HomeRequest)(nil),           // 21: sniffarr.v1.HomeRequest
-	(*HomeResponse)(nil),          // 22: sniffarr.v1.HomeResponse
-	(*TopRequest)(nil),            // 23: sniffarr.v1.TopRequest
-	(*TopResponse)(nil),           // 24: sniffarr.v1.TopResponse
-	(*TopEntry)(nil),              // 25: sniffarr.v1.TopEntry
-	(*StatsRequest)(nil),          // 26: sniffarr.v1.StatsRequest
-	(*StatsResponse)(nil),         // 27: sniffarr.v1.StatsResponse
-	(*KindCount)(nil),             // 28: sniffarr.v1.KindCount
-	(*LayerCount)(nil),            // 29: sniffarr.v1.LayerCount
-	(*SourceCount)(nil),           // 30: sniffarr.v1.SourceCount
-	(*AudioCounts)(nil),           // 31: sniffarr.v1.AudioCounts
-	(*RejectionCount)(nil),        // 32: sniffarr.v1.RejectionCount
-	(Kind)(0),                     // 33: sniffarr.v1.Kind
-	(*TMDBWork)(nil),              // 34: sniffarr.v1.TMDBWork
-	(Quality)(0),                  // 35: sniffarr.v1.Quality
-	(VideoSource)(0),              // 36: sniffarr.v1.VideoSource
-	(*Release)(nil),               // 37: sniffarr.v1.Release
-	(Layer)(0),                    // 38: sniffarr.v1.Layer
-	(Source)(0),                   // 39: sniffarr.v1.Source
-	(*File)(nil),                  // 40: sniffarr.v1.File
-	(*timestamppb.Timestamp)(nil), // 41: google.protobuf.Timestamp
+	(*RuleHit)(nil),               // 20: sniffarr.v1.RuleHit
+	(*PeerCounts)(nil),            // 21: sniffarr.v1.PeerCounts
+	(*HomeRequest)(nil),           // 22: sniffarr.v1.HomeRequest
+	(*HomeResponse)(nil),          // 23: sniffarr.v1.HomeResponse
+	(*TopRequest)(nil),            // 24: sniffarr.v1.TopRequest
+	(*TopResponse)(nil),           // 25: sniffarr.v1.TopResponse
+	(*TopEntry)(nil),              // 26: sniffarr.v1.TopEntry
+	(*StatsRequest)(nil),          // 27: sniffarr.v1.StatsRequest
+	(*StatsResponse)(nil),         // 28: sniffarr.v1.StatsResponse
+	(*KindCount)(nil),             // 29: sniffarr.v1.KindCount
+	(*LayerCount)(nil),            // 30: sniffarr.v1.LayerCount
+	(*SourceCount)(nil),           // 31: sniffarr.v1.SourceCount
+	(*AudioCounts)(nil),           // 32: sniffarr.v1.AudioCounts
+	(*RejectionCount)(nil),        // 33: sniffarr.v1.RejectionCount
+	(Kind)(0),                     // 34: sniffarr.v1.Kind
+	(*TMDBWork)(nil),              // 35: sniffarr.v1.TMDBWork
+	(Quality)(0),                  // 36: sniffarr.v1.Quality
+	(VideoSource)(0),              // 37: sniffarr.v1.VideoSource
+	(*Release)(nil),               // 38: sniffarr.v1.Release
+	(Layer)(0),                    // 39: sniffarr.v1.Layer
+	(Source)(0),                   // 40: sniffarr.v1.Source
+	(*File)(nil),                  // 41: sniffarr.v1.File
+	(*timestamppb.Timestamp)(nil), // 42: google.protobuf.Timestamp
 }
 var file_sniffarr_v1_browse_proto_depIdxs = []int32{
-	33, // 0: sniffarr.v1.WorkSummary.kind:type_name -> sniffarr.v1.Kind
-	34, // 1: sniffarr.v1.WorkSummary.tmdb:type_name -> sniffarr.v1.TMDBWork
-	33, // 2: sniffarr.v1.SearchTitlesRequest.kind:type_name -> sniffarr.v1.Kind
+	34, // 0: sniffarr.v1.WorkSummary.kind:type_name -> sniffarr.v1.Kind
+	35, // 1: sniffarr.v1.WorkSummary.tmdb:type_name -> sniffarr.v1.TMDBWork
+	34, // 2: sniffarr.v1.SearchTitlesRequest.kind:type_name -> sniffarr.v1.Kind
 	6,  // 3: sniffarr.v1.SearchTitlesResponse.works:type_name -> sniffarr.v1.WorkSummary
 	6,  // 4: sniffarr.v1.TitleResponse.work:type_name -> sniffarr.v1.WorkSummary
 	12, // 5: sniffarr.v1.TitleResponse.ranks:type_name -> sniffarr.v1.WindowRanks
-	20, // 6: sniffarr.v1.TitleResponse.peers:type_name -> sniffarr.v1.PeerCounts
+	21, // 6: sniffarr.v1.TitleResponse.peers:type_name -> sniffarr.v1.PeerCounts
 	7,  // 7: sniffarr.v1.TitleResponse.audio:type_name -> sniffarr.v1.WorkAudio
-	35, // 8: sniffarr.v1.TitleReleasesRequest.quality:type_name -> sniffarr.v1.Quality
-	36, // 9: sniffarr.v1.TitleReleasesRequest.source:type_name -> sniffarr.v1.VideoSource
+	36, // 8: sniffarr.v1.TitleReleasesRequest.quality:type_name -> sniffarr.v1.Quality
+	37, // 9: sniffarr.v1.TitleReleasesRequest.source:type_name -> sniffarr.v1.VideoSource
 	2,  // 10: sniffarr.v1.TitleReleasesRequest.voice:type_name -> sniffarr.v1.Voice
 	0,  // 11: sniffarr.v1.TitleReleasesRequest.sort:type_name -> sniffarr.v1.Sort
-	37, // 12: sniffarr.v1.TitleReleasesResponse.releases:type_name -> sniffarr.v1.Release
-	33, // 13: sniffarr.v1.TorrentsRequest.kind:type_name -> sniffarr.v1.Kind
-	35, // 14: sniffarr.v1.TorrentsRequest.quality:type_name -> sniffarr.v1.Quality
+	38, // 12: sniffarr.v1.TitleReleasesResponse.releases:type_name -> sniffarr.v1.Release
+	34, // 13: sniffarr.v1.TorrentsRequest.kind:type_name -> sniffarr.v1.Kind
+	36, // 14: sniffarr.v1.TorrentsRequest.quality:type_name -> sniffarr.v1.Quality
 	2,  // 15: sniffarr.v1.TorrentsRequest.voice:type_name -> sniffarr.v1.Voice
-	36, // 16: sniffarr.v1.TorrentsRequest.source:type_name -> sniffarr.v1.VideoSource
-	38, // 17: sniffarr.v1.TorrentsRequest.layer:type_name -> sniffarr.v1.Layer
+	37, // 16: sniffarr.v1.TorrentsRequest.source:type_name -> sniffarr.v1.VideoSource
+	39, // 17: sniffarr.v1.TorrentsRequest.layer:type_name -> sniffarr.v1.Layer
 	0,  // 18: sniffarr.v1.TorrentsRequest.sort:type_name -> sniffarr.v1.Sort
 	17, // 19: sniffarr.v1.TorrentsResponse.rows:type_name -> sniffarr.v1.TorrentRow
-	37, // 20: sniffarr.v1.TorrentRow.release:type_name -> sniffarr.v1.Release
+	38, // 20: sniffarr.v1.TorrentRow.release:type_name -> sniffarr.v1.Release
 	6,  // 21: sniffarr.v1.TorrentRow.work:type_name -> sniffarr.v1.WorkSummary
-	37, // 22: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
-	39, // 23: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
-	40, // 24: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
-	20, // 25: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
+	38, // 22: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
+	40, // 23: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
+	41, // 24: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
+	21, // 25: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
 	6,  // 26: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkSummary
-	33, // 27: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
-	1,  // 28: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
-	2,  // 29: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
-	25, // 30: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
-	41, // 31: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
-	6,  // 32: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.WorkSummary
-	7,  // 33: sniffarr.v1.TopEntry.audio:type_name -> sniffarr.v1.WorkAudio
-	36, // 34: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
-	41, // 35: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
-	28, // 36: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
-	29, // 37: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
-	30, // 38: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
-	31, // 39: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
-	32, // 40: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
-	33, // 41: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
-	38, // 42: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
-	36, // 43: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
-	3,  // 44: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
-	8,  // 45: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
-	10, // 46: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
-	13, // 47: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
-	15, // 48: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
-	18, // 49: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
-	26, // 50: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
-	21, // 51: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
-	23, // 52: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
-	4,  // 53: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
-	9,  // 54: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
-	11, // 55: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
-	14, // 56: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
-	16, // 57: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
-	19, // 58: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
-	27, // 59: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
-	22, // 60: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
-	24, // 61: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
-	5,  // 62: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
-	54, // [54:63] is the sub-list for method output_type
-	45, // [45:54] is the sub-list for method input_type
-	45, // [45:45] is the sub-list for extension type_name
-	45, // [45:45] is the sub-list for extension extendee
-	0,  // [0:45] is the sub-list for field type_name
+	20, // 27: sniffarr.v1.CardResponse.rules:type_name -> sniffarr.v1.RuleHit
+	34, // 28: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
+	1,  // 29: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
+	2,  // 30: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
+	26, // 31: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
+	42, // 32: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
+	6,  // 33: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.WorkSummary
+	7,  // 34: sniffarr.v1.TopEntry.audio:type_name -> sniffarr.v1.WorkAudio
+	37, // 35: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
+	42, // 36: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
+	29, // 37: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
+	30, // 38: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
+	31, // 39: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
+	32, // 40: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
+	33, // 41: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
+	34, // 42: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
+	39, // 43: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
+	37, // 44: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
+	3,  // 45: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
+	8,  // 46: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
+	10, // 47: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
+	13, // 48: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
+	15, // 49: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
+	18, // 50: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
+	27, // 51: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
+	22, // 52: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
+	24, // 53: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
+	4,  // 54: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
+	9,  // 55: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
+	11, // 56: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
+	14, // 57: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
+	16, // 58: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
+	19, // 59: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
+	28, // 60: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
+	23, // 61: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
+	25, // 62: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
+	5,  // 63: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
+	55, // [55:64] is the sub-list for method output_type
+	46, // [46:55] is the sub-list for method input_type
+	46, // [46:46] is the sub-list for extension type_name
+	46, // [46:46] is the sub-list for extension extendee
+	0,  // [0:46] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_browse_proto_init() }
@@ -2673,14 +2749,14 @@ func file_sniffarr_v1_browse_proto_init() {
 	file_sniffarr_v1_search_proto_init()
 	file_sniffarr_v1_browse_proto_msgTypes[9].OneofWrappers = []any{}
 	file_sniffarr_v1_browse_proto_msgTypes[11].OneofWrappers = []any{}
-	file_sniffarr_v1_browse_proto_msgTypes[21].OneofWrappers = []any{}
+	file_sniffarr_v1_browse_proto_msgTypes[22].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_browse_proto_rawDesc), len(file_sniffarr_v1_browse_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

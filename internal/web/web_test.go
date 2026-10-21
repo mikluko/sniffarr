@@ -164,17 +164,17 @@ func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
 	})
 	require.NoError(t, err)
 	require.NoError(t, st.ComputeTop(ctx, now))
-	h, err := New(Config{Browse: browse(t, st), Languages: languages, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
+	h, err := New(Config{Browse: browse(t, st, audio.Tags(languages)), Languages: languages, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
 }
 
 // browse serves BrowseService over st behind the token "search" in-process,
 // and returns a client holding the token.
-func browse(t *testing.T, st *store.Store) sniffarrv1connect.BrowseServiceClient {
+func browse(t *testing.T, st *store.Store, tags []string) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
-	b := &search.Browser{Store: st, TMDB: titleSearch{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, Now: func() time.Time { return now }}
+	b := &search.Browser{Store: st, TMDB: titleSearch{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, Languages: tags, Now: func() time.Time { return now }}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b, connect.WithInterceptors(auth.NewBearer("search"))))
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)
@@ -204,12 +204,15 @@ func get(t *testing.T, h http.Handler, path, target string, header ...string) *h
 var untranslated = regexp.MustCompile(`\b(?:(?:kind|layer|source|drop|voiceband|voicemode|relvoice|relsort|quality|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results|unit|attr|work|rel|search|matched|audio|dub|langname)\.[a-z_]+` +
 	`|tmdb\.(?:votes|noposter|unmatched|unchecked|search|checked|tv|seasons|episode|method|low|key|conf)|tvstatus\.[A-Z][a-zA-Z ]*)\b`)
 
+// ruleLine is a card's fired rule: its id is not a translation key.
+var ruleLine = regexp.MustCompile(`<div class="mono">[a-z0-9.]+ ← «[^»]*»</div>`)
+
 // page returns the body of an OK answer, failing on an untranslated key.
 func page(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	body := w.Body.String()
-	require.Empty(t, untranslated.FindAllString(body, -1), "every key is translated")
+	require.Empty(t, untranslated.FindAllString(ruleLine.ReplaceAllString(body, ""), -1), "every key is translated")
 	return body
 }
 
@@ -445,6 +448,11 @@ func TestTorrent(t *testing.T) {
 	require.Contains(t, body, `picked by the classifier among candidates · confidence 0.80 · Oct 20`, "how it was matched")
 	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1), "", "Referer", "http://example.com/data")), `<a href="/w/m348">← back to results</a>`,
 		"from elsewhere, back to its work")
+
+	require.Contains(t, body, "Rules fired")
+	for _, hit := range []string{"year ← «1979»", "kind.movie ← «1080p»", "quality.1080p ← «1080p»", "audio.ru ← «Rus»"} {
+		require.Contains(t, body, hit)
+	}
 
 	body = page(t, get(t, h, "/t/"+hexOf(2), ""))
 	require.Contains(t, body, `this one by peers #2`)

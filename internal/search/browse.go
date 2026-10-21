@@ -13,6 +13,8 @@ import (
 	"connectrpc.com/connect"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/audio"
+	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -212,6 +214,7 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 	for _, f := range c.Files {
 		res.Files = append(res.Files, &sniffarrv1.File{Path: f.Path, Size: f.Size})
 	}
+	res.Rules = ruleHits(c.Name, c.Files, b.Languages)
 	if c.Work != nil {
 		res.Work, res.RankInWork = summary(*c.Work, lang), int32(c.RankInWork)
 		if t := res.GetRelease().GetTmdb(); t != nil {
@@ -219,6 +222,23 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 		}
 	}
 	return connect.NewResponse(res), nil
+}
+
+// ruleHits are the features names.Explain finds in name, then the audio
+// markers of the languages with tags that name or a file path has.
+func ruleHits(name string, files []rules.File, tags []string) []*sniffarrv1.RuleHit {
+	var out []*sniffarrv1.RuleHit
+	for _, h := range names.Explain(name) {
+		out = append(out, &sniffarrv1.RuleHit{Rule: h.Rule, Match: h.Match})
+	}
+	for _, tag := range tags {
+		if l, ok := audio.Lookup(tag); ok {
+			if m := l.Mark(name, files); m != "" {
+				out = append(out, &sniffarrv1.RuleHit{Rule: "audio." + l.Tag, Match: m})
+			}
+		}
+	}
+	return out
 }
 
 func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.StatsRequest]) (*connect.Response[sniffarrv1.StatsResponse], error) {

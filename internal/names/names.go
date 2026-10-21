@@ -5,6 +5,7 @@ package names
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -47,24 +48,29 @@ type Parsed struct {
 }
 
 // words matches any of the alternatives as a whole word, case-insensitively,
-// with every non-letter, non-digit as a separator.
+// with every non-letter, non-digit as a separator. Group 1 is the word.
 func words(alternatives string) *regexp.Regexp {
-	return regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:` + alternatives + `)(?:$|[^\p{L}\p{N}])`)
+	return regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(` + alternatives + `)(?:$|[^\p{L}\p{N}])`)
 }
 
 var (
 	seriesMarker = words(`s\d{1,2}\s?e\d{1,3}|s\d{1,2}|\d{1,2}x\d{2,3}|e\d{1,3}\s?of\s?\d{1,3}|seasons?\s?\d{1,2}|complete series|` +
 		`temporada\s?\d{1,2}|temporadas|staffel\s?\d{1,2}|cap\s?\d{3,4}|` +
 		`сезоны?|\d{1,2}\s?сезон|серии|серия|выпуски?`)
-	anime   = regexp.MustCompile(`^\[[^\]]+\]\s*(.+?)\s+-\s+\d{2,4}(?:v\d)?(?:\s|$|[\[(])`)
+	// anime group 1 is the title, group 2 the episode part, "- 12".
+	anime   = regexp.MustCompile(`^\[[^\]]+\]\s*(.+?)\s+(-\s+\d{2,4}(?:v\d)?)(?:\s|$|[\[(])`)
 	year    = regexp.MustCompile(`(?:^|[^\p{L}\p{N}])((?:19[2-9]|20[0-4])\d)(?:$|[^\p{L}\p{N}])`)
 	quality = words(`2160p|1080p|1080i|720p|576p|480p|4k|uhd|bdrip|brrip|bluray|blu-ray|bdremux|remux|bd25|bd50|` +
 		`web-?dl|webrip|hdrip|dvdrip|dvd5|dvd9|hdtv|hdtvrip|x264|x265|h\.?264|h\.?265|hevc|xvid|camrip|telesync|hdcam`)
 	music  = words(`flac|mp3|lossless|discography|дискография|альбом|album|ost`)
 	groups = regexp.MustCompile(`^(?:\s*\[[^\]]*\])+`)
-	season = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:s(\d{1,2})\s?e\d{1,3}|s(\d{1,2})|(\d{1,2})x\d{2,3}|seasons?\s?(\d{1,2})|` +
+	// season group 1 is the marker, the groups after it the season number,
+	// one per alternative.
+	season = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(s(\d{1,2})\s?e\d{1,3}|s(\d{1,2})|(\d{1,2})x\d{2,3}|seasons?\s?(\d{1,2})|` +
 		`temporada\s?(\d{1,2})|staffel\s?(\d{1,2})|(\d{1,2})\s?сезон|сезоны?:?\s?(\d{1,2}))(?:$|[^\p{L}\p{N}])`)
-	episode = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:s\d{1,2}\s?e(\d{1,3})|\d{1,2}x(\d{2,3})|e(\d{2,3})|(?:серия|episode|ep)\s?:?\s?(\d{1,3})|(\d{1,3})\s?серия)`)
+	// episode group 1 is the marker, the groups after it the episode
+	// number, one per alternative.
+	episode = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(s\d{1,2}\s?e(\d{1,3})|\d{1,2}x(\d{2,3})|e(\d{2,3})|(?:серия|episode|ep)\s?:?\s?(\d{1,3})|(\d{1,3})\s?серия)`)
 	// episodeRange follows an episode number that starts a range or a
 	// count, "1-8" or "1 of 8".
 	episodeRange = regexp.MustCompile(`(?i)^\s*(?:-\s*\d|(?:of|из)\b)`)
@@ -83,22 +89,64 @@ var (
 // Parse reads the kind, the title key, the year, the season, the episode and
 // the quality from a torrent's name.
 func Parse(name string) Parsed {
+	return parse(name, nil)
+}
+
+// Hit is a feature of a name and the fragment of the name that gave it.
+type Hit struct {
+	// Rule is "kind.series" or "kind.movie", "year", "season", "episode",
+	// or "quality." and the quality, one of Qualities.
+	Rule string
+	// Match is the fragment as written in the name.
+	Match string
+	// Pos is the byte offset of Match in the name.
+	Pos int
+}
+
+// Explain returns the features Parse recognises in a name, each with the
+// fragment that gave it, in the order the fragments read; features at the
+// same place keep the order kind, year, season, episode, quality. It has a
+// hit for each of the non-empty Kind, Year, Season, Episode and Quality that
+// Parse returns for the name.
+func Explain(name string) []Hit {
+	c := &collector{name: name}
+	parse(name, c)
+	slices.SortStableFunc(c.hits, func(a, b Hit) int { return a.Pos - b.Pos })
+	return c.hits
+}
+
+// collector gathers hits on a name; a nil collector gathers none.
+type collector struct {
+	name string
+	hits []Hit
+}
+
+// add records rule for name[from:to]. The cleaned name is the same length
+// as the name, so offsets in either are offsets in both.
+func (c *collector) add(rule string, from, to int) {
+	if c != nil {
+		c.hits = append(c.hits, Hit{Rule: rule, Match: c.name[from:to], Pos: from})
+	}
+}
+
+func parse(name string, c *collector) Parsed {
 	clean := strings.NewReplacer(".", " ", "_", " ").Replace(name)
 	var p Parsed
-	switch {
-	case anime.MatchString(name):
-		p = series(key("s:", cut(anime.FindStringSubmatch(name)[1], seriesMarker)), clean)
-	case seriesMarker.MatchString(clean):
-		p = series(key("s:", cut(mainTitle(clean), seriesMarker)), clean)
-	default:
-		p = movie(mainTitle(clean), clean)
+	if m := anime.FindStringSubmatchIndex(name); m != nil {
+		c.add("kind.series", m[4], m[5])
+		p = series(key("s:", cut(name[m[2]:m[3]], seriesMarker)), clean, c)
+	} else if m := seriesMarker.FindStringSubmatchIndex(clean); m != nil {
+		c.add("kind.series", m[2], m[3])
+		p = series(key("s:", cut(mainTitle(clean), seriesMarker)), clean, c)
+	} else {
+		p = movie(mainTitle(clean), clean, c)
 	}
-	p.Quality = qualityOf(clean)
+	p.Quality = qualityOf(clean, c)
 	return p
 }
 
 // movie returns the Parsed of a titled release with a year, or nothing.
-func movie(title, clean string) Parsed {
+func movie(title, clean string, c *collector) Parsed {
 	m := year.FindStringSubmatchIndex(clean)
 	if m == nil {
 		return Parsed{}
@@ -109,58 +157,68 @@ func movie(title, clean string) Parsed {
 		return Parsed{}
 	}
 	p.Year, _ = strconv.Atoi(y)
-	if quality.MatchString(clean) && !music.MatchString(clean) {
+	c.add("year", m[2], m[3])
+	if q := quality.FindStringSubmatchIndex(clean); q != nil && !music.MatchString(clean) {
 		p.Kind = Movie
+		c.add("kind.movie", q[2], q[3])
 	}
 	return p
 }
 
 // series returns the Parsed of a series with the title key, with the season,
 // episode and year the cleaned name gives.
-func series(k, clean string) Parsed {
+func series(k, clean string, c *collector) Parsed {
 	p := Parsed{Kind: Series, Key: k}
 	if k == "" {
 		return p
 	}
-	if m := season.FindStringSubmatch(clean); m != nil {
-		for _, g := range m[1:] {
-			if g != "" {
-				p.Season, _ = strconv.Atoi(g)
-				break
-			}
+	if m := season.FindStringSubmatchIndex(clean); m != nil {
+		from, to, _ := group(m[4:])
+		p.Season, _ = strconv.Atoi(clean[from:to])
+		if p.Season != 0 {
+			c.add("season", m[2], m[3])
 		}
 	}
-	p.Episode = episodeOf(clean)
-	if m := year.FindStringSubmatch(clean); m != nil {
-		p.Year, _ = strconv.Atoi(m[1])
+	p.Episode = episodeOf(clean, c)
+	if m := year.FindStringSubmatchIndex(clean); m != nil {
+		p.Year, _ = strconv.Atoi(clean[m[2]:m[3]])
+		c.add("year", m[2], m[3])
 	}
 	return p
 }
 
+// group returns the bounds of the first participating group of the match
+// indexes loc, a pair per group.
+func group(loc []int) (from, to int, ok bool) {
+	for g := 0; 2*g+1 < len(loc); g++ {
+		if loc[2*g] >= 0 {
+			return loc[2*g], loc[2*g+1], true
+		}
+	}
+	return 0, 0, false
+}
+
 // episodeOf returns the episode number the cleaned name gives, 0 when it
 // gives none or a range.
-func episodeOf(clean string) int {
+func episodeOf(clean string, c *collector) int {
 	m := episode.FindStringSubmatchIndex(clean)
 	if m == nil {
 		return 0
 	}
-	for g := 1; 2*g+1 < len(m); g++ {
-		if m[2*g] < 0 {
-			continue
-		}
-		if episodeRange.MatchString(clean[m[2*g+1]:]) {
-			return 0
-		}
-		n, _ := strconv.Atoi(clean[m[2*g]:m[2*g+1]])
-		return n
+	from, to, _ := group(m[4:])
+	n, _ := strconv.Atoi(clean[from:to])
+	if n == 0 || episodeRange.MatchString(clean[to:]) {
+		return 0
 	}
-	return 0
+	c.add("episode", m[2], m[3])
+	return n
 }
 
 // qualityOf returns the highest quality the cleaned name gives, "" for none.
-func qualityOf(clean string) string {
+func qualityOf(clean string, c *collector) string {
 	for _, q := range qualities {
-		if q.re.MatchString(clean) {
+		if m := q.re.FindStringSubmatchIndex(clean); m != nil {
+			c.add("quality."+q.quality, m[2], m[3])
 			return q.quality
 		}
 	}

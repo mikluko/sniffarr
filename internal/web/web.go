@@ -593,6 +593,9 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		}
 		t.Audio = append(t.Audio, a)
 	}
+	for _, h := range c.GetRules() {
+		t.Rules = append(t.Rules, ui.RuleHit{Rule: h.GetRule(), Match: h.GetMatch()})
+	}
 	all := req.URL.Query().Get("files") == "all"
 	files := c.GetFiles()
 	t.Files = ui.FileList{InfoHash: h, Stored: len(files), All: all}
