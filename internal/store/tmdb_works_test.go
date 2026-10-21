@@ -102,8 +102,8 @@ var alienDetails = Details{
 	Type: "movie", OriginalTitle: "Alien", PosterPath: "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg", Rating: 8.176, Votes: 16995, Runtime: 117,
 	Countries: []string{"US", "GB"}, Language: "en",
 	Texts: map[string]Text{
-		"en": {Title: "Alien", Overview: "During its return to the earth...", Genres: []string{"Horror", "Science Fiction"}},
-		"ru": {Title: "Чужой", Overview: "В далеком будущем...", Genres: []string{"ужасы", "фантастика"}},
+		"en": {Title: "Alien", Overview: "During its return to the earth...", Genres: []string{"Horror", "Science Fiction"}, PosterPath: "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg"},
+		"ru": {Title: "Чужой", Overview: "В далеком будущем...", Genres: []string{"ужасы", "фантастика"}, PosterPath: "/zg4fcO8IuYRllK9wWVNqNlYpueL.jpg"},
 	},
 }
 
@@ -145,14 +145,15 @@ func TestTMDBDetails(t *testing.T) {
 	require.NoError(t, err)
 	want := alienDetails
 	require.Equal(t, Title{Year: 1979, Confidence: 1, Layer: LayerTMDB, IDs: ids("348"), MatchedAt: t0.Add(2 * time.Hour), Details: &want}, r.Title)
-	require.Equal(t, Text{Title: "Чужой", Overview: "В далеком будущем...", Genres: []string{"ужасы", "фантастика"}}, r.Title.Details.Text("ru"))
+	require.Equal(t, Text{Title: "Чужой", Overview: "В далеком будущем...", Genres: []string{"ужасы", "фантастика"}, PosterPath: "/zg4fcO8IuYRllK9wWVNqNlYpueL.jpg"},
+		r.Title.Details.Text("ru"), "the poster of the language")
 	require.Equal(t, alienDetails.Texts["en"], r.Title.Details.Text("en"))
 	r, err = s.Get(ctx, hash(3))
 	require.NoError(t, err)
 	require.Nil(t, r.Title.Details, "not fetched yet")
 
-	heat := Details{Type: "movie", OriginalTitle: "Heat", Runtime: 170, Texts: map[string]Text{
-		"en": {Title: "Heat", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}},
+	heat := Details{Type: "movie", OriginalTitle: "Heat", Runtime: 170, PosterPath: "/w.jpg", Texts: map[string]Text{
+		"en": {Title: "Heat", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}, PosterPath: "/h.jpg"},
 		"ru": {Title: "Схватка"},
 	}}
 	require.NoError(t, s.RecordDetails(ctx, "y:heat 1995", heat, []ExternalID{{ProviderIMDb, "tt0113277"}, {ProviderTMDB, "949"}}, t0.Add(3*time.Hour)))
@@ -160,11 +161,12 @@ func TestTMDBDetails(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []ExternalID{{ProviderIMDb, "tt0113277"}, {ProviderTMDB, "949"}}, r.Title.IDs, "the IDs come with the details")
 	require.Equal(t, &heat, r.Title.Details)
-	require.Equal(t, Text{Title: "Схватка", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}}, r.Title.Details.Text("ru"),
-		"a field missing in the language comes from the other")
-	require.Equal(t, Text{Title: "Heat", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}}, r.Title.Details.Text("de"),
+	require.Equal(t, Text{Title: "Схватка", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}, PosterPath: "/h.jpg"}, r.Title.Details.Text("ru"),
+		"a field missing in the language comes from the other, the poster too")
+	require.Equal(t, Text{Title: "Heat", Overview: "Obsessive master thief Neil McCauley...", Genres: []string{"Action", "Crime"}, PosterPath: "/h.jpg"}, r.Title.Details.Text("de"),
 		"an unknown language takes what there is")
-	require.Equal(t, Text{Title: "Nameless"}, (&Details{OriginalTitle: "Nameless"}).Text("ru"), "the original title is the last resort")
+	require.Equal(t, Text{Title: "Nameless", PosterPath: "/n.jpg"}, (&Details{OriginalTitle: "Nameless", PosterPath: "/n.jpg", Texts: map[string]Text{"en": {}}}).Text("ru"),
+		"the original title and the work's poster are the last resort")
 	require.Equal(t, Text{}, (*Details)(nil).Text("ru"))
 	due, err = s.WithoutDetails(ctx, 10)
 	require.NoError(t, err)
@@ -263,6 +265,68 @@ func TestMigrateTMDBDetails(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_texts").Scan(&texts))
 	require.Zero(t, texts, "texts cascade from tmdb_works")
+}
+
+func TestMigrateTMDBPosters(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	old := fstest.MapFS{}
+	for _, name := range []string{"001_init.sql", "002_layers.sql", "003_audio.sql", "004_titles.sql", "005_peers.sql", "006_tmdb.sql", "007_modules.sql", "008_tmdb_details.sql"} {
+		b, err := migrations.ReadFile("migrations/" + name)
+		require.NoError(t, err)
+		old[name] = &fstest.MapFile{Data: b}
+	}
+	require.NoError(t, db.Migrate(ctx, "store", old))
+	for _, stmt := range []string{
+		`INSERT INTO torrent_releases (id, infohash, name, size, file_count, discovery, first_seen, last_seen, kind, kind_layer, title_key, work_key)
+			VALUES (1, x'0100000000000000000000000000000000000000', 'Alien.1979.1080p.BluRay', 1073741824, 1, 'sample', 100, 100, 'movie', 'rules', 'y:alien 1979', 'y:alien 1979')`,
+		"INSERT INTO torrent_releases_fts (rowid, name, paths) VALUES (1, 'Alien.1979.1080p.BluRay', '')",
+		`INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at, type, original_title, poster_path, details_at)
+			VALUES ('y:alien 1979', 1979, 1, 'tmdb', 100, 'movie', 'Alien', '/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg', 200)`,
+		"INSERT INTO tmdb_ids (title_key, provider, id) VALUES ('y:alien 1979', 'tmdb', '348')",
+		"INSERT INTO tmdb_texts (title_key, lang, title) VALUES ('y:alien 1979', 'en', 'Alien'), ('y:alien 1979', 'ru', 'Чужой')",
+		"INSERT INTO tmdb_works (title_key, year, confidence, layer, matched_at) VALUES ('y:heat 1995', 1995, 1, 'tmdb', 100)",
+		"INSERT INTO tmdb_works (title_key, matched_at, details_at) VALUES ('y:ronin 1998', 100, 300)",
+	} {
+		_, err := db.W.ExecContext(ctx, stmt)
+		require.NoError(t, err, stmt)
+	}
+
+	s, err := New(ctx, db, Options{TMDB: true})
+	require.NoError(t, err)
+	var columns int
+	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM pragma_table_info('tmdb_texts') WHERE name = 'poster_path'").Scan(&columns))
+	require.Equal(t, 1, columns, "tmdb_texts has the poster column")
+	detailsAt := map[string]sql.NullInt64{}
+	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
+		var k string
+		var at sql.NullInt64
+		if err := rows.Scan(&k, &at); err != nil {
+			return err
+		}
+		detailsAt[k] = at
+		return nil
+	}, "SELECT title_key, details_at FROM tmdb_works"))
+	require.Equal(t, map[string]sql.NullInt64{
+		"y:alien 1979": {}, "y:heat 1995": {}, "y:ronin 1998": {Int64: 300, Valid: true},
+	}, detailsAt, "matched works are due their details again; an unmatched row is left alone")
+	var texts int
+	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_texts").Scan(&texts))
+	require.Equal(t, 2, texts, "the texts stay until the refetch replaces them")
+	due, err := s.WithoutDetails(ctx, 10)
+	require.NoError(t, err)
+	require.Equal(t, []Matched{{Key: "y:alien 1979", Kind: "movie", ID: 348}}, due)
+	r, err := s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Nil(t, r.Title.Details, "without details until the refetch")
+
+	require.NoError(t, s.RecordDetails(ctx, "y:alien 1979", alienDetails, nil, time.Unix(400, 0)))
+	r, err = s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Equal(t, "/zg4fcO8IuYRllK9wWVNqNlYpueL.jpg", r.Title.Details.Text("ru").PosterPath)
+	require.Equal(t, "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg", r.Title.Details.Text("en").PosterPath)
 }
 
 func titleKeys(ks []TitleKey) []string {

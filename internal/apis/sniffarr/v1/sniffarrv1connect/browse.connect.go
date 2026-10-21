@@ -45,6 +45,8 @@ const (
 	BrowseServiceTopProcedure = "/sniffarr.v1.BrowseService/Top"
 	// BrowseServiceWorkProcedure is the fully-qualified name of the BrowseService's Work RPC.
 	BrowseServiceWorkProcedure = "/sniffarr.v1.BrowseService/Work"
+	// BrowseServiceSettingsProcedure is the fully-qualified name of the BrowseService's Settings RPC.
+	BrowseServiceSettingsProcedure = "/sniffarr.v1.BrowseService/Settings"
 )
 
 // BrowseServiceClient is a client for the sniffarr.v1.BrowseService service.
@@ -66,6 +68,9 @@ type BrowseServiceClient interface {
 	// Work returns one work with its releases, most peers over the window
 	// first, or NOT_FOUND.
 	Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error)
+	// Settings returns what the server is configured with that a client
+	// showing its answers needs to know.
+	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
 }
 
 // NewBrowseServiceClient constructs a client for the sniffarr.v1.BrowseService service. By default,
@@ -115,17 +120,24 @@ func NewBrowseServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(browseServiceMethods.ByName("Work")),
 			connect.WithClientOptions(opts...),
 		),
+		settings: connect.NewClient[v1.SettingsRequest, v1.SettingsResponse](
+			httpClient,
+			baseURL+BrowseServiceSettingsProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("Settings")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // browseServiceClient implements BrowseServiceClient.
 type browseServiceClient struct {
-	page  *connect.Client[v1.PageRequest, v1.PageResponse]
-	card  *connect.Client[v1.CardRequest, v1.CardResponse]
-	stats *connect.Client[v1.StatsRequest, v1.StatsResponse]
-	home  *connect.Client[v1.HomeRequest, v1.HomeResponse]
-	top   *connect.Client[v1.TopRequest, v1.TopResponse]
-	work  *connect.Client[v1.WorkRequest, v1.WorkResponse]
+	page     *connect.Client[v1.PageRequest, v1.PageResponse]
+	card     *connect.Client[v1.CardRequest, v1.CardResponse]
+	stats    *connect.Client[v1.StatsRequest, v1.StatsResponse]
+	home     *connect.Client[v1.HomeRequest, v1.HomeResponse]
+	top      *connect.Client[v1.TopRequest, v1.TopResponse]
+	work     *connect.Client[v1.WorkRequest, v1.WorkResponse]
+	settings *connect.Client[v1.SettingsRequest, v1.SettingsResponse]
 }
 
 // Page calls sniffarr.v1.BrowseService.Page.
@@ -158,6 +170,11 @@ func (c *browseServiceClient) Work(ctx context.Context, req *connect.Request[v1.
 	return c.work.CallUnary(ctx, req)
 }
 
+// Settings calls sniffarr.v1.BrowseService.Settings.
+func (c *browseServiceClient) Settings(ctx context.Context, req *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error) {
+	return c.settings.CallUnary(ctx, req)
+}
+
 // BrowseServiceHandler is an implementation of the sniffarr.v1.BrowseService service.
 type BrowseServiceHandler interface {
 	// Page returns one page of the releases the filters select, in the order
@@ -177,6 +194,9 @@ type BrowseServiceHandler interface {
 	// Work returns one work with its releases, most peers over the window
 	// first, or NOT_FOUND.
 	Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error)
+	// Settings returns what the server is configured with that a client
+	// showing its answers needs to know.
+	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
 }
 
 // NewBrowseServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -222,6 +242,12 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(browseServiceMethods.ByName("Work")),
 		connect.WithHandlerOptions(opts...),
 	)
+	browseServiceSettingsHandler := connect.NewUnaryHandler(
+		BrowseServiceSettingsProcedure,
+		svc.Settings,
+		connect.WithSchema(browseServiceMethods.ByName("Settings")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sniffarr.v1.BrowseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BrowseServicePageProcedure:
@@ -236,6 +262,8 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 			browseServiceTopHandler.ServeHTTP(w, r)
 		case BrowseServiceWorkProcedure:
 			browseServiceWorkHandler.ServeHTTP(w, r)
+		case BrowseServiceSettingsProcedure:
+			browseServiceSettingsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -267,4 +295,8 @@ func (UnimplementedBrowseServiceHandler) Top(context.Context, *connect.Request[v
 
 func (UnimplementedBrowseServiceHandler) Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Work is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Settings is not implemented"))
 }

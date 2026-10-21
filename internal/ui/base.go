@@ -14,7 +14,7 @@ type Base struct {
 	Lang       string   // "ru" | "en"
 	Langs      []string // switcher entries
 	Nav        string   // "home" | "search" | "top" | "data" | "" (card)
-	VoiceLangs []string // configured dubbing languages, e.g. ["ru"]
+	VoiceLangs []string // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
 	Path       string   // current path+query, for the language switcher
 	Loc        *time.Location
 	Now        time.Time

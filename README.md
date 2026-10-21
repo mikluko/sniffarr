@@ -82,14 +82,17 @@ records which layer decided its kind:
 
 Adult and software kinds never show in search results.
 
-Audio is an extension over the layers, set by `SNIFFARR_AUDIO_LANGUAGES`;
-`ru` is the only language built in. For each configured language every stored
-torrent records a marker, a word or studio of the language in its name or file
-paths (`Rus`, `Дубляж`, `LostFilm` for `ru`), and a script hint, letters of
-the language's script there (Cyrillic for `ru`). A marker sets the probability
-of an audio track in the language to 1; otherwise Jev answers it, one question
-per language. Without languages nothing about audio is recorded, asked or
-returned, and the background classifier has nothing to select.
+Audio is an extension over the layers, off until `SNIFFARR_AUDIO_LANGUAGES`
+names languages; `ru` is the only language built in. For each configured
+language every stored torrent records a marker, a word or studio of the
+language in its name or file paths (`Rus`, `Дубляж`, `LostFilm` for `ru`), and
+a script hint, letters of the language's script there (Cyrillic for `ru`). A
+marker sets the probability of an audio track in the language to 1; otherwise
+Jev answers it, one question per language. While the extension is off, nothing
+about audio is recorded or returned, Jev is asked about kind and source only,
+the background classifier has nothing to select, `BrowseService.Settings`
+returns no languages, and the web UI shows no voice filter, no per-language
+columns in search results and tops, and no audio rows on a release's card.
 
 TMDB is a second extension, on by default with the
 [TMDB](https://www.themoviedb.org) read access token sniffarr ships with;
@@ -118,17 +121,21 @@ each with its external IDs appended. The first answer gives the work's
 details: its type, original title, poster path, rating and votes, runtime (a
 typical episode's for a series), a series' status and seasons, its origin
 countries and original language, and its IMDb, TVDB (series) and Wikidata
-IDs; each answer gives its title, overview and genres in that language, stored
-as `en` and `ru` texts as TMDB returns them, which is the original where TMDB
-has no translation. A match whose page could not be fetched keeps its ID
+IDs; each answer gives its title, overview, genres and poster in that
+language, stored as `en` and `ru` texts as TMDB returns them, which is the
+original where TMDB has no translation. The API serves the texts and the
+poster of the request's `lang`; a language without a poster takes the
+other's, then the work's. A match whose page could not be fetched keeps its ID
 alone, and the TMDB worker's backfill fetches the details of every match
 without them, oldest match first, under `SNIFFARR_TMDB_RATE` and
 `SNIFFARR_TMDB_CONCURRENCY`, until none is left; it looks again every 10
-seconds. A page TMDB refuses to serve records empty details, so the work is
-not asked about again. The web UI shows the details on the card, in the top
-and over search results, with posters from `image.tmdb.org`; every page
-carries the TMDB logo and the notice "This product uses the TMDB API but is
-not endorsed or certified by TMDB."
+seconds. The migration that adds posters to the texts marks every matched
+work's details unfetched, so the backfill fetches each once more, two
+requests a work, after the upgrade. A page TMDB refuses to serve records
+empty details, so the work is not asked about again. The web UI shows the
+details on the card, in the top and over search results, with posters from
+`image.tmdb.org`; every page carries the TMDB logo and the notice "This
+product uses the TMDB API but is not endorsed or certified by TMDB."
 
 Peers are a third extension, always on. A peer is an `IP:port`; `-sniff` sees
 one in every `announce_peer` its node receives, `-fetch` in every `get_peers`
@@ -175,6 +182,7 @@ in the `Authorization` header; `/healthz` needs none.
 | `sniffarr.v1.BrowseService` | `Home`   | `SNIFFARR_SEARCH_TOKEN` |
 | `sniffarr.v1.BrowseService` | `Top`    | `SNIFFARR_SEARCH_TOKEN` |
 | `sniffarr.v1.BrowseService` | `Work`   | `SNIFFARR_SEARCH_TOKEN` |
+| `sniffarr.v1.BrowseService` | `Settings` | `SNIFFARR_SEARCH_TOKEN` |
 
 - `Sight` is client-streaming: it queues every infohash the server has neither
   stored, rejected nor queued, and returns how many were new and how many
@@ -219,7 +227,9 @@ in the `Authorization` header; `/healthz` needs none.
   releases ordered by peers over the window. `Page`, `Card`, `Top` and `Work`
   take `lang`, `ru` or `en`; every release carries `tmdb` as `Search` does,
   and every work, in `Page`, `Top` and `Work`, carries `tmdb` of the title of
-  its release with the most peers.
+  its release with the most peers. `Settings` returns the API's audio
+  languages, BCP-47 tags in its order, empty while the audio extension is
+  off; the web UI asks it at start.
 
 ## Torznab
 
@@ -260,8 +270,10 @@ In Prowlarr, add an indexer of type Generic Torznab with URL
 With `-ui`, sniffarr serves a web UI on `SNIFFARR_UI_ADDR`, in English or
 Russian. The UI touches no database: it reads `BrowseService` with
 `SNIFFARR_SEARCH_TOKEN`, in-process when `-api` is on and over the network at
-`SNIFFARR_URL` otherwise. Its `SNIFFARR_AUDIO_LANGUAGES` must then be the
-API's.
+`SNIFFARR_URL` otherwise. At start it asks `Settings` for the API's audio
+languages, retrying every 5 seconds until the API answers, and listens only
+then; the languages are kept for the life of the process, so a change of the
+API's needs the UI restarted.
 
 | Route               | Page                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -331,7 +343,7 @@ the same to each.
 | `SNIFFARR_STORE_MAX_FILES`         | `20`             | Files stored per torrent, the largest ones                                                                             |
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
-| `SNIFFARR_AUDIO_LANGUAGES`         | `ru`             | Audio languages, BCP-47 tags and comma-separated; set but empty is none. An unknown tag fails startup                  |
+| `SNIFFARR_AUDIO_LANGUAGES`         |                  | Audio languages, BCP-47 tags and comma-separated; unset or empty leaves the extension off. An unknown tag fails startup |
 | `TMDB_API_KEY`                     | built-in token   | TMDB API key or read access token; set empty, no titles are matched                                                    |
 | `SNIFFARR_TMDB_CONCURRENCY`        | `2`              | Background title matches at once                                                                                       |
 | `SNIFFARR_TMDB_RATE`               | `20`             | TMDB requests a second at most                                                                                         |
@@ -356,7 +368,6 @@ torrent's peers over the last 7 days.
 | `SNIFFARR_SEARCH_TOKEN`    |         | Bearer token of `BrowseService`; required                                            |
 | `SNIFFARR_UI_ADDR`         | `:8081` | Listen address                                                                       |
 | `SNIFFARR_OIDC_ISSUER`     |         | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none |
-| `SNIFFARR_AUDIO_LANGUAGES` | `ru`    | The API's audio languages, in its order                                              |
 
 ### `-sniff` and `-fetch`
 
@@ -522,8 +533,7 @@ so it needs no open port.
 With `ui.enabled`, `<release>-ui` runs `sniffarr -ui`, with `ui.replicas`
 replicas, behind the Service `<release>-ui` on `ui.service.port` (8081).
 `ui.addr` is `SNIFFARR_UI_ADDR`, and `ui.env` carries the rest of the UI's
-variables, `SNIFFARR_OIDC_ISSUER` and, when the API's are not the default,
-`SNIFFARR_AUDIO_LANGUAGES`. `ui.extraContainers` and `ui.extraVolumes` add an
+variables, `SNIFFARR_OIDC_ISSUER`. `ui.extraContainers` and `ui.extraVolumes` add an
 authenticating proxy to the pod, and `ui.service.targetPort` names its port.
 With `ui.addr` on a loopback address, such as `127.0.0.1:8081`, the UI is
 reachable only through that proxy, and `ui.service.targetPort` must name it.

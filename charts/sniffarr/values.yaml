@@ -83,7 +83,7 @@ ui:
     targetPort: ui
     # Annotations of the Service.
     annotations: {}
-  # Extra environment variables, name to value: SNIFFARR_OIDC_ISSUER, SNIFFARR_AUDIO_LANGUAGES when the API's are not the default.
+  # Extra environment variables, name to value: SNIFFARR_OIDC_ISSUER.
   env: {}
   # Containers added to the ui pod, rendered as given.
   extraContainers: []

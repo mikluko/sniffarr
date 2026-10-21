@@ -13,6 +13,7 @@
         <option value="">{{.T "f.all"}}</option>
         {{range kinds}}<option value="{{.}}"{{if eq . $.Filters.Kind}} selected{{end}}>{{$.T (concat "kind." .)}}</option>{{end}}
       </select></label>
+    {{if .VoiceLangs}}
     <label>{{.T "f.voice"}}
       <select name="vl" aria-label="{{.T "f.voice_lang"}}">
         {{range .VoiceLangs}}<option value="{{.}}"{{if eq . $.Filters.VoiceLang}} selected{{end}}>{{.}}</option>{{end}}
@@ -20,6 +21,7 @@
       <select name="voice" aria-label="{{.T "f.voice_mode"}}">
         {{range voiceModes}}<option value="{{.}}"{{if eq . $.Filters.Voice}} selected{{end}}>{{$.T (concat "voicemode." .)}}</option>{{end}}
       </select></label>
+    {{end}}
     <label>{{.T "f.source"}}
       <select name="source">
         <option value="">{{.T "f.all"}}</option>

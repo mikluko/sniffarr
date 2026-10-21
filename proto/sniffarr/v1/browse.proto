@@ -37,6 +37,17 @@ service BrowseService {
   // Work returns one work with its releases, most peers over the window
   // first, or NOT_FOUND.
   rpc Work(WorkRequest) returns (WorkResponse);
+  // Settings returns what the server is configured with that a client
+  // showing its answers needs to know.
+  rpc Settings(SettingsRequest) returns (SettingsResponse);
+}
+
+message SettingsRequest {}
+
+message SettingsResponse {
+  // The audio languages the server is configured with, BCP-47 tags in the
+  // server's order; empty when the audio extension is off.
+  repeated string audio_languages = 1;
 }
 
 message PageRequest {

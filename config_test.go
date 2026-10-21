@@ -53,8 +53,6 @@ func defaultNetwork(passive bool) sniffer.NetworkConfig {
 
 func TestLoadComponents(t *testing.T) {
 	apiEnv := []string{"SNIFFARR_DB", "/data/sniffarr.db", "SNIFFARR_INGEST_TOKEN", "in", "SNIFFARR_SEARCH_TOKEN", "se"}
-	russian, err := audio.Parse("ru")
-	require.NoError(t, err)
 	tests := []struct {
 		name string
 		args []string
@@ -74,14 +72,14 @@ func TestLoadComponents(t *testing.T) {
 		{name: "api and ui in one process", args: []string{"-api", "-ui"}, env: apiEnv, want: func(t *testing.T, c config) {
 			require.Equal(t, components{api: true, ui: true}, c.on)
 			require.Nil(t, c.client.URL, "memconn")
-			require.Equal(t, ui.Config{Addr: defaultUIAddr, Languages: russian}, c.ui)
+			require.Equal(t, ui.Config{Addr: defaultUIAddr}, c.ui)
 		}},
 		{name: "api with a URL", args: []string{"-api", "-ui"}, env: append(apiEnv, "SNIFFARR_URL", "http://api:8080"), err: "SNIFFARR_URL is set, but -api serves the API in this process: unset it"},
-		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_SEARCH_TOKEN", "se", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_AUDIO_LANGUAGES", ""},
+		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_SEARCH_TOKEN", "se", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},
 			want: func(t *testing.T, c config) {
 				require.Equal(t, client.Config{URL: &url.URL{Scheme: "http", Host: "api:8080"}, SearchToken: "se"}, c.client)
 				require.Equal(t, ui.Config{Addr: ":9001", OIDCIssuer: "https://id.example.com"}, c.ui)
-				require.Equal(t, api.Config{}, c.api, "the API's variables are not read")
+				require.Equal(t, api.Config{}, c.api, "the API's variables are not read, the unknown audio language among them")
 				require.Equal(t, db.Config{}, c.db)
 			}},
 		{name: "ui without a URL", args: []string{"-ui"}, env: []string{"SNIFFARR_SEARCH_TOKEN", "se"}, err: "SNIFFARR_URL is not set"},
@@ -127,7 +125,6 @@ func TestLoadComponents(t *testing.T) {
 		{name: "zero peers", args: []string{"-fetch", "-min-peers", "0"}, err: "-fetchers, -rate, -walkers and -min-peers: want positive integers"},
 		{name: "port out of range", args: []string{"-sniff", "-port", "70000"}, err: "-port: want 0 to 65535"},
 		{name: "negative wait", args: []string{"-fetch", "-peer-wait", "-1s"}, err: "-fetch-timeout and -peer-wait: want positive durations"},
-		{name: "unknown audio language", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_SEARCH_TOKEN", "se", "SNIFFARR_AUDIO_LANGUAGES", "ru,xx"}, err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -153,10 +150,10 @@ func TestLoadAPI(t *testing.T) {
 				DailyTokens: classify.DefaultDailyTokens, SearchReserve: classify.DefaultSearchReserve, LazyMax: search.DefaultLazyMax, LazyWait: search.DefaultLazyWait,
 				LazyTMDB: search.DefaultLazyTMDB, TMDBConcurrency: tmdb.DefaultConcurrency, TMDBRate: tmdb.DefaultRate, TMDBRetry: tmdb.DefaultRetry,
 				Lease: ingest.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff,
-				Retention: defaultRetention, Scripts: defaultScripts, Languages: russian},
+				Retention: defaultRetention, Scripts: defaultScripts},
 			db.Config{Path: "/data/sniffarr.db",
 				Queue: store.QueueOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor},
-				Store: store.Options{MaxFiles: store.DefaultMaxFiles, Languages: []string{"ru"}, TMDB: true}}
+				Store: store.Options{MaxFiles: store.DefaultMaxFiles, TMDB: true}}
 	}
 	tests := []struct {
 		name string
@@ -184,7 +181,9 @@ func TestLoadAPI(t *testing.T) {
 			}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: func(a *api.Config, _ *db.Config) { a.DailyTokens = 0 }},
 		{name: "no reserve", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0"), want: func(a *api.Config, _ *db.Config) { a.SearchReserve = 0 }},
-		{name: "no audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", ""), want: func(a *api.Config, d *db.Config) { a.Languages, d.Store.Languages = nil, nil }},
+		{name: "audio languages set but empty", env: with("SNIFFARR_AUDIO_LANGUAGES", ""), want: func(*api.Config, *db.Config) {}},
+		{name: "audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru"), want: func(a *api.Config, d *db.Config) { a.Languages, d.Store.Languages = russian, []string{"ru"} }},
+		{name: "unknown audio language", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru,xx"), err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},
 		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
 		{name: "nothing set", env: nil, err: "SNIFFARR_DB is not set"},
 		{name: "no ingest token", env: with("SNIFFARR_INGEST_TOKEN", ""), err: "SNIFFARR_INGEST_TOKEN is not set"},

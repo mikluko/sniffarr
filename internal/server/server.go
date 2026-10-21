@@ -39,7 +39,9 @@ type Config struct {
 	// Scripts are the writing systems a torrent's name may have letters of;
 	// rules.DefaultScripts when nil.
 	Scripts rules.Scripts
-	// Languages get an audio entry in every stored torrent.
+	// Languages get an audio entry in every stored torrent, and
+	// BrowseService.Settings reports them; nil leaves the audio extension
+	// off.
 	Languages []audio.Language
 	Log       *slog.Logger
 	// Meter records metrics; the global MeterProvider when nil. Traces go to
@@ -78,7 +80,7 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
-		&search.Browser{Store: c.Store, Log: c.Log, DailyTokens: c.DailyTokens},
+		&search.Browser{Store: c.Store, Log: c.Log, DailyTokens: c.DailyTokens, Languages: audio.Tags(c.Languages)},
 		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

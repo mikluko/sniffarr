@@ -116,8 +116,8 @@ var alienDetails = &store.Details{
 	Type: "movie", OriginalTitle: "Alien", PosterPath: "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg", Rating: 8.176, Votes: 16995, Runtime: 117,
 	Countries: []string{"US"}, Language: "en",
 	Texts: map[string]store.Text{
-		"en": {Title: "Alien", Overview: "During its return to the earth, commercial spaceship Nostromo intercepts a distress signal from a distant planet. When a three-member team of the crew discovers a chamber containing thousands of eggs on the planet, a creature inside one of the eggs attacks an explorer. The entire crew is unaware of the impending nightmare set to descend upon them when the alien parasite planted inside its unfortunate host is birthed.", Genres: []string{"Horror", "Science Fiction"}},
-		"ru": {Title: "Чужой", Overview: "В далеком будущем возвращающийся на Землю грузовой космический корабль перехватывает исходящий с неизвестной планеты сигнал. Экипаж, в соответствии с основными инструкциями, обязан найти и исследовать источник сигнала. Оказавшись на планете, астронавты повсюду обнаруживают предметы, по виду напоминающие гигантские коконы.", Genres: []string{"ужасы", "фантастика"}},
+		"en": {Title: "Alien", Overview: "During its return to the earth, commercial spaceship Nostromo intercepts a distress signal from a distant planet. When a three-member team of the crew discovers a chamber containing thousands of eggs on the planet, a creature inside one of the eggs attacks an explorer. The entire crew is unaware of the impending nightmare set to descend upon them when the alien parasite planted inside its unfortunate host is birthed.", Genres: []string{"Horror", "Science Fiction"}, PosterPath: "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg"},
+		"ru": {Title: "Чужой", Overview: "В далеком будущем возвращающийся на Землю грузовой космический корабль перехватывает исходящий с неизвестной планеты сигнал. Экипаж, в соответствии с основными инструкциями, обязан найти и исследовать источник сигнала. Оказавшись на планете, астронавты повсюду обнаруживают предметы, по виду напоминающие гигантские коконы.", Genres: []string{"ужасы", "фантастика"}, PosterPath: "/zg4fcO8IuYRllK9wWVNqNlYpueL.jpg"},
 	},
 }
 
@@ -267,6 +267,9 @@ func TestMatchBothTitles(t *testing.T) {
 	require.Equal(t, "Returning Series", got.Details.Status)
 	require.Equal(t, 2, got.Details.Seasons)
 	require.Equal(t, "Фоллаут", got.Details.Text("ru").Title)
+	require.Equal(t, "/7o3XRf31lEtAaRNtgupOGTDD3sP.jpg", got.Details.Text("ru").PosterPath, "the poster of the Russian page")
+	require.Equal(t, "/c15BtJxCXMrISLVmysdsnZUPQft.jpg", got.Details.Text("en").PosterPath, "the poster of the English page")
+	require.Equal(t, "/c15BtJxCXMrISLVmysdsnZUPQft.jpg", got.Details.PosterPath, "the work's poster is the first language's")
 	require.Equal(t, []string{"/3/search/tv|Фоллаут|en-US|", "/3/search/tv|Фоллаут|ru-RU|", "/3/search/tv|Fallout|en-US|"}, f.searches,
 		"each title, in Russian too when Cyrillic")
 }

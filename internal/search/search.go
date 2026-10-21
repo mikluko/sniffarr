@@ -155,9 +155,9 @@ func (s *Service) Get(ctx context.Context, req *connect.Request[sniffarrv1.GetRe
 	return connect.NewResponse(&sniffarrv1.GetResponse{Release: release(r, lang)}), nil
 }
 
-// tmdbWork is the API's view of a title match with texts in lang, or nil
-// while the title was never looked up. A match without details takes its type
-// from kind, movie or series.
+// tmdbWork is the API's view of a title match with texts and poster in lang,
+// or nil while the title was never looked up. A match without details takes
+// its type from kind, movie or series.
 func tmdbWork(t store.Title, kind, lang string) *sniffarrv1.TMDBWork {
 	if t.MatchedAt.IsZero() {
 		return nil
@@ -188,7 +188,7 @@ func tmdbWork(t store.Title, kind, lang string) *sniffarrv1.TMDBWork {
 	}
 	text := d.Text(lang)
 	out.Title, out.OriginalTitle, out.Overview, out.Genres = text.Title, d.OriginalTitle, text.Overview, text.Genres
-	out.PosterPath, out.Rating, out.Votes, out.Runtime = d.PosterPath, d.Rating, int32(d.Votes), int32(d.Runtime)
+	out.PosterPath, out.Rating, out.Votes, out.Runtime = text.PosterPath, d.Rating, int32(d.Votes), int32(d.Runtime)
 	out.Status, out.Seasons, out.Countries, out.Language = d.Status, int32(d.Seasons), d.Countries, d.Language
 	return out
 }

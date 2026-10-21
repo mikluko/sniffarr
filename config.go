@@ -115,19 +115,11 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	if c.client, err = loadClient(c.on, getenv); err != nil {
 		return c, err
 	}
-	languages, ok := lookup("SNIFFARR_AUDIO_LANGUAGES")
-	if !ok {
-		languages = audio.DefaultLanguages
-	}
-	langs, err := audio.Parse(languages)
-	if err != nil {
-		return c, fmt.Errorf("SNIFFARR_AUDIO_LANGUAGES: %w", err)
-	}
 	if c.on.ui {
-		c.ui = ui.Config{Addr: or(getenv("SNIFFARR_UI_ADDR"), defaultUIAddr), OIDCIssuer: getenv("SNIFFARR_OIDC_ISSUER"), Languages: langs}
+		c.ui = ui.Config{Addr: or(getenv("SNIFFARR_UI_ADDR"), defaultUIAddr), OIDCIssuer: getenv("SNIFFARR_OIDC_ISSUER")}
 	}
 	if c.on.api {
-		if c.api, c.db, err = loadAPI(lookup, langs); err != nil {
+		if c.api, c.db, err = loadAPI(lookup); err != nil {
 			return c, err
 		}
 	}
@@ -184,8 +176,9 @@ func loadClient(on components, getenv func(string) string) (client.Config, error
 	return c, nil
 }
 
-// loadAPI reads the API's and the store's configuration.
-func loadAPI(lookup func(string) (string, bool), langs []audio.Language) (api.Config, db.Config, error) {
+// loadAPI reads the API's and the store's configuration. An unset or empty
+// SNIFFARR_AUDIO_LANGUAGES leaves the audio extension off.
+func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) {
 	getenv := func(name string) string {
 		v, _ := lookup(name)
 		return v
@@ -196,10 +189,12 @@ func loadAPI(lookup func(string) (string, bool), langs []audio.Language) (api.Co
 		SearchToken:  getenv("SNIFFARR_SEARCH_TOKEN"),
 		TypesafeKey:  getenv("TYPESAFE_API_KEY"),
 		TorznabToken: getenv("SNIFFARR_TORZNAB_TOKEN"),
-		Languages:    langs,
 	}
 	d := db.Config{Path: getenv("SNIFFARR_DB")}
 	var err error
+	if a.Languages, err = audio.Parse(getenv("SNIFFARR_AUDIO_LANGUAGES")); err != nil {
+		return a, d, fmt.Errorf("SNIFFARR_AUDIO_LANGUAGES: %w", err)
+	}
 	if a.ClassifyConcurrency, err = positive(getenv, "SNIFFARR_CLASSIFY_CONCURRENCY", 4); err != nil {
 		return a, d, err
 	}
@@ -263,7 +258,7 @@ func loadAPI(lookup func(string) (string, bool), langs []audio.Language) (api.Co
 		a.TMDBKey = tmdb.DefaultKey
 	}
 	d.Store.TMDB = a.TMDBKey != ""
-	d.Store.Languages = audio.Tags(langs)
+	d.Store.Languages = audio.Tags(a.Languages)
 	return a, d, nil
 }
 
