@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The web UI searches movies and series in the store and on TMDB together; what TMDB finds is listed after the movies and series with releases, and stored even without releases.
+- A page per movie or series at `/w/{id}`, `m348` or `tv1399`: its TMDB details, its places in the tops over 24 hours, 7 days and 30 days, its peers, the audio of its releases, and its releases filtered by quality, source, size, audio, season and episode.
+- The torrents tab at `/torrents`: every release, matched or not, filtered by kind, match, quality, audio, source, layer and size, each matched one linked to its movie or series.
+- `BrowseService.SearchTitles`, `Title`, `TitleReleases` and `Torrents`.
+- A release's quality, `2160p`, `1080p`, `720p` or `sd`, and its episode, read from its name; `Release` carries `quality`, `season` and `episode`, and stored releases get them at the first start.
+- An audio marker records its mark, the word or studio as written; `Audio` carries `mark`, and stored markers get theirs at the first start.
+- `TopRequest.voice_language` picks the audio language a voice applies to among the configured ones.
+
+### Changed
+
+- **Breaking:** `BrowseService` is reshaped for the movies and series of TMDB: `Card` returns the release's `work` and `rank_in_work` in place of `work`, `releases` and `release_rank`, `TopEntry` carries a `WorkSummary` with `audio`, `sources` and `first_seen` in place of `Work`, and `Stats` counts music, books and software as `KIND_OTHER`.
+- **Breaking:** the tops rank TMDB movies and series: releases of every title key matched to one TMDB work count together, and a release matched to none is in no top.
+- **Breaking:** music, books and software have no top and no page in the web UI; they show as "other" among the torrents.
+- **Breaking:** `VOICE_LIKELY` and `voice=p50` admit releases with a marker as well as those with a probability of at least 0.5.
+- **Breaking:** a movie or series is named by its ID, `m348` or `tv1399`, in place of the work key `WorkRef.key` gave; `Release.work` carries it.
+- A movie's or series' TMDB details are fetched once for all its title keys.
+
+### Removed
+
+- `BrowseService.Page` and `BrowseService.Work`, with `PageRequest`, `WorkMatch`, `WorkRef` and `Work`.
+- The web UI's `/top/w/{id}`: it redirects to `/w/{id}`.
+
 ## [0.15.1] - 2026-10-21
 
 ### Changed
