@@ -18,13 +18,13 @@
   <div class="grid">
     <div>
       <h3>{{$.T "d.bykind"}}</h3>
-      <table class="t">{{range .ByKind}}<tr><td><a href="/?kind={{.Key}}">{{$.T (concat "kind." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+      <table class="t">{{range .ByKind}}<tr><td><a href="/torrents?kind={{.Key}}">{{$.T (concat "kind." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
     </div>
     <div>
       <h3>{{$.T "d.bylayer"}}</h3>
-      <table class="t">{{range .ByLayer}}<tr><td><a href="/?layer={{.Key}}">{{$.T (concat "layer." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+      <table class="t">{{range .ByLayer}}<tr><td><a href="/torrents?layer={{.Key}}">{{$.T (concat "layer." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
       <h3 class="gap">{{$.T "d.bysource"}}</h3>
-      <table class="t">{{range .BySource}}<tr><td><a href="/?source={{.Key}}">{{$.T (concat "source." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+      <table class="t">{{range .BySource}}<tr><td><a href="/torrents?source={{.Key}}">{{$.T (concat "source." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
     </div>
     {{if .Voice}}
     <div>

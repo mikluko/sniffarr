@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"maps"
 	"slices"
@@ -34,11 +35,11 @@ type Torrent struct {
 	Kind      string
 	KindLayer string
 	TitleKey  string
-	// WorkKey, Year and Season are what names.Parse gives; a torrent without
-	// a work key is in no top.
-	WorkKey string
+	// Year, Season, Episode and Quality are what names.Parse gives.
 	Year    int
 	Season  int
+	Episode int
+	Quality string
 	// Audio holds one entry per language, at most.
 	Audio []Audio
 }
@@ -58,11 +59,17 @@ type Release struct {
 	// Audio holds the entries of Options.Languages, in tag order.
 	Audio    []Audio
 	TitleKey string
-	// Title is the match of TitleKey when Options.TMDB is set.
-	Title   Title
-	WorkKey string
+	// Work is the store's ID of the work TitleKey is matched to, 0 while it
+	// is matched to none.
+	Work int64
+	// Match is the match of TitleKey when Options.TMDB is set.
+	Match Match
+	// Year, Season and Episode are 0 when the name gives none; Quality is
+	// one of names.Qualities, or "".
 	Year    int
 	Season  int
+	Episode int
+	Quality string
 	// PeersWeek is the torrent's distinct peers over the last 7 days, as
 	// ComputeTop last counted them.
 	PeersWeek int64
@@ -94,43 +101,43 @@ type Classification struct {
 	Audio map[string]float64
 }
 
-// fillWorkKeys derives work_key, year and season from the names of the
-// torrents that have a title key and no work key, in batches; a name whose
-// work key is empty takes its title key.
-func (s *Store) fillWorkKeys(ctx context.Context) error {
+// featuresFilled is the settings key that records that fillFeatures has run.
+const featuresFilled = "release_features_filled"
+
+// fillFeatures derives, once, the year, season, episode and quality of the
+// stored torrents with neither an episode nor a quality from their names,
+// in batches.
+func (s *Store) fillFeatures(ctx context.Context) error {
+	done, err := s.flag(ctx, featuresFilled)
+	if err != nil || done {
+		return err
+	}
+	var after int64
 	for {
-		rows, err := s.r.QueryContext(ctx, "SELECT id, name, title_key FROM torrent_releases WHERE work_key IS NULL AND title_key IS NOT NULL LIMIT 1000")
-		if err != nil {
-			return err
-		}
 		type row struct {
-			id   int64
-			p    names.Parsed
-			work string
+			id int64
+			p  names.Parsed
 		}
 		var batch []row
-		for rows.Next() {
+		if err := s.each(ctx, func(rows *sql.Rows) error {
 			var r row
 			var name string
-			if err := rows.Scan(&r.id, &name, &r.work); err != nil {
-				rows.Close()
+			if err := rows.Scan(&r.id, &name); err != nil {
 				return err
 			}
 			r.p = names.Parse(name)
-			if r.p.Work != "" {
-				r.work = r.p.Work
-			}
 			batch = append(batch, r)
-		}
-		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return nil
+		}, "SELECT id, name FROM torrent_releases WHERE id > ? AND quality IS NULL AND episode IS NULL ORDER BY id LIMIT 1000", after); err != nil {
 			return err
 		}
 		if len(batch) == 0 {
-			return nil
+			return s.setFlag(ctx, featuresFilled)
 		}
 		if err := s.tx(ctx, func(tx *sql.Tx) error {
 			for _, r := range batch {
-				if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET work_key = ?, year = ?, season = ? WHERE id = ?", r.work, nullInt(r.p.Year), nullInt(r.p.Season), r.id); err != nil {
+				if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET year = ?, season = ?, episode = ?, quality = ? WHERE id = ?",
+					nullInt(r.p.Year), nullInt(r.p.Season), nullInt(r.p.Episode), null(r.p.Quality), r.id); err != nil {
 					return err
 				}
 			}
@@ -138,6 +145,7 @@ func (s *Store) fillWorkKeys(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
+		after = batch[len(batch)-1].id
 	}
 }
 
@@ -203,10 +211,11 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 		}
 		var id int64
 		err := tx.QueryRowContext(ctx, `INSERT INTO torrent_releases (infohash, name, size, file_count, discovery, first_seen, last_seen,
-				kind, kind_layer, title_key, work_key, year, season)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (infohash) DO NOTHING RETURNING id`,
+				kind, kind_layer, title_key, year, season, episode, quality, work)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT work FROM tmdb_matches WHERE title_key = ?10))
+			ON CONFLICT (infohash) DO NOTHING RETURNING id`,
 			t.Hash[:], t.Name, t.Size, len(t.Files), t.Discovery, t.SeenAt.Unix(), t.SeenAt.Unix(),
-			null(t.Kind), null(t.KindLayer), null(t.TitleKey), null(t.WorkKey), nullInt(t.Year), nullInt(t.Season)).Scan(&id)
+			null(t.Kind), null(t.KindLayer), null(t.TitleKey), nullInt(t.Year), nullInt(t.Season), nullInt(t.Episode), null(t.Quality)).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -226,8 +235,8 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 			return err
 		}
 		for _, a := range t.Audio {
-			if _, err := tx.ExecContext(ctx, "INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer) VALUES (?, ?, ?, ?, ?, ?)",
-				id, a.Language, a.Marker, a.ScriptHint, a.Probability, null(a.Layer)); err != nil {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO torrent_audio (torrent_id, language, marker, mark, script_hint, probability, layer) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				id, a.Language, a.Marker, null(a.Mark), a.ScriptHint, a.Probability, null(a.Layer)); err != nil {
 				return err
 			}
 		}
@@ -262,15 +271,15 @@ type Query struct {
 	// releases the classifier has not examined whose kind or audio
 	// probability is unknown.
 	Unexamined bool
-	// ID, when set, selects releases whose title key is matched to it.
+	// ID, when set, selects releases of the work with the ID.
 	ID    *ExternalID
 	Limit int
 }
 
 const releaseColumns = `t.id, t.infohash, t.name, t.size, t.file_count, coalesce(t.kind, ''), coalesce(t.kind_layer, ''),
 	coalesce(t.kind_confidence, 0), coalesce(t.source, ''), coalesce(t.source_confidence, 0),
-	t.classified_at IS NOT NULL, t.first_seen, t.last_seen, coalesce(t.title_key, ''),
-	coalesce(t.work_key, ''), coalesce(t.year, 0), coalesce(t.season, 0), t.peers_week`
+	t.classified_at IS NOT NULL, t.first_seen, t.last_seen, coalesce(t.title_key, ''), coalesce(t.work, 0),
+	coalesce(t.year, 0), coalesce(t.season, 0), coalesce(t.episode, 0), coalesce(t.quality, ''), t.peers_week`
 
 // Search returns releases matching q, best text match first, or most
 // recently seen first when q has no text.
@@ -320,8 +329,12 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 		}
 		where = append(where, cond)
 	}
-	if q.ID != nil {
-		where = append(where, "t.title_key IN (SELECT i.title_key FROM tmdb_ids i WHERE i.provider = ? AND i.id = ?)")
+	switch {
+	case q.ID != nil && q.ID.Provider == ProviderTMDB:
+		where = append(where, "t.work IN (SELECT w.id FROM tmdb_works w WHERE w.tmdb_id = CAST(? AS INTEGER))")
+		args = append(args, q.ID.ID)
+	case q.ID != nil:
+		where = append(where, "t.work IN (SELECT i.work FROM tmdb_ids i WHERE i.provider = ? AND i.id = ?)")
 		args = append(args, q.ID.Provider, q.ID.ID)
 	}
 	stmt := "SELECT " + releaseColumns + " FROM " + from
@@ -373,7 +386,7 @@ func scanRelease(row interface{ Scan(...any) error }) (Release, error) {
 	var hash []byte
 	var first, last int64
 	err := row.Scan(&r.ID, &hash, &r.Name, &r.Size, &r.FileCount, &r.Kind, &r.KindLayer, &r.KindConfidence, &r.Source, &r.SourceConfidence,
-		&r.Classified, &first, &last, &r.TitleKey, &r.WorkKey, &r.Year, &r.Season, &r.PeersWeek)
+		&r.Classified, &first, &last, &r.TitleKey, &r.Work, &r.Year, &r.Season, &r.Episode, &r.Quality, &r.PeersWeek)
 	if err != nil {
 		return Release{}, err
 	}
@@ -512,36 +525,54 @@ func matchExpr(text string) string {
 
 // Browse selects releases for Page.
 type Browse struct {
-	// Text matches releases whose name or file paths contain all its words.
+	// Text matches releases whose name or file paths contain all its words,
+	// or, as 40 hex digits, the release with that infohash.
 	Text string
-	// Kind selects releases of the kind; UnknownKind selects those whose kind
-	// is unknown instead.
-	Kind        string
-	UnknownKind bool
+	// Kinds selects releases of these kinds, "" for those whose kind is
+	// unknown; empty selects any kind.
+	Kinds []string
 	// Exclude drops releases of these kinds.
 	Exclude []string
-	// AudioMarker selects releases with a marker of AudioLanguage, and
-	// MinAudioProbability those whose probability of an audio track in it is
-	// at least that.
-	AudioLanguage       string
-	AudioMarker         bool
-	MinAudioProbability *float64
-	Source              string
-	KindLayer           string
+	// Matched, when set, selects releases whose title key is matched to a
+	// work when true and those whose is not when false.
+	Matched *bool
+	// Quality selects releases of the quality.
+	Quality string
+	// Voice narrows the releases by their audio in AudioLanguage.
+	AudioLanguage string
+	Voice         Voice
+	Source        string
+	KindLayer     string
 	// MinSize drops releases smaller than it, in bytes.
 	MinSize       int64
 	Offset, Limit int
-	// Sort is SortPeers, SortLastSeen or SortSize; "" is best text match
-	// first with Text and most recently seen first without.
+	// Sort is SortPeers, SortLastSeen, SortFirstSeen or SortSize; "" is best
+	// text match first with Text and most recently seen first without.
 	Sort string
 }
 
 // Sorts of a page.
 const (
-	SortPeers    = "peers"
-	SortLastSeen = "last_seen"
-	SortSize     = "size"
+	SortPeers     = "peers"
+	SortLastSeen  = "last_seen"
+	SortFirstSeen = "first_seen"
+	SortSize      = "size"
 )
+
+// orders are the ORDER BY clauses of the sorts.
+var orders = map[string]string{
+	SortPeers:     "t.peers_week DESC, t.id DESC",
+	SortLastSeen:  "t.last_seen DESC, t.id DESC",
+	SortFirstSeen: "t.first_seen DESC, t.id DESC",
+	SortSize:      "t.size DESC, t.id DESC",
+}
+
+// infohashText reports whether text is an infohash, 40 hex digits, and its
+// bytes.
+func infohashText(text string) ([]byte, bool) {
+	b, err := hex.DecodeString(strings.TrimSpace(text))
+	return b, err == nil && len(b) == len(Hash{})
+}
 
 // Page returns the releases b selects, in b's sort, and how many it selects
 // in all.
@@ -549,27 +580,34 @@ func (s *Store) Page(ctx context.Context, b Browse) ([]Release, int64, error) {
 	var where []string
 	var args []any
 	from := "torrent_releases t"
-	order := "t.last_seen DESC, t.id DESC"
-	if m := matchExpr(b.Text); m != "" {
+	order := orders[SortLastSeen]
+	if h, ok := infohashText(b.Text); ok {
+		where = append(where, "t.infohash = ?")
+		args = append(args, h)
+	} else if m := matchExpr(b.Text); m != "" {
 		from = "torrent_releases_fts f JOIN torrent_releases t ON t.id = f.rowid"
 		where = append(where, "torrent_releases_fts MATCH ?")
 		args = append(args, m)
 		order = "f.rank, t.id"
 	}
-	switch b.Sort {
-	case SortPeers:
-		order = "t.peers_week DESC, t.id DESC"
-	case SortLastSeen:
-		order = "t.last_seen DESC, t.id DESC"
-	case SortSize:
-		order = "t.size DESC, t.id DESC"
+	if o, ok := orders[b.Sort]; ok {
+		order = o
 	}
-	switch {
-	case b.UnknownKind:
-		where = append(where, "t.kind IS NULL")
-	case b.Kind != "":
-		where = append(where, "t.kind = ?")
-		args = append(args, b.Kind)
+	if len(b.Kinds) > 0 {
+		var or []string
+		var kinds []any
+		for _, k := range b.Kinds {
+			if k == "" {
+				or = append(or, "t.kind IS NULL")
+			} else {
+				kinds = append(kinds, k)
+			}
+		}
+		if len(kinds) > 0 {
+			or = append(or, "t.kind IN ("+placeholders(len(kinds))+")")
+			args = append(args, kinds...)
+		}
+		where = append(where, "("+strings.Join(or, " OR ")+")")
 	}
 	if len(b.Exclude) > 0 {
 		where = append(where, "coalesce(t.kind, '') NOT IN ("+placeholders(len(b.Exclude))+")")
@@ -577,13 +615,20 @@ func (s *Store) Page(ctx context.Context, b Browse) ([]Release, int64, error) {
 			args = append(args, k)
 		}
 	}
-	if b.AudioMarker {
-		where = append(where, "EXISTS (SELECT 1 FROM torrent_audio a WHERE a.torrent_id = t.id AND a.language = ? AND a.marker)")
-		args = append(args, b.AudioLanguage)
+	if b.Matched != nil {
+		if *b.Matched {
+			where = append(where, "t.work IS NOT NULL")
+		} else {
+			where = append(where, "t.work IS NULL")
+		}
 	}
-	if b.MinAudioProbability != nil {
-		where = append(where, "EXISTS (SELECT 1 FROM torrent_audio a WHERE a.torrent_id = t.id AND a.language = ? AND a.probability >= ?)")
-		args = append(args, b.AudioLanguage, *b.MinAudioProbability)
+	if b.Quality != "" {
+		where = append(where, "t.quality = ?")
+		args = append(args, b.Quality)
+	}
+	if cond, cargs := voiceTest(b.Voice, b.AudioLanguage, "t"); cond != "" {
+		where = append(where, cond)
+		args = append(args, cargs...)
 	}
 	if b.Source != "" {
 		where = append(where, "t.source = ?")
@@ -635,12 +680,11 @@ type Card struct {
 	Stored int
 	// Peers are the release's distinct peers over each window.
 	Peers PeerCounts
-	// Work is the release's work, zero without a work key; Releases counts
-	// its releases of any kind and ReleaseRank is the release's place among
-	// them by PeersWeek, 1 first.
-	Work        Work
-	Releases    int64
-	ReleaseRank int
+	// Work is the release's work, nil while its title key is matched to
+	// none; RankInWork is the release's place among the work's releases by
+	// PeersWeek, 1 first, and 0 without a work.
+	Work       *Summary
+	RankInWork int
 }
 
 // Card returns the stored release with the hash, its first files, at most
@@ -661,20 +705,18 @@ func (s *Store) Card(ctx context.Context, h Hash, files int, now time.Time) (Car
 	if c.Peers, err = s.Peers(ctx, r.ID, now); err != nil {
 		return Card{}, err
 	}
-	if r.WorkKey == "" {
+	if r.Work == 0 {
 		return c, nil
 	}
-	kind := ""
-	if slices.Contains(TopKinds, r.Kind) {
-		kind = r.Kind
-	}
-	works, err := s.works(ctx, kind, []string{r.WorkKey}, VoiceAny)
+	sums, err := s.Summaries(ctx, []int64{r.Work})
 	if err != nil {
 		return Card{}, err
 	}
-	c.Work = works[r.WorkKey]
-	if err := s.r.QueryRowContext(ctx, `SELECT count(*), 1 + count(*) FILTER (WHERE peers_week > ? OR peers_week = ? AND id > ?)
-		FROM torrent_releases WHERE work_key = ?`, r.PeersWeek, r.PeersWeek, r.ID, r.WorkKey).Scan(&c.Releases, &c.ReleaseRank); err != nil {
+	if w, ok := sums[r.Work]; ok {
+		c.Work = &w
+	}
+	if err := s.r.QueryRowContext(ctx, `SELECT 1 + count(*) FROM torrent_releases WHERE work = ? AND (peers_week > ? OR peers_week = ? AND id > ?)`,
+		r.Work, r.PeersWeek, r.PeersWeek, r.ID).Scan(&c.RankInWork); err != nil {
 		return Card{}, err
 	}
 	return c, nil
@@ -770,22 +812,6 @@ func (s *Store) Stats(ctx context.Context, now time.Time, days int) (Stats, erro
 		return Stats{}, err
 	}
 	return st, nil
-}
-
-// scanReleasePeers scans releaseColumns followed by a peer count.
-func scanReleasePeers(rows *sql.Rows) (Release, int64, error) {
-	var r Release
-	var hash []byte
-	var first, last, peers int64
-	err := rows.Scan(&r.ID, &hash, &r.Name, &r.Size, &r.FileCount, &r.Kind, &r.KindLayer, &r.KindConfidence, &r.Source, &r.SourceConfidence,
-		&r.Classified, &first, &last, &r.TitleKey, &r.WorkKey, &r.Year, &r.Season, &r.PeersWeek, &peers)
-	if err != nil {
-		return Release{}, 0, err
-	}
-	r.Hash = Hash(hash)
-	r.FirstSeen = time.Unix(first, 0).UTC()
-	r.LastSeen = time.Unix(last, 0).UTC()
-	return r, peers, nil
 }
 
 // pendingCount counts the torrents Unclassified selects.

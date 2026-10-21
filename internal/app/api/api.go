@@ -124,7 +124,12 @@ func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 }
 
 func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, mem *memconn.Listener) error {
+	var titles search.TitleSearch
+	if c.matcher != nil {
+		titles = c.matcher
+	}
 	handler, err := server.New(server.Config{
+		TMDB:         titles,
 		Store:        s,
 		Queue:        q,
 		IngestToken:  cfg.IngestToken,

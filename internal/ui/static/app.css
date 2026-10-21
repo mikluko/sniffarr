@@ -142,15 +142,49 @@ h2.tm-title{margin:0;font-size:17px;font-weight:600;text-transform:none;letter-s
 .attr img{height:12px;width:auto;display:block}
 .home .attr{justify-content:center;padding:0 16px 16px;border-top:none}
 
+/* dubs */
+.t td.au{white-space:normal;min-width:220px}
+.t td.au div{max-width:36ch}
+.hint{margin:0;padding:6px 10px;background:var(--alt);border-radius:3px;max-width:100ch}
+
+/* titles list (search) */
+.results{display:flex;flex-direction:column;gap:10px}
+.wlist{list-style:none;margin:0;padding:0;border-top:1px solid var(--bd)}
+.wrow{border-bottom:1px solid var(--bd)}
+.wrow-a{display:flex;gap:12px;align-items:center;padding:6px 4px;color:var(--fg);text-decoration:none}
+.wrow-a:hover{background:var(--alt);text-decoration:none}
+.wrow-t{display:flex;flex-direction:column;gap:1px;flex:1 1 auto;min-width:0}
+.wrow-title{color:var(--ln);font-size:14px}
+.wrow-ours{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex:none;text-align:right}
+.only-tmdb .wrow-a{opacity:.62}
+.only-tmdb .wrow-a:hover,.only-tmdb .wrow-a:focus{opacity:1}
+
+/* title page */
+.tm-page{max-width:none}
+.tm-page h1.tm-title{font-size:22px}
+.tm-over-long{-webkit-line-clamp:6}
+.ours{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)}
+.ours .au div{white-space:normal}
+.rels{display:flex;flex-direction:column;gap:8px}
+.rels h2 span{text-transform:none;letter-spacing:0;font-weight:400}
+.rels .filters input.num{width:52px}
+
+/* torrents */
+.th-ph{display:inline-flex;align-items:center;justify-content:center;height:42px;border:1px dashed var(--bd);background:none;color:var(--mu);font-size:12px;box-sizing:border-box}
+a.thl{flex:none;line-height:0}
+a.orig{display:block;font-size:12px}
+.t.rt td{vertical-align:middle}
+
 @media (max-width:640px){
   .search>button,.filters select{min-height:40px}
   /* results collapse to two-line rows: name, then size · kind · dub · source · last seen */
-  #results thead{display:none}
-  #results .t tr{display:block;padding:6px 0;border-bottom:1px solid var(--bd)}
-  #results .t td{display:inline;border:none;padding:0 8px 0 0}
-  #results .t td.nm{display:block;min-width:0;padding-bottom:2px}
-  #results .t td.v::before{content:attr(data-l) " ";color:var(--mu)}
-  #results .t td.fs{display:none}
+  #releases thead,#torrents thead{display:none}
+  #releases .t tr,#torrents .t tr{display:block;padding:6px 0;border-bottom:1px solid var(--bd)}
+  #releases .t td,#torrents .t td{display:inline;border:none;padding:0 8px 0 0}
+  #releases .t td.nm,#torrents .t td.nm{display:block;min-width:0;padding-bottom:2px}
+  #releases .t td.v::before{content:attr(data-l) " ";color:var(--mu)}
+  #releases .t td.fs,#torrents .t td.fs{display:none}
+  #torrents .t td.nm .tw{align-items:flex-start}
   .t td.pe::after,.t td.rl::after{content:" " attr(data-l);color:var(--mu)}
   /* top: rank + title, then peers · delta · releases · dub */
   .tt,.tt tbody{display:block}
@@ -163,8 +197,12 @@ h2.tm-title{margin:0;font-size:17px;font-weight:600;text-transform:none;letter-s
   .tt tr.wk td.pe{margin-left:28px}
   .tt td.v::before{content:attr(data-l) " ";color:var(--mu)}
   .tt tr.rel td{display:inline;padding-right:8px}
+  .tt tr.wk td.au{flex-basis:100%;margin-left:28px;min-width:0}
+  .t td.au div{white-space:normal}
   .tt tr.rel td.nm{display:block}
   .topctl .at{margin-left:0}
+  .wrow-a{flex-wrap:wrap}
+  .wrow-ours{flex-basis:100%;flex-direction:row;flex-wrap:wrap;gap:2px 10px;align-items:baseline;padding-left:52px;text-align:left}
   .kpis .at{margin-left:0}
   .tm{gap:12px;padding:10px}
   .tm-poster{width:96px;height:144px}

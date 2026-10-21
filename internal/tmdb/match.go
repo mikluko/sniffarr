@@ -1,5 +1,6 @@
 // Package tmdb matches title keys to works on TMDB, so that every release
-// of a movie or series can be found by the work's IDs.
+// of a movie or series can be found by the work's IDs, and searches TMDB
+// for the works a person looks for, released or not.
 package tmdb
 
 import (
@@ -38,9 +39,11 @@ const none = "none"
 // Store is the part of the store matching uses.
 type Store interface {
 	UnmatchedTitles(ctx context.Context, keys []string, before time.Time, limit int) ([]store.TitleKey, error)
-	RecordTitle(ctx context.Context, key string, t store.Title, at time.Time) error
-	WithoutDetails(ctx context.Context, limit int) ([]store.Matched, error)
-	RecordDetails(ctx context.Context, key string, d store.Details, ids []store.ExternalID, at time.Time) error
+	RecordMatch(ctx context.Context, key string, f store.Found, at time.Time) (int64, bool, error)
+	WithoutDetails(ctx context.Context, limit int) ([]store.Due, error)
+	RecordDetails(ctx context.Context, work int64, d store.Details, ids []store.ExternalID, at time.Time) error
+	CachedSearch(ctx context.Context, typ, query string, after time.Time) ([]int64, bool, error)
+	RecordSearch(ctx context.Context, typ, query string, hits []store.Hit, at time.Time) ([]int64, error)
 }
 
 // languages are the languages details are stored in, each with the tag TMDB
@@ -95,8 +98,8 @@ func (m *Matcher) Unmatched(ctx context.Context, keys []string, limit int) ([]st
 // under layer jev; or no match. It records nothing when it fails, except
 // for a request TMDB refuses for good, which is recorded as a failed match.
 // It returns classify.ErrBudget when the Chooser's budget is spent. A match
-// recorded, it fetches the work's details as Details does; when that fails
-// the match stays without them for Worker's backfill.
+// to a work whose details are not fetched yet fetches them as Details does;
+// when that fails the work stays without them for Worker's backfill.
 func (m *Matcher) Match(ctx context.Context, k store.TitleKey) error {
 	_, err, _ := m.group.Do(k.Key, func() (any, error) {
 		return nil, m.match(ctx, k)
@@ -105,26 +108,27 @@ func (m *Matcher) Match(ctx context.Context, k store.TitleKey) error {
 }
 
 func (m *Matcher) match(ctx context.Context, k store.TitleKey) error {
-	t, id, err := m.find(ctx, k)
+	f, err := m.find(ctx, k)
 	var tErr *Error
 	switch {
 	case errors.As(err, &tErr) && tErr.Permanent():
-		t = store.Title{Error: tErr.Error()}
+		f = store.Found{Error: tErr.Error()}
 	case err != nil:
 		return err
 	}
-	if err := m.Store.RecordTitle(ctx, k.Key, t, m.now()); err != nil {
-		return fmt.Errorf("record title: %w", err)
+	work, detailed, err := m.Store.RecordMatch(ctx, k.Key, f, m.now())
+	if err != nil {
+		return fmt.Errorf("record match: %w", err)
 	}
-	layer := t.Layer
+	layer := f.Layer
 	if layer == "" {
 		layer = "none"
 	}
 	m.count(ctx, layer)
-	if id == 0 {
+	if f.Hit == nil || detailed {
 		return nil
 	}
-	err = m.Details(ctx, store.Matched{Key: k.Key, Kind: k.Kind, ID: id})
+	err = m.Details(ctx, store.Due{Work: work, Type: f.Hit.Type, TMDBID: f.Hit.TMDBID})
 	switch {
 	case ctx.Err() != nil:
 		return ctx.Err()
@@ -134,21 +138,20 @@ func (m *Matcher) match(ctx context.Context, k store.TitleKey) error {
 	return nil
 }
 
-// Details fetches the details of the matched work in every language and
-// records them, with the work's IDs with other providers. A request TMDB
-// refuses for good records empty details, so the work is not asked about
-// again.
-func (m *Matcher) Details(ctx context.Context, k store.Matched) error {
-	d, ids, err := m.details(ctx, k.Kind == names.Series, k.ID)
+// Details fetches the details of the work in every language and records
+// them, with the work's IDs with other providers. A request TMDB refuses
+// for good records empty details, so the work is not asked about again.
+func (m *Matcher) Details(ctx context.Context, w store.Due) error {
+	d, ids, err := m.details(ctx, w.Type == store.TypeTV, w.TMDBID)
 	var tErr *Error
 	switch {
 	case errors.As(err, &tErr) && tErr.Permanent():
-		m.Log.Warn("tmdb refuses the work", "key", k.Key, "err", err)
+		m.Log.Warn("tmdb refuses the work", "type", w.Type, "id", w.TMDBID, "err", err)
 		d, ids = store.Details{}, nil
 	case err != nil:
 		return err
 	}
-	if err := m.Store.RecordDetails(ctx, k.Key, d, ids, m.now()); err != nil {
+	if err := m.Store.RecordDetails(ctx, w.Work, d, ids, m.now()); err != nil {
 		return fmt.Errorf("record details: %w", err)
 	}
 	return nil
@@ -157,11 +160,11 @@ func (m *Matcher) Details(ctx context.Context, k store.Matched) error {
 // details fetches the work in every language: the details and IDs of the
 // first language, and the texts of each with the poster of that language.
 func (m *Matcher) details(ctx context.Context, series bool, id int) (store.Details, []store.ExternalID, error) {
-	d := store.Details{Type: "movie", Texts: map[string]store.Text{}}
+	d := store.Details{Type: store.TypeMovie, Texts: map[string]store.Text{}}
 	if series {
-		d.Type = "tv"
+		d.Type = store.TypeTV
 	}
-	ids := []store.ExternalID{{Provider: store.ProviderTMDB, ID: strconv.Itoa(id)}}
+	var ids []store.ExternalID
 	for i, l := range languages {
 		r, err := m.Client.Details(ctx, series, id, l.tag)
 		if err != nil {
@@ -169,7 +172,7 @@ func (m *Matcher) details(ctx context.Context, series bool, id int) (store.Detai
 		}
 		switch {
 		case i == 0:
-			d.OriginalTitle, d.PosterPath, d.Rating, d.Votes, d.Runtime = r.OriginalTitle, r.PosterPath, r.Rating, r.Votes, r.Runtime
+			d.OriginalTitle, d.Year, d.PosterPath, d.Rating, d.Votes, d.Runtime = r.OriginalTitle, r.Year, r.PosterPath, r.Rating, r.Votes, r.Runtime
 			d.Status, d.Seasons, d.Countries, d.Language = r.Status, r.Seasons, r.Countries, r.Language
 			for _, p := range []string{store.ProviderIMDb, store.ProviderTVDB, store.ProviderWikidata} {
 				if id := r.IDs[p]; id != "" {
@@ -208,13 +211,13 @@ func workOf(k store.TitleKey) work {
 	return w
 }
 
-// find returns the match of the key and the TMDB ID of the work, with an
-// empty Layer and 0 when there is none.
-func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Title, int, error) {
+// find returns what looking the key up found, with a nil Hit when nothing
+// fits.
+func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Found, error) {
 	w := workOf(k)
 	found, err := m.search(ctx, w)
 	if err != nil {
-		return store.Title{}, 0, err
+		return store.Found{}, err
 	}
 	var fits []fit
 	for _, c := range found {
@@ -225,7 +228,7 @@ func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Title, int,
 	var pick fit
 	switch {
 	case len(fits) == 0:
-		return store.Title{}, 0, nil
+		return store.Found{}, nil
 	case len(fits) == 1:
 		pick = fits[0]
 		pick.layer = store.LayerTMDB
@@ -233,21 +236,39 @@ func (m *Matcher) find(ctx context.Context, k store.TitleKey) (store.Title, int,
 		pick = fits[dominant(fits)]
 		pick.confidence, pick.layer = dominantConfidence, store.LayerTMDB
 	case m.Chooser == nil:
-		return store.Title{}, 0, nil
+		return store.Found{}, nil
 	default:
 		var ok bool
 		if pick, ok, err = m.choose(ctx, k, fits); err != nil || !ok {
-			return store.Title{}, 0, err
+			return store.Found{}, err
 		}
 	}
-	t := store.Title{Year: pick.c.Year, Confidence: pick.confidence, Layer: pick.layer,
-		IDs: []store.ExternalID{{Provider: store.ProviderTMDB, ID: strconv.Itoa(pick.c.ID)}}}
-	return t, pick.c.ID, nil
+	typ := store.TypeMovie
+	if w.series {
+		typ = store.TypeTV
+	}
+	h := hit(typ, pick.c.lang, pick.c.Candidate)
+	return store.Found{Hit: &h, Confidence: pick.confidence, Layer: pick.layer}, nil
 }
 
-// candidate is a TMDB work with every title it was found under.
+// hit is the store's hit of a candidate of the type found in the language,
+// an IETF tag.
+func hit(typ, tag string, c Candidate) store.Hit {
+	h := store.Hit{Type: typ, TMDBID: c.ID, Title: c.Title, OriginalTitle: c.OriginalTitle, Overview: c.Overview,
+		PosterPath: c.PosterPath, Year: c.Year, Popularity: c.Popularity}
+	for _, l := range languages {
+		if l.tag == tag {
+			h.Lang = l.lang
+		}
+	}
+	return h
+}
+
+// candidate is a TMDB work with every title it was found under, and the
+// language it was first found in.
 type candidate struct {
 	Candidate
+	lang   string
 	titles []string
 }
 
@@ -272,7 +293,7 @@ func (m *Matcher) search(ctx context.Context, w work) ([]candidate, error) {
 				if !ok {
 					i = len(out)
 					index[c.ID] = i
-					out = append(out, candidate{Candidate: c})
+					out = append(out, candidate{Candidate: c, lang: lang})
 				}
 				out[i].titles = append(out[i].titles, c.Title, c.OriginalTitle)
 			}

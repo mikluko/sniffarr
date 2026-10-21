@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -189,28 +188,6 @@ func TestReuseByKey(t *testing.T) {
 	require.Equal(t, LayerReuse, r.KindLayer)
 }
 
-func TestWorkKeysFilled(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "test.db")
-	s, db := openAt(t, path)
-	tr := torrent(1, "Severance.S02E01.1080p.WEB-DL")
-	tr.Kind, tr.KindLayer, tr.TitleKey = "series", LayerRules, "s:severance"
-	_, _, err := s.Insert(ctx, tr)
-	require.NoError(t, err)
-	r, err := s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Empty(t, r.WorkKey, "Insert takes the work key it is given")
-	require.NoError(t, db.Close())
-
-	s, db = openAt(t, path)
-	defer db.Close()
-	r, err = s.Get(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, "s:severance/2", r.WorkKey, "New derives the work key of a torrent stored without one")
-	require.Equal(t, 2, r.Season)
-	require.Zero(t, r.Year)
-}
-
 // fill stores five torrents: 1 a rules movie with a Russian marker, 2 a
 // classified web series, 3 and 4 of unknown kind with a script hint, 3 seen
 // a day after the rest, and 5 a large adult one; and rejects two hashes.
@@ -270,10 +247,14 @@ func TestPage(t *testing.T) {
 		{name: "latest first", b: Browse{Exclude: []string{"adult"}, Limit: 2}, want: []Hash{hash(3), hash(4)}, total: 4},
 		{name: "offset", b: Browse{Exclude: []string{"adult"}, Offset: 2, Limit: 2}, want: []Hash{hash(2), hash(1)}, total: 4},
 		{name: "text", b: Browse{Text: "alien", Limit: 10}, want: []Hash{hash(1)}, total: 1},
-		{name: "kind", b: Browse{Kind: "series", Limit: 10}, want: []Hash{hash(2)}, total: 1},
-		{name: "unknown kind", b: Browse{UnknownKind: true, Limit: 10}, want: []Hash{hash(3), hash(4)}, total: 2},
-		{name: "marker", b: Browse{AudioLanguage: "ru", AudioMarker: true, Limit: 10}, want: []Hash{hash(1)}, total: 1},
-		{name: "probability", b: Browse{AudioLanguage: "ru", MinAudioProbability: new(0.5), Limit: 10}, want: []Hash{hash(2), hash(1)}, total: 2},
+		{name: "infohash", b: Browse{Text: "0400000000000000000000000000000000000000", Limit: 10}, want: []Hash{hash(4)}, total: 1},
+		{name: "kind", b: Browse{Kinds: []string{"series"}, Limit: 10}, want: []Hash{hash(2)}, total: 1},
+		{name: "kinds", b: Browse{Kinds: []string{"series", "adult"}, Limit: 10}, want: []Hash{hash(5), hash(2)}, total: 2},
+		{name: "unknown kind", b: Browse{Kinds: []string{""}, Limit: 10}, want: []Hash{hash(3), hash(4)}, total: 2},
+		{name: "marker", b: Browse{AudioLanguage: "ru", Voice: VoiceMarker, Limit: 10}, want: []Hash{hash(1)}, total: 1},
+		{name: "likely", b: Browse{AudioLanguage: "ru", Voice: VoiceLikely, Limit: 10}, want: []Hash{hash(2), hash(1)}, total: 2},
+		{name: "unmatched", b: Browse{Matched: new(false), Exclude: []string{"adult"}, Limit: 1}, want: []Hash{hash(3)}, total: 4},
+		{name: "matched", b: Browse{Matched: new(true), Limit: 10}, total: 0},
 		{name: "source", b: Browse{Source: "web", Limit: 10}, want: []Hash{hash(2)}, total: 1},
 		{name: "layer", b: Browse{KindLayer: LayerRules, Exclude: []string{"adult"}, Limit: 10}, want: []Hash{hash(1)}, total: 1},
 		{name: "size", b: Browse{MinSize: 8 << 30, Exclude: []string{"adult"}, Limit: 10}, want: []Hash{hash(2), hash(1)}, total: 2},
@@ -285,7 +266,7 @@ func TestPage(t *testing.T) {
 			require.Equal(t, tt.total, total)
 		})
 	}
-	rs, _, err := s.Page(ctx, Browse{Kind: "movie", Limit: 1})
+	rs, _, err := s.Page(ctx, Browse{Kinds: []string{"movie"}, Limit: 1})
 	require.NoError(t, err)
 	require.Len(t, rs[0].Audio, 1, "with the audio of each release")
 }
@@ -331,19 +312,20 @@ func TestCardPeersAndWork(t *testing.T) {
 	require.InDelta(t, 100, c.Peers.Day, 10)
 	require.Equal(t, c.Peers.Day, c.Peers.Week)
 	require.Equal(t, c.Peers.Day, c.Peers.Month)
-	require.Equal(t, "y:dune part two 2024", c.Work.Key)
-	require.Equal(t, "movie", c.Work.Kind)
+	require.NotNil(t, c.Work)
+	require.Equal(t, dune, c.Work.Work.ID)
+	require.Equal(t, "movie", c.Work.Work.Kind())
 	require.Equal(t, 1, c.Work.Rank)
-	require.Equal(t, int64(2), c.Releases)
-	require.Contains(t, []int{1, 2}, c.ReleaseRank)
+	require.Equal(t, int64(3), c.Work.Releases, "the releases of both title keys")
+	require.Equal(t, 2, c.RankInWork, "fewer peers than release 1, more than release 9")
 	other, err := s.Card(ctx, hash(1), 10, t0)
 	require.NoError(t, err)
-	require.Equal(t, 3, c.ReleaseRank+other.ReleaseRank, "the two releases take ranks 1 and 2")
+	require.Equal(t, 1, other.RankInWork)
 
 	c, err = s.Card(ctx, hash(8), 10, t0)
 	require.NoError(t, err)
-	require.Equal(t, Work{}, c.Work, "no work without a work key")
-	require.Zero(t, c.Releases)
+	require.Nil(t, c.Work, "no work while unmatched")
+	require.Zero(t, c.RankInWork)
 	require.InDelta(t, 500, c.Peers.Day, 50)
 }
 
@@ -358,5 +340,9 @@ func TestPageSort(t *testing.T) {
 	require.Equal(t, hash(3), rs[0].Hash, "a query sorts by peers too")
 	rs, _, err = s.Page(ctx, Browse{Sort: SortSize, Limit: 1})
 	require.NoError(t, err)
-	require.Equal(t, hash(8), rs[0].Hash, "all are the same size; the newest wins")
+	require.Equal(t, hash(10), rs[0].Hash, "all are the same size; the newest wins")
+	rs, total, err := s.Page(ctx, Browse{Matched: new(true), Quality: "720p", Limit: 10})
+	require.NoError(t, err)
+	require.Equal(t, []Hash{hash(9), hash(6)}, hashes(rs), "matched releases of a quality")
+	require.Equal(t, int64(2), total)
 }

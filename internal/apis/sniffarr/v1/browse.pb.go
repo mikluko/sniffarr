@@ -22,17 +22,20 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Sort is the order of a page.
+// Sort is the order of releases.
 type Sort int32
 
 const (
-	// Best text match first with a query, most recently seen first without.
+	// Best text match first with a query, most recently seen first without;
+	// most peers first for a work's releases.
 	Sort_SORT_UNSPECIFIED Sort = 0
 	// Most peers over the last 7 days first, as last computed.
 	Sort_SORT_PEERS     Sort = 1
 	Sort_SORT_LAST_SEEN Sort = 2
 	// Largest first.
 	Sort_SORT_SIZE Sort = 3
+	// Most recently first seen first.
+	Sort_SORT_FIRST_SEEN Sort = 4
 )
 
 // Enum value maps for Sort.
@@ -42,12 +45,14 @@ var (
 		1: "SORT_PEERS",
 		2: "SORT_LAST_SEEN",
 		3: "SORT_SIZE",
+		4: "SORT_FIRST_SEEN",
 	}
 	Sort_value = map[string]int32{
 		"SORT_UNSPECIFIED": 0,
 		"SORT_PEERS":       1,
 		"SORT_LAST_SEEN":   2,
 		"SORT_SIZE":        3,
+		"SORT_FIRST_SEEN":  4,
 	}
 )
 
@@ -135,16 +140,15 @@ func (Window) EnumDescriptor() ([]byte, []int) {
 	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{1}
 }
 
-// Voice narrows a work's releases by their audio in the first language the
-// server is configured with; without audio languages every narrowing admits
-// no release.
+// Voice narrows a work's releases by their audio in one language; without
+// the language among the server's every narrowing admits no release.
 type Voice int32
 
 const (
 	// Every release.
 	Voice_VOICE_UNSPECIFIED Voice = 0
-	// Releases whose probability of an audio track in the language is known
-	// and at least 0.5.
+	// Releases with a marker of the language, and those whose probability of
+	// an audio track in it is known and at least 0.5.
 	Voice_VOICE_LIKELY Voice = 1
 	// Releases with a marker of the language.
 	Voice_VOICE_MARKER Voice = 2
@@ -341,53 +345,45 @@ func (x *SettingsResponse) GetAudioLanguages() []string {
 	return nil
 }
 
-type PageRequest struct {
+// WorkSummary is a work as lists show it.
+type WorkSummary struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Words that the name or stored file paths must all contain.
-	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	// Only releases of this kind; KIND_UNSPECIFIED is any.
+	// The work's ID: "m" and the TMDB ID for a movie, "tv" and the TMDB ID
+	// for a series, as movies and series are numbered apart on TMDB.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// KIND_MOVIE or KIND_SERIES.
 	Kind Kind `protobuf:"varint,2,opt,name=kind,proto3,enum=sniffarr.v1.Kind" json:"kind,omitempty"`
-	// Only releases whose kind is unknown; kind must be KIND_UNSPECIFIED.
-	UnknownKind bool `protobuf:"varint,3,opt,name=unknown_kind,json=unknownKind,proto3" json:"unknown_kind,omitempty"`
-	// The language, a BCP-47 tag, that audio_marker and
-	// min_audio_probability apply to; required with either.
-	AudioLanguage *string `protobuf:"bytes,4,opt,name=audio_language,json=audioLanguage,proto3,oneof" json:"audio_language,omitempty"`
-	// Only releases with a marker of audio_language.
-	AudioMarker bool `protobuf:"varint,5,opt,name=audio_marker,json=audioMarker,proto3" json:"audio_marker,omitempty"`
-	// Only releases whose probability of an audio track in audio_language is
-	// known and at least this.
-	MinAudioProbability *float32 `protobuf:"fixed32,6,opt,name=min_audio_probability,json=minAudioProbability,proto3,oneof" json:"min_audio_probability,omitempty"`
-	// Only releases of this source; VIDEO_SOURCE_UNSPECIFIED is any.
-	Source VideoSource `protobuf:"varint,7,opt,name=source,proto3,enum=sniffarr.v1.VideoSource" json:"source,omitempty"`
-	// Only releases whose kind this layer decided; LAYER_UNSPECIFIED is any.
-	Layer Layer `protobuf:"varint,8,opt,name=layer,proto3,enum=sniffarr.v1.Layer" json:"layer,omitempty"`
-	// Only releases of at least this many bytes.
-	MinSize int64 `protobuf:"varint,9,opt,name=min_size,json=minSize,proto3" json:"min_size,omitempty"`
-	// Releases to skip.
-	Offset int32 `protobuf:"varint,10,opt,name=offset,proto3" json:"offset,omitempty"`
-	// At most this many releases: 50 when unset, never more than 500.
-	Limit int32 `protobuf:"varint,11,opt,name=limit,proto3" json:"limit,omitempty"`
-	Sort  Sort  `protobuf:"varint,12,opt,name=sort,proto3,enum=sniffarr.v1.Sort" json:"sort,omitempty"`
-	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
-	Lang          string `protobuf:"bytes,13,opt,name=lang,proto3" json:"lang,omitempty"`
+	// What TMDB tells of the work, with its texts in the request's lang;
+	// layer, confidence and checked_at are a release's match and set on a
+	// card only.
+	Tmdb *TMDBWork `protobuf:"bytes,3,opt,name=tmdb,proto3" json:"tmdb,omitempty"`
+	// Stored releases of the work; 0 for a work known from TMDB's search
+	// only.
+	Releases int64 `protobuf:"varint,4,opt,name=releases,proto3" json:"releases,omitempty"`
+	// Distinct peers of the work's releases over the last 7 days, as last
+	// computed.
+	Peers int64 `protobuf:"varint,5,opt,name=peers,proto3" json:"peers,omitempty"`
+	// The work's place in the last 7 days' top of its kind among all voices,
+	// 1 first; 0 when it is not in it.
+	Rank          int32 `protobuf:"varint,6,opt,name=rank,proto3" json:"rank,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *PageRequest) Reset() {
-	*x = PageRequest{}
+func (x *WorkSummary) Reset() {
+	*x = WorkSummary{}
 	mi := &file_sniffarr_v1_browse_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PageRequest) String() string {
+func (x *WorkSummary) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PageRequest) ProtoMessage() {}
+func (*WorkSummary) ProtoMessage() {}
 
-func (x *PageRequest) ProtoReflect() protoreflect.Message {
+func (x *WorkSummary) ProtoReflect() protoreflect.Message {
 	mi := &file_sniffarr_v1_browse_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -399,235 +395,920 @@ func (x *PageRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PageRequest.ProtoReflect.Descriptor instead.
-func (*PageRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use WorkSummary.ProtoReflect.Descriptor instead.
+func (*WorkSummary) Descriptor() ([]byte, []int) {
 	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *PageRequest) GetQuery() string {
+func (x *WorkSummary) GetId() string {
 	if x != nil {
-		return x.Query
+		return x.Id
 	}
 	return ""
 }
 
-func (x *PageRequest) GetKind() Kind {
+func (x *WorkSummary) GetKind() Kind {
 	if x != nil {
 		return x.Kind
 	}
 	return Kind_KIND_UNSPECIFIED
 }
 
-func (x *PageRequest) GetUnknownKind() bool {
+func (x *WorkSummary) GetTmdb() *TMDBWork {
 	if x != nil {
-		return x.UnknownKind
+		return x.Tmdb
 	}
-	return false
+	return nil
 }
 
-func (x *PageRequest) GetAudioLanguage() string {
-	if x != nil && x.AudioLanguage != nil {
-		return *x.AudioLanguage
-	}
-	return ""
-}
-
-func (x *PageRequest) GetAudioMarker() bool {
-	if x != nil {
-		return x.AudioMarker
-	}
-	return false
-}
-
-func (x *PageRequest) GetMinAudioProbability() float32 {
-	if x != nil && x.MinAudioProbability != nil {
-		return *x.MinAudioProbability
-	}
-	return 0
-}
-
-func (x *PageRequest) GetSource() VideoSource {
-	if x != nil {
-		return x.Source
-	}
-	return VideoSource_VIDEO_SOURCE_UNSPECIFIED
-}
-
-func (x *PageRequest) GetLayer() Layer {
-	if x != nil {
-		return x.Layer
-	}
-	return Layer_LAYER_UNSPECIFIED
-}
-
-func (x *PageRequest) GetMinSize() int64 {
-	if x != nil {
-		return x.MinSize
-	}
-	return 0
-}
-
-func (x *PageRequest) GetOffset() int32 {
-	if x != nil {
-		return x.Offset
-	}
-	return 0
-}
-
-func (x *PageRequest) GetLimit() int32 {
-	if x != nil {
-		return x.Limit
-	}
-	return 0
-}
-
-func (x *PageRequest) GetSort() Sort {
-	if x != nil {
-		return x.Sort
-	}
-	return Sort_SORT_UNSPECIFIED
-}
-
-func (x *PageRequest) GetLang() string {
-	if x != nil {
-		return x.Lang
-	}
-	return ""
-}
-
-type PageResponse struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Releases []*Release             `protobuf:"bytes,1,rep,name=releases,proto3" json:"releases,omitempty"`
-	// How many releases the filters select in all.
-	Total int64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	// On the first page of a query, up to 10 works of movies, series or music
-	// whose releases match it, most peers over the last 7 days first; empty
-	// otherwise.
-	Works         []*WorkMatch `protobuf:"bytes,3,rep,name=works,proto3" json:"works,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PageResponse) Reset() {
-	*x = PageResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PageResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PageResponse) ProtoMessage() {}
-
-func (x *PageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PageResponse.ProtoReflect.Descriptor instead.
-func (*PageResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *PageResponse) GetReleases() []*Release {
+func (x *WorkSummary) GetReleases() int64 {
 	if x != nil {
 		return x.Releases
 	}
-	return nil
-}
-
-func (x *PageResponse) GetTotal() int64 {
-	if x != nil {
-		return x.Total
-	}
 	return 0
 }
 
-func (x *PageResponse) GetWorks() []*WorkMatch {
-	if x != nil {
-		return x.Works
-	}
-	return nil
-}
-
-// WorkMatch is a work among the releases a query matches.
-type WorkMatch struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Work  *WorkRef               `protobuf:"bytes,1,opt,name=work,proto3" json:"work,omitempty"`
-	// Distinct peers of the work's releases over the last 7 days.
-	Peers int64 `protobuf:"varint,2,opt,name=peers,proto3" json:"peers,omitempty"`
-	// Stored releases of the work.
-	Releases int64 `protobuf:"varint,3,opt,name=releases,proto3" json:"releases,omitempty"`
-	// What TMDB knows of the work, by the title of its release with the most
-	// peers; absent while that title was never looked up.
-	Tmdb          *TMDBWork `protobuf:"bytes,4,opt,name=tmdb,proto3" json:"tmdb,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *WorkMatch) Reset() {
-	*x = WorkMatch{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *WorkMatch) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*WorkMatch) ProtoMessage() {}
-
-func (x *WorkMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use WorkMatch.ProtoReflect.Descriptor instead.
-func (*WorkMatch) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *WorkMatch) GetWork() *WorkRef {
-	if x != nil {
-		return x.Work
-	}
-	return nil
-}
-
-func (x *WorkMatch) GetPeers() int64 {
+func (x *WorkSummary) GetPeers() int64 {
 	if x != nil {
 		return x.Peers
 	}
 	return 0
 }
 
-func (x *WorkMatch) GetReleases() int64 {
+func (x *WorkSummary) GetRank() int32 {
 	if x != nil {
-		return x.Releases
+		return x.Rank
 	}
 	return 0
 }
 
-func (x *WorkMatch) GetTmdb() *TMDBWork {
+// WorkAudio sums up the audio in one language of a work's releases.
+type WorkAudio struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// BCP-47 tag.
+	Language string `protobuf:"bytes,1,opt,name=language,proto3" json:"language,omitempty"`
+	// Releases with a marker of the language, and their marks, each once,
+	// most frequent first.
+	Marked int64    `protobuf:"varint,2,opt,name=marked,proto3" json:"marked,omitempty"`
+	Marks  []string `protobuf:"bytes,3,rep,name=marks,proto3" json:"marks,omitempty"`
+	// Releases without a marker whose probability of an audio track in the
+	// language is at least 0.5.
+	Likely        int64 `protobuf:"varint,4,opt,name=likely,proto3" json:"likely,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorkAudio) Reset() {
+	*x = WorkAudio{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkAudio) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkAudio) ProtoMessage() {}
+
+func (x *WorkAudio) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[3]
 	if x != nil {
-		return x.Tmdb
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkAudio.ProtoReflect.Descriptor instead.
+func (*WorkAudio) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *WorkAudio) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *WorkAudio) GetMarked() int64 {
+	if x != nil {
+		return x.Marked
+	}
+	return 0
+}
+
+func (x *WorkAudio) GetMarks() []string {
+	if x != nil {
+		return x.Marks
+	}
+	return nil
+}
+
+func (x *WorkAudio) GetLikely() int64 {
+	if x != nil {
+		return x.Likely
+	}
+	return 0
+}
+
+type SearchTitlesRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Words the titles, or the release names and paths, must all contain.
+	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	// KIND_MOVIE or KIND_SERIES; KIND_UNSPECIFIED is both.
+	Kind Kind `protobuf:"varint,2,opt,name=kind,proto3,enum=sniffarr.v1.Kind" json:"kind,omitempty"`
+	// The language of TMDBWork texts and of TMDB's search, "ru" or "en";
+	// "en" when empty.
+	Lang          string `protobuf:"bytes,3,opt,name=lang,proto3" json:"lang,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchTitlesRequest) Reset() {
+	*x = SearchTitlesRequest{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchTitlesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchTitlesRequest) ProtoMessage() {}
+
+func (x *SearchTitlesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchTitlesRequest.ProtoReflect.Descriptor instead.
+func (*SearchTitlesRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SearchTitlesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *SearchTitlesRequest) GetKind() Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return Kind_KIND_UNSPECIFIED
+}
+
+func (x *SearchTitlesRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
+type SearchTitlesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The works with releases, then those without.
+	Works []*WorkSummary `protobuf:"bytes,1,rep,name=works,proto3" json:"works,omitempty"`
+	// How many of works have releases, and how many have none.
+	Ours          int32 `protobuf:"varint,2,opt,name=ours,proto3" json:"ours,omitempty"`
+	TmdbOnly      int32 `protobuf:"varint,3,opt,name=tmdb_only,json=tmdbOnly,proto3" json:"tmdb_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchTitlesResponse) Reset() {
+	*x = SearchTitlesResponse{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchTitlesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchTitlesResponse) ProtoMessage() {}
+
+func (x *SearchTitlesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchTitlesResponse.ProtoReflect.Descriptor instead.
+func (*SearchTitlesResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SearchTitlesResponse) GetWorks() []*WorkSummary {
+	if x != nil {
+		return x.Works
+	}
+	return nil
+}
+
+func (x *SearchTitlesResponse) GetOurs() int32 {
+	if x != nil {
+		return x.Ours
+	}
+	return 0
+}
+
+func (x *SearchTitlesResponse) GetTmdbOnly() int32 {
+	if x != nil {
+		return x.TmdbOnly
+	}
+	return 0
+}
+
+type TitleRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// WorkSummary.id.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+	Lang          string `protobuf:"bytes,2,opt,name=lang,proto3" json:"lang,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TitleRequest) Reset() {
+	*x = TitleRequest{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TitleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TitleRequest) ProtoMessage() {}
+
+func (x *TitleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TitleRequest.ProtoReflect.Descriptor instead.
+func (*TitleRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TitleRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TitleRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
+type TitleResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Work  *WorkSummary           `protobuf:"bytes,1,opt,name=work,proto3" json:"work,omitempty"`
+	// The work's places in the top of its kind among all voices, 0 where it
+	// is not in it.
+	Ranks *WindowRanks `protobuf:"bytes,2,opt,name=ranks,proto3" json:"ranks,omitempty"`
+	// Distinct peers of all the work's releases over each window.
+	Peers *PeerCounts `protobuf:"bytes,3,opt,name=peers,proto3" json:"peers,omitempty"`
+	// One entry per audio language the server is configured with, in its
+	// order.
+	Audio         []*WorkAudio `protobuf:"bytes,4,rep,name=audio,proto3" json:"audio,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TitleResponse) Reset() {
+	*x = TitleResponse{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TitleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TitleResponse) ProtoMessage() {}
+
+func (x *TitleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TitleResponse.ProtoReflect.Descriptor instead.
+func (*TitleResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TitleResponse) GetWork() *WorkSummary {
+	if x != nil {
+		return x.Work
+	}
+	return nil
+}
+
+func (x *TitleResponse) GetRanks() *WindowRanks {
+	if x != nil {
+		return x.Ranks
+	}
+	return nil
+}
+
+func (x *TitleResponse) GetPeers() *PeerCounts {
+	if x != nil {
+		return x.Peers
+	}
+	return nil
+}
+
+func (x *TitleResponse) GetAudio() []*WorkAudio {
+	if x != nil {
+		return x.Audio
+	}
+	return nil
+}
+
+// WindowRanks are places in the tops over each window.
+type WindowRanks struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Day           int32                  `protobuf:"varint,1,opt,name=day,proto3" json:"day,omitempty"`
+	Week          int32                  `protobuf:"varint,2,opt,name=week,proto3" json:"week,omitempty"`
+	Month         int32                  `protobuf:"varint,3,opt,name=month,proto3" json:"month,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WindowRanks) Reset() {
+	*x = WindowRanks{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WindowRanks) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WindowRanks) ProtoMessage() {}
+
+func (x *WindowRanks) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WindowRanks.ProtoReflect.Descriptor instead.
+func (*WindowRanks) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *WindowRanks) GetDay() int32 {
+	if x != nil {
+		return x.Day
+	}
+	return 0
+}
+
+func (x *WindowRanks) GetWeek() int32 {
+	if x != nil {
+		return x.Week
+	}
+	return 0
+}
+
+func (x *WindowRanks) GetMonth() int32 {
+	if x != nil {
+		return x.Month
+	}
+	return 0
+}
+
+type TitleReleasesRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// WorkSummary.id.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Only releases of this quality; QUALITY_UNSPECIFIED is any.
+	Quality Quality `protobuf:"varint,2,opt,name=quality,proto3,enum=sniffarr.v1.Quality" json:"quality,omitempty"`
+	// Only releases of this source; VIDEO_SOURCE_UNSPECIFIED is any.
+	Source VideoSource `protobuf:"varint,3,opt,name=source,proto3,enum=sniffarr.v1.VideoSource" json:"source,omitempty"`
+	// Only releases of at least and at most this many bytes; 0 is no bound.
+	MinSize int64 `protobuf:"varint,4,opt,name=min_size,json=minSize,proto3" json:"min_size,omitempty"`
+	MaxSize int64 `protobuf:"varint,5,opt,name=max_size,json=maxSize,proto3" json:"max_size,omitempty"`
+	// The language, a BCP-47 tag, voice applies to; required with a voice.
+	AudioLanguage *string `protobuf:"bytes,6,opt,name=audio_language,json=audioLanguage,proto3,oneof" json:"audio_language,omitempty"`
+	Voice         Voice   `protobuf:"varint,7,opt,name=voice,proto3,enum=sniffarr.v1.Voice" json:"voice,omitempty"`
+	// Only releases of this season and this episode; 0 is any. A whole
+	// season has no episode.
+	Season  int32 `protobuf:"varint,8,opt,name=season,proto3" json:"season,omitempty"`
+	Episode int32 `protobuf:"varint,9,opt,name=episode,proto3" json:"episode,omitempty"`
+	// SORT_PEERS, SORT_FIRST_SEEN or SORT_SIZE; SORT_UNSPECIFIED is
+	// SORT_PEERS.
+	Sort Sort `protobuf:"varint,10,opt,name=sort,proto3,enum=sniffarr.v1.Sort" json:"sort,omitempty"`
+	// Releases to skip.
+	Offset int32 `protobuf:"varint,11,opt,name=offset,proto3" json:"offset,omitempty"`
+	// At most this many releases: 50 when unset, never more than 500.
+	Limit         int32 `protobuf:"varint,12,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TitleReleasesRequest) Reset() {
+	*x = TitleReleasesRequest{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TitleReleasesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TitleReleasesRequest) ProtoMessage() {}
+
+func (x *TitleReleasesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TitleReleasesRequest.ProtoReflect.Descriptor instead.
+func (*TitleReleasesRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *TitleReleasesRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TitleReleasesRequest) GetQuality() Quality {
+	if x != nil {
+		return x.Quality
+	}
+	return Quality_QUALITY_UNSPECIFIED
+}
+
+func (x *TitleReleasesRequest) GetSource() VideoSource {
+	if x != nil {
+		return x.Source
+	}
+	return VideoSource_VIDEO_SOURCE_UNSPECIFIED
+}
+
+func (x *TitleReleasesRequest) GetMinSize() int64 {
+	if x != nil {
+		return x.MinSize
+	}
+	return 0
+}
+
+func (x *TitleReleasesRequest) GetMaxSize() int64 {
+	if x != nil {
+		return x.MaxSize
+	}
+	return 0
+}
+
+func (x *TitleReleasesRequest) GetAudioLanguage() string {
+	if x != nil && x.AudioLanguage != nil {
+		return *x.AudioLanguage
+	}
+	return ""
+}
+
+func (x *TitleReleasesRequest) GetVoice() Voice {
+	if x != nil {
+		return x.Voice
+	}
+	return Voice_VOICE_UNSPECIFIED
+}
+
+func (x *TitleReleasesRequest) GetSeason() int32 {
+	if x != nil {
+		return x.Season
+	}
+	return 0
+}
+
+func (x *TitleReleasesRequest) GetEpisode() int32 {
+	if x != nil {
+		return x.Episode
+	}
+	return 0
+}
+
+func (x *TitleReleasesRequest) GetSort() Sort {
+	if x != nil {
+		return x.Sort
+	}
+	return Sort_SORT_UNSPECIFIED
+}
+
+func (x *TitleReleasesRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *TitleReleasesRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type TitleReleasesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The releases selected, each with its audio, without tmdb.
+	Releases []*Release `protobuf:"bytes,1,rep,name=releases,proto3" json:"releases,omitempty"`
+	// The work's releases, and those the filters select.
+	Total   int64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	Matched int64 `protobuf:"varint,3,opt,name=matched,proto3" json:"matched,omitempty"`
+	// The seasons among the work's releases, in order.
+	Seasons       []int32 `protobuf:"varint,4,rep,packed,name=seasons,proto3" json:"seasons,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TitleReleasesResponse) Reset() {
+	*x = TitleReleasesResponse{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TitleReleasesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TitleReleasesResponse) ProtoMessage() {}
+
+func (x *TitleReleasesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TitleReleasesResponse.ProtoReflect.Descriptor instead.
+func (*TitleReleasesResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TitleReleasesResponse) GetReleases() []*Release {
+	if x != nil {
+		return x.Releases
+	}
+	return nil
+}
+
+func (x *TitleReleasesResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *TitleReleasesResponse) GetMatched() int64 {
+	if x != nil {
+		return x.Matched
+	}
+	return 0
+}
+
+func (x *TitleReleasesResponse) GetSeasons() []int32 {
+	if x != nil {
+		return x.Seasons
+	}
+	return nil
+}
+
+type TorrentsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Words that the name or stored file paths must all contain, or the 40
+	// hex digits of an infohash.
+	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	// Only releases of this kind; KIND_OTHER takes music, books and software
+	// in. KIND_UNSPECIFIED is any.
+	Kind Kind `protobuf:"varint,2,opt,name=kind,proto3,enum=sniffarr.v1.Kind" json:"kind,omitempty"`
+	// Only releases whose kind is unknown; kind must be KIND_UNSPECIFIED.
+	UnknownKind bool `protobuf:"varint,3,opt,name=unknown_kind,json=unknownKind,proto3" json:"unknown_kind,omitempty"`
+	// Only releases matched to a work, or only those matched to none.
+	Matched *bool `protobuf:"varint,4,opt,name=matched,proto3,oneof" json:"matched,omitempty"`
+	// Only releases of this quality; QUALITY_UNSPECIFIED is any.
+	Quality Quality `protobuf:"varint,5,opt,name=quality,proto3,enum=sniffarr.v1.Quality" json:"quality,omitempty"`
+	// The language, a BCP-47 tag, voice applies to; required with a voice.
+	AudioLanguage *string `protobuf:"bytes,6,opt,name=audio_language,json=audioLanguage,proto3,oneof" json:"audio_language,omitempty"`
+	Voice         Voice   `protobuf:"varint,7,opt,name=voice,proto3,enum=sniffarr.v1.Voice" json:"voice,omitempty"`
+	// Only releases of this source; VIDEO_SOURCE_UNSPECIFIED is any.
+	Source VideoSource `protobuf:"varint,8,opt,name=source,proto3,enum=sniffarr.v1.VideoSource" json:"source,omitempty"`
+	// Only releases whose kind this layer decided; LAYER_UNSPECIFIED is any.
+	Layer Layer `protobuf:"varint,9,opt,name=layer,proto3,enum=sniffarr.v1.Layer" json:"layer,omitempty"`
+	// Only releases of at least this many bytes.
+	MinSize int64 `protobuf:"varint,10,opt,name=min_size,json=minSize,proto3" json:"min_size,omitempty"`
+	Sort    Sort  `protobuf:"varint,11,opt,name=sort,proto3,enum=sniffarr.v1.Sort" json:"sort,omitempty"`
+	// Releases to skip.
+	Offset int32 `protobuf:"varint,12,opt,name=offset,proto3" json:"offset,omitempty"`
+	// At most this many releases: 50 when unset, never more than 500.
+	Limit int32 `protobuf:"varint,13,opt,name=limit,proto3" json:"limit,omitempty"`
+	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
+	Lang          string `protobuf:"bytes,14,opt,name=lang,proto3" json:"lang,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TorrentsRequest) Reset() {
+	*x = TorrentsRequest{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TorrentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TorrentsRequest) ProtoMessage() {}
+
+func (x *TorrentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TorrentsRequest.ProtoReflect.Descriptor instead.
+func (*TorrentsRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *TorrentsRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *TorrentsRequest) GetKind() Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return Kind_KIND_UNSPECIFIED
+}
+
+func (x *TorrentsRequest) GetUnknownKind() bool {
+	if x != nil {
+		return x.UnknownKind
+	}
+	return false
+}
+
+func (x *TorrentsRequest) GetMatched() bool {
+	if x != nil && x.Matched != nil {
+		return *x.Matched
+	}
+	return false
+}
+
+func (x *TorrentsRequest) GetQuality() Quality {
+	if x != nil {
+		return x.Quality
+	}
+	return Quality_QUALITY_UNSPECIFIED
+}
+
+func (x *TorrentsRequest) GetAudioLanguage() string {
+	if x != nil && x.AudioLanguage != nil {
+		return *x.AudioLanguage
+	}
+	return ""
+}
+
+func (x *TorrentsRequest) GetVoice() Voice {
+	if x != nil {
+		return x.Voice
+	}
+	return Voice_VOICE_UNSPECIFIED
+}
+
+func (x *TorrentsRequest) GetSource() VideoSource {
+	if x != nil {
+		return x.Source
+	}
+	return VideoSource_VIDEO_SOURCE_UNSPECIFIED
+}
+
+func (x *TorrentsRequest) GetLayer() Layer {
+	if x != nil {
+		return x.Layer
+	}
+	return Layer_LAYER_UNSPECIFIED
+}
+
+func (x *TorrentsRequest) GetMinSize() int64 {
+	if x != nil {
+		return x.MinSize
+	}
+	return 0
+}
+
+func (x *TorrentsRequest) GetSort() Sort {
+	if x != nil {
+		return x.Sort
+	}
+	return Sort_SORT_UNSPECIFIED
+}
+
+func (x *TorrentsRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *TorrentsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *TorrentsRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
+type TorrentsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Rows  []*TorrentRow          `protobuf:"bytes,1,rep,name=rows,proto3" json:"rows,omitempty"`
+	// How many releases the filters select in all.
+	Total         int64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TorrentsResponse) Reset() {
+	*x = TorrentsResponse{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TorrentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TorrentsResponse) ProtoMessage() {}
+
+func (x *TorrentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TorrentsResponse.ProtoReflect.Descriptor instead.
+func (*TorrentsResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *TorrentsResponse) GetRows() []*TorrentRow {
+	if x != nil {
+		return x.Rows
+	}
+	return nil
+}
+
+func (x *TorrentsResponse) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+// TorrentRow is a release with its work.
+type TorrentRow struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Release *Release               `protobuf:"bytes,1,opt,name=release,proto3" json:"release,omitempty"`
+	// Absent while the release's title key is matched to no work.
+	Work          *WorkSummary `protobuf:"bytes,2,opt,name=work,proto3" json:"work,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TorrentRow) Reset() {
+	*x = TorrentRow{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TorrentRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TorrentRow) ProtoMessage() {}
+
+func (x *TorrentRow) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TorrentRow.ProtoReflect.Descriptor instead.
+func (*TorrentRow) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *TorrentRow) GetRelease() *Release {
+	if x != nil {
+		return x.Release
+	}
+	return nil
+}
+
+func (x *TorrentRow) GetWork() *WorkSummary {
+	if x != nil {
+		return x.Work
 	}
 	return nil
 }
@@ -643,7 +1324,7 @@ type CardRequest struct {
 
 func (x *CardRequest) Reset() {
 	*x = CardRequest{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[5]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -655,7 +1336,7 @@ func (x *CardRequest) String() string {
 func (*CardRequest) ProtoMessage() {}
 
 func (x *CardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[5]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -668,7 +1349,7 @@ func (x *CardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CardRequest.ProtoReflect.Descriptor instead.
 func (*CardRequest) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{5}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CardRequest) GetInfohash() []byte {
@@ -686,27 +1367,28 @@ func (x *CardRequest) GetLang() string {
 }
 
 type CardResponse struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
-	Release *Release               `protobuf:"bytes,1,opt,name=release,proto3" json:"release,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The release; its tmdb is the state of its title key's match.
+	Release *Release `protobuf:"bytes,1,opt,name=release,proto3" json:"release,omitempty"`
 	// How the release's infohash was first learned of.
 	Discovery Source `protobuf:"varint,2,opt,name=discovery,proto3,enum=sniffarr.v1.Source" json:"discovery,omitempty"`
 	// The stored files, the largest of the release's, in stored order.
 	Files []*File `protobuf:"bytes,3,rep,name=files,proto3" json:"files,omitempty"`
 	// Distinct peers of the release over the last day, 7 days and 30 days.
 	Peers *PeerCounts `protobuf:"bytes,4,opt,name=peers,proto3" json:"peers,omitempty"`
-	// The release's work; absent when its name yields none.
-	Work *WorkRef `protobuf:"bytes,5,opt,name=work,proto3" json:"work,omitempty"`
-	// Stored releases of the work, and this release's place among them by
-	// peers over the last 7 days, 1 first; both 0 without a work.
-	Releases      int64 `protobuf:"varint,6,opt,name=releases,proto3" json:"releases,omitempty"`
-	ReleaseRank   int32 `protobuf:"varint,7,opt,name=release_rank,json=releaseRank,proto3" json:"release_rank,omitempty"`
+	// The release's work, with tmdb carrying the match's layer, confidence
+	// and checked_at; absent while its title key is matched to none.
+	Work *WorkSummary `protobuf:"bytes,8,opt,name=work,proto3" json:"work,omitempty"`
+	// The release's place among its work's releases by peers over the last
+	// 7 days, 1 first; 0 without a work.
+	RankInWork    int32 `protobuf:"varint,9,opt,name=rank_in_work,json=rankInWork,proto3" json:"rank_in_work,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CardResponse) Reset() {
 	*x = CardResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[6]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -718,7 +1400,7 @@ func (x *CardResponse) String() string {
 func (*CardResponse) ProtoMessage() {}
 
 func (x *CardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[6]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -731,7 +1413,7 @@ func (x *CardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CardResponse.ProtoReflect.Descriptor instead.
 func (*CardResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{6}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CardResponse) GetRelease() *Release {
@@ -762,23 +1444,16 @@ func (x *CardResponse) GetPeers() *PeerCounts {
 	return nil
 }
 
-func (x *CardResponse) GetWork() *WorkRef {
+func (x *CardResponse) GetWork() *WorkSummary {
 	if x != nil {
 		return x.Work
 	}
 	return nil
 }
 
-func (x *CardResponse) GetReleases() int64 {
+func (x *CardResponse) GetRankInWork() int32 {
 	if x != nil {
-		return x.Releases
-	}
-	return 0
-}
-
-func (x *CardResponse) GetReleaseRank() int32 {
-	if x != nil {
-		return x.ReleaseRank
+		return x.RankInWork
 	}
 	return 0
 }
@@ -795,7 +1470,7 @@ type PeerCounts struct {
 
 func (x *PeerCounts) Reset() {
 	*x = PeerCounts{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[7]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -807,7 +1482,7 @@ func (x *PeerCounts) String() string {
 func (*PeerCounts) ProtoMessage() {}
 
 func (x *PeerCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[7]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -820,7 +1495,7 @@ func (x *PeerCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerCounts.ProtoReflect.Descriptor instead.
 func (*PeerCounts) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{7}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PeerCounts) GetDay() int64 {
@@ -844,194 +1519,6 @@ func (x *PeerCounts) GetMonth() int64 {
 	return 0
 }
 
-// WorkRef names a work.
-type WorkRef struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// The key under which the work's releases meet, for Work.
-	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	// The kind of the work's releases: KIND_MOVIE, KIND_SERIES or KIND_MUSIC,
-	// or KIND_UNSPECIFIED while undecided.
-	Kind Kind `protobuf:"varint,2,opt,name=kind,proto3,enum=sniffarr.v1.Kind" json:"kind,omitempty"`
-	// The title of the release with the most peers over the last 7 days, as
-	// its name gives it.
-	Title string `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	// The year the name gives, 0 when none.
-	Year int32 `protobuf:"varint,4,opt,name=year,proto3" json:"year,omitempty"`
-	// The season of a series, 0 when the names give none.
-	Season int32 `protobuf:"varint,5,opt,name=season,proto3" json:"season,omitempty"`
-	// The work's place in the last 7 days' top of its kind among all voices,
-	// 1 first; 0 when it is not in it.
-	Rank          int32 `protobuf:"varint,6,opt,name=rank,proto3" json:"rank,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *WorkRef) Reset() {
-	*x = WorkRef{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *WorkRef) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*WorkRef) ProtoMessage() {}
-
-func (x *WorkRef) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use WorkRef.ProtoReflect.Descriptor instead.
-func (*WorkRef) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *WorkRef) GetKey() string {
-	if x != nil {
-		return x.Key
-	}
-	return ""
-}
-
-func (x *WorkRef) GetKind() Kind {
-	if x != nil {
-		return x.Kind
-	}
-	return Kind_KIND_UNSPECIFIED
-}
-
-func (x *WorkRef) GetTitle() string {
-	if x != nil {
-		return x.Title
-	}
-	return ""
-}
-
-func (x *WorkRef) GetYear() int32 {
-	if x != nil {
-		return x.Year
-	}
-	return 0
-}
-
-func (x *WorkRef) GetSeason() int32 {
-	if x != nil {
-		return x.Season
-	}
-	return 0
-}
-
-func (x *WorkRef) GetRank() int32 {
-	if x != nil {
-		return x.Rank
-	}
-	return 0
-}
-
-// Work is a work with what is known of its releases together.
-type Work struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Ref   *WorkRef               `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	// Stored releases of the work that the voice admits.
-	Releases int64 `protobuf:"varint,2,opt,name=releases,proto3" json:"releases,omitempty"`
-	// At most one entry per audio language the server is configured with, in
-	// tag order: the highest probability among the releases, and marker and
-	// script_hint when any release has them.
-	Audio []*Audio `protobuf:"bytes,3,rep,name=audio,proto3" json:"audio,omitempty"`
-	// The sources of the releases, each once, in enum order; a release
-	// without a source adds none.
-	Sources []VideoSource `protobuf:"varint,4,rep,packed,name=sources,proto3,enum=sniffarr.v1.VideoSource" json:"sources,omitempty"`
-	// The first sighting of the earliest release.
-	FirstSeen *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=first_seen,json=firstSeen,proto3" json:"first_seen,omitempty"`
-	// What TMDB knows of the work, by the title of its release with the most
-	// peers; absent while that title was never looked up.
-	Tmdb          *TMDBWork `protobuf:"bytes,6,opt,name=tmdb,proto3" json:"tmdb,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Work) Reset() {
-	*x = Work{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Work) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Work) ProtoMessage() {}
-
-func (x *Work) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Work.ProtoReflect.Descriptor instead.
-func (*Work) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *Work) GetRef() *WorkRef {
-	if x != nil {
-		return x.Ref
-	}
-	return nil
-}
-
-func (x *Work) GetReleases() int64 {
-	if x != nil {
-		return x.Releases
-	}
-	return 0
-}
-
-func (x *Work) GetAudio() []*Audio {
-	if x != nil {
-		return x.Audio
-	}
-	return nil
-}
-
-func (x *Work) GetSources() []VideoSource {
-	if x != nil {
-		return x.Sources
-	}
-	return nil
-}
-
-func (x *Work) GetFirstSeen() *timestamppb.Timestamp {
-	if x != nil {
-		return x.FirstSeen
-	}
-	return nil
-}
-
-func (x *Work) GetTmdb() *TMDBWork {
-	if x != nil {
-		return x.Tmdb
-	}
-	return nil
-}
-
 type HomeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1040,7 +1527,7 @@ type HomeRequest struct {
 
 func (x *HomeRequest) Reset() {
 	*x = HomeRequest{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[10]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1052,7 +1539,7 @@ func (x *HomeRequest) String() string {
 func (*HomeRequest) ProtoMessage() {}
 
 func (x *HomeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[10]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1065,7 +1552,7 @@ func (x *HomeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HomeRequest.ProtoReflect.Descriptor instead.
 func (*HomeRequest) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{10}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{17}
 }
 
 type HomeResponse struct {
@@ -1082,7 +1569,7 @@ type HomeResponse struct {
 
 func (x *HomeResponse) Reset() {
 	*x = HomeResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[11]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1094,7 +1581,7 @@ func (x *HomeResponse) String() string {
 func (*HomeResponse) ProtoMessage() {}
 
 func (x *HomeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[11]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1107,7 +1594,7 @@ func (x *HomeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HomeResponse.ProtoReflect.Descriptor instead.
 func (*HomeResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{11}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *HomeResponse) GetTotal() int64 {
@@ -1133,7 +1620,7 @@ func (x *HomeResponse) GetPending() int64 {
 
 type TopRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// KIND_MOVIE, KIND_SERIES or KIND_MUSIC; required.
+	// KIND_MOVIE or KIND_SERIES; required.
 	Kind   Kind   `protobuf:"varint,1,opt,name=kind,proto3,enum=sniffarr.v1.Kind" json:"kind,omitempty"`
 	Window Window `protobuf:"varint,2,opt,name=window,proto3,enum=sniffarr.v1.Window" json:"window,omitempty"`
 	Voice  Voice  `protobuf:"varint,3,opt,name=voice,proto3,enum=sniffarr.v1.Voice" json:"voice,omitempty"`
@@ -1142,14 +1629,17 @@ type TopRequest struct {
 	// At most this many entries: 20 when unset, never more than 100.
 	Limit int32 `protobuf:"varint,5,opt,name=limit,proto3" json:"limit,omitempty"`
 	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
-	Lang          string `protobuf:"bytes,6,opt,name=lang,proto3" json:"lang,omitempty"`
+	Lang string `protobuf:"bytes,6,opt,name=lang,proto3" json:"lang,omitempty"`
+	// The audio language, a BCP-47 tag, voice applies to; the server's first
+	// when empty.
+	VoiceLanguage string `protobuf:"bytes,7,opt,name=voice_language,json=voiceLanguage,proto3" json:"voice_language,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TopRequest) Reset() {
 	*x = TopRequest{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[12]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1161,7 +1651,7 @@ func (x *TopRequest) String() string {
 func (*TopRequest) ProtoMessage() {}
 
 func (x *TopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[12]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1174,7 +1664,7 @@ func (x *TopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopRequest.ProtoReflect.Descriptor instead.
 func (*TopRequest) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{12}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *TopRequest) GetKind() Kind {
@@ -1219,6 +1709,13 @@ func (x *TopRequest) GetLang() string {
 	return ""
 }
 
+func (x *TopRequest) GetVoiceLanguage() string {
+	if x != nil {
+		return x.VoiceLanguage
+	}
+	return ""
+}
+
 type TopResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Entries []*TopEntry            `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
@@ -1232,7 +1729,7 @@ type TopResponse struct {
 
 func (x *TopResponse) Reset() {
 	*x = TopResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[13]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1244,7 +1741,7 @@ func (x *TopResponse) String() string {
 func (*TopResponse) ProtoMessage() {}
 
 func (x *TopResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[13]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1257,7 +1754,7 @@ func (x *TopResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopResponse.ProtoReflect.Descriptor instead.
 func (*TopResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{13}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *TopResponse) GetEntries() []*TopEntry {
@@ -1281,25 +1778,34 @@ func (x *TopResponse) GetComputedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// TopEntry is one work of a top.
+// TopEntry is one work of a top, over the releases the voice admits.
 type TopEntry struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The work's place, 1 first.
 	Rank int32 `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
-	Work *Work `protobuf:"bytes,2,opt,name=work,proto3" json:"work,omitempty"`
 	// Distinct peers of the releases the voice admits over the window.
 	Peers int64 `protobuf:"varint,3,opt,name=peers,proto3" json:"peers,omitempty"`
 	// Change of peers against the window of the same length before it, as a
 	// fraction of the earlier count: 0.5 is half as many more; absent when the
 	// work had no peers then.
-	Delta         *float32 `protobuf:"fixed32,4,opt,name=delta,proto3,oneof" json:"delta,omitempty"`
+	Delta *float32 `protobuf:"fixed32,4,opt,name=delta,proto3,oneof" json:"delta,omitempty"`
+	// The work; releases counts those the voice admits.
+	Work *WorkSummary `protobuf:"bytes,5,opt,name=work,proto3" json:"work,omitempty"`
+	// One entry per audio language the server is configured with, in its
+	// order.
+	Audio []*WorkAudio `protobuf:"bytes,6,rep,name=audio,proto3" json:"audio,omitempty"`
+	// The sources of the releases, each once, in enum order; a release
+	// without a source adds none.
+	Sources []VideoSource `protobuf:"varint,7,rep,packed,name=sources,proto3,enum=sniffarr.v1.VideoSource" json:"sources,omitempty"`
+	// The first sighting of the earliest release.
+	FirstSeen     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=first_seen,json=firstSeen,proto3" json:"first_seen,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TopEntry) Reset() {
 	*x = TopEntry{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[14]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1311,7 +1817,7 @@ func (x *TopEntry) String() string {
 func (*TopEntry) ProtoMessage() {}
 
 func (x *TopEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[14]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1324,7 +1830,7 @@ func (x *TopEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopEntry.ProtoReflect.Descriptor instead.
 func (*TopEntry) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{14}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *TopEntry) GetRank() int32 {
@@ -1332,13 +1838,6 @@ func (x *TopEntry) GetRank() int32 {
 		return x.Rank
 	}
 	return 0
-}
-
-func (x *TopEntry) GetWork() *Work {
-	if x != nil {
-		return x.Work
-	}
-	return nil
 }
 
 func (x *TopEntry) GetPeers() int64 {
@@ -1355,210 +1854,32 @@ func (x *TopEntry) GetDelta() float32 {
 	return 0
 }
 
-type WorkRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// WorkRef.key.
-	Key    string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Window Window `protobuf:"varint,2,opt,name=window,proto3,enum=sniffarr.v1.Window" json:"window,omitempty"`
-	Voice  Voice  `protobuf:"varint,3,opt,name=voice,proto3,enum=sniffarr.v1.Voice" json:"voice,omitempty"`
-	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
-	Lang          string `protobuf:"bytes,4,opt,name=lang,proto3" json:"lang,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *WorkRequest) Reset() {
-	*x = WorkRequest{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *WorkRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*WorkRequest) ProtoMessage() {}
-
-func (x *WorkRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use WorkRequest.ProtoReflect.Descriptor instead.
-func (*WorkRequest) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *WorkRequest) GetKey() string {
-	if x != nil {
-		return x.Key
-	}
-	return ""
-}
-
-func (x *WorkRequest) GetWindow() Window {
-	if x != nil {
-		return x.Window
-	}
-	return Window_WINDOW_UNSPECIFIED
-}
-
-func (x *WorkRequest) GetVoice() Voice {
-	if x != nil {
-		return x.Voice
-	}
-	return Voice_VOICE_UNSPECIFIED
-}
-
-func (x *WorkRequest) GetLang() string {
-	if x != nil {
-		return x.Lang
-	}
-	return ""
-}
-
-type WorkResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Work  *Work                  `protobuf:"bytes,1,opt,name=work,proto3" json:"work,omitempty"`
-	// Distinct peers of the releases the voice admits over the window.
-	Peers int64 `protobuf:"varint,2,opt,name=peers,proto3" json:"peers,omitempty"`
-	// The releases the voice admits, most peers over the window first.
-	Releases []*WorkRelease `protobuf:"bytes,3,rep,name=releases,proto3" json:"releases,omitempty"`
-	// The work's place in the top of its kind for the window and voice, 1
-	// first; 0 when it is not in it.
-	Rank int32 `protobuf:"varint,4,opt,name=rank,proto3" json:"rank,omitempty"`
-	// TopEntry.delta of that place; absent when the work is not in the top or
-	// had no peers the window before.
-	Delta         *float32 `protobuf:"fixed32,5,opt,name=delta,proto3,oneof" json:"delta,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *WorkResponse) Reset() {
-	*x = WorkResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[16]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *WorkResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*WorkResponse) ProtoMessage() {}
-
-func (x *WorkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[16]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use WorkResponse.ProtoReflect.Descriptor instead.
-func (*WorkResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{16}
-}
-
-func (x *WorkResponse) GetWork() *Work {
+func (x *TopEntry) GetWork() *WorkSummary {
 	if x != nil {
 		return x.Work
 	}
 	return nil
 }
 
-func (x *WorkResponse) GetPeers() int64 {
+func (x *TopEntry) GetAudio() []*WorkAudio {
 	if x != nil {
-		return x.Peers
-	}
-	return 0
-}
-
-func (x *WorkResponse) GetReleases() []*WorkRelease {
-	if x != nil {
-		return x.Releases
+		return x.Audio
 	}
 	return nil
 }
 
-func (x *WorkResponse) GetRank() int32 {
+func (x *TopEntry) GetSources() []VideoSource {
 	if x != nil {
-		return x.Rank
-	}
-	return 0
-}
-
-func (x *WorkResponse) GetDelta() float32 {
-	if x != nil && x.Delta != nil {
-		return *x.Delta
-	}
-	return 0
-}
-
-// WorkRelease is a release of a work with its peers.
-type WorkRelease struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
-	Release *Release               `protobuf:"bytes,1,opt,name=release,proto3" json:"release,omitempty"`
-	// Distinct peers of the release over the window.
-	Peers         int64 `protobuf:"varint,2,opt,name=peers,proto3" json:"peers,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *WorkRelease) Reset() {
-	*x = WorkRelease{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[17]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *WorkRelease) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*WorkRelease) ProtoMessage() {}
-
-func (x *WorkRelease) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[17]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use WorkRelease.ProtoReflect.Descriptor instead.
-func (*WorkRelease) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{17}
-}
-
-func (x *WorkRelease) GetRelease() *Release {
-	if x != nil {
-		return x.Release
+		return x.Sources
 	}
 	return nil
 }
 
-func (x *WorkRelease) GetPeers() int64 {
+func (x *TopEntry) GetFirstSeen() *timestamppb.Timestamp {
 	if x != nil {
-		return x.Peers
+		return x.FirstSeen
 	}
-	return 0
+	return nil
 }
 
 type StatsRequest struct {
@@ -1572,7 +1893,7 @@ type StatsRequest struct {
 
 func (x *StatsRequest) Reset() {
 	*x = StatsRequest{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[18]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1584,7 +1905,7 @@ func (x *StatsRequest) String() string {
 func (*StatsRequest) ProtoMessage() {}
 
 func (x *StatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[18]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1597,7 +1918,7 @@ func (x *StatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatsRequest.ProtoReflect.Descriptor instead.
 func (*StatsRequest) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{18}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *StatsRequest) GetDays() int32 {
@@ -1611,8 +1932,9 @@ type StatsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Stored releases.
 	Total int64 `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
-	// Stored releases by kind, KIND_UNSPECIFIED for unknown; by the layer
-	// that decided the kind, LAYER_UNSPECIFIED for none; and by source,
+	// Stored releases by kind, KIND_UNSPECIFIED for unknown, with music,
+	// books and software counted as KIND_OTHER; by the layer that decided the
+	// kind, LAYER_UNSPECIFIED for none; and by source,
 	// VIDEO_SOURCE_UNSPECIFIED for none. A value with no releases is absent.
 	Kinds   []*KindCount   `protobuf:"bytes,2,rep,name=kinds,proto3" json:"kinds,omitempty"`
 	Layers  []*LayerCount  `protobuf:"bytes,3,rep,name=layers,proto3" json:"layers,omitempty"`
@@ -1636,7 +1958,7 @@ type StatsResponse struct {
 
 func (x *StatsResponse) Reset() {
 	*x = StatsResponse{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[19]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1648,7 +1970,7 @@ func (x *StatsResponse) String() string {
 func (*StatsResponse) ProtoMessage() {}
 
 func (x *StatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[19]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1661,7 +1983,7 @@ func (x *StatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatsResponse.ProtoReflect.Descriptor instead.
 func (*StatsResponse) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{19}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *StatsResponse) GetTotal() int64 {
@@ -1744,7 +2066,7 @@ type KindCount struct {
 
 func (x *KindCount) Reset() {
 	*x = KindCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[20]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1756,7 +2078,7 @@ func (x *KindCount) String() string {
 func (*KindCount) ProtoMessage() {}
 
 func (x *KindCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[20]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1769,7 +2091,7 @@ func (x *KindCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KindCount.ProtoReflect.Descriptor instead.
 func (*KindCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{20}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *KindCount) GetKind() Kind {
@@ -1796,7 +2118,7 @@ type LayerCount struct {
 
 func (x *LayerCount) Reset() {
 	*x = LayerCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[21]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1808,7 +2130,7 @@ func (x *LayerCount) String() string {
 func (*LayerCount) ProtoMessage() {}
 
 func (x *LayerCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[21]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1821,7 +2143,7 @@ func (x *LayerCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LayerCount.ProtoReflect.Descriptor instead.
 func (*LayerCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{21}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *LayerCount) GetLayer() Layer {
@@ -1848,7 +2170,7 @@ type SourceCount struct {
 
 func (x *SourceCount) Reset() {
 	*x = SourceCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[22]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1860,7 +2182,7 @@ func (x *SourceCount) String() string {
 func (*SourceCount) ProtoMessage() {}
 
 func (x *SourceCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[22]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1873,7 +2195,7 @@ func (x *SourceCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceCount.ProtoReflect.Descriptor instead.
 func (*SourceCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{22}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SourceCount) GetSource() VideoSource {
@@ -1905,7 +2227,7 @@ type AudioCounts struct {
 
 func (x *AudioCounts) Reset() {
 	*x = AudioCounts{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[23]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1917,7 +2239,7 @@ func (x *AudioCounts) String() string {
 func (*AudioCounts) ProtoMessage() {}
 
 func (x *AudioCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[23]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1930,7 +2252,7 @@ func (x *AudioCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AudioCounts.ProtoReflect.Descriptor instead.
 func (*AudioCounts) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{23}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *AudioCounts) GetLanguage() string {
@@ -1971,7 +2293,7 @@ type RejectionCount struct {
 
 func (x *RejectionCount) Reset() {
 	*x = RejectionCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[24]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1983,7 +2305,7 @@ func (x *RejectionCount) String() string {
 func (*RejectionCount) ProtoMessage() {}
 
 func (x *RejectionCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[24]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1996,7 +2318,7 @@ func (x *RejectionCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectionCount.ProtoReflect.Descriptor instead.
 func (*RejectionCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{24}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RejectionCount) GetReason() Rejection {
@@ -2020,69 +2342,106 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x18sniffarr/v1/browse.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18sniffarr/v1/ingest.proto\x1a\x18sniffarr/v1/search.proto\"\x11\n" +
 	"\x0fSettingsRequest\";\n" +
 	"\x10SettingsResponse\x12'\n" +
-	"\x0faudio_languages\x18\x01 \x03(\tR\x0eaudioLanguages\"\x82\x04\n" +
-	"\vPageRequest\x12\x14\n" +
+	"\x0faudio_languages\x18\x01 \x03(\tR\x0eaudioLanguages\"\xb5\x01\n" +
+	"\vWorkSummary\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12%\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12)\n" +
+	"\x04tmdb\x18\x03 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdb\x12\x1a\n" +
+	"\breleases\x18\x04 \x01(\x03R\breleases\x12\x14\n" +
+	"\x05peers\x18\x05 \x01(\x03R\x05peers\x12\x12\n" +
+	"\x04rank\x18\x06 \x01(\x05R\x04rank\"m\n" +
+	"\tWorkAudio\x12\x1a\n" +
+	"\blanguage\x18\x01 \x01(\tR\blanguage\x12\x16\n" +
+	"\x06marked\x18\x02 \x01(\x03R\x06marked\x12\x14\n" +
+	"\x05marks\x18\x03 \x03(\tR\x05marks\x12\x16\n" +
+	"\x06likely\x18\x04 \x01(\x03R\x06likely\"f\n" +
+	"\x13SearchTitlesRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\x12%\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12\x12\n" +
+	"\x04lang\x18\x03 \x01(\tR\x04lang\"w\n" +
+	"\x14SearchTitlesResponse\x12.\n" +
+	"\x05works\x18\x01 \x03(\v2\x18.sniffarr.v1.WorkSummaryR\x05works\x12\x12\n" +
+	"\x04ours\x18\x02 \x01(\x05R\x04ours\x12\x1b\n" +
+	"\ttmdb_only\x18\x03 \x01(\x05R\btmdbOnly\"2\n" +
+	"\fTitleRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\"\xca\x01\n" +
+	"\rTitleResponse\x12,\n" +
+	"\x04work\x18\x01 \x01(\v2\x18.sniffarr.v1.WorkSummaryR\x04work\x12.\n" +
+	"\x05ranks\x18\x02 \x01(\v2\x18.sniffarr.v1.WindowRanksR\x05ranks\x12-\n" +
+	"\x05peers\x18\x03 \x01(\v2\x17.sniffarr.v1.PeerCountsR\x05peers\x12,\n" +
+	"\x05audio\x18\x04 \x03(\v2\x16.sniffarr.v1.WorkAudioR\x05audio\"I\n" +
+	"\vWindowRanks\x12\x10\n" +
+	"\x03day\x18\x01 \x01(\x05R\x03day\x12\x12\n" +
+	"\x04week\x18\x02 \x01(\x05R\x04week\x12\x14\n" +
+	"\x05month\x18\x03 \x01(\x05R\x05month\"\xae\x03\n" +
+	"\x14TitleReleasesRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12.\n" +
+	"\aquality\x18\x02 \x01(\x0e2\x14.sniffarr.v1.QualityR\aquality\x120\n" +
+	"\x06source\x18\x03 \x01(\x0e2\x18.sniffarr.v1.VideoSourceR\x06source\x12\x19\n" +
+	"\bmin_size\x18\x04 \x01(\x03R\aminSize\x12\x19\n" +
+	"\bmax_size\x18\x05 \x01(\x03R\amaxSize\x12*\n" +
+	"\x0eaudio_language\x18\x06 \x01(\tH\x00R\raudioLanguage\x88\x01\x01\x12(\n" +
+	"\x05voice\x18\a \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\x12\x16\n" +
+	"\x06season\x18\b \x01(\x05R\x06season\x12\x18\n" +
+	"\aepisode\x18\t \x01(\x05R\aepisode\x12%\n" +
+	"\x04sort\x18\n" +
+	" \x01(\x0e2\x11.sniffarr.v1.SortR\x04sort\x12\x16\n" +
+	"\x06offset\x18\v \x01(\x05R\x06offset\x12\x14\n" +
+	"\x05limit\x18\f \x01(\x05R\x05limitB\x11\n" +
+	"\x0f_audio_language\"\x93\x01\n" +
+	"\x15TitleReleasesResponse\x120\n" +
+	"\breleases\x18\x01 \x03(\v2\x14.sniffarr.v1.ReleaseR\breleases\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x18\n" +
+	"\amatched\x18\x03 \x01(\x03R\amatched\x12\x18\n" +
+	"\aseasons\x18\x04 \x03(\x05R\aseasons\"\x95\x04\n" +
+	"\x0fTorrentsRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12%\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12!\n" +
-	"\funknown_kind\x18\x03 \x01(\bR\vunknownKind\x12*\n" +
-	"\x0eaudio_language\x18\x04 \x01(\tH\x00R\raudioLanguage\x88\x01\x01\x12!\n" +
-	"\faudio_marker\x18\x05 \x01(\bR\vaudioMarker\x127\n" +
-	"\x15min_audio_probability\x18\x06 \x01(\x02H\x01R\x13minAudioProbability\x88\x01\x01\x120\n" +
-	"\x06source\x18\a \x01(\x0e2\x18.sniffarr.v1.VideoSourceR\x06source\x12(\n" +
-	"\x05layer\x18\b \x01(\x0e2\x12.sniffarr.v1.LayerR\x05layer\x12\x19\n" +
-	"\bmin_size\x18\t \x01(\x03R\aminSize\x12\x16\n" +
-	"\x06offset\x18\n" +
-	" \x01(\x05R\x06offset\x12\x14\n" +
-	"\x05limit\x18\v \x01(\x05R\x05limit\x12%\n" +
-	"\x04sort\x18\f \x01(\x0e2\x11.sniffarr.v1.SortR\x04sort\x12\x12\n" +
-	"\x04lang\x18\r \x01(\tR\x04langB\x11\n" +
-	"\x0f_audio_languageB\x18\n" +
-	"\x16_min_audio_probability\"\x84\x01\n" +
-	"\fPageResponse\x120\n" +
-	"\breleases\x18\x01 \x03(\v2\x14.sniffarr.v1.ReleaseR\breleases\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x03R\x05total\x12,\n" +
-	"\x05works\x18\x03 \x03(\v2\x16.sniffarr.v1.WorkMatchR\x05works\"\x92\x01\n" +
-	"\tWorkMatch\x12(\n" +
-	"\x04work\x18\x01 \x01(\v2\x14.sniffarr.v1.WorkRefR\x04work\x12\x14\n" +
-	"\x05peers\x18\x02 \x01(\x03R\x05peers\x12\x1a\n" +
-	"\breleases\x18\x03 \x01(\x03R\breleases\x12)\n" +
-	"\x04tmdb\x18\x04 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdb\"=\n" +
+	"\funknown_kind\x18\x03 \x01(\bR\vunknownKind\x12\x1d\n" +
+	"\amatched\x18\x04 \x01(\bH\x00R\amatched\x88\x01\x01\x12.\n" +
+	"\aquality\x18\x05 \x01(\x0e2\x14.sniffarr.v1.QualityR\aquality\x12*\n" +
+	"\x0eaudio_language\x18\x06 \x01(\tH\x01R\raudioLanguage\x88\x01\x01\x12(\n" +
+	"\x05voice\x18\a \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\x120\n" +
+	"\x06source\x18\b \x01(\x0e2\x18.sniffarr.v1.VideoSourceR\x06source\x12(\n" +
+	"\x05layer\x18\t \x01(\x0e2\x12.sniffarr.v1.LayerR\x05layer\x12\x19\n" +
+	"\bmin_size\x18\n" +
+	" \x01(\x03R\aminSize\x12%\n" +
+	"\x04sort\x18\v \x01(\x0e2\x11.sniffarr.v1.SortR\x04sort\x12\x16\n" +
+	"\x06offset\x18\f \x01(\x05R\x06offset\x12\x14\n" +
+	"\x05limit\x18\r \x01(\x05R\x05limit\x12\x12\n" +
+	"\x04lang\x18\x0e \x01(\tR\x04langB\n" +
+	"\n" +
+	"\b_matchedB\x11\n" +
+	"\x0f_audio_language\"U\n" +
+	"\x10TorrentsResponse\x12+\n" +
+	"\x04rows\x18\x01 \x03(\v2\x17.sniffarr.v1.TorrentRowR\x04rows\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\"j\n" +
+	"\n" +
+	"TorrentRow\x12.\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\x12,\n" +
+	"\x04work\x18\x02 \x01(\v2\x18.sniffarr.v1.WorkSummaryR\x04work\"=\n" +
 	"\vCardRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
-	"\x04lang\x18\x02 \x01(\tR\x04lang\"\xb2\x02\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\"\xc3\x02\n" +
 	"\fCardResponse\x12.\n" +
 	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\x121\n" +
 	"\tdiscovery\x18\x02 \x01(\x0e2\x13.sniffarr.v1.SourceR\tdiscovery\x12'\n" +
 	"\x05files\x18\x03 \x03(\v2\x11.sniffarr.v1.FileR\x05files\x12-\n" +
-	"\x05peers\x18\x04 \x01(\v2\x17.sniffarr.v1.PeerCountsR\x05peers\x12(\n" +
-	"\x04work\x18\x05 \x01(\v2\x14.sniffarr.v1.WorkRefR\x04work\x12\x1a\n" +
-	"\breleases\x18\x06 \x01(\x03R\breleases\x12!\n" +
-	"\frelease_rank\x18\a \x01(\x05R\vreleaseRank\"H\n" +
+	"\x05peers\x18\x04 \x01(\v2\x17.sniffarr.v1.PeerCountsR\x05peers\x12,\n" +
+	"\x04work\x18\b \x01(\v2\x18.sniffarr.v1.WorkSummaryR\x04work\x12 \n" +
+	"\frank_in_work\x18\t \x01(\x05R\n" +
+	"rankInWorkJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\breleasesR\frelease_rank\"H\n" +
 	"\n" +
 	"PeerCounts\x12\x10\n" +
 	"\x03day\x18\x01 \x01(\x03R\x03day\x12\x12\n" +
 	"\x04week\x18\x02 \x01(\x03R\x04week\x12\x14\n" +
-	"\x05month\x18\x03 \x01(\x03R\x05month\"\x98\x01\n" +
-	"\aWorkRef\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12%\n" +
-	"\x04kind\x18\x02 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12\x14\n" +
-	"\x05title\x18\x03 \x01(\tR\x05title\x12\x12\n" +
-	"\x04year\x18\x04 \x01(\x05R\x04year\x12\x16\n" +
-	"\x06season\x18\x05 \x01(\x05R\x06season\x12\x12\n" +
-	"\x04rank\x18\x06 \x01(\x05R\x04rank\"\x8e\x02\n" +
-	"\x04Work\x12&\n" +
-	"\x03ref\x18\x01 \x01(\v2\x14.sniffarr.v1.WorkRefR\x03ref\x12\x1a\n" +
-	"\breleases\x18\x02 \x01(\x03R\breleases\x12(\n" +
-	"\x05audio\x18\x03 \x03(\v2\x12.sniffarr.v1.AudioR\x05audio\x122\n" +
-	"\asources\x18\x04 \x03(\x0e2\x18.sniffarr.v1.VideoSourceR\asources\x129\n" +
-	"\n" +
-	"first_seen\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeen\x12)\n" +
-	"\x04tmdb\x18\x06 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdb\"\r\n" +
+	"\x05month\x18\x03 \x01(\x03R\x05month\"\r\n" +
 	"\vHomeRequest\"W\n" +
 	"\fHomeResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x03R\x05total\x12\x17\n" +
 	"\anew_day\x18\x02 \x01(\x03R\x06newDay\x12\x18\n" +
-	"\apending\x18\x03 \x01(\x03R\apending\"\xcc\x01\n" +
+	"\apending\x18\x03 \x01(\x03R\apending\"\xf3\x01\n" +
 	"\n" +
 	"TopRequest\x12%\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12+\n" +
@@ -2090,33 +2449,23 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x05voice\x18\x03 \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\x12\x16\n" +
 	"\x06offset\x18\x04 \x01(\x05R\x06offset\x12\x14\n" +
 	"\x05limit\x18\x05 \x01(\x05R\x05limit\x12\x12\n" +
-	"\x04lang\x18\x06 \x01(\tR\x04lang\"\x91\x01\n" +
+	"\x04lang\x18\x06 \x01(\tR\x04lang\x12%\n" +
+	"\x0evoice_language\x18\a \x01(\tR\rvoiceLanguage\"\x91\x01\n" +
 	"\vTopResponse\x12/\n" +
 	"\aentries\x18\x01 \x03(\v2\x15.sniffarr.v1.TopEntryR\aentries\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12;\n" +
 	"\vcomputed_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"computedAt\"\x80\x01\n" +
+	"computedAt\"\xaa\x02\n" +
 	"\bTopEntry\x12\x12\n" +
-	"\x04rank\x18\x01 \x01(\x05R\x04rank\x12%\n" +
-	"\x04work\x18\x02 \x01(\v2\x11.sniffarr.v1.WorkR\x04work\x12\x14\n" +
+	"\x04rank\x18\x01 \x01(\x05R\x04rank\x12\x14\n" +
 	"\x05peers\x18\x03 \x01(\x03R\x05peers\x12\x19\n" +
-	"\x05delta\x18\x04 \x01(\x02H\x00R\x05delta\x88\x01\x01B\b\n" +
-	"\x06_delta\"\x8a\x01\n" +
-	"\vWorkRequest\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12+\n" +
-	"\x06window\x18\x02 \x01(\x0e2\x13.sniffarr.v1.WindowR\x06window\x12(\n" +
-	"\x05voice\x18\x03 \x01(\x0e2\x12.sniffarr.v1.VoiceR\x05voice\x12\x12\n" +
-	"\x04lang\x18\x04 \x01(\tR\x04lang\"\xba\x01\n" +
-	"\fWorkResponse\x12%\n" +
-	"\x04work\x18\x01 \x01(\v2\x11.sniffarr.v1.WorkR\x04work\x12\x14\n" +
-	"\x05peers\x18\x02 \x01(\x03R\x05peers\x124\n" +
-	"\breleases\x18\x03 \x03(\v2\x18.sniffarr.v1.WorkReleaseR\breleases\x12\x12\n" +
-	"\x04rank\x18\x04 \x01(\x05R\x04rank\x12\x19\n" +
-	"\x05delta\x18\x05 \x01(\x02H\x00R\x05delta\x88\x01\x01B\b\n" +
-	"\x06_delta\"S\n" +
-	"\vWorkRelease\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\x12\x14\n" +
-	"\x05peers\x18\x02 \x01(\x03R\x05peers\"\"\n" +
+	"\x05delta\x18\x04 \x01(\x02H\x00R\x05delta\x88\x01\x01\x12,\n" +
+	"\x04work\x18\x05 \x01(\v2\x18.sniffarr.v1.WorkSummaryR\x04work\x12,\n" +
+	"\x05audio\x18\x06 \x03(\v2\x16.sniffarr.v1.WorkAudioR\x05audio\x122\n" +
+	"\asources\x18\a \x03(\x0e2\x18.sniffarr.v1.VideoSourceR\asources\x129\n" +
+	"\n" +
+	"first_seen\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeenB\b\n" +
+	"\x06_deltaJ\x04\b\x02\x10\x03\"\"\n" +
 	"\fStatsRequest\x12\x12\n" +
 	"\x04days\x18\x01 \x01(\x05R\x04days\"\xa1\x03\n" +
 	"\rStatsResponse\x12\x14\n" +
@@ -2148,13 +2497,14 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\bunlikely\x18\x04 \x01(\x03R\bunlikely\"V\n" +
 	"\x0eRejectionCount\x12.\n" +
 	"\x06reason\x18\x01 \x01(\x0e2\x16.sniffarr.v1.RejectionR\x06reason\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x03R\x05count*O\n" +
+	"\x05count\x18\x02 \x01(\x03R\x05count*d\n" +
 	"\x04Sort\x12\x14\n" +
 	"\x10SORT_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +
 	"SORT_PEERS\x10\x01\x12\x12\n" +
 	"\x0eSORT_LAST_SEEN\x10\x02\x12\r\n" +
-	"\tSORT_SIZE\x10\x03*S\n" +
+	"\tSORT_SIZE\x10\x03\x12\x13\n" +
+	"\x0fSORT_FIRST_SEEN\x10\x04*S\n" +
 	"\x06Window\x12\x16\n" +
 	"\x12WINDOW_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +
@@ -2173,14 +2523,16 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x10REJECTION_COURSE\x10\x04\x12\x13\n" +
 	"\x0fREJECTION_SMALL\x10\x05\x12\x16\n" +
 	"\x12REJECTION_NO_MEDIA\x10\x06\x12\x14\n" +
-	"\x10REJECTION_SCRIPT\x10\a2\xc6\x03\n" +
-	"\rBrowseService\x12;\n" +
-	"\x04Page\x12\x18.sniffarr.v1.PageRequest\x1a\x19.sniffarr.v1.PageResponse\x12;\n" +
+	"\x10REJECTION_SCRIPT\x10\a2\x82\x05\n" +
+	"\rBrowseService\x12S\n" +
+	"\fSearchTitles\x12 .sniffarr.v1.SearchTitlesRequest\x1a!.sniffarr.v1.SearchTitlesResponse\x12>\n" +
+	"\x05Title\x12\x19.sniffarr.v1.TitleRequest\x1a\x1a.sniffarr.v1.TitleResponse\x12V\n" +
+	"\rTitleReleases\x12!.sniffarr.v1.TitleReleasesRequest\x1a\".sniffarr.v1.TitleReleasesResponse\x12G\n" +
+	"\bTorrents\x12\x1c.sniffarr.v1.TorrentsRequest\x1a\x1d.sniffarr.v1.TorrentsResponse\x12;\n" +
 	"\x04Card\x12\x18.sniffarr.v1.CardRequest\x1a\x19.sniffarr.v1.CardResponse\x12>\n" +
 	"\x05Stats\x12\x19.sniffarr.v1.StatsRequest\x1a\x1a.sniffarr.v1.StatsResponse\x12;\n" +
 	"\x04Home\x12\x18.sniffarr.v1.HomeRequest\x1a\x19.sniffarr.v1.HomeResponse\x128\n" +
-	"\x03Top\x12\x17.sniffarr.v1.TopRequest\x1a\x18.sniffarr.v1.TopResponse\x12;\n" +
-	"\x04Work\x12\x18.sniffarr.v1.WorkRequest\x1a\x19.sniffarr.v1.WorkResponse\x12G\n" +
+	"\x03Top\x12\x17.sniffarr.v1.TopRequest\x1a\x18.sniffarr.v1.TopResponse\x12G\n" +
 	"\bSettings\x12\x1c.sniffarr.v1.SettingsRequest\x1a\x1d.sniffarr.v1.SettingsResponseBBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
 
 var (
@@ -2196,7 +2548,7 @@ func file_sniffarr_v1_browse_proto_rawDescGZIP() []byte {
 }
 
 var file_sniffarr_v1_browse_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_sniffarr_v1_browse_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_sniffarr_v1_browse_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_sniffarr_v1_browse_proto_goTypes = []any{
 	(Sort)(0),                     // 0: sniffarr.v1.Sort
 	(Window)(0),                   // 1: sniffarr.v1.Window
@@ -2204,98 +2556,112 @@ var file_sniffarr_v1_browse_proto_goTypes = []any{
 	(Rejection)(0),                // 3: sniffarr.v1.Rejection
 	(*SettingsRequest)(nil),       // 4: sniffarr.v1.SettingsRequest
 	(*SettingsResponse)(nil),      // 5: sniffarr.v1.SettingsResponse
-	(*PageRequest)(nil),           // 6: sniffarr.v1.PageRequest
-	(*PageResponse)(nil),          // 7: sniffarr.v1.PageResponse
-	(*WorkMatch)(nil),             // 8: sniffarr.v1.WorkMatch
-	(*CardRequest)(nil),           // 9: sniffarr.v1.CardRequest
-	(*CardResponse)(nil),          // 10: sniffarr.v1.CardResponse
-	(*PeerCounts)(nil),            // 11: sniffarr.v1.PeerCounts
-	(*WorkRef)(nil),               // 12: sniffarr.v1.WorkRef
-	(*Work)(nil),                  // 13: sniffarr.v1.Work
-	(*HomeRequest)(nil),           // 14: sniffarr.v1.HomeRequest
-	(*HomeResponse)(nil),          // 15: sniffarr.v1.HomeResponse
-	(*TopRequest)(nil),            // 16: sniffarr.v1.TopRequest
-	(*TopResponse)(nil),           // 17: sniffarr.v1.TopResponse
-	(*TopEntry)(nil),              // 18: sniffarr.v1.TopEntry
-	(*WorkRequest)(nil),           // 19: sniffarr.v1.WorkRequest
-	(*WorkResponse)(nil),          // 20: sniffarr.v1.WorkResponse
-	(*WorkRelease)(nil),           // 21: sniffarr.v1.WorkRelease
-	(*StatsRequest)(nil),          // 22: sniffarr.v1.StatsRequest
-	(*StatsResponse)(nil),         // 23: sniffarr.v1.StatsResponse
-	(*KindCount)(nil),             // 24: sniffarr.v1.KindCount
-	(*LayerCount)(nil),            // 25: sniffarr.v1.LayerCount
-	(*SourceCount)(nil),           // 26: sniffarr.v1.SourceCount
-	(*AudioCounts)(nil),           // 27: sniffarr.v1.AudioCounts
-	(*RejectionCount)(nil),        // 28: sniffarr.v1.RejectionCount
-	(Kind)(0),                     // 29: sniffarr.v1.Kind
-	(VideoSource)(0),              // 30: sniffarr.v1.VideoSource
-	(Layer)(0),                    // 31: sniffarr.v1.Layer
-	(*Release)(nil),               // 32: sniffarr.v1.Release
-	(*TMDBWork)(nil),              // 33: sniffarr.v1.TMDBWork
-	(Source)(0),                   // 34: sniffarr.v1.Source
-	(*File)(nil),                  // 35: sniffarr.v1.File
-	(*Audio)(nil),                 // 36: sniffarr.v1.Audio
-	(*timestamppb.Timestamp)(nil), // 37: google.protobuf.Timestamp
+	(*WorkSummary)(nil),           // 6: sniffarr.v1.WorkSummary
+	(*WorkAudio)(nil),             // 7: sniffarr.v1.WorkAudio
+	(*SearchTitlesRequest)(nil),   // 8: sniffarr.v1.SearchTitlesRequest
+	(*SearchTitlesResponse)(nil),  // 9: sniffarr.v1.SearchTitlesResponse
+	(*TitleRequest)(nil),          // 10: sniffarr.v1.TitleRequest
+	(*TitleResponse)(nil),         // 11: sniffarr.v1.TitleResponse
+	(*WindowRanks)(nil),           // 12: sniffarr.v1.WindowRanks
+	(*TitleReleasesRequest)(nil),  // 13: sniffarr.v1.TitleReleasesRequest
+	(*TitleReleasesResponse)(nil), // 14: sniffarr.v1.TitleReleasesResponse
+	(*TorrentsRequest)(nil),       // 15: sniffarr.v1.TorrentsRequest
+	(*TorrentsResponse)(nil),      // 16: sniffarr.v1.TorrentsResponse
+	(*TorrentRow)(nil),            // 17: sniffarr.v1.TorrentRow
+	(*CardRequest)(nil),           // 18: sniffarr.v1.CardRequest
+	(*CardResponse)(nil),          // 19: sniffarr.v1.CardResponse
+	(*PeerCounts)(nil),            // 20: sniffarr.v1.PeerCounts
+	(*HomeRequest)(nil),           // 21: sniffarr.v1.HomeRequest
+	(*HomeResponse)(nil),          // 22: sniffarr.v1.HomeResponse
+	(*TopRequest)(nil),            // 23: sniffarr.v1.TopRequest
+	(*TopResponse)(nil),           // 24: sniffarr.v1.TopResponse
+	(*TopEntry)(nil),              // 25: sniffarr.v1.TopEntry
+	(*StatsRequest)(nil),          // 26: sniffarr.v1.StatsRequest
+	(*StatsResponse)(nil),         // 27: sniffarr.v1.StatsResponse
+	(*KindCount)(nil),             // 28: sniffarr.v1.KindCount
+	(*LayerCount)(nil),            // 29: sniffarr.v1.LayerCount
+	(*SourceCount)(nil),           // 30: sniffarr.v1.SourceCount
+	(*AudioCounts)(nil),           // 31: sniffarr.v1.AudioCounts
+	(*RejectionCount)(nil),        // 32: sniffarr.v1.RejectionCount
+	(Kind)(0),                     // 33: sniffarr.v1.Kind
+	(*TMDBWork)(nil),              // 34: sniffarr.v1.TMDBWork
+	(Quality)(0),                  // 35: sniffarr.v1.Quality
+	(VideoSource)(0),              // 36: sniffarr.v1.VideoSource
+	(*Release)(nil),               // 37: sniffarr.v1.Release
+	(Layer)(0),                    // 38: sniffarr.v1.Layer
+	(Source)(0),                   // 39: sniffarr.v1.Source
+	(*File)(nil),                  // 40: sniffarr.v1.File
+	(*timestamppb.Timestamp)(nil), // 41: google.protobuf.Timestamp
 }
 var file_sniffarr_v1_browse_proto_depIdxs = []int32{
-	29, // 0: sniffarr.v1.PageRequest.kind:type_name -> sniffarr.v1.Kind
-	30, // 1: sniffarr.v1.PageRequest.source:type_name -> sniffarr.v1.VideoSource
-	31, // 2: sniffarr.v1.PageRequest.layer:type_name -> sniffarr.v1.Layer
-	0,  // 3: sniffarr.v1.PageRequest.sort:type_name -> sniffarr.v1.Sort
-	32, // 4: sniffarr.v1.PageResponse.releases:type_name -> sniffarr.v1.Release
-	8,  // 5: sniffarr.v1.PageResponse.works:type_name -> sniffarr.v1.WorkMatch
-	12, // 6: sniffarr.v1.WorkMatch.work:type_name -> sniffarr.v1.WorkRef
-	33, // 7: sniffarr.v1.WorkMatch.tmdb:type_name -> sniffarr.v1.TMDBWork
-	32, // 8: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
-	34, // 9: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
-	35, // 10: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
-	11, // 11: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
-	12, // 12: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkRef
-	29, // 13: sniffarr.v1.WorkRef.kind:type_name -> sniffarr.v1.Kind
-	12, // 14: sniffarr.v1.Work.ref:type_name -> sniffarr.v1.WorkRef
-	36, // 15: sniffarr.v1.Work.audio:type_name -> sniffarr.v1.Audio
-	30, // 16: sniffarr.v1.Work.sources:type_name -> sniffarr.v1.VideoSource
-	37, // 17: sniffarr.v1.Work.first_seen:type_name -> google.protobuf.Timestamp
-	33, // 18: sniffarr.v1.Work.tmdb:type_name -> sniffarr.v1.TMDBWork
-	29, // 19: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
-	1,  // 20: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
-	2,  // 21: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
-	18, // 22: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
-	37, // 23: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
-	13, // 24: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.Work
-	1,  // 25: sniffarr.v1.WorkRequest.window:type_name -> sniffarr.v1.Window
-	2,  // 26: sniffarr.v1.WorkRequest.voice:type_name -> sniffarr.v1.Voice
-	13, // 27: sniffarr.v1.WorkResponse.work:type_name -> sniffarr.v1.Work
-	21, // 28: sniffarr.v1.WorkResponse.releases:type_name -> sniffarr.v1.WorkRelease
-	32, // 29: sniffarr.v1.WorkRelease.release:type_name -> sniffarr.v1.Release
-	24, // 30: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
-	25, // 31: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
-	26, // 32: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
-	27, // 33: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
-	28, // 34: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
-	29, // 35: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
-	31, // 36: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
-	30, // 37: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
-	3,  // 38: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
-	6,  // 39: sniffarr.v1.BrowseService.Page:input_type -> sniffarr.v1.PageRequest
-	9,  // 40: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
-	22, // 41: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
-	14, // 42: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
-	16, // 43: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
-	19, // 44: sniffarr.v1.BrowseService.Work:input_type -> sniffarr.v1.WorkRequest
-	4,  // 45: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
-	7,  // 46: sniffarr.v1.BrowseService.Page:output_type -> sniffarr.v1.PageResponse
-	10, // 47: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
-	23, // 48: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
-	15, // 49: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
-	17, // 50: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
-	20, // 51: sniffarr.v1.BrowseService.Work:output_type -> sniffarr.v1.WorkResponse
-	5,  // 52: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
-	46, // [46:53] is the sub-list for method output_type
-	39, // [39:46] is the sub-list for method input_type
-	39, // [39:39] is the sub-list for extension type_name
-	39, // [39:39] is the sub-list for extension extendee
-	0,  // [0:39] is the sub-list for field type_name
+	33, // 0: sniffarr.v1.WorkSummary.kind:type_name -> sniffarr.v1.Kind
+	34, // 1: sniffarr.v1.WorkSummary.tmdb:type_name -> sniffarr.v1.TMDBWork
+	33, // 2: sniffarr.v1.SearchTitlesRequest.kind:type_name -> sniffarr.v1.Kind
+	6,  // 3: sniffarr.v1.SearchTitlesResponse.works:type_name -> sniffarr.v1.WorkSummary
+	6,  // 4: sniffarr.v1.TitleResponse.work:type_name -> sniffarr.v1.WorkSummary
+	12, // 5: sniffarr.v1.TitleResponse.ranks:type_name -> sniffarr.v1.WindowRanks
+	20, // 6: sniffarr.v1.TitleResponse.peers:type_name -> sniffarr.v1.PeerCounts
+	7,  // 7: sniffarr.v1.TitleResponse.audio:type_name -> sniffarr.v1.WorkAudio
+	35, // 8: sniffarr.v1.TitleReleasesRequest.quality:type_name -> sniffarr.v1.Quality
+	36, // 9: sniffarr.v1.TitleReleasesRequest.source:type_name -> sniffarr.v1.VideoSource
+	2,  // 10: sniffarr.v1.TitleReleasesRequest.voice:type_name -> sniffarr.v1.Voice
+	0,  // 11: sniffarr.v1.TitleReleasesRequest.sort:type_name -> sniffarr.v1.Sort
+	37, // 12: sniffarr.v1.TitleReleasesResponse.releases:type_name -> sniffarr.v1.Release
+	33, // 13: sniffarr.v1.TorrentsRequest.kind:type_name -> sniffarr.v1.Kind
+	35, // 14: sniffarr.v1.TorrentsRequest.quality:type_name -> sniffarr.v1.Quality
+	2,  // 15: sniffarr.v1.TorrentsRequest.voice:type_name -> sniffarr.v1.Voice
+	36, // 16: sniffarr.v1.TorrentsRequest.source:type_name -> sniffarr.v1.VideoSource
+	38, // 17: sniffarr.v1.TorrentsRequest.layer:type_name -> sniffarr.v1.Layer
+	0,  // 18: sniffarr.v1.TorrentsRequest.sort:type_name -> sniffarr.v1.Sort
+	17, // 19: sniffarr.v1.TorrentsResponse.rows:type_name -> sniffarr.v1.TorrentRow
+	37, // 20: sniffarr.v1.TorrentRow.release:type_name -> sniffarr.v1.Release
+	6,  // 21: sniffarr.v1.TorrentRow.work:type_name -> sniffarr.v1.WorkSummary
+	37, // 22: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
+	39, // 23: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
+	40, // 24: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
+	20, // 25: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
+	6,  // 26: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkSummary
+	33, // 27: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
+	1,  // 28: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
+	2,  // 29: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
+	25, // 30: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
+	41, // 31: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
+	6,  // 32: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.WorkSummary
+	7,  // 33: sniffarr.v1.TopEntry.audio:type_name -> sniffarr.v1.WorkAudio
+	36, // 34: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
+	41, // 35: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
+	28, // 36: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
+	29, // 37: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
+	30, // 38: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
+	31, // 39: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
+	32, // 40: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
+	33, // 41: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
+	38, // 42: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
+	36, // 43: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
+	3,  // 44: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
+	8,  // 45: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
+	10, // 46: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
+	13, // 47: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
+	15, // 48: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
+	18, // 49: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
+	26, // 50: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
+	21, // 51: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
+	23, // 52: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
+	4,  // 53: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
+	9,  // 54: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
+	11, // 55: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
+	14, // 56: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
+	16, // 57: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
+	19, // 58: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
+	27, // 59: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
+	22, // 60: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
+	24, // 61: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
+	5,  // 62: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
+	54, // [54:63] is the sub-list for method output_type
+	45, // [45:54] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_browse_proto_init() }
@@ -2305,16 +2671,16 @@ func file_sniffarr_v1_browse_proto_init() {
 	}
 	file_sniffarr_v1_ingest_proto_init()
 	file_sniffarr_v1_search_proto_init()
-	file_sniffarr_v1_browse_proto_msgTypes[2].OneofWrappers = []any{}
-	file_sniffarr_v1_browse_proto_msgTypes[14].OneofWrappers = []any{}
-	file_sniffarr_v1_browse_proto_msgTypes[16].OneofWrappers = []any{}
+	file_sniffarr_v1_browse_proto_msgTypes[9].OneofWrappers = []any{}
+	file_sniffarr_v1_browse_proto_msgTypes[11].OneofWrappers = []any{}
+	file_sniffarr_v1_browse_proto_msgTypes[21].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_browse_proto_rawDesc), len(file_sniffarr_v1_browse_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   25,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

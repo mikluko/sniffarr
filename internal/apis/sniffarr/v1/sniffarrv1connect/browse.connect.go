@@ -33,8 +33,16 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// BrowseServicePageProcedure is the fully-qualified name of the BrowseService's Page RPC.
-	BrowseServicePageProcedure = "/sniffarr.v1.BrowseService/Page"
+	// BrowseServiceSearchTitlesProcedure is the fully-qualified name of the BrowseService's
+	// SearchTitles RPC.
+	BrowseServiceSearchTitlesProcedure = "/sniffarr.v1.BrowseService/SearchTitles"
+	// BrowseServiceTitleProcedure is the fully-qualified name of the BrowseService's Title RPC.
+	BrowseServiceTitleProcedure = "/sniffarr.v1.BrowseService/Title"
+	// BrowseServiceTitleReleasesProcedure is the fully-qualified name of the BrowseService's
+	// TitleReleases RPC.
+	BrowseServiceTitleReleasesProcedure = "/sniffarr.v1.BrowseService/TitleReleases"
+	// BrowseServiceTorrentsProcedure is the fully-qualified name of the BrowseService's Torrents RPC.
+	BrowseServiceTorrentsProcedure = "/sniffarr.v1.BrowseService/Torrents"
 	// BrowseServiceCardProcedure is the fully-qualified name of the BrowseService's Card RPC.
 	BrowseServiceCardProcedure = "/sniffarr.v1.BrowseService/Card"
 	// BrowseServiceStatsProcedure is the fully-qualified name of the BrowseService's Stats RPC.
@@ -43,18 +51,28 @@ const (
 	BrowseServiceHomeProcedure = "/sniffarr.v1.BrowseService/Home"
 	// BrowseServiceTopProcedure is the fully-qualified name of the BrowseService's Top RPC.
 	BrowseServiceTopProcedure = "/sniffarr.v1.BrowseService/Top"
-	// BrowseServiceWorkProcedure is the fully-qualified name of the BrowseService's Work RPC.
-	BrowseServiceWorkProcedure = "/sniffarr.v1.BrowseService/Work"
 	// BrowseServiceSettingsProcedure is the fully-qualified name of the BrowseService's Settings RPC.
 	BrowseServiceSettingsProcedure = "/sniffarr.v1.BrowseService/Settings"
 )
 
 // BrowseServiceClient is a client for the sniffarr.v1.BrowseService service.
 type BrowseServiceClient interface {
-	// Page returns one page of the releases the filters select, in the order
-	// sort asks for, and how many they select in all. Without kind or
-	// unknown_kind, adult releases are left out.
-	Page(context.Context, *connect.Request[v1.PageRequest]) (*connect.Response[v1.PageResponse], error)
+	// SearchTitles returns the works whose titles, or whose releases' names
+	// and file paths, contain every word of the query, and the works TMDB's
+	// search finds for it, which it stores: first those with releases, most
+	// peers over the last 7 days first, then the rest, most popular on TMDB
+	// first. A failing TMDB leaves the answer to the store.
+	SearchTitles(context.Context, *connect.Request[v1.SearchTitlesRequest]) (*connect.Response[v1.SearchTitlesResponse], error)
+	// Title returns one work with its places in the tops, peers and audio, or
+	// NOT_FOUND.
+	Title(context.Context, *connect.Request[v1.TitleRequest]) (*connect.Response[v1.TitleResponse], error)
+	// TitleReleases returns one page of the releases of a work the filters
+	// select, or NOT_FOUND.
+	TitleReleases(context.Context, *connect.Request[v1.TitleReleasesRequest]) (*connect.Response[v1.TitleReleasesResponse], error)
+	// Torrents returns one page of the releases the filters select, matched
+	// to a work or not, in the order sort asks for, and how many they select
+	// in all. Adult releases are left out.
+	Torrents(context.Context, *connect.Request[v1.TorrentsRequest]) (*connect.Response[v1.TorrentsResponse], error)
 	// Card returns one release with every stored file, its peers and its
 	// work, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
@@ -62,12 +80,10 @@ type BrowseServiceClient interface {
 	Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error)
 	// Home returns the counts the home page shows.
 	Home(context.Context, *connect.Request[v1.HomeRequest]) (*connect.Response[v1.HomeResponse], error)
-	// Top returns one page of the 100 works of a kind with the most peers over
-	// a window, as last computed; the server recomputes every 10 minutes.
+	// Top returns one page of the 100 movies or series with the most peers
+	// over a window, as last computed; the server recomputes every 10
+	// minutes.
 	Top(context.Context, *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error)
-	// Work returns one work with its releases, most peers over the window
-	// first, or NOT_FOUND.
-	Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error)
 	// Settings returns what the server is configured with that a client
 	// showing its answers needs to know.
 	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
@@ -84,10 +100,28 @@ func NewBrowseServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 	baseURL = strings.TrimRight(baseURL, "/")
 	browseServiceMethods := v1.File_sniffarr_v1_browse_proto.Services().ByName("BrowseService").Methods()
 	return &browseServiceClient{
-		page: connect.NewClient[v1.PageRequest, v1.PageResponse](
+		searchTitles: connect.NewClient[v1.SearchTitlesRequest, v1.SearchTitlesResponse](
 			httpClient,
-			baseURL+BrowseServicePageProcedure,
-			connect.WithSchema(browseServiceMethods.ByName("Page")),
+			baseURL+BrowseServiceSearchTitlesProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("SearchTitles")),
+			connect.WithClientOptions(opts...),
+		),
+		title: connect.NewClient[v1.TitleRequest, v1.TitleResponse](
+			httpClient,
+			baseURL+BrowseServiceTitleProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("Title")),
+			connect.WithClientOptions(opts...),
+		),
+		titleReleases: connect.NewClient[v1.TitleReleasesRequest, v1.TitleReleasesResponse](
+			httpClient,
+			baseURL+BrowseServiceTitleReleasesProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("TitleReleases")),
+			connect.WithClientOptions(opts...),
+		),
+		torrents: connect.NewClient[v1.TorrentsRequest, v1.TorrentsResponse](
+			httpClient,
+			baseURL+BrowseServiceTorrentsProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("Torrents")),
 			connect.WithClientOptions(opts...),
 		),
 		card: connect.NewClient[v1.CardRequest, v1.CardResponse](
@@ -114,12 +148,6 @@ func NewBrowseServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(browseServiceMethods.ByName("Top")),
 			connect.WithClientOptions(opts...),
 		),
-		work: connect.NewClient[v1.WorkRequest, v1.WorkResponse](
-			httpClient,
-			baseURL+BrowseServiceWorkProcedure,
-			connect.WithSchema(browseServiceMethods.ByName("Work")),
-			connect.WithClientOptions(opts...),
-		),
 		settings: connect.NewClient[v1.SettingsRequest, v1.SettingsResponse](
 			httpClient,
 			baseURL+BrowseServiceSettingsProcedure,
@@ -131,18 +159,35 @@ func NewBrowseServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // browseServiceClient implements BrowseServiceClient.
 type browseServiceClient struct {
-	page     *connect.Client[v1.PageRequest, v1.PageResponse]
-	card     *connect.Client[v1.CardRequest, v1.CardResponse]
-	stats    *connect.Client[v1.StatsRequest, v1.StatsResponse]
-	home     *connect.Client[v1.HomeRequest, v1.HomeResponse]
-	top      *connect.Client[v1.TopRequest, v1.TopResponse]
-	work     *connect.Client[v1.WorkRequest, v1.WorkResponse]
-	settings *connect.Client[v1.SettingsRequest, v1.SettingsResponse]
+	searchTitles  *connect.Client[v1.SearchTitlesRequest, v1.SearchTitlesResponse]
+	title         *connect.Client[v1.TitleRequest, v1.TitleResponse]
+	titleReleases *connect.Client[v1.TitleReleasesRequest, v1.TitleReleasesResponse]
+	torrents      *connect.Client[v1.TorrentsRequest, v1.TorrentsResponse]
+	card          *connect.Client[v1.CardRequest, v1.CardResponse]
+	stats         *connect.Client[v1.StatsRequest, v1.StatsResponse]
+	home          *connect.Client[v1.HomeRequest, v1.HomeResponse]
+	top           *connect.Client[v1.TopRequest, v1.TopResponse]
+	settings      *connect.Client[v1.SettingsRequest, v1.SettingsResponse]
 }
 
-// Page calls sniffarr.v1.BrowseService.Page.
-func (c *browseServiceClient) Page(ctx context.Context, req *connect.Request[v1.PageRequest]) (*connect.Response[v1.PageResponse], error) {
-	return c.page.CallUnary(ctx, req)
+// SearchTitles calls sniffarr.v1.BrowseService.SearchTitles.
+func (c *browseServiceClient) SearchTitles(ctx context.Context, req *connect.Request[v1.SearchTitlesRequest]) (*connect.Response[v1.SearchTitlesResponse], error) {
+	return c.searchTitles.CallUnary(ctx, req)
+}
+
+// Title calls sniffarr.v1.BrowseService.Title.
+func (c *browseServiceClient) Title(ctx context.Context, req *connect.Request[v1.TitleRequest]) (*connect.Response[v1.TitleResponse], error) {
+	return c.title.CallUnary(ctx, req)
+}
+
+// TitleReleases calls sniffarr.v1.BrowseService.TitleReleases.
+func (c *browseServiceClient) TitleReleases(ctx context.Context, req *connect.Request[v1.TitleReleasesRequest]) (*connect.Response[v1.TitleReleasesResponse], error) {
+	return c.titleReleases.CallUnary(ctx, req)
+}
+
+// Torrents calls sniffarr.v1.BrowseService.Torrents.
+func (c *browseServiceClient) Torrents(ctx context.Context, req *connect.Request[v1.TorrentsRequest]) (*connect.Response[v1.TorrentsResponse], error) {
+	return c.torrents.CallUnary(ctx, req)
 }
 
 // Card calls sniffarr.v1.BrowseService.Card.
@@ -165,11 +210,6 @@ func (c *browseServiceClient) Top(ctx context.Context, req *connect.Request[v1.T
 	return c.top.CallUnary(ctx, req)
 }
 
-// Work calls sniffarr.v1.BrowseService.Work.
-func (c *browseServiceClient) Work(ctx context.Context, req *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error) {
-	return c.work.CallUnary(ctx, req)
-}
-
 // Settings calls sniffarr.v1.BrowseService.Settings.
 func (c *browseServiceClient) Settings(ctx context.Context, req *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error) {
 	return c.settings.CallUnary(ctx, req)
@@ -177,10 +217,22 @@ func (c *browseServiceClient) Settings(ctx context.Context, req *connect.Request
 
 // BrowseServiceHandler is an implementation of the sniffarr.v1.BrowseService service.
 type BrowseServiceHandler interface {
-	// Page returns one page of the releases the filters select, in the order
-	// sort asks for, and how many they select in all. Without kind or
-	// unknown_kind, adult releases are left out.
-	Page(context.Context, *connect.Request[v1.PageRequest]) (*connect.Response[v1.PageResponse], error)
+	// SearchTitles returns the works whose titles, or whose releases' names
+	// and file paths, contain every word of the query, and the works TMDB's
+	// search finds for it, which it stores: first those with releases, most
+	// peers over the last 7 days first, then the rest, most popular on TMDB
+	// first. A failing TMDB leaves the answer to the store.
+	SearchTitles(context.Context, *connect.Request[v1.SearchTitlesRequest]) (*connect.Response[v1.SearchTitlesResponse], error)
+	// Title returns one work with its places in the tops, peers and audio, or
+	// NOT_FOUND.
+	Title(context.Context, *connect.Request[v1.TitleRequest]) (*connect.Response[v1.TitleResponse], error)
+	// TitleReleases returns one page of the releases of a work the filters
+	// select, or NOT_FOUND.
+	TitleReleases(context.Context, *connect.Request[v1.TitleReleasesRequest]) (*connect.Response[v1.TitleReleasesResponse], error)
+	// Torrents returns one page of the releases the filters select, matched
+	// to a work or not, in the order sort asks for, and how many they select
+	// in all. Adult releases are left out.
+	Torrents(context.Context, *connect.Request[v1.TorrentsRequest]) (*connect.Response[v1.TorrentsResponse], error)
 	// Card returns one release with every stored file, its peers and its
 	// work, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
@@ -188,12 +240,10 @@ type BrowseServiceHandler interface {
 	Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error)
 	// Home returns the counts the home page shows.
 	Home(context.Context, *connect.Request[v1.HomeRequest]) (*connect.Response[v1.HomeResponse], error)
-	// Top returns one page of the 100 works of a kind with the most peers over
-	// a window, as last computed; the server recomputes every 10 minutes.
+	// Top returns one page of the 100 movies or series with the most peers
+	// over a window, as last computed; the server recomputes every 10
+	// minutes.
 	Top(context.Context, *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error)
-	// Work returns one work with its releases, most peers over the window
-	// first, or NOT_FOUND.
-	Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error)
 	// Settings returns what the server is configured with that a client
 	// showing its answers needs to know.
 	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
@@ -206,10 +256,28 @@ type BrowseServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	browseServiceMethods := v1.File_sniffarr_v1_browse_proto.Services().ByName("BrowseService").Methods()
-	browseServicePageHandler := connect.NewUnaryHandler(
-		BrowseServicePageProcedure,
-		svc.Page,
-		connect.WithSchema(browseServiceMethods.ByName("Page")),
+	browseServiceSearchTitlesHandler := connect.NewUnaryHandler(
+		BrowseServiceSearchTitlesProcedure,
+		svc.SearchTitles,
+		connect.WithSchema(browseServiceMethods.ByName("SearchTitles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	browseServiceTitleHandler := connect.NewUnaryHandler(
+		BrowseServiceTitleProcedure,
+		svc.Title,
+		connect.WithSchema(browseServiceMethods.ByName("Title")),
+		connect.WithHandlerOptions(opts...),
+	)
+	browseServiceTitleReleasesHandler := connect.NewUnaryHandler(
+		BrowseServiceTitleReleasesProcedure,
+		svc.TitleReleases,
+		connect.WithSchema(browseServiceMethods.ByName("TitleReleases")),
+		connect.WithHandlerOptions(opts...),
+	)
+	browseServiceTorrentsHandler := connect.NewUnaryHandler(
+		BrowseServiceTorrentsProcedure,
+		svc.Torrents,
+		connect.WithSchema(browseServiceMethods.ByName("Torrents")),
 		connect.WithHandlerOptions(opts...),
 	)
 	browseServiceCardHandler := connect.NewUnaryHandler(
@@ -236,12 +304,6 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(browseServiceMethods.ByName("Top")),
 		connect.WithHandlerOptions(opts...),
 	)
-	browseServiceWorkHandler := connect.NewUnaryHandler(
-		BrowseServiceWorkProcedure,
-		svc.Work,
-		connect.WithSchema(browseServiceMethods.ByName("Work")),
-		connect.WithHandlerOptions(opts...),
-	)
 	browseServiceSettingsHandler := connect.NewUnaryHandler(
 		BrowseServiceSettingsProcedure,
 		svc.Settings,
@@ -250,8 +312,14 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 	)
 	return "/sniffarr.v1.BrowseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case BrowseServicePageProcedure:
-			browseServicePageHandler.ServeHTTP(w, r)
+		case BrowseServiceSearchTitlesProcedure:
+			browseServiceSearchTitlesHandler.ServeHTTP(w, r)
+		case BrowseServiceTitleProcedure:
+			browseServiceTitleHandler.ServeHTTP(w, r)
+		case BrowseServiceTitleReleasesProcedure:
+			browseServiceTitleReleasesHandler.ServeHTTP(w, r)
+		case BrowseServiceTorrentsProcedure:
+			browseServiceTorrentsHandler.ServeHTTP(w, r)
 		case BrowseServiceCardProcedure:
 			browseServiceCardHandler.ServeHTTP(w, r)
 		case BrowseServiceStatsProcedure:
@@ -260,8 +328,6 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 			browseServiceHomeHandler.ServeHTTP(w, r)
 		case BrowseServiceTopProcedure:
 			browseServiceTopHandler.ServeHTTP(w, r)
-		case BrowseServiceWorkProcedure:
-			browseServiceWorkHandler.ServeHTTP(w, r)
 		case BrowseServiceSettingsProcedure:
 			browseServiceSettingsHandler.ServeHTTP(w, r)
 		default:
@@ -273,8 +339,20 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 // UnimplementedBrowseServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedBrowseServiceHandler struct{}
 
-func (UnimplementedBrowseServiceHandler) Page(context.Context, *connect.Request[v1.PageRequest]) (*connect.Response[v1.PageResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Page is not implemented"))
+func (UnimplementedBrowseServiceHandler) SearchTitles(context.Context, *connect.Request[v1.SearchTitlesRequest]) (*connect.Response[v1.SearchTitlesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.SearchTitles is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) Title(context.Context, *connect.Request[v1.TitleRequest]) (*connect.Response[v1.TitleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Title is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) TitleReleases(context.Context, *connect.Request[v1.TitleReleasesRequest]) (*connect.Response[v1.TitleReleasesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.TitleReleases is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) Torrents(context.Context, *connect.Request[v1.TorrentsRequest]) (*connect.Response[v1.TorrentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Torrents is not implemented"))
 }
 
 func (UnimplementedBrowseServiceHandler) Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error) {
@@ -291,10 +369,6 @@ func (UnimplementedBrowseServiceHandler) Home(context.Context, *connect.Request[
 
 func (UnimplementedBrowseServiceHandler) Top(context.Context, *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Top is not implemented"))
-}
-
-func (UnimplementedBrowseServiceHandler) Work(context.Context, *connect.Request[v1.WorkRequest]) (*connect.Response[v1.WorkResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Work is not implemented"))
 }
 
 func (UnimplementedBrowseServiceHandler) Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error) {

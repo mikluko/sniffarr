@@ -22,6 +22,65 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Quality is a release's resolution as its name gives it.
+type Quality int32
+
+const (
+	Quality_QUALITY_UNSPECIFIED Quality = 0
+	// 2160p, 4K or UHD.
+	Quality_QUALITY_2160P Quality = 1
+	// 1080p or 1080i.
+	Quality_QUALITY_1080P Quality = 2
+	Quality_QUALITY_720P  Quality = 3
+	// 576p, 480p, or an SD source such as a DVD rip.
+	Quality_QUALITY_SD Quality = 4
+)
+
+// Enum value maps for Quality.
+var (
+	Quality_name = map[int32]string{
+		0: "QUALITY_UNSPECIFIED",
+		1: "QUALITY_2160P",
+		2: "QUALITY_1080P",
+		3: "QUALITY_720P",
+		4: "QUALITY_SD",
+	}
+	Quality_value = map[string]int32{
+		"QUALITY_UNSPECIFIED": 0,
+		"QUALITY_2160P":       1,
+		"QUALITY_1080P":       2,
+		"QUALITY_720P":        3,
+		"QUALITY_SD":          4,
+	}
+)
+
+func (x Quality) Enum() *Quality {
+	p := new(Quality)
+	*p = x
+	return p
+}
+
+func (x Quality) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Quality) Descriptor() protoreflect.EnumDescriptor {
+	return file_sniffarr_v1_search_proto_enumTypes[0].Descriptor()
+}
+
+func (Quality) Type() protoreflect.EnumType {
+	return &file_sniffarr_v1_search_proto_enumTypes[0]
+}
+
+func (x Quality) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Quality.Descriptor instead.
+func (Quality) EnumDescriptor() ([]byte, []int) {
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{0}
+}
+
 // TMDBLayer is what matched a release's title to a work.
 type TMDBLayer int32
 
@@ -58,11 +117,11 @@ func (x TMDBLayer) String() string {
 }
 
 func (TMDBLayer) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[0].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[1].Descriptor()
 }
 
 func (TMDBLayer) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[0]
+	return &file_sniffarr_v1_search_proto_enumTypes[1]
 }
 
 func (x TMDBLayer) Number() protoreflect.EnumNumber {
@@ -71,7 +130,7 @@ func (x TMDBLayer) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TMDBLayer.Descriptor instead.
 func (TMDBLayer) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{0}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{1}
 }
 
 // Layer is what decided a release's kind.
@@ -114,11 +173,11 @@ func (x Layer) String() string {
 }
 
 func (Layer) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[1].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[2].Descriptor()
 }
 
 func (Layer) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[1]
+	return &file_sniffarr_v1_search_proto_enumTypes[2]
 }
 
 func (x Layer) Number() protoreflect.EnumNumber {
@@ -127,7 +186,7 @@ func (x Layer) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Layer.Descriptor instead.
 func (Layer) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{1}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{2}
 }
 
 type Kind int32
@@ -178,11 +237,11 @@ func (x Kind) String() string {
 }
 
 func (Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[2].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[3].Descriptor()
 }
 
 func (Kind) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[2]
+	return &file_sniffarr_v1_search_proto_enumTypes[3]
 }
 
 func (x Kind) Number() protoreflect.EnumNumber {
@@ -191,7 +250,7 @@ func (x Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Kind.Descriptor instead.
 func (Kind) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{2}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{3}
 }
 
 // VideoSource is the kind of copy a video release is.
@@ -237,11 +296,11 @@ func (x VideoSource) String() string {
 }
 
 func (VideoSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_sniffarr_v1_search_proto_enumTypes[3].Descriptor()
+	return file_sniffarr_v1_search_proto_enumTypes[4].Descriptor()
 }
 
 func (VideoSource) Type() protoreflect.EnumType {
-	return &file_sniffarr_v1_search_proto_enumTypes[3]
+	return &file_sniffarr_v1_search_proto_enumTypes[4]
 }
 
 func (x VideoSource) Number() protoreflect.EnumNumber {
@@ -250,7 +309,7 @@ func (x VideoSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use VideoSource.Descriptor instead.
 func (VideoSource) EnumDescriptor() ([]byte, []int) {
-	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{3}
+	return file_sniffarr_v1_search_proto_rawDescGZIP(), []int{4}
 }
 
 type SearchRequest struct {
@@ -531,7 +590,16 @@ type Release struct {
 	PeersWeek int64 `protobuf:"varint,19,opt,name=peers_week,json=peersWeek,proto3" json:"peers_week,omitempty"`
 	// What TMDB knows of the work the release's title is matched to; absent
 	// while the title was never looked up or without title matching.
-	Tmdb          *TMDBWork `protobuf:"bytes,20,opt,name=tmdb,proto3" json:"tmdb,omitempty"`
+	Tmdb *TMDBWork `protobuf:"bytes,20,opt,name=tmdb,proto3" json:"tmdb,omitempty"`
+	// The ID of the work the release's title is matched to, as
+	// BrowseService's WorkSummary.id; empty while it is matched to none.
+	Work string `protobuf:"bytes,21,opt,name=work,proto3" json:"work,omitempty"`
+	// The resolution the name gives; QUALITY_UNSPECIFIED when it gives none.
+	Quality Quality `protobuf:"varint,22,opt,name=quality,proto3,enum=sniffarr.v1.Quality" json:"quality,omitempty"`
+	// The season and episode the name gives, 0 when it gives none; a whole
+	// season has no episode.
+	Season        int32 `protobuf:"varint,23,opt,name=season,proto3" json:"season,omitempty"`
+	Episode       int32 `protobuf:"varint,24,opt,name=episode,proto3" json:"episode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -697,6 +765,34 @@ func (x *Release) GetTmdb() *TMDBWork {
 		return x.Tmdb
 	}
 	return nil
+}
+
+func (x *Release) GetWork() string {
+	if x != nil {
+		return x.Work
+	}
+	return ""
+}
+
+func (x *Release) GetQuality() Quality {
+	if x != nil {
+		return x.Quality
+	}
+	return Quality_QUALITY_UNSPECIFIED
+}
+
+func (x *Release) GetSeason() int32 {
+	if x != nil {
+		return x.Season
+	}
+	return 0
+}
+
+func (x *Release) GetEpisode() int32 {
+	if x != nil {
+		return x.Episode
+	}
+	return 0
 }
 
 // ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
@@ -972,7 +1068,10 @@ type Audio struct {
 	// A word or studio of the language is in the release's name or paths.
 	Marker bool `protobuf:"varint,3,opt,name=marker,proto3" json:"marker,omitempty"`
 	// Letters of the language's script are in the release's name or paths.
-	ScriptHint    bool `protobuf:"varint,4,opt,name=script_hint,json=scriptHint,proto3" json:"script_hint,omitempty"`
+	ScriptHint bool `protobuf:"varint,4,opt,name=script_hint,json=scriptHint,proto3" json:"script_hint,omitempty"`
+	// The marker as written in the name, or else in a stored file path;
+	// empty without a marker, or for one in a path not stored.
+	Mark          string `protobuf:"bytes,5,opt,name=mark,proto3" json:"mark,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1035,6 +1134,13 @@ func (x *Audio) GetScriptHint() bool {
 	return false
 }
 
+func (x *Audio) GetMark() string {
+	if x != nil {
+		return x.Mark
+	}
+	return ""
+}
+
 var File_sniffarr_v1_search_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_search_proto_rawDesc = "" +
@@ -1058,7 +1164,7 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04lang\x18\x02 \x01(\tR\x04lang\"=\n" +
 	"\vGetResponse\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\x85\x06\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xfb\x06\n" +
 	"\aRelease\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1085,7 +1191,11 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\x0ftmdb_confidence\x18\x12 \x01(\x02R\x0etmdbConfidence\x12\x1d\n" +
 	"\n" +
 	"peers_week\x18\x13 \x01(\x03R\tpeersWeek\x12)\n" +
-	"\x04tmdb\x18\x14 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdbJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
+	"\x04tmdb\x18\x14 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdb\x12\x12\n" +
+	"\x04work\x18\x15 \x01(\tR\x04work\x12.\n" +
+	"\aquality\x18\x16 \x01(\x0e2\x14.sniffarr.v1.QualityR\aquality\x12\x16\n" +
+	"\x06season\x18\x17 \x01(\x05R\x06season\x12\x18\n" +
+	"\aepisode\x18\x18 \x01(\x05R\aepisodeJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
 	"\n" +
 	"ExternalId\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x0e\n" +
@@ -1114,14 +1224,22 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"confidence\x18\x12 \x01(\x02R\n" +
 	"confidence\x129\n" +
 	"\n" +
-	"checked_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\"\x93\x01\n" +
+	"checked_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\"\xa7\x01\n" +
 	"\x05Audio\x12\x1a\n" +
 	"\blanguage\x18\x01 \x01(\tR\blanguage\x12%\n" +
 	"\vprobability\x18\x02 \x01(\x02H\x00R\vprobability\x88\x01\x01\x12\x16\n" +
 	"\x06marker\x18\x03 \x01(\bR\x06marker\x12\x1f\n" +
 	"\vscript_hint\x18\x04 \x01(\bR\n" +
-	"scriptHintB\x0e\n" +
-	"\f_probability*Y\n" +
+	"scriptHint\x12\x12\n" +
+	"\x04mark\x18\x05 \x01(\tR\x04markB\x0e\n" +
+	"\f_probability*j\n" +
+	"\aQuality\x12\x17\n" +
+	"\x13QUALITY_UNSPECIFIED\x10\x00\x12\x11\n" +
+	"\rQUALITY_2160P\x10\x01\x12\x11\n" +
+	"\rQUALITY_1080P\x10\x02\x12\x10\n" +
+	"\fQUALITY_720P\x10\x03\x12\x0e\n" +
+	"\n" +
+	"QUALITY_SD\x10\x04*Y\n" +
 	"\tTMDBLayer\x12\x1a\n" +
 	"\x16TMDB_LAYER_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11TMDB_LAYER_SEARCH\x10\x01\x12\x19\n" +
@@ -1167,48 +1285,50 @@ func file_sniffarr_v1_search_proto_rawDescGZIP() []byte {
 	return file_sniffarr_v1_search_proto_rawDescData
 }
 
-var file_sniffarr_v1_search_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_sniffarr_v1_search_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
 var file_sniffarr_v1_search_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_sniffarr_v1_search_proto_goTypes = []any{
-	(TMDBLayer)(0),                // 0: sniffarr.v1.TMDBLayer
-	(Layer)(0),                    // 1: sniffarr.v1.Layer
-	(Kind)(0),                     // 2: sniffarr.v1.Kind
-	(VideoSource)(0),              // 3: sniffarr.v1.VideoSource
-	(*SearchRequest)(nil),         // 4: sniffarr.v1.SearchRequest
-	(*SearchResponse)(nil),        // 5: sniffarr.v1.SearchResponse
-	(*GetRequest)(nil),            // 6: sniffarr.v1.GetRequest
-	(*GetResponse)(nil),           // 7: sniffarr.v1.GetResponse
-	(*Release)(nil),               // 8: sniffarr.v1.Release
-	(*ExternalId)(nil),            // 9: sniffarr.v1.ExternalId
-	(*TMDBWork)(nil),              // 10: sniffarr.v1.TMDBWork
-	(*Audio)(nil),                 // 11: sniffarr.v1.Audio
-	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
+	(Quality)(0),                  // 0: sniffarr.v1.Quality
+	(TMDBLayer)(0),                // 1: sniffarr.v1.TMDBLayer
+	(Layer)(0),                    // 2: sniffarr.v1.Layer
+	(Kind)(0),                     // 3: sniffarr.v1.Kind
+	(VideoSource)(0),              // 4: sniffarr.v1.VideoSource
+	(*SearchRequest)(nil),         // 5: sniffarr.v1.SearchRequest
+	(*SearchResponse)(nil),        // 6: sniffarr.v1.SearchResponse
+	(*GetRequest)(nil),            // 7: sniffarr.v1.GetRequest
+	(*GetResponse)(nil),           // 8: sniffarr.v1.GetResponse
+	(*Release)(nil),               // 9: sniffarr.v1.Release
+	(*ExternalId)(nil),            // 10: sniffarr.v1.ExternalId
+	(*TMDBWork)(nil),              // 11: sniffarr.v1.TMDBWork
+	(*Audio)(nil),                 // 12: sniffarr.v1.Audio
+	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
 }
 var file_sniffarr_v1_search_proto_depIdxs = []int32{
-	2,  // 0: sniffarr.v1.SearchRequest.kinds:type_name -> sniffarr.v1.Kind
-	9,  // 1: sniffarr.v1.SearchRequest.id:type_name -> sniffarr.v1.ExternalId
-	8,  // 2: sniffarr.v1.SearchResponse.releases:type_name -> sniffarr.v1.Release
-	8,  // 3: sniffarr.v1.GetResponse.release:type_name -> sniffarr.v1.Release
-	2,  // 4: sniffarr.v1.Release.kind:type_name -> sniffarr.v1.Kind
-	3,  // 5: sniffarr.v1.Release.source:type_name -> sniffarr.v1.VideoSource
-	12, // 6: sniffarr.v1.Release.first_seen:type_name -> google.protobuf.Timestamp
-	12, // 7: sniffarr.v1.Release.last_seen:type_name -> google.protobuf.Timestamp
-	1,  // 8: sniffarr.v1.Release.layer:type_name -> sniffarr.v1.Layer
-	11, // 9: sniffarr.v1.Release.audio:type_name -> sniffarr.v1.Audio
-	9,  // 10: sniffarr.v1.Release.ids:type_name -> sniffarr.v1.ExternalId
-	0,  // 11: sniffarr.v1.Release.tmdb_layer:type_name -> sniffarr.v1.TMDBLayer
-	10, // 12: sniffarr.v1.Release.tmdb:type_name -> sniffarr.v1.TMDBWork
-	0,  // 13: sniffarr.v1.TMDBWork.layer:type_name -> sniffarr.v1.TMDBLayer
-	12, // 14: sniffarr.v1.TMDBWork.checked_at:type_name -> google.protobuf.Timestamp
-	4,  // 15: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
-	6,  // 16: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
-	5,  // 17: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
-	7,  // 18: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
-	17, // [17:19] is the sub-list for method output_type
-	15, // [15:17] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	3,  // 0: sniffarr.v1.SearchRequest.kinds:type_name -> sniffarr.v1.Kind
+	10, // 1: sniffarr.v1.SearchRequest.id:type_name -> sniffarr.v1.ExternalId
+	9,  // 2: sniffarr.v1.SearchResponse.releases:type_name -> sniffarr.v1.Release
+	9,  // 3: sniffarr.v1.GetResponse.release:type_name -> sniffarr.v1.Release
+	3,  // 4: sniffarr.v1.Release.kind:type_name -> sniffarr.v1.Kind
+	4,  // 5: sniffarr.v1.Release.source:type_name -> sniffarr.v1.VideoSource
+	13, // 6: sniffarr.v1.Release.first_seen:type_name -> google.protobuf.Timestamp
+	13, // 7: sniffarr.v1.Release.last_seen:type_name -> google.protobuf.Timestamp
+	2,  // 8: sniffarr.v1.Release.layer:type_name -> sniffarr.v1.Layer
+	12, // 9: sniffarr.v1.Release.audio:type_name -> sniffarr.v1.Audio
+	10, // 10: sniffarr.v1.Release.ids:type_name -> sniffarr.v1.ExternalId
+	1,  // 11: sniffarr.v1.Release.tmdb_layer:type_name -> sniffarr.v1.TMDBLayer
+	11, // 12: sniffarr.v1.Release.tmdb:type_name -> sniffarr.v1.TMDBWork
+	0,  // 13: sniffarr.v1.Release.quality:type_name -> sniffarr.v1.Quality
+	1,  // 14: sniffarr.v1.TMDBWork.layer:type_name -> sniffarr.v1.TMDBLayer
+	13, // 15: sniffarr.v1.TMDBWork.checked_at:type_name -> google.protobuf.Timestamp
+	5,  // 16: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
+	7,  // 17: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
+	6,  // 18: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
+	8,  // 19: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
+	18, // [18:20] is the sub-list for method output_type
+	16, // [16:18] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_search_proto_init() }
@@ -1223,7 +1343,7 @@ func file_sniffarr_v1_search_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_search_proto_rawDesc), len(file_sniffarr_v1_search_proto_rawDesc)),
-			NumEnums:      4,
+			NumEnums:      5,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,

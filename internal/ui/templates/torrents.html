@@ -1,0 +1,100 @@
+{{define "title"}}{{.T "nav.torrents"}}{{if .Q}}: {{.Q}}{{end}}{{end}}
+
+{{define "main"}}
+<form class="search" action="/torrents" method="get"
+      hx-get="/torrents" hx-target="#torrents" hx-swap="morph:outerHTML" hx-push-url="true"
+      hx-trigger="submit, input changed delay:400ms from:#q">
+  <label for="q" class="vh">{{.T "torrents.label"}}</label>
+  <input id="q" name="q" type="search" value="{{.Q}}" placeholder="{{.T "search.placeholder"}}" autocomplete="off" spellcheck="false">
+  <button type="submit">{{.T "search.submit"}}</button>
+</form>
+{{template "torrents" .}}
+{{end}}
+
+{{/* Torrents by recognized features, matched to a title or not. The poster, or a
+     placeholder for an unmatched torrent, leads to the title page; the name to the torrent card. */}}
+{{define "torrents"}}
+<section id="torrents" class="results">
+<form class="filters" action="/torrents" method="get"
+      hx-get="/torrents" hx-target="#torrents" hx-swap="morph:outerHTML" hx-push-url="true" hx-trigger="change, submit">
+  <input type="hidden" name="q" value="{{.Q}}">
+  <label>{{.T "f.kind"}}
+    <select name="kind">
+      <option value="">{{.T "f.all"}}</option>
+      {{range kinds}}<option value="{{.}}"{{if eq . $.Filters.Kind}} selected{{end}}>{{$.T (concat "kind." .)}}</option>{{end}}
+    </select></label>
+  <label>{{.T "f.matched"}}
+    <select name="matched">
+      <option value="">{{.T "f.all"}}</option>
+      {{range matchedOpts}}<option value="{{.}}"{{if eq . $.Filters.Matched}} selected{{end}}>{{$.T (concat "matched." .)}}</option>{{end}}
+    </select></label>
+  <label>{{.T "rel.quality"}}
+    <select name="quality">
+      <option value="">{{.T "f.all"}}</option>
+      {{range qualities}}<option value="{{.}}"{{if eq . $.Filters.Quality}} selected{{end}}>{{$.T (concat "quality." .)}}</option>{{end}}
+    </select></label>
+  {{if .VoiceLangs}}
+  <label>{{if gt (len .VoiceLangs) 1}}{{.T "audio.filter"}}
+    <select name="vl" aria-label="{{.T "f.voice_lang"}}">
+      {{range .VoiceLangs}}<option value="{{.}}"{{if eq . $.Filters.VoiceLang}} selected{{end}}>{{$.LangName .}}</option>{{end}}
+    </select>{{else}}{{.DubLabel (index .VoiceLangs 0)}}<input type="hidden" name="vl" value="{{index .VoiceLangs 0}}">{{end}}
+    <select name="voice" aria-label="{{.T "f.voice_mode"}}">
+      {{range voiceModes}}<option value="{{.}}"{{if eq . $.Filters.Voice}} selected{{end}}>{{$.T (concat "voicemode." .)}}</option>{{end}}
+    </select></label>
+  {{end}}
+  <label>{{.T "f.source"}}
+    <select name="source">
+      <option value="">{{.T "f.all"}}</option>
+      {{range sources}}<option value="{{.}}"{{if eq . $.Filters.Source}} selected{{end}}>{{$.T (concat "source." .)}}</option>{{end}}
+    </select></label>
+  <label>{{.T "f.layer"}}
+    <select name="layer">
+      <option value="">{{.T "f.all"}}</option>
+      {{range layers}}<option value="{{.}}"{{if eq . $.Filters.Layer}} selected{{end}}>{{$.T (concat "layer." .)}}</option>{{end}}
+    </select></label>
+  <label>{{.T "f.minsize"}}
+    <input name="min" type="text" inputmode="decimal" value="{{.Filters.MinSizeGB}}" placeholder="{{.T "unit.gb"}}" class="num"></label>
+  <label>{{.T "f.sort"}}
+    <select name="sort">
+      {{range sorts}}<option value="{{.}}"{{if eq . $.Filters.Sort}} selected{{end}}>{{$.T (concat "sort." .)}}</option>{{end}}
+    </select></label>
+</form>
+<p class="mu">{{.T "results.found"}}: {{$.Num .Results.Total}}</p>
+{{if .Results.Rows}}
+<div class="scroll">
+<table class="t rt">
+  <thead><tr>
+    <th>{{.T "col.name"}}</th><th class="r">{{.T "col.peers7"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "rel.quality_c"}}</th><th>{{.T "col.kind"}}</th>
+    {{if .VoiceLangs}}<th>{{.T "top.audio"}}</th>{{end}}
+    <th>{{.T "col.source"}}</th><th>{{.T "col.first"}}</th><th>{{.T "col.last"}}</th>
+  </tr></thead>
+  <tbody>
+  {{range .Results.Rows}}
+    <tr id="t-{{.InfoHash}}">
+      <td class="nm"><span class="tw">
+        {{- with .Work}}<a href="{{.Path}}" class="thl" title="{{.TMDB.Title}}">{{if .TMDB.HasPoster}}<img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="28" height="42" alt="{{.TMDB.Title}}" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="th th-ph" aria-label="{{.TMDB.Title}}">—</span>{{end}}</a>
+        {{- else}}<span class="th th-ph" title="{{$.T "matched.no"}}" aria-label="{{$.T "matched.no"}}">?</span>{{end -}}
+        <span class="tw-t"><a href="/t/{{.InfoHash}}">{{.Name}}</a>{{with .Work}}<a class="orig mu" href="{{.Path}}">{{.TMDB.Title}}{{if .TMDB.Year}} · {{.TMDB.Year}}{{end}}</a>{{end}}</span></span></td>
+      <td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>
+      <td class="r">{{$.Size .Size}}</td>
+      <td>{{if .Quality}}{{$.T (concat "quality." .Quality)}}{{else}}<span class="mu">—</span>{{end}}</td>
+      <td>{{$.T (concat "kind." .Kind)}} <span class="mu">· {{$.T (concat "layer." .Layer)}}{{if .Confidence}} {{$.Prob .Confidence}}{{end}}</span></td>
+      {{if $.VoiceLangs}}<td class="au">{{template "relaudio" (audioArgs $ .Audio)}}</td>{{end}}
+      <td>{{$.T (concat "source." .Source)}}</td>
+      <td class="mu fs">{{$.Date .FirstSeen}}</td>
+      <td class="mu">{{$.Time .LastSeen}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<nav class="pager mu">
+  {{if .Results.PrevURL}}<a href="{{.Results.PrevURL}}" hx-get="{{.Results.PrevURL}}" hx-target="#torrents" hx-swap="morph:outerHTML" hx-push-url="true">← {{.T "pager.prev"}}</a>{{end}}
+  <span>{{add .Results.Offset 1}}–{{add .Results.Offset .Results.Shown}}</span>
+  {{if .Results.NextURL}}<a href="{{.Results.NextURL}}" hx-get="{{.Results.NextURL}}" hx-target="#torrents" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "pager.next"}} →</a>{{end}}
+</nav>
+{{else}}
+<p>{{.T "results.empty"}}</p>
+{{end}}
+</section>
+{{end}}

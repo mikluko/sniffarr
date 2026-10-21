@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"math"
 	"net/url"
 	"strconv"
@@ -13,7 +14,7 @@ import (
 type Base struct {
 	Lang       string   // "ru" | "en"
 	Langs      []string // switcher entries
-	Nav        string   // "home" | "search" | "top" | "data" | "" (card)
+	Nav        string   // "home" | "search" | "torrents" | "top" | "data" | "" (card, title page)
 	VoiceLangs []string // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
 	Path       string   // current path+query, for the language switcher
 	Loc        *time.Location
@@ -155,14 +156,6 @@ func (b Base) TimeFull(t time.Time) string {
 	return t.In(loc).Format("2006-01-02 15:04")
 }
 
-// Voice renders a search-table dubbing cell: "явно", "0,84" or "—".
-func (b Base) Voice(c VoiceCell) string {
-	if c.Explicit {
-		return b.T("voice.explicit")
-	}
-	return b.Prob(c.Prob)
-}
-
 // Delta formats a change against the previous window: "+12%", "−8%", "0%";
 // nil means the work was absent then ("new").
 func (b Base) Delta(d *float64) string {
@@ -179,17 +172,6 @@ func (b Base) Delta(d *float64) string {
 	return "0%"
 }
 
-// Work names a work in one line: "Дюна: Часть вторая (2024)", "Сёгун · S01".
-func (b Base) Work(w WorkRef) string {
-	if w.Sub == "" {
-		return w.Title
-	}
-	if w.Kind == "movie" {
-		return w.Title + " (" + w.Sub + ")"
-	}
-	return w.Title + " · " + w.Sub
-}
-
 // SourceList joins translated source keys: "WEB, ремукс".
 func (b Base) SourceList(keys []string) string {
 	if len(keys) == 0 {
@@ -202,31 +184,45 @@ func (b Base) SourceList(keys []string) string {
 	return strings.Join(out, ", ")
 }
 
-// URL builds a top page link with the given parameters.
+// URL builds a top page link with the given parameters and the current dub language.
 func (p TopPage) URL(kind, win, voice string, all bool) string {
+	return p.url(kind, win, p.VoiceLang, voice, all)
+}
+
+// VoiceLangURL switches the dub language of the filter, keeping the rest.
+func (p TopPage) VoiceLangURL(vl string) string {
+	return p.url(p.Kind, p.Window, vl, p.VoiceMode, p.All)
+}
+
+func (p TopPage) url(kind, win, vl, voice string, all bool) string {
 	v := url.Values{}
 	v.Set("kind", kind)
 	v.Set("win", win)
-	if voice != "" && voice != "any" {
-		v.Set("voice", voice)
-	}
+	p.setVoice(v, vl, voice)
 	if all {
 		v.Set("all", "1")
 	}
 	return "/top?" + v.Encode()
 }
 
-// WorkURL is the toggle link for one work's releases.
-func (p TopPage) WorkURL(id string, open bool) string {
+// setVoice adds vl (only when several languages are configured) and voice (unless "any").
+func (p TopPage) setVoice(v url.Values, vl, voice string) {
+	if len(p.VoiceLangs) > 1 && vl != "" {
+		v.Set("vl", vl)
+	}
+	if voice != "" && voice != "any" {
+		v.Set("voice", voice)
+	}
+}
+
+// KindURL filters the titles tab by kind ("" = movies and series).
+func (p SearchPage) KindURL(kind string) string {
 	v := url.Values{}
-	v.Set("win", p.Window)
-	if p.VoiceMode != "" && p.VoiceMode != "any" {
-		v.Set("voice", p.VoiceMode)
+	v.Set("q", p.Q)
+	if kind != "" {
+		v.Set("kind", kind)
 	}
-	if open {
-		v.Set("open", "1")
-	}
-	return "/top/w/" + url.PathEscape(id) + "?" + v.Encode()
+	return "/?" + v.Encode()
 }
 
 // Date formats a day: same year → "20.10" / "Oct 20", else "20.10.2025" / "2025-10-20".
@@ -257,3 +253,23 @@ func (b Base) Date(t time.Time) string {
 
 // Prob2 is Prob for a plain value.
 func (b Base) Prob2(p float64) string { return b.dec(p, 2) }
+
+// Fmt translates key and substitutes {0}, {1}, ... with args.
+func (b Base) Fmt(key string, args ...string) string {
+	s := b.T(key)
+	for i, a := range args {
+		s = strings.ReplaceAll(s, "{"+strconv.Itoa(i)+"}", a)
+	}
+	return s
+}
+
+// SE formats a series position: "S02E05", "S02" for a whole season, "—" when unknown.
+func (b Base) SE(season, episode int) string {
+	switch {
+	case season <= 0:
+		return "—"
+	case episode <= 0:
+		return fmt.Sprintf("S%02d", season)
+	}
+	return fmt.Sprintf("S%02dE%02d", season, episode)
+}

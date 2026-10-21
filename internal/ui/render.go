@@ -17,19 +17,50 @@ import (
 var files embed.FS
 
 // Page names and the fragments (htmx targets) each one can return alone.
-// A target "work-<id>" matches the fragment "work".
 var pages = map[string][]string{
-	"home":    {},
-	"search":  {"results"},
-	"top":     {"top", "work"},
-	"torrent": {"files"},
-	"data":    {"data"},
+	"home":     {},
+	"search":   {"results"},
+	"torrents": {"torrents"},
+	"top":      {"top"},
+	"work":     {"releases"},
+	"torrent":  {"files"},
+	"data":     {"data"},
 }
 
 type chartArgs struct {
 	B     Base
 	C     Chart
 	Label string
+}
+
+type workAudioArgs struct {
+	B Base
+	A []WorkAudio
+	N int
+}
+
+type audioArgs struct {
+	B Base
+	A []Audio
+}
+
+// baseOf accepts a Base or any page model that embeds one.
+func baseOf(v any) Base {
+	switch p := v.(type) {
+	case Base:
+		return p
+	case SearchPage:
+		return p.Base
+	case TopPage:
+		return p.Base
+	case TorrentPage:
+		return p.Base
+	case WorkPage:
+		return p.Base
+	case TorrentsPage:
+		return p.Base
+	}
+	return Base{}
 }
 
 type Renderer struct {
@@ -41,22 +72,34 @@ type Renderer struct {
 func New() (*Renderer, error) {
 	r := &Renderer{tpl: map[string]*template.Template{}, msgs: map[string]map[string]string{}}
 	funcs := template.FuncMap{
-		"kinds":      func() []string { return Kinds },
-		"sources":    func() []string { return Sources },
-		"layers":     func() []string { return Layers },
-		"voiceModes": func() []string { return VoiceModes },
-		"voiceBands": func() []string { return VoiceBands },
-		"topKinds":   func() []string { return TopKinds },
-		"windows":    func() []string { return Windows },
-		"sorts":      func() []string { return Sorts },
-		"concat":     func(a ...string) string { return strings.Join(a, "") },
-		"int64":      func(i int) int64 { return int64(i) },
-		"add":        func(a, b int) int { return a + b },
-		"safeCSS":    func(s string) template.CSS { return template.CSS(s) },
+		"kinds":       func() []string { return Kinds },
+		"sources":     func() []string { return Sources },
+		"layers":      func() []string { return Layers },
+		"voiceModes":  func() []string { return VoiceModes },
+		"voiceBands":  func() []string { return VoiceBands },
+		"topKinds":    func() []string { return TopKinds },
+		"windows":     func() []string { return Windows },
+		"sorts":       func() []string { return Sorts },
+		"qualities":   func() []string { return Qualities },
+		"matchedOpts": func() []string { return []string{"yes", "no"} },
+		"relSources":  func() []string { return ReleaseSources },
+		"relSorts":    func() []string { return ReleaseSorts },
+		"concat":      func(a ...string) string { return strings.Join(a, "") },
+		"int64":       func(i int) int64 { return int64(i) },
+		"add":         func(a, b int) int { return a + b },
+		"safeCSS":     func(s string) template.CSS { return template.CSS(s) },
 		"chartArgs": func(b Base, c Chart, label string) chartArgs {
 			return chartArgs{B: b, C: c, Label: label}
 		},
-		"tmdbState":   StateOf,
+		"tmdbState": StateOf,
+		"workAudio": WorkAudioOf,
+		"workAudioArgs": func(b Base, a []WorkAudio, n int) workAudioArgs {
+			return workAudioArgs{B: b, A: a, N: n}
+		},
+		"audioArgs": func(b any, a []Audio) audioArgs {
+			return audioArgs{B: baseOf(b), A: a}
+		},
+		"audioOf":     func(list []Audio, lang string) Audio { a, _ := AudioOf(list, lang); return a },
 		"lowConf":     func(c float64) bool { return c < LowConfidence },
 		"tmdbImg":     TMDBImg,
 		"tmdbSearch":  TMDBSearchURL,
@@ -96,7 +139,7 @@ func New() (*Renderer, error) {
 
 // Base builds the common page model for a request.
 //
-//	lang: from Lang(); nav: "home" | "search" | "top" | "data" | "".
+//	lang: from Lang(); nav: "home" | "search" | "torrents" | "top" | "data" | "".
 func (r *Renderer) Base(req *http.Request, lang, nav string, voiceLangs []string, loc *time.Location) Base {
 	if _, ok := r.msgs[lang]; !ok {
 		lang = "en"

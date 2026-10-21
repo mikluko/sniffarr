@@ -1,5 +1,3 @@
-// Package ui renders the web UI: page models, templates, translations and
-// static files. Handlers fill the models; ui holds no data of its own.
 package ui
 
 import "time"
@@ -8,19 +6,27 @@ import "time"
 // ("kind.<v>", "source.<v>", "layer.<v>", "voicemode.<v>", "drop.<v>", "voiceband.<v>",
 // "topkind.<v>", "win.<v>", "sort.<v>").
 var (
-	Kinds       = []string{"movie", "series", "music", "book", "software", "other", "unknown"}
+	// Kinds a torrent can be classified as. Only movies and series are titles;
+	// "other" and "unknown" remain visible on the torrents tab.
+	Kinds       = []string{"movie", "series", "other", "unknown"}
 	Sources     = []string{"disc", "remux", "rip", "web", "other"}
 	Layers      = []string{"rules", "title_repeat", "classifier"}
 	VoiceModes  = []string{"any", "p50", "explicit"}
 	DropReasons = []string{"adult", "software", "book", "course", "script", "filetype", "size"}
 	// VoiceBands are the rows of the dubbing table on the data page, in order.
 	VoiceBands = []string{"explicit", "likely", "unlikely", "unscored"}
-	// TopKinds are the tabs of the top page.
-	TopKinds = []string{"movie", "series", "music"}
+	// TopKinds are the kinds of titles: tabs of the top, filter of the titles tab.
+	TopKinds = []string{"movie", "series"}
 	// Windows are the popularity windows.
 	Windows = []string{"24h", "7d", "30d"}
-	// Sorts are the orders of search results.
+	// Sorts are the orders of the torrents tab of search.
 	Sorts = []string{"peers", "last_seen", "size"}
+	// ReleaseSorts are the orders of a title's release table.
+	ReleaseSorts = []string{"peers", "first_seen", "size"}
+	// Qualities of a release, by resolution; "" = unknown.
+	Qualities = []string{"2160p", "1080p", "720p", "sd"}
+	// ReleaseSources are the sources offered by the release table filter.
+	ReleaseSources = []string{"web", "rip", "remux", "disc"}
 )
 
 // PeerCounts are unique peers seen in each window.
@@ -67,6 +73,19 @@ type TMDBWork struct {
 	Confidence float64 // 0–1
 }
 
+// ---------- titles ----------
+
+// WorkSummary is one movie or series as the list views show it: TMDB data plus
+// our numbers. A title found only in TMDB has Releases == 0.
+type WorkSummary struct {
+	ID       string    // URL id, see WorkID
+	Kind     string    // "movie" | "series"
+	TMDB     *TMDBWork // always State == TMDBMatched here
+	Releases int       // our releases, all spellings of the title merged
+	Peers    int64     // unique peers, 7 days
+	Rank     int       // place in the top of its kind, 7 days; 0 = outside
+}
+
 // ---------- home (GET / without query or filters) ----------
 
 type HomePage struct {
@@ -80,32 +99,45 @@ type Summary struct {
 	Pending int64 // classifier queue
 }
 
-// ---------- search results (GET / with q or any filter) ----------
+// ---------- search (GET / with q or any filter) ----------
 
+// SearchPage lists movies and series only; raw torrents live on TorrentsPage.
 type SearchPage struct {
+	Base
+	Q      string
+	Titles WorkResults
+}
+
+// WorkResults is the list of titles. Items come ordered: ours by 7-day peers,
+// then TMDB-only by TMDB popularity.
+type WorkResults struct {
+	Kind     string // "" = movies and series, else a TopKinds value
+	Items    []WorkSummary
+	Ours     int // items with Releases > 0
+	TMDBOnly int // items with Releases == 0
+}
+
+// ---------- torrents (GET /torrents) ----------
+
+// TorrentsPage searches and filters torrents by recognized features, matched to
+// a title or not. Fragment "torrents".
+type TorrentsPage struct {
 	Base
 	Q       string
 	Filters Filters
-	Works   []WorkHit // works whose title matches q, best first; at most a handful
 	Results Results
 }
 
 type Filters struct {
-	Kind      string // "" = all
-	VoiceLang string // one of Base.VoiceLangs
-	Voice     string // VoiceModes value, "" = any
+	Kind      string // "" = all, else a Kinds value
+	Matched   string // "" = all, "yes" = matched to a title, "no" = not matched
+	Quality   string // Qualities value, "" = any
+	VoiceLang string // one of Base.VoiceLangs; default DefaultVoiceLang
+	Voice     string // VoiceModes value for VoiceLang, "" = any
 	Source    string
 	Layer     string
 	MinSizeGB string // raw input, echoed back
 	Sort      string // Sorts value, "" = peers
-}
-
-// WorkHit is a work matched by the search query, shown above the torrents.
-type WorkHit struct {
-	Ref      WorkRef
-	Peers    int64 // in the 7-day window
-	Releases int
-	TMDB     *TMDBWork
 }
 
 type Results struct {
@@ -120,20 +152,37 @@ type Results struct {
 type Row struct {
 	InfoHash   string
 	Name       string
-	Peers      int64 // unique peers, 7 days
+	Work       *WorkSummary // the title; nil = not matched (placeholder instead of the poster)
+	Peers      int64        // unique peers, 7 days
 	Size       int64
 	Kind       string
 	Layer      string
-	Confidence *float64    // set only when Layer == "classifier"
-	Voice      []VoiceCell // aligned with Base.VoiceLangs
+	Confidence *float64 // set only when Layer == "classifier"
+	Quality    string   // Qualities value, "" = unknown
+	Audio      []Audio  // one entry per configured language that has any signal
 	Source     string
 	FirstSeen  time.Time
 	LastSeen   time.Time
 }
 
-type VoiceCell struct {
-	Explicit bool
-	Prob     *float64 // nil = not scored
+// Audio is the dub signal of one release for one configured language.
+type Audio struct {
+	Lang        string   // configured dub language, ISO 639-1
+	Probability *float64 // classifier, 0–1; nil = not scored
+	Marker      bool     // explicit marker found in the name
+	Mark        string   // the marker: a word or a studio ("Дубляж", "MVO", "LostFilm", "seleZen"); "" if unnamed
+	Script      string   // optional script hint for the torrent card, e.g. "cyrillic"
+}
+
+// Likely reports a probability of at least 0.5.
+func (a Audio) Likely() bool { return a.Probability != nil && *a.Probability >= 0.5 }
+
+// WorkAudio summarizes one language over all releases of a title.
+type WorkAudio struct {
+	Lang   string
+	Marked int      // releases with an explicit marker
+	Marks  []string // distinct marks among them, most frequent first
+	Likely int      // releases without a marker but with probability >= 0.5
 }
 
 // ---------- top 100 (GET /top) ----------
@@ -142,44 +191,74 @@ type TopPage struct {
 	Base
 	Kind      string // TopKinds value
 	Window    string // Windows value
-	VoiceMode string // VoiceModes value; filters works by their best release
-	Computed  time.Time
-	Limit     int  // 100
-	All       bool // Works holds all Limit entries; otherwise the first 25
-	Works     []Work
+	VoiceLang string // language the voice filter applies to; "" when none configured
+	VoiceMode string // VoiceModes value. With "explicit" or "p50" Peers count only
+	//                  matching releases: explicit = Marker; p50 = Marker or Probability >= 0.5
+	Computed time.Time
+	Limit    int  // 100
+	All      bool // Works holds all Limit entries; otherwise the first 25
+	Works    []Work
 }
 
-// WorkRef names a work: a movie (title + year), a series season (title + season),
-// an album (artist + album), a book (author + title), a program (name + version).
-type WorkRef struct {
-	ID    string // opaque; safe in a URL path segment and in an HTML id
-	Kind  string
-	Title string // "Дюна: Часть вторая", "Сёгун", "Pink Floyd"
-	Sub   string // "2024", "S01", "The Dark Side Of The Moon"
-	Rank  int    // place in the top of its kind for the 7-day window, 0 = outside
-}
-
+// Work is one row of the top. The row links to the title page.
 type Work struct {
-	Ref       WorkRef
-	Rank      int // place in this top (window and filter)
-	Peers     int64
-	Delta     *float64 // change against the previous window, nil = was absent ("new")
-	Releases  int
-	Voice     []VoiceCell // best release per language, aligned with Base.VoiceLangs
-	Sources   []string    // Sources values present among releases
-	FirstSeen time.Time   // earliest release
-	Open      bool        // Items is filled and shown
-	Items     []Release   // releases by peers, filled only when Open
-	TMDB      *TMDBWork
+	WorkSummary             // Rank here is the place in this top (window and filter)
+	Delta       *float64    // change against the previous window, nil = was absent ("new")
+	Audio       []WorkAudio // one entry per configured language, in Base.VoiceLangs order
+	Sources     []string    // Sources values present among releases
+	FirstSeen   time.Time   // earliest release
+}
+
+// ---------- title page (GET /w/{id}) ----------
+
+// WorkPage is the page of one movie or series: TMDB on top, our releases below.
+type WorkPage struct {
+	Base
+	Work     WorkSummary
+	Ranks    [3]int     // place in the top of its kind for 24h, 7d, 30d; 0 = outside
+	Peers    PeerCounts // all releases
+	Audio    []WorkAudio
+	Releases ReleaseTable
+}
+
+// ReleaseTable is the filterable table of a title's releases; it is also the
+// htmx fragment "releases".
+type ReleaseTable struct {
+	WorkID  string
+	Kind    string // "series" shows season and episode
+	Filters ReleaseFilters
+	Seasons []int // seasons present among releases, for the season filter
+	Total   int   // all releases of the title
+	Matched int   // releases passing Filters
+	Offset  int
+	Shown   int
+	PrevURL string
+	NextURL string
+	Rows    []Release
+}
+
+type ReleaseFilters struct {
+	Quality   string // Qualities value, "" = any
+	Source    string // ReleaseSources value, "" = any
+	MinGB     string // raw inputs, echoed back
+	MaxGB     string
+	VoiceLang string // one of Base.VoiceLangs
+	Voice     string // VoiceModes value, "" = any
+	Season    string // "" = all, else a number; series only
+	Episode   string // "" = all, else a number; series only
+	Sort      string // ReleaseSorts value, "" = peers
 }
 
 type Release struct {
 	InfoHash  string
 	Name      string
-	Peers     int64
+	Peers     int64 // unique peers, 7 days
 	Size      int64
-	Voice     []VoiceCell
-	Source    string
+	Quality   string // Qualities value, "" = unknown
+	Source    string // Sources value
+	Season    int    // series: 0 = unknown
+	Episode   int    // series: 0 = whole season or unknown
+	Audio     []Audio
 	FirstSeen time.Time
 }
 
@@ -187,7 +266,7 @@ type Release struct {
 
 type TorrentPage struct {
 	Base
-	BackURL string // search URL to return to, "" = "/"
+	BackURL string // URL to return to, "" = the title page or the top
 	Torrent Torrent
 }
 
@@ -202,15 +281,16 @@ type Torrent struct {
 	DiscoveredVia string // "announce" | "sample"
 	TMDBQuery     string // cleaned title, used for TMDB/IMDb search links when not matched
 	Peers         PeerCounts
-	TMDB          *TMDBWork // match of the title key; shown only when Work != nil
 
-	Work       *WorkRef // nil = not grouped into a work
-	WorkRels   int      // releases of the work
-	RankInWork int      // place of this torrent among them by 7-day peers
+	// Work is the movie or series this torrent belongs to; nil when the title
+	// is not matched to TMDB. TMDB then carries the state (unmatched / unchecked).
+	Work       *WorkSummary
+	TMDB       *TMDBWork
+	RankInWork int // place of this torrent among the title's releases by 7-day peers
 
 	Kind   Answer
 	Source Answer
-	Voice  []VoiceDetail // aligned with Base.VoiceLangs
+	Audio  []Audio // card shows every configured language; missing ones render as "—"
 	Rules  []RuleHit
 
 	Files FileList
@@ -220,13 +300,6 @@ type Answer struct {
 	Value      string
 	Layer      string
 	Confidence *float64
-}
-
-type VoiceDetail struct {
-	Lang       string
-	Mark       string   // studio or tag that matched, "" = none
-	ScriptHint string   // e.g. "cyrillic", "" = none
-	Prob       *float64 // classifier probability, nil = not scored
 }
 
 type RuleHit struct {

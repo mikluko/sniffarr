@@ -161,10 +161,14 @@ func TestSearchByID(t *testing.T) {
 		stored{"Alien.S01E01.720p", "series", "s:alien"},
 		stored{"Alien.1979.DVDRip", "movie", "y:alien 1979"},
 	)
-	require.NoError(t, s.RecordTitle(ctx, "y:alien 1979", store.Title{Year: 1979, Confidence: 1, Layer: store.LayerTMDB,
-		IDs: []store.ExternalID{{Provider: "tmdb", ID: "348"}, {Provider: "imdb", ID: "tt0078748"}}}, t0))
-	require.NoError(t, s.RecordTitle(ctx, "s:alien", store.Title{Confidence: 1, Layer: store.LayerTMDB,
-		IDs: []store.ExternalID{{Provider: "tmdb", ID: "348"}, {Provider: "tvdb", ID: "81189"}}}, t0))
+	record := func(key, typ string, id store.ExternalID) {
+		t.Helper()
+		work, _, err := s.RecordMatch(ctx, key, store.Found{Hit: &store.Hit{Type: typ, TMDBID: 348}, Confidence: 1, Layer: store.LayerTMDB}, t0)
+		require.NoError(t, err)
+		require.NoError(t, s.RecordDetails(ctx, work, store.Details{Type: typ}, []store.ExternalID{id}, t0))
+	}
+	record("y:alien 1979", store.TypeMovie, store.ExternalID{Provider: "imdb", ID: "tt0078748"})
+	record("s:alien", store.TypeTV, store.ExternalID{Provider: "tvdb", ID: "81189"})
 
 	got := items(t, get(t, srv, "t", "movie", "tmdbid", "348"))
 	require.Equal(t, []string{"Alien.1979.DVDRip", "Alien.1979.1080p.BluRay", "Alien.1979.2160p.UHD.BluRay"}, titles(got),
