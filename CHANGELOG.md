@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.19.0] - 2026-10-22
 
+### Fixed
+
+- The chart's pods take `fsGroup` 65532, so `api.persistence.type: pvc` on a fresh volume owned by root is writable; litestream's restore failed on it with `permission denied`.
+
 ### Added
 
 - `SNIFFARR_RETENTION_IDLE`, default `168h`: a stored torrent matched to no TMDB work is deleted once it has not been seen for that long; the others keep `SNIFFARR_RETENTION`. `sniffarr.store.retention.deletions` carries `sniffarr.store.retention.class`, `idle` or `expired`.
@@ -16,12 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The dead set keys an infohash by its first 8 bytes, about 40 bytes an entry with its index instead of 68; a migration converts the stored entries, keeping the latest expiry of the hashes that share a key. Two infohashes that share the first 8 bytes are kept out of the queue together.
-
-## [0.18.1] - 2026-10-22
-
-### Fixed
-
-- The chart's pods take `fsGroup` 65532, so `api.persistence.type: pvc` on a fresh volume owned by root is writable; litestream's restore failed on it with `permission denied`.
 
 ## [0.18.0] - 2026-10-21
 
@@ -285,8 +283,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
 [Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.19.0...HEAD
-[0.19.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.1...v0.19.0
-[0.18.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.0...v0.18.1
+[0.19.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.0...v0.19.0
 [0.18.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.17.1...v0.18.0
 [0.17.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.17.0...v0.17.1
 [0.17.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.16.0...v0.17.0
