@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-22
+
+### Added
+
+- Calls to TypeSafe, TMDB and the Radarr and Sonarr APIs record OpenTelemetry client spans and carry the trace context.
+
+### Changed
+
+- Torznab answers with the classifications and TMDB matches already stored instead of waiting up to `SNIFFARR_SEARCH_CLASSIFY_WAIT` for them; the search still starts them in the background, and later searches return their results. Searches from the web UI wait as before.
+- Searches running at the same time classify a release once between them.
+
 ## [0.23.1] - 2026-10-22
 
 ### Added
@@ -338,7 +349,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.1...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.24.0...HEAD
+[0.24.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.1...v0.24.0
 [0.23.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.0...v0.23.1
 [0.23.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.1...v0.23.0
 [0.22.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.0...v0.22.1
