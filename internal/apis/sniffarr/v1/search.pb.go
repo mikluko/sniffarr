@@ -334,7 +334,13 @@ type SearchRequest struct {
 	// Only releases of the work with this ID; query may be empty then.
 	Id *ExternalId `protobuf:"bytes,7,opt,name=id,proto3,oneof" json:"id,omitempty"`
 	// The language of TMDBWork texts, "ru" or "en"; "en" when empty.
-	Lang          string `protobuf:"bytes,8,opt,name=lang,proto3" json:"lang,omitempty"`
+	Lang string `protobuf:"bytes,8,opt,name=lang,proto3" json:"lang,omitempty"`
+	// Only releases whose name gives this season; one whose name gives none
+	// never matches.
+	Season *int32 `protobuf:"varint,9,opt,name=season,proto3,oneof" json:"season,omitempty"`
+	// With season, only releases of this episode and whole seasons; requires
+	// season.
+	Episode       *int32 `protobuf:"varint,10,opt,name=episode,proto3,oneof" json:"episode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -416,6 +422,20 @@ func (x *SearchRequest) GetLang() string {
 		return x.Lang
 	}
 	return ""
+}
+
+func (x *SearchRequest) GetSeason() int32 {
+	if x != nil && x.Season != nil {
+		return *x.Season
+	}
+	return 0
+}
+
+func (x *SearchRequest) GetEpisode() int32 {
+	if x != nil && x.Episode != nil {
+		return *x.Episode
+	}
+	return 0
 }
 
 type SearchResponse struct {
@@ -1150,7 +1170,7 @@ var File_sniffarr_v1_search_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\n" +
-	"\x18sniffarr/v1/search.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd8\x02\n" +
+	"\x18sniffarr/v1/search.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xab\x03\n" +
 	"\rSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12'\n" +
 	"\x05kinds\x18\x02 \x03(\x0e2\x11.sniffarr.v1.KindR\x05kinds\x12\x14\n" +
@@ -1158,10 +1178,16 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\x0eaudio_language\x18\x05 \x01(\tH\x00R\raudioLanguage\x88\x01\x01\x127\n" +
 	"\x15min_audio_probability\x18\x06 \x01(\x02H\x01R\x13minAudioProbability\x88\x01\x01\x12,\n" +
 	"\x02id\x18\a \x01(\v2\x17.sniffarr.v1.ExternalIdH\x02R\x02id\x88\x01\x01\x12\x12\n" +
-	"\x04lang\x18\b \x01(\tR\x04langB\x11\n" +
+	"\x04lang\x18\b \x01(\tR\x04lang\x12\x1b\n" +
+	"\x06season\x18\t \x01(\x05H\x03R\x06season\x88\x01\x01\x12\x1d\n" +
+	"\aepisode\x18\n" +
+	" \x01(\x05H\x04R\aepisode\x88\x01\x01B\x11\n" +
 	"\x0f_audio_languageB\x18\n" +
 	"\x16_min_audio_probabilityB\x05\n" +
-	"\x03_idJ\x04\b\x03\x10\x04R\x11min_russian_audio\"B\n" +
+	"\x03_idB\t\n" +
+	"\a_seasonB\n" +
+	"\n" +
+	"\b_episodeJ\x04\b\x03\x10\x04R\x11min_russian_audio\"B\n" +
 	"\x0eSearchResponse\x120\n" +
 	"\breleases\x18\x01 \x03(\v2\x14.sniffarr.v1.ReleaseR\breleases\"<\n" +
 	"\n" +

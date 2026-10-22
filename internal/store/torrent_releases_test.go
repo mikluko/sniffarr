@@ -102,6 +102,41 @@ func TestSearch(t *testing.T) {
 	require.Nil(t, r.Audio)
 }
 
+func TestSearchSeason(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for i, x := range []struct {
+		name            string
+		season, episode int
+	}{
+		{"Fallout.S01E03.1080p", 1, 3},
+		{"Fallout.S01E04.1080p", 1, 4},
+		{"Fallout.S01.2160p", 1, 0},
+		{"Fallout.S02E03.1080p", 2, 3},
+		{"Fallout.2024.1080p", 0, 0},
+	} {
+		tr := torrent(byte(i+1), x.name)
+		tr.Season, tr.Episode, tr.SeenAt = x.season, x.episode, t0.Add(time.Duration(i)*time.Minute)
+		_, _, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	names := func(q Query) []string {
+		t.Helper()
+		q.Limit = 10
+		rs, err := s.Search(ctx, q)
+		require.NoError(t, err)
+		var out []string
+		for _, r := range rs {
+			out = append(out, r.Name)
+		}
+		return out
+	}
+	require.Equal(t, []string{"Fallout.S01.2160p", "Fallout.S01E04.1080p", "Fallout.S01E03.1080p"}, names(Query{Season: new(1)}))
+	require.Equal(t, []string{"Fallout.S01.2160p", "Fallout.S01E03.1080p"}, names(Query{Season: new(1), Episode: 3}), "a whole season has every episode")
+	require.Empty(t, names(Query{Season: new(0)}), "a name without a season matches no season")
+	require.Len(t, names(Query{}), 5)
+}
+
 func classify(t *testing.T, s *Store, id int64, c Classification) int {
 	t.Helper()
 	n, err := s.Classify(context.Background(), id, c, t0)

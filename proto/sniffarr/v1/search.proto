@@ -39,6 +39,12 @@ message SearchRequest {
   optional ExternalId id = 7;
   // The language of TMDBWork texts, "ru" or "en"; "en" when empty.
   string lang = 8;
+  // Only releases whose name gives this season; one whose name gives none
+  // never matches.
+  optional int32 season = 9;
+  // With season, only releases of this episode and whole seasons; requires
+  // season.
+  optional int32 episode = 10;
 }
 
 message SearchResponse {

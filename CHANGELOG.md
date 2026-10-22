@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-22
+
+### Added
+
+- Torznab items carry `seeders` and `peers`: the release's distinct peers over the last 7 days.
+- `season` and `episode` in `SearchRequest`: only releases whose name gives the season, and with `episode` that episode and the season's whole packs.
+
+### Fixed
+
+- Torznab `tvsearch` honours `season` and `ep`: `season` selects the releases of that season, `ep` with it that episode and the season's whole packs, before `offset` and `limit` are applied; a name that gives no season matches none, and an invalid value answers error 201.
+
 ## [0.22.0] - 2026-10-22
 
 ### Added
@@ -310,7 +321,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.1...HEAD
+[0.22.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.0...v0.22.1
 [0.22.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.21.0...v0.22.0
 [0.21.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.20.0...v0.21.0
 [0.20.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.19.0...v0.20.0

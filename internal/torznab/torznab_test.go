@@ -3,19 +3,24 @@ package torznab
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/mikluko/sniffarr/internal/database"
+	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/search"
+	"github.com/mikluko/sniffarr/internal/sketch"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -34,8 +39,10 @@ func serve(t *testing.T, torrents ...stored) (*httptest.Server, *store.Store) {
 	s, err := store.New(ctx, db, store.Options{TMDB: true})
 	require.NoError(t, err)
 	for i, x := range torrents {
+		p := names.Parse(x.name)
 		tr := store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: x.name, Size: int64(i+1) << 30, Discovery: "sample",
-			SeenAt: t0.Add(time.Duration(i) * time.Minute), Kind: x.kind, TitleKey: x.key}
+			SeenAt: t0.Add(time.Duration(i) * time.Minute), Kind: x.kind, TitleKey: x.key,
+			Year: p.Year, Season: p.Season, Episode: p.Episode, Quality: p.Quality}
 		if x.kind != "" {
 			tr.KindLayer = store.LayerRules
 		}
@@ -183,7 +190,7 @@ func TestSearchByID(t *testing.T) {
 	require.Equal(t, t0.Format(time.RFC1123Z), uhd.PubDate)
 	require.Equal(t, map[string]string{
 		"category": "2045", "size": "1073741824", "infohash": "0100000000000000000000000000000000000000", "magneturl": magnet,
-		"tmdbid": "348", "imdbid": "0078748",
+		"tmdbid": "348", "imdbid": "0078748", "seeders": "0", "peers": "0",
 	}, uhd.attrs())
 	require.Equal(t, "2040", got[1].attrs()["category"])
 	require.Equal(t, "2030", got[0].attrs()["category"])
@@ -197,6 +204,62 @@ func TestSearchByID(t *testing.T) {
 	require.Equal(t, "81189", tv[0].attrs()["tvdbid"])
 	require.Empty(t, items(t, get(t, srv, "t", "tvsearch", "tmdbid", "348", "cat", "2000")), "a movie category in a TV search")
 	require.Len(t, items(t, get(t, srv, "t", "search", "q", "alien", "cat", "5000,5040")), 1)
+}
+
+func TestSearchSeasonEpisode(t *testing.T) {
+	ctx := context.Background()
+	torrents := []stored{
+		{"Fallout.S01E03.1080p", "series", "s:fallout"},
+		{"Fallout.S01.2160p", "series", "s:fallout"},
+		{"Fallout.S01E04.1080p", "series", "s:fallout"},
+		{"Fallout.1080p", "series", "s:fallout"},
+	}
+	for e := 1; e <= 5; e++ {
+		torrents = append(torrents, stored{fmt.Sprintf("Fallout.S02E%02d.1080p", e), "series", "s:fallout"})
+	}
+	srv, s := serve(t, torrents...)
+	work, _, err := s.RecordMatch(ctx, "s:fallout", store.Found{Hit: &store.Hit{Type: store.TypeTV, TMDBID: 106379}, Confidence: 1, Layer: store.LayerTMDB}, t0)
+	require.NoError(t, err)
+	require.NoError(t, s.RecordDetails(ctx, work, store.Details{Type: store.TypeTV}, []store.ExternalID{{Provider: "tvdb", ID: "416744"}}, t0))
+	search := func(params ...string) []string {
+		t.Helper()
+		return titles(items(t, get(t, srv, append([]string{"t", "tvsearch", "tvdbid", "416744"}, params...)...)))
+	}
+
+	require.Len(t, search(), 9)
+	require.Equal(t, []string{"Fallout.S01E04.1080p", "Fallout.S01.2160p", "Fallout.S01E03.1080p"}, search("season", "1"),
+		"a name without a season is of no season")
+	require.Equal(t, []string{"Fallout.S01.2160p", "Fallout.S01E03.1080p"}, search("season", "1", "ep", "3"), "a whole season has every episode")
+	require.Equal(t, []string{"Fallout.S01.2160p", "Fallout.S01E03.1080p"}, search("season", "1", "limit", "2", "offset", "1"),
+		"pages are cut after the season filter")
+	require.Empty(t, search("season", "3"))
+	require.Empty(t, search("season", "2024", "ep", "10/22"), "names give no air dates")
+	require.Len(t, items(t, get(t, srv, "t", "search", "season", "1")), 9, "only a TV search reads season")
+}
+
+func TestSearchPeers(t *testing.T) {
+	ctx := context.Background()
+	srv, s := serve(t, stored{"Heat.1995.1080p", "movie", ""}, stored{"Ronin.1998.1080p", "movie", ""})
+	k, err := s.HashKey(ctx)
+	require.NoError(t, err)
+	sk := sketch.New()
+	for i := range 40 {
+		sk.Add(k.Hash(netip.AddrPortFrom(netip.AddrFrom4([4]byte{10, 0, 0, byte(i)}), 6881)))
+	}
+	_, _, err = s.MergePeers(ctx, []store.PeerSketch{{Hash: store.Hash{1}, Hour: t0, Sketch: sk.Bytes()}})
+	require.NoError(t, err)
+	require.NoError(t, s.ComputeTop(ctx, t0))
+
+	got := map[string]map[string]string{}
+	for _, it := range items(t, get(t, srv, "t", "movie")) {
+		got[it.Title] = it.attrs()
+	}
+	seeders, err := strconv.Atoi(got["Heat.1995.1080p"]["seeders"])
+	require.NoError(t, err)
+	require.InDelta(t, 40, seeders, 4)
+	require.Equal(t, got["Heat.1995.1080p"]["seeders"], got["Heat.1995.1080p"]["peers"])
+	require.Equal(t, "0", got["Ronin.1998.1080p"]["seeders"])
+	require.Equal(t, "0", got["Ronin.1998.1080p"]["peers"])
 }
 
 func TestSearchOnlyMoviesAndSeries(t *testing.T) {
@@ -253,5 +316,20 @@ func TestErrors(t *testing.T) {
 	} {
 		code, _ := parseError(t, get(t, srv, tt.params...))
 		require.Equal(t, tt.code, code, tt.params)
+	}
+	for _, tt := range []struct {
+		params []string
+		desc   string
+	}{
+		{[]string{"season", "one"}, "Incorrect parameter (season)"},
+		{[]string{"season", "-1"}, "Incorrect parameter (season)"},
+		{[]string{"season", "1", "ep", "x"}, "Incorrect parameter (ep)"},
+		{[]string{"season", "1", "ep", "0"}, "Incorrect parameter (ep)"},
+		{[]string{"season", "2024", "ep", "13/01"}, "Incorrect parameter (ep)"},
+		{[]string{"ep", "3"}, "Incorrect parameter (ep)"},
+	} {
+		code, desc := parseError(t, get(t, srv, append([]string{"t", "tvsearch"}, tt.params...)...))
+		require.Equal(t, 201, code, tt.params)
+		require.Equal(t, tt.desc, desc, tt.params)
 	}
 }

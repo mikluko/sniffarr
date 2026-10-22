@@ -117,6 +117,15 @@ func (h *Handler) search(ctx context.Context, t string, q map[string][]string) (
 	if req.Id, err = idOf(t, get); err != nil {
 		return nil, errParameter, err
 	}
+	if t == "tvsearch" {
+		var dated bool
+		if req.Season, req.Episode, dated, err = episodeOf(get("season"), get("ep")); err != nil {
+			return nil, errParameter, err
+		}
+		if dated {
+			return f, 0, nil
+		}
+	}
 	res, err := h.Search.Search(ctx, connect.NewRequest(req))
 	if connect.CodeOf(err) == connect.CodeInvalidArgument {
 		return nil, errParameter, err
@@ -200,6 +209,39 @@ func idOf(t string, get func(string) string) (*sniffarrv1.ExternalId, error) {
 	return nil, nil
 }
 
+// episodeOf reads the season and ep parameters of a TV search. An ep in
+// Sonarr's month/day form, for a daily series, is dated: names give no air
+// dates, so it matches nothing.
+func episodeOf(season, ep string) (s, e *int32, dated bool, err error) {
+	season, ep = strings.TrimSpace(season), strings.TrimSpace(ep)
+	if season != "" {
+		n, err := strconv.ParseInt(season, 10, 32)
+		if err != nil || n < 0 {
+			return nil, nil, false, errors.New("Incorrect parameter (season)")
+		}
+		s = new(int32(n))
+	}
+	if ep == "" {
+		return s, nil, false, nil
+	}
+	if s == nil {
+		return nil, nil, false, errors.New("Incorrect parameter (ep)")
+	}
+	if month, day, ok := strings.Cut(ep, "/"); ok {
+		m, merr := strconv.Atoi(month)
+		d, derr := strconv.Atoi(day)
+		if merr != nil || derr != nil || m < 1 || m > 12 || d < 1 || d > 31 {
+			return nil, nil, false, errors.New("Incorrect parameter (ep)")
+		}
+		return s, nil, true, nil
+	}
+	n, err := strconv.ParseInt(ep, 10, 32)
+	if err != nil || n <= 0 {
+		return nil, nil, false, errors.New("Incorrect parameter (ep)")
+	}
+	return s, new(int32(n)), false, nil
+}
+
 var (
 	uhd = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:2160p|4k|uhd)(?:$|[^\p{L}\p{N}])`)
 	hd  = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(?:1080[pi]|720p)(?:$|[^\p{L}\p{N}])`)
@@ -221,9 +263,14 @@ func category(r *sniffarrv1.Release) int {
 	return sd
 }
 
+// itemOf is the item of a release. Its seeders and peers are both the
+// release's distinct peers over the last 7 days, peers_week: the DHT does
+// not tell seeders apart, and a count over a shorter window would take a
+// sketch union per item.
 func itemOf(r *sniffarrv1.Release) item {
 	magnet := r.GetMagnet()
 	cat := strconv.Itoa(category(r))
+	peers := strconv.FormatInt(r.GetPeersWeek(), 10)
 	it := item{
 		Title:     r.GetName(),
 		GUID:      guid{Value: magnet},
@@ -237,6 +284,8 @@ func itemOf(r *sniffarrv1.Release) item {
 			{Name: "size", Value: strconv.FormatInt(r.GetSize(), 10)},
 			{Name: "infohash", Value: hex.EncodeToString(r.GetInfohash())},
 			{Name: "magneturl", Value: magnet},
+			{Name: "seeders", Value: peers},
+			{Name: "peers", Value: peers},
 		},
 	}
 	for _, id := range r.GetIds() {

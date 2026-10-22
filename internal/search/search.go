@@ -120,6 +120,16 @@ func (s *Service) Search(ctx context.Context, req *connect.Request[sniffarrv1.Se
 		}
 		q.ID = &store.ExternalID{Provider: id.GetProvider(), ID: id.GetId()}
 	}
+	switch {
+	case m.Season != nil && m.GetSeason() < 0:
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("negative season"))
+	case m.Episode != nil && m.Season == nil:
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("episode without season"))
+	case m.Episode != nil && m.GetEpisode() <= 0:
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("episode not positive"))
+	case m.Season != nil:
+		q.Season, q.Episode = new(int(m.GetSeason())), int(m.GetEpisode())
+	}
 	var found []store.Release
 	if s.Lazy != nil {
 		found, err = s.Lazy.search(ctx, s.Store, q)

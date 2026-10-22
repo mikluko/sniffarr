@@ -292,17 +292,19 @@ a search's are, and returns movies and series only: `movie` searches movies,
 `tvsearch` series, `search` both, and `cat` narrows them to Movies (2000s) or
 TV (5000s). An ID parameter selects the releases matched to that work,
 `tmdbid` among movies for `movie` and among series for `tvsearch`; `imdbid`
-takes either `tt0078748` or `78748`. `season` and `ep` are accepted and
-ignored. `limit` is 100 by default and `offset` and `limit` together 500 at
-most.
+takes either `tt0078748` or `78748`. `season` selects the releases whose
+name gives that season, and `ep` with it that episode and the season's whole
+packs; a name that gives no season matches no `season`, and an `ep` in the
+daily form `MM/DD` matches nothing. `limit` is 100 by default and `offset`
+and `limit` together 500 at most, counted among the releases that match.
 
 Each item is a release: its name, its magnet as guid, link and enclosure, its
 first sighting as `pubDate`, and the attributes `category`, `size`,
-`infohash`, `magneturl`, and `tmdbid`, `imdbid` (without `tt`) and `tvdbid`
-when its title is matched. The category is Movies or TV, `/UHD` for a name
-with `2160p`, `4K` or `UHD`, `/HD` for `1080p`, `1080i` or `720p`, `/SD`
-otherwise. Items carry no seeders or peers, which the DHT does not tell;
-Radarr's minimum-seeders check passes a release without them.
+`infohash`, `magneturl`, `seeders`, `peers`, and `tmdbid`, `imdbid` (without
+`tt`) and `tvdbid` when its title is matched. The category is Movies or TV,
+`/UHD` for a name with `2160p`, `4K` or `UHD`, `/HD` for `1080p`, `1080i` or
+`720p`, `/SD` otherwise. `seeders` and `peers` are both the release's distinct
+peers over the last 7 days, since the DHT does not tell seeders apart.
 
 In Prowlarr, add an indexer of type Generic Torznab with URL
 `http://<host>:8080/torznab`, API path `/api`, and the token as API key.

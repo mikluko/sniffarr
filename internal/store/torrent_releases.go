@@ -276,8 +276,12 @@ type Query struct {
 	// probability is unknown.
 	Unexamined bool
 	// ID, when set, selects releases of the work with the ID.
-	ID    *ExternalID
-	Limit int
+	ID *ExternalID
+	// Season, when set, selects releases whose name gives the season.
+	// Episode, unless 0, narrows them to the episode and whole seasons.
+	Season  *int
+	Episode int
+	Limit   int
 }
 
 const releaseColumns = `t.id, t.infohash, t.name, t.size, t.file_count, coalesce(t.kind, ''), coalesce(t.kind_layer, ''),
@@ -340,6 +344,14 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 	case q.ID != nil:
 		where = append(where, "t.work IN (SELECT i.work FROM tmdb_ids i WHERE i.provider = ? AND i.id = ?)")
 		args = append(args, q.ID.Provider, q.ID.ID)
+	}
+	if q.Season != nil {
+		where = append(where, "t.season = ?")
+		args = append(args, *q.Season)
+		if q.Episode != 0 {
+			where = append(where, "(t.episode IS NULL OR t.episode = ?)")
+			args = append(args, q.Episode)
+		}
 	}
 	stmt := "SELECT " + releaseColumns + " FROM " + from
 	if len(where) > 0 {
