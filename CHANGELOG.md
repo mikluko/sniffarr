@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-22
+
 ### Added
 
 - SQLite statements are traced as child spans of the request that runs them, with the statement text and without its arguments, and measured in `db.client.operation.duration` by `db.pool`, `db.operation.name` and `code.function.name`; `db.sql.connection.*` reports both pools.
@@ -286,7 +288,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.19.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.20.0...HEAD
+[0.20.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.19.0...v0.20.0
 [0.19.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.0...v0.19.0
 [0.18.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.17.1...v0.18.0
 [0.17.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.17.0...v0.17.1
