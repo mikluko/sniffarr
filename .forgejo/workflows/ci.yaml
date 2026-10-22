@@ -46,4 +46,4 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: https://github.com/mikluko/action-changelog@v1
+      - uses: https://forge.sarak.sh/actions/changelog@v1
