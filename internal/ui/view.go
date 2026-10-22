@@ -327,7 +327,7 @@ type DataPage struct {
 }
 
 type Stats struct {
-	At           time.Time
+	Computed     time.Time // when the API computed the counts
 	Total        int64
 	NewDay       int64
 	NewWeek      int64

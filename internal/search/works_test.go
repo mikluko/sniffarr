@@ -117,6 +117,7 @@ func TestBrowserHome(t *testing.T) {
 	require.Equal(t, int64(7), res.Msg.GetTotal())
 	require.Equal(t, int64(7), res.Msg.GetNewDay())
 	require.Zero(t, res.Msg.GetPending())
+	require.Equal(t, now, res.Msg.GetComputedAt().AsTime())
 }
 
 func TestBrowserTop(t *testing.T) {

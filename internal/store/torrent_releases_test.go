@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -302,6 +303,35 @@ func TestStats(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, len(pending), st.Pending, "what Unclassified selects")
 	require.EqualValues(t, 1, st.Pending)
+}
+
+func TestStatsPlans(t *testing.T) {
+	s := open(t)
+	for _, tt := range []struct {
+		query, want string
+		args        []any
+		grouped     bool
+	}{
+		{classCounts, "SCAN torrent_releases USING COVERING INDEX torrent_releases_counts", nil, true},
+		{rejectedCounts, "SCAN ingest_rejected USING COVERING INDEX ingest_rejected_reason", nil, true},
+		{dayCounts, "SEARCH torrent_releases USING COVERING INDEX torrent_releases_first_seen (first_seen>?)", []any{0, 1, 0}, false},
+		{pendingCounts(1), "SCAN t USING INDEX torrent_releases_background", []any{"ru"}, false},
+	} {
+		var plan []string
+		require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
+			var id, parent, unused int
+			var detail string
+			if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+				return err
+			}
+			plan = append(plan, detail)
+			return nil
+		}, "EXPLAIN QUERY PLAN "+tt.query, tt.args...))
+		require.Contains(t, plan, tt.want, tt.query)
+		if tt.grouped {
+			require.NotContains(t, plan, "USE TEMP B-TREE FOR GROUP BY", "grouped in index order: %s", tt.query)
+		}
+	}
 }
 
 func TestCardPeersAndWork(t *testing.T) {

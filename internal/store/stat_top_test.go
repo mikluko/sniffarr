@@ -266,14 +266,3 @@ func TestFindWorks(t *testing.T) {
 		require.Equal(t, tt.want, got, "%q %q", tt.text, tt.typ)
 	}
 }
-
-func TestHome(t *testing.T) {
-	ctx := context.Background()
-	s := seeded(t)
-	h, err := s.Home(ctx, t0.Add(time.Hour))
-	require.NoError(t, err)
-	require.Equal(t, Home{Total: 10, NewDay: 10}, h)
-	h, err = s.Home(ctx, t0.Add(25*time.Hour))
-	require.NoError(t, err)
-	require.Equal(t, Home{Total: 10}, h)
-}

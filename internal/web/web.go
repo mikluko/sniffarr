@@ -642,12 +642,16 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	st := res.Msg
+	computed := now
+	if at := st.GetComputedAt(); at != nil {
+		computed = at.AsTime()
+	}
 	days := st.GetDays()
 	if len(days) < statDays {
 		days = append(days, make([]int64, statDays-len(days))...)
 	}
 	out := ui.Stats{
-		At:         now,
+		Computed:   computed,
 		Total:      st.GetTotal(),
 		NewDay:     days[0],
 		Classifier: ui.ClassifierStats{Pending: st.GetPending(), DoneDay: st.GetTokensUsedDay(), LimitDay: st.GetTokensLimitDay()},
@@ -695,7 +699,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	slices.SortStableFunc(out.Dropped, func(a, b ui.Count) int {
 		return cmp.Or(cmp.Compare(b.N, a.N), cmp.Compare(slices.Index(ui.DropReasons, a.Key), slices.Index(ui.DropReasons, b.Key)))
 	})
-	out.Daily, out.Weekly = s.charts(now, days)
+	out.Daily, out.Weekly = s.charts(computed, days)
 	s.render(w, req, "data", ui.DataPage{Base: s.base(req, s.lang(w, req), "data"), Stats: out})
 }
 

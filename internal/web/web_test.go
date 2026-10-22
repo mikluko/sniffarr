@@ -174,7 +174,8 @@ func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
 func browse(t *testing.T, st *store.Store, tags []string) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
-	b := &search.Browser{Store: st, TMDB: titleSearch{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, Languages: tags, Now: func() time.Time { return now }}
+	b := &search.Browser{Store: st, TMDB: titleSearch{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, Languages: tags, Now: func() time.Time { return now },
+		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }}}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b, connect.WithInterceptors(auth.NewBearer("search"))))
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)
@@ -507,6 +508,7 @@ func TestData(t *testing.T) {
 	require.Contains(t, body, `<a href="/torrents?kind=other">other</a></td><td class="r">1</td>`, "music counts as other")
 	require.Contains(t, body, `<a href="/torrents?kind=unknown">unknown</a></td><td class="r">1</td>`)
 	require.Contains(t, body, "25.0%", "tokens used of the daily limit")
+	require.Contains(t, body, `title="2026-10-20 11:53">updated 7 min ago</div>`, "when the API computed the counts")
 	require.Contains(t, body, "Dub by language")
 	require.NotContains(t, body, "Grafana")
 	frag := fragment(t, get(t, h, "/data", "data"), "data")

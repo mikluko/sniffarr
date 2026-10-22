@@ -76,9 +76,11 @@ type BrowseServiceClient interface {
 	// Card returns one release with every stored file, its peers and its
 	// work, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
-	// Stats returns the store's counts.
+	// Stats returns the store's counts as last computed, which the server
+	// recomputes periodically.
 	Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error)
-	// Home returns the counts the home page shows.
+	// Home returns the counts the home page shows, from the same computation
+	// as Stats.
 	Home(context.Context, *connect.Request[v1.HomeRequest]) (*connect.Response[v1.HomeResponse], error)
 	// Top returns one page of the 100 movies or series with the most peers
 	// over a window, as last computed; the server recomputes every 10
@@ -236,9 +238,11 @@ type BrowseServiceHandler interface {
 	// Card returns one release with every stored file, its peers and its
 	// work, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
-	// Stats returns the store's counts.
+	// Stats returns the store's counts as last computed, which the server
+	// recomputes periodically.
 	Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error)
-	// Home returns the counts the home page shows.
+	// Home returns the counts the home page shows, from the same computation
+	// as Stats.
 	Home(context.Context, *connect.Request[v1.HomeRequest]) (*connect.Response[v1.HomeResponse], error)
 	// Top returns one page of the 100 movies or series with the most peers
 	// over a window, as last computed; the server recomputes every 10

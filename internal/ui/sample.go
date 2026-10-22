@@ -408,7 +408,7 @@ func SampleData(b Base) DataPage {
 		wl = append(wl, b.Now.AddDate(0, 0, 7*(i-len(weekly)+1)).Format("02.01"))
 	}
 	return DataPage{Base: b, Stats: Stats{
-		At: b.Now, Total: 1284311, NewDay: 9506, NewWeek: 86060, DroppedTotal: 4754966,
+		Computed: b.Now.Add(-3 * time.Minute), Total: 1284311, NewDay: 9506, NewWeek: 86060, DroppedTotal: 4754966,
 		ByKind:     []Count{{"movie", 312940}, {"series", 248117}, {"other", 628184}, {"unknown", 95070}},
 		ByLayer:    []Count{{"rules", 702118}, {"title_repeat", 211540}, {"classifier", 370653}},
 		BySource:   []Count{{"disc", 18204}, {"remux", 41377}, {"rip", 233510}, {"web", 251096}, {"other", 740124}},

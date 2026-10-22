@@ -234,11 +234,12 @@ func (b *Browser) TitleReleases(ctx context.Context, req *connect.Request[sniffa
 }
 
 func (b *Browser) Home(ctx context.Context, _ *connect.Request[sniffarrv1.HomeRequest]) (*connect.Response[sniffarrv1.HomeResponse], error) {
-	h, err := b.Store.Home(ctx, b.now())
+	snap, err := b.counts(ctx)
 	if err != nil {
 		return nil, b.internal(ctx, "home", err)
 	}
-	return connect.NewResponse(&sniffarrv1.HomeResponse{Total: h.Total, NewDay: h.NewDay, Pending: h.Pending}), nil
+	st := snap.Stats
+	return connect.NewResponse(&sniffarrv1.HomeResponse{Total: st.Total, NewDay: st.Days[0], Pending: st.Pending, ComputedAt: timestamppb.New(snap.At)}), nil
 }
 
 func (b *Browser) Top(ctx context.Context, req *connect.Request[sniffarrv1.TopRequest]) (*connect.Response[sniffarrv1.TopResponse], error) {

@@ -59,6 +59,10 @@ const defaultRetention = 90 * 24 * time.Hour
 // defaultRetentionIdle is defaultRetention for a torrent with no TMDB work.
 const defaultRetentionIdle = 7 * 24 * time.Hour
 
+// defaultStatsInterval is how often the API recomputes the counts of the
+// data and home pages.
+const defaultStatsInterval = 5 * time.Minute
+
 // defaultUIAddr is the UI's listen address when SNIFFARR_UI_ADDR is unset.
 const defaultUIAddr = ":8081"
 
@@ -235,6 +239,9 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 		return a, d, err
 	}
 	if a.RetentionIdle, err = duration(getenv, "SNIFFARR_RETENTION_IDLE", defaultRetentionIdle); err != nil {
+		return a, d, err
+	}
+	if a.StatsInterval, err = duration(getenv, "SNIFFARR_STATS_INTERVAL", defaultStatsInterval); err != nil {
 		return a, d, err
 	}
 	if a.LazyMax, err = positive(getenv, "SNIFFARR_SEARCH_CLASSIFY_MAX", search.DefaultLazyMax); err != nil {

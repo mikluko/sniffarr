@@ -57,6 +57,9 @@ type Config struct {
 	// DailyTokens is the classifier's daily token limit BrowseService
 	// reports; 0 is none.
 	DailyTokens int64
+	// Counts, when set, holds the counts BrowseService.Stats and Home serve;
+	// nil computes them at every call.
+	Counts *search.Counts
 }
 
 // New returns the handler serving the APIs and /healthz.
@@ -82,7 +85,7 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
-		&search.Browser{Store: c.Store, TMDB: c.TMDB, Log: c.Log, DailyTokens: c.DailyTokens, Languages: audio.Tags(c.Languages)},
+		&search.Browser{Store: c.Store, TMDB: c.TMDB, Log: c.Log, DailyTokens: c.DailyTokens, Languages: audio.Tags(c.Languages), Counts: c.Counts},
 		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

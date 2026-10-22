@@ -10,7 +10,7 @@
   <div><span class="mu">{{$.T "d.newday"}}</span> <b>{{$.Num .NewDay}}</b></div>
   <div><span class="mu">{{$.T "d.newweek"}}</span> <b>{{$.Num .NewWeek}}</b></div>
   <div><span class="mu">{{$.T "d.dropped"}}</span> <b>{{$.Num .DroppedTotal}}</b></div>
-  <div class="mu at">{{$.T "d.at"}} {{$.TimeFull .At}}</div>
+  <div class="mu at" title="{{$.TimeFull .Computed}}">{{$.T "d.updated"}} {{$.Ago .Computed}}</div>
 </div>
 
 <section>

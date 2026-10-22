@@ -1631,7 +1631,9 @@ type HomeResponse struct {
 	// Releases first seen in the last 24 hours.
 	NewDay int64 `protobuf:"varint,2,opt,name=new_day,json=newDay,proto3" json:"new_day,omitempty"`
 	// Releases awaiting the background classifier.
-	Pending       int64 `protobuf:"varint,3,opt,name=pending,proto3" json:"pending,omitempty"`
+	Pending int64 `protobuf:"varint,3,opt,name=pending,proto3" json:"pending,omitempty"`
+	// When the counts were computed; new_day is the 24 hours before it.
+	ComputedAt    *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1685,6 +1687,13 @@ func (x *HomeResponse) GetPending() int64 {
 		return x.Pending
 	}
 	return 0
+}
+
+func (x *HomeResponse) GetComputedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ComputedAt
+	}
+	return nil
 }
 
 type TopRequest struct {
@@ -2021,8 +2030,11 @@ type StatsResponse struct {
 	// for none.
 	TokensUsedDay  int64 `protobuf:"varint,9,opt,name=tokens_used_day,json=tokensUsedDay,proto3" json:"tokens_used_day,omitempty"`
 	TokensLimitDay int64 `protobuf:"varint,10,opt,name=tokens_limit_day,json=tokensLimitDay,proto3" json:"tokens_limit_day,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// When every count but tokens_used_day was computed; days are the 24-hour
+	// periods before it. tokens_used_day is read at the request.
+	ComputedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StatsResponse) Reset() {
@@ -2123,6 +2135,13 @@ func (x *StatsResponse) GetTokensLimitDay() int64 {
 		return x.TokensLimitDay
 	}
 	return 0
+}
+
+func (x *StatsResponse) GetComputedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ComputedAt
+	}
+	return nil
 }
 
 type KindCount struct {
@@ -2511,11 +2530,13 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x03day\x18\x01 \x01(\x03R\x03day\x12\x12\n" +
 	"\x04week\x18\x02 \x01(\x03R\x04week\x12\x14\n" +
 	"\x05month\x18\x03 \x01(\x03R\x05month\"\r\n" +
-	"\vHomeRequest\"W\n" +
+	"\vHomeRequest\"\x94\x01\n" +
 	"\fHomeResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x03R\x05total\x12\x17\n" +
 	"\anew_day\x18\x02 \x01(\x03R\x06newDay\x12\x18\n" +
-	"\apending\x18\x03 \x01(\x03R\apending\"\xf3\x01\n" +
+	"\apending\x18\x03 \x01(\x03R\apending\x12;\n" +
+	"\vcomputed_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"computedAt\"\xf3\x01\n" +
 	"\n" +
 	"TopRequest\x12%\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12+\n" +
@@ -2541,7 +2562,7 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"first_seen\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeenB\b\n" +
 	"\x06_deltaJ\x04\b\x02\x10\x03\"\"\n" +
 	"\fStatsRequest\x12\x12\n" +
-	"\x04days\x18\x01 \x01(\x05R\x04days\"\xa1\x03\n" +
+	"\x04days\x18\x01 \x01(\x05R\x04days\"\xde\x03\n" +
 	"\rStatsResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x03R\x05total\x12,\n" +
 	"\x05kinds\x18\x02 \x03(\v2\x16.sniffarr.v1.KindCountR\x05kinds\x12/\n" +
@@ -2553,7 +2574,9 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x04days\x18\b \x03(\x03R\x04days\x12&\n" +
 	"\x0ftokens_used_day\x18\t \x01(\x03R\rtokensUsedDay\x12(\n" +
 	"\x10tokens_limit_day\x18\n" +
-	" \x01(\x03R\x0etokensLimitDay\"H\n" +
+	" \x01(\x03R\x0etokensLimitDay\x12;\n" +
+	"\vcomputed_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"computedAt\"H\n" +
 	"\tKindCount\x12%\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x03R\x05count\"L\n" +
@@ -2697,47 +2720,49 @@ var file_sniffarr_v1_browse_proto_depIdxs = []int32{
 	21, // 25: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
 	6,  // 26: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkSummary
 	20, // 27: sniffarr.v1.CardResponse.rules:type_name -> sniffarr.v1.RuleHit
-	34, // 28: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
-	1,  // 29: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
-	2,  // 30: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
-	26, // 31: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
-	42, // 32: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
-	6,  // 33: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.WorkSummary
-	7,  // 34: sniffarr.v1.TopEntry.audio:type_name -> sniffarr.v1.WorkAudio
-	37, // 35: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
-	42, // 36: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
-	29, // 37: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
-	30, // 38: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
-	31, // 39: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
-	32, // 40: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
-	33, // 41: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
-	34, // 42: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
-	39, // 43: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
-	37, // 44: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
-	3,  // 45: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
-	8,  // 46: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
-	10, // 47: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
-	13, // 48: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
-	15, // 49: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
-	18, // 50: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
-	27, // 51: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
-	22, // 52: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
-	24, // 53: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
-	4,  // 54: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
-	9,  // 55: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
-	11, // 56: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
-	14, // 57: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
-	16, // 58: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
-	19, // 59: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
-	28, // 60: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
-	23, // 61: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
-	25, // 62: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
-	5,  // 63: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
-	55, // [55:64] is the sub-list for method output_type
-	46, // [46:55] is the sub-list for method input_type
-	46, // [46:46] is the sub-list for extension type_name
-	46, // [46:46] is the sub-list for extension extendee
-	0,  // [0:46] is the sub-list for field type_name
+	42, // 28: sniffarr.v1.HomeResponse.computed_at:type_name -> google.protobuf.Timestamp
+	34, // 29: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
+	1,  // 30: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
+	2,  // 31: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
+	26, // 32: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
+	42, // 33: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
+	6,  // 34: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.WorkSummary
+	7,  // 35: sniffarr.v1.TopEntry.audio:type_name -> sniffarr.v1.WorkAudio
+	37, // 36: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
+	42, // 37: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
+	29, // 38: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
+	30, // 39: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
+	31, // 40: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
+	32, // 41: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
+	33, // 42: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
+	42, // 43: sniffarr.v1.StatsResponse.computed_at:type_name -> google.protobuf.Timestamp
+	34, // 44: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
+	39, // 45: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
+	37, // 46: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
+	3,  // 47: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
+	8,  // 48: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
+	10, // 49: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
+	13, // 50: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
+	15, // 51: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
+	18, // 52: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
+	27, // 53: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
+	22, // 54: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
+	24, // 55: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
+	4,  // 56: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
+	9,  // 57: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
+	11, // 58: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
+	14, // 59: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
+	16, // 60: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
+	19, // 61: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
+	28, // 62: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
+	23, // 63: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
+	25, // 64: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
+	5,  // 65: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
+	57, // [57:66] is the sub-list for method output_type
+	48, // [48:57] is the sub-list for method input_type
+	48, // [48:48] is the sub-list for extension type_name
+	48, // [48:48] is the sub-list for extension extendee
+	0,  // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_browse_proto_init() }

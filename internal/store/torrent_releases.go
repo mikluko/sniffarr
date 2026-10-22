@@ -747,6 +747,15 @@ type AudioCounts struct {
 	Marker, Likely, Unlikely int64
 }
 
+// Statements of Stats that read only an index: classCounts groups in the
+// column order of torrent_releases_counts, rejectedCounts reads
+// ingest_rejected_reason and dayCounts torrent_releases_first_seen.
+const (
+	classCounts    = "SELECT coalesce(kind, ''), coalesce(kind_layer, ''), coalesce(source, ''), count(*) FROM torrent_releases GROUP BY source, kind_layer, kind"
+	rejectedCounts = "SELECT reason, count(*) FROM ingest_rejected GROUP BY reason"
+	dayCounts      = "SELECT max(0, (? - first_seen) / ?), count(*) FROM torrent_releases WHERE first_seen > ? GROUP BY 1"
+)
+
 // Stats returns the store's counts at now, with days periods in Days.
 func (s *Store) Stats(ctx context.Context, now time.Time, days int) (Stats, error) {
 	st := Stats{Kinds: map[string]int64{}, Layers: map[string]int64{}, Sources: map[string]int64{},
@@ -762,7 +771,7 @@ func (s *Store) Stats(ctx context.Context, now time.Time, days int) (Stats, erro
 		st.Layers[layer] += n
 		st.Sources[source] += n
 		return nil
-	}, "SELECT coalesce(kind, ''), coalesce(kind_layer, ''), coalesce(source, ''), count(*) FROM torrent_releases GROUP BY 1, 2, 3"); err != nil {
+	}, classCounts); err != nil {
 		return Stats{}, err
 	}
 	if len(s.opts.Languages) > 0 {
@@ -795,7 +804,7 @@ func (s *Store) Stats(ctx context.Context, now time.Time, days int) (Stats, erro
 		}
 		st.Rejected[reason] = n
 		return nil
-	}, "SELECT reason, count(*) FROM ingest_rejected GROUP BY reason"); err != nil {
+	}, rejectedCounts); err != nil {
 		return Stats{}, err
 	}
 	const day = 24 * 60 * 60
@@ -808,7 +817,7 @@ func (s *Store) Stats(ctx context.Context, now time.Time, days int) (Stats, erro
 		}
 		st.Days[d] += n
 		return nil
-	}, "SELECT max(0, (? - first_seen) / ?), count(*) FROM torrent_releases WHERE first_seen > ? GROUP BY 1", at, day, at-int64(days)*day); err != nil {
+	}, dayCounts, at, day, at-int64(days)*day); err != nil {
 		return Stats{}, err
 	}
 	return st, nil
@@ -824,8 +833,13 @@ func (s *Store) pendingCount(ctx context.Context) (int64, error) {
 		args[i] = l
 	}
 	var n int64
-	err := s.r.QueryRowContext(ctx, `SELECT count(*) FROM torrent_releases t
-		WHERE t.classified_at IS NULL AND t.kind IS NULL AND EXISTS (SELECT 1 FROM torrent_audio a WHERE a.torrent_id = t.id
-			AND a.language IN (`+placeholders(len(args))+`) AND (a.marker OR a.script_hint))`, args...).Scan(&n)
+	err := s.r.QueryRowContext(ctx, pendingCounts(len(args)), args...).Scan(&n)
 	return n, err
+}
+
+// pendingCounts is the statement of pendingCount for n languages.
+func pendingCounts(n int) string {
+	return `SELECT count(*) FROM torrent_releases t
+		WHERE t.classified_at IS NULL AND t.kind IS NULL AND EXISTS (SELECT 1 FROM torrent_audio a WHERE a.torrent_id = t.id
+			AND a.language IN (` + placeholders(n) + `) AND (a.marker OR a.script_hint))`
 }

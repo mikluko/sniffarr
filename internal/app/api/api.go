@@ -1,7 +1,7 @@
 // Package api is the API component: the ingest, search and browse services
 // and the Torznab indexer over the store, with the classify and TMDB
-// workers, the store's maintenance, the rollup of peer sketches and the tops
-// of works.
+// workers, the store's maintenance, the rollup of peer sketches, the tops
+// of works and the counts of the browse service.
 package api
 
 import (
@@ -67,13 +67,16 @@ type Config struct {
 	// Languages are the audio languages every stored torrent gets an entry
 	// for.
 	Languages []audio.Language
+	// StatsInterval is how often the counts BrowseService.Stats and Home
+	// serve are recomputed; positive.
+	StatsInterval time.Duration
 }
 
 // Module provides *memconn.Listener, on which the API is served to the
 // process's own clients, and serves it on Config.Addr from start to stop
 // with its workers.
 var Module = fx.Module("api",
-	fx.Provide(memconn.Listen, newClassifiers),
+	fx.Provide(memconn.Listen, newClassifiers, newCounts),
 	fx.Invoke(serve, work),
 )
 
@@ -125,7 +128,11 @@ func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 	return c
 }
 
-func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, mem *memconn.Listener) error {
+func newCounts(s *store.Store, log *slog.Logger) *search.Counts {
+	return &search.Counts{Store: s, Log: log}
+}
+
+func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts, mem *memconn.Listener) error {
 	var titles search.TitleSearch
 	if c.matcher != nil {
 		titles = c.matcher
@@ -145,6 +152,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		Lazy:         c.lazy,
 		TorznabToken: cfg.TorznabToken,
 		DailyTokens:  cfg.DailyTokens,
+		Counts:       counts,
 	})
 	if err != nil {
 		return err
@@ -154,7 +162,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 	return nil
 }
 
-func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers) {
+func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts) {
 	app.Go(lc, sd, log, "maintenance", func(ctx context.Context) error {
 		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, cfg.RetentionIdle, log) })
 		return nil
@@ -168,6 +176,7 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *st
 		every(ctx, topInterval, func() { computeTop(ctx, s, log) })
 		return nil
 	})
+	app.Go(lc, sd, log, "counts", func(ctx context.Context) error { return counts.Run(ctx, cfg.StatsInterval) })
 	if c.jev != nil {
 		w := &classify.Worker{Store: s, Jev: c.jev, Concurrency: cfg.ClassifyConcurrency, Reserve: cfg.SearchReserve, Poll: workerPoll, Log: log}
 		app.Go(lc, sd, log, "classify worker", w.Run)

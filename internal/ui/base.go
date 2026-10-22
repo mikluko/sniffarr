@@ -156,6 +156,20 @@ func (b Base) TimeFull(t time.Time) string {
 	return t.In(loc).Format("2006-01-02 15:04")
 }
 
+// Ago formats how long before Now t was in whole minutes by "ago.min", or
+// by "ago.now" under a minute.
+func (b Base) Ago(t time.Time) string {
+	now := b.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	m := int64(now.Sub(t) / time.Minute)
+	if m < 1 {
+		return b.T("ago.now")
+	}
+	return b.Fmt("ago.min", b.Num(m))
+}
+
 // Delta formats a change against the previous window: "+12%", "−8%", "0%";
 // nil means the work was absent then ("new").
 func (b Base) Delta(d *float64) string {

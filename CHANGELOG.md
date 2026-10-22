@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SNIFFARR_STATS_INTERVAL`, default `5m`: how often the API recomputes the counts of `BrowseService.Stats` and `Home`.
+- `computed_at` in `StatsResponse` and `HomeResponse`; the data page shows how many minutes ago its counts were computed.
+
+### Changed
+
+- The data page and the home page are served from a snapshot of the store's counts that the API computes at start and then every 5 minutes, instead of counting at each request; only the tokens spent today are read at the request.
+- Indexes `torrent_releases (source, kind_layer, kind)`, `torrent_releases (first_seen)` and `ingest_rejected (reason)` cover the counts by kind, layer and source, of new torrents per day, and of rejections by reason; a migration builds them at start.
+
 ## [0.20.0] - 2026-10-22
 
 ### Added

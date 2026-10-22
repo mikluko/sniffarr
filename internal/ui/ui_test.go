@@ -139,6 +139,7 @@ func TestRenderNoLanguages(t *testing.T) {
 }
 
 func TestFormat(t *testing.T) {
+	t5 := time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
 	ru := Base{Lang: "ru"}
 	c := Base{Lang: "en"}
 	for _, x := range []struct{ got, want string }{
@@ -160,6 +161,8 @@ func TestFormat(t *testing.T) {
 		{WorkID("movie", 318846), "m318846"},
 		{ru.SE(2, 5), "S02E05"},
 		{ru.SE(2, 0), "S02"},
+		{Base{Lang: "en", Now: t5, msgs: map[string]string{"ago.min": "{0} min ago", "ago.now": "just now"}}.Ago(t5.Add(-125 * time.Minute)), "125 min ago"},
+		{Base{Lang: "en", Now: t5, msgs: map[string]string{"ago.now": "just now"}}.Ago(t5.Add(-59 * time.Second)), "just now"},
 	} {
 		if x.got != x.want {
 			t.Errorf("got %q, want %q", x.got, x.want)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/audio"
@@ -40,8 +41,24 @@ type Browser struct {
 	// Languages are the audio languages Settings reports, tags in configured
 	// order; nil when the audio extension is off.
 	Languages []string
+	// Counts, when set, holds the counts Stats and Home serve; nil computes
+	// them at every call.
+	Counts *Counts
 	// Now is time.Now when nil.
 	Now func() time.Time
+}
+
+// counts returns the snapshot of Counts, or one computed now without it.
+func (b *Browser) counts(ctx context.Context) (*Snapshot, error) {
+	if b.Counts != nil {
+		return b.Counts.Latest(ctx)
+	}
+	now := b.now()
+	st, err := b.Store.Stats(ctx, now, MaxStatsDays)
+	if err != nil {
+		return nil, err
+	}
+	return &Snapshot{At: now, Stats: st}, nil
 }
 
 func (b *Browser) Settings(context.Context, *connect.Request[sniffarrv1.SettingsRequest]) (*connect.Response[sniffarrv1.SettingsResponse], error) {
@@ -246,16 +263,17 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	if days < 0 || days > MaxStatsDays {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("days %d, want 0 to %d", days, MaxStatsDays))
 	}
-	now := b.now()
-	st, err := b.Store.Stats(ctx, now, days)
+	snap, err := b.counts(ctx)
 	if err != nil {
 		return nil, b.internal(ctx, "stats", err)
 	}
-	used, err := b.Store.TokensUsed(ctx, now.UTC().Format(time.DateOnly))
+	st := snap.Stats
+	used, err := b.Store.TokensUsed(ctx, b.now().UTC().Format(time.DateOnly))
 	if err != nil {
 		return nil, b.internal(ctx, "stats", err)
 	}
-	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Days: st.Days, TokensUsedDay: used, TokensLimitDay: b.DailyTokens}
+	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Days: slices.Clone(st.Days[:days]), TokensUsedDay: used,
+		TokensLimitDay: b.DailyTokens, ComputedAt: timestamppb.New(snap.At)}
 	byKind := map[sniffarrv1.Kind]int64{}
 	for kind, n := range st.Kinds {
 		if slices.Contains(others, kind) {

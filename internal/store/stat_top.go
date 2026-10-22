@@ -275,23 +275,3 @@ func (s *Store) Top(ctx context.Context, kind string, w Window, v Voice, lang st
 	}
 	return out, total, at, nil
 }
-
-// Home is what the home page shows.
-type Home struct {
-	Total int64
-	// NewDay counts the torrents first seen in the last 24 hours.
-	NewDay int64
-	// Pending counts the torrents Unclassified selects.
-	Pending int64
-}
-
-// Home returns the home counts at now.
-func (s *Store) Home(ctx context.Context, now time.Time) (Home, error) {
-	var h Home
-	if err := s.r.QueryRowContext(ctx, "SELECT count(*), coalesce(sum(first_seen > ?), 0) FROM torrent_releases", now.Add(-24*time.Hour).Unix()).Scan(&h.Total, &h.NewDay); err != nil {
-		return Home{}, err
-	}
-	var err error
-	h.Pending, err = s.pendingCount(ctx)
-	return h, err
-}

@@ -40,9 +40,11 @@ service BrowseService {
   // Card returns one release with every stored file, its peers and its
   // work, or NOT_FOUND.
   rpc Card(CardRequest) returns (CardResponse);
-  // Stats returns the store's counts.
+  // Stats returns the store's counts as last computed, which the server
+  // recomputes periodically.
   rpc Stats(StatsRequest) returns (StatsResponse);
-  // Home returns the counts the home page shows.
+  // Home returns the counts the home page shows, from the same computation
+  // as Stats.
   rpc Home(HomeRequest) returns (HomeResponse);
   // Top returns one page of the 100 movies or series with the most peers
   // over a window, as last computed; the server recomputes every 10
@@ -314,6 +316,8 @@ message HomeResponse {
   int64 new_day = 2;
   // Releases awaiting the background classifier.
   int64 pending = 3;
+  // When the counts were computed; new_day is the 24 hours before it.
+  google.protobuf.Timestamp computed_at = 4;
 }
 
 message TopRequest {
@@ -392,6 +396,9 @@ message StatsResponse {
   // for none.
   int64 tokens_used_day = 9;
   int64 tokens_limit_day = 10;
+  // When every count but tokens_used_day was computed; days are the 24-hour
+  // periods before it. tokens_used_day is read at the request.
+  google.protobuf.Timestamp computed_at = 11;
 }
 
 message KindCount {
