@@ -40,8 +40,8 @@ they reach it over an in-process connection, with the process's own
 Any number of sniffing and fetching processes can run against one API.
 `-sniff` and `-fetch` in one process share one DHT node.
 
-The queue serves announced infohashes before sampled ones, then the oldest
-first. It lives in the same SQLite database and survives restarts; a task
+The queue serves the infohashes Radarr or Sonarr grabbed first, then
+announced ones before sampled ones, then the oldest first. It lives in the same SQLite database and survives restarts; a task
 whose fetcher goes away, or whose lease expires, goes back to the queue. A
 task whose fetcher finds no peers, or fewer than its `-min-peers`, is dropped
 at once. A task whose metadata times out is retried after a backoff and
@@ -50,8 +50,8 @@ The queue is bounded: once a minute the API evicts the infohashes that have
 waited too long, then the ones beyond the size limit, sampled ones before
 announced ones and the oldest first. A dropped or evicted infohash is kept out
 of the queue for a while, a shorter one when it had no peers, then forgotten.
-It is not rejected: an announce queues it again at once, and a sample once it
-is forgotten.
+It is not rejected: an announce or a Radarr or Sonarr event queues it again
+at once, and a sample once it is forgotten.
 
 The server passes fetched metadata through a first filter by name and file
 extensions, rejecting what is never worth classifying: adult content,
@@ -247,8 +247,9 @@ in the `Authorization` header; `/healthz` needs none.
 - `Get` returns one release by infohash, with `tmdb` in `lang` likewise.
 - `BrowseService` reads the store as the web UI shows it and classifies
   nothing first. A work in its answers is a `WorkSummary`: its ID, kind,
-  `tmdb`, stored releases, distinct peers over the last 7 days and place in
-  the 7-day top of its kind. A voice narrows releases by their audio in one
+  `tmdb`, stored releases, distinct peers over the last 7 days, place in
+  the 7-day top of its kind, and `grabs_week`, the grabs Radarr and Sonarr
+  reported over the last 7 days. A voice narrows releases by their audio in one
   language: `VOICE_MARKER` to those with a marker of it, `VOICE_LIKELY` to
   those with a marker or a probability of at least 0.5.
 
@@ -305,6 +306,59 @@ Radarr's minimum-seeders check passes a release without them.
 
 In Prowlarr, add an indexer of type Generic Torznab with URL
 `http://<host>:8080/torznab`, API path `/api`, and the token as API key.
+
+## Radarr and Sonarr
+
+With `SNIFFARR_WEBHOOK_TOKEN` set, the API port also serves a webhook for
+Radarr and Sonarr at `POST /webhooks/arr`; without it the path answers 404.
+In each app, add a connection of type Webhook under Settings, Connect:
+
+| Field    | Value                                                  |
+| -------- | ------------------------------------------------------ |
+| URL      | `https://<api>/webhooks/arr`                           |
+| Method   | `POST`                                                 |
+| Username | anything                                               |
+| Password | `SNIFFARR_WEBHOOK_TOKEN`                               |
+| Triggers | On Grab, On File Import; On File Upgrade if you like   |
+
+A request without the token as its Basic password answers 401. The app is
+the query's `app`, `radarr` or `sonarr`, or else the payload's: a movie is
+Radarr's, a series Sonarr's. A Grab is recorded as a grab, a Download, which
+Radarr and Sonarr send on import and upgrade, as an import; Test and every
+other event answer 200 and record nothing.
+
+Each event is recorded once per app, event and download ID, so the same
+download reported twice counts once. A `downloadId` of 40 hex digits, as
+torrent clients such as qBittorrent report it, is the torrent's infohash;
+any other, such as a Usenet client's, leaves the event without one. The
+event's work is Radarr's TMDB ID, or Sonarr's TMDB ID or else its TVDB ID,
+which TMDB's `/3/find` turns into a TMDB ID once, the mapping kept with the
+work's IDs; a work new to the store is stored without details, for the
+backfill to fetch.
+
+With a work and an infohash, the stored release of the hash belongs to the
+work, and its title key is matched to the work under layer `arr` with
+confidence 1, `TMDB_LAYER_ARR` in the API, which every other release of the
+key follows. Neither TMDB's search nor Jev replaces an `arr` match; a later
+event does. A release not stored is queued, ahead of announced infohashes,
+and gets the work and the match when its metadata is stored; one the DHT
+never yields, such as a private tracker's, stays unfetched. A rejected
+infohash is not queued.
+
+Every grab is demand, with or without an infohash: `grabs_week` in a
+`WorkSummary`, in `Title`, `SearchTitles`, `Top` and `Card`, counts the
+work's grabs over the last 7 days. Imports are recorded and not counted.
+
+With `SNIFFARR_RADARR_URL` and `SNIFFARR_RADARR_API_KEY`, or the
+`SNIFFARR_SONARR_` pair, the API imports the app's grabs through its
+`/api/v3/history`: the whole history once per database, oldest first, and
+then at start and every 24 hours the grabs since the latest recorded one
+through `/api/v3/history/since`; a round that fails is retried after an
+hour. The URL is the app's base, with its URL base if it has one, such as
+`http://radarr:7878` or `http://nas/sonarr`. A history record and a webhook
+event of one download are one event, and the records of a season pack's
+episodes one grab. An event without a download ID is never taken for
+another.
 
 ## Web UI
 
@@ -397,6 +451,11 @@ the same to each.
 | `SNIFFARR_TMDB_RETRY`              | `168h`           | How long a title key that matched nothing waits before it is looked up again                                           |
 | `SNIFFARR_SEARCH_TMDB_MAX`         | `5`              | Title keys one search has matched at most                                                                              |
 | `SNIFFARR_TORZNAB_TOKEN`           |                  | API key of the Torznab endpoint; when unset, there is none                                                             |
+| `SNIFFARR_WEBHOOK_TOKEN`           |                  | Basic password of the Radarr and Sonarr webhook; when unset, there is none                                             |
+| `SNIFFARR_RADARR_URL`              |                  | Base URL of the Radarr whose grab history is imported; set with `SNIFFARR_RADARR_API_KEY` or not at all                |
+| `SNIFFARR_RADARR_API_KEY`          |                  | That Radarr's API key                                                                                                  |
+| `SNIFFARR_SONARR_URL`              |                  | Base URL of the Sonarr whose grab history is imported; set with `SNIFFARR_SONARR_API_KEY` or not at all                |
+| `SNIFFARR_SONARR_API_KEY`          |                  | That Sonarr's API key                                                                                                  |
 
 The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start. A torrent keeps its true file
@@ -523,6 +582,8 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.tmdb.matches`                | `{title}`    | `sniffarr.tmdb.layer`                      |
 | `-api`     | `sniffarr.tmdb.requests`               | `{request}`  | `sniffarr.tmdb.status`                     |
 | `-api`     | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
+| `-api`     | `sniffarr.arr.events`                  | `{event}`    | `sniffarr.arr.app`, `sniffarr.arr.event`, `sniffarr.arr.source` |
+| `-api`     | `sniffarr.arr.outcomes`                | `{event}`    | `sniffarr.arr.app`, `sniffarr.arr.outcome` |
 | `-sniff`, `-fetch` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
 | `-sniff`   | `sniffarr.dht.replies`                 | `{reply}`    | `sniffarr.dht.query`                       |
@@ -534,7 +595,7 @@ counts are the `db.sql.connection.*` metrics.
 | `-fetch`   | `sniffarr.sniff.fetch.duration`        | `s`          | `sniffarr.fetch.outcome`                   |
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
-`sniffarr.discovery` is `announce` or `sample`; `sniffarr.dht.query` is
+`sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` too; `sniffarr.dht.query` is
 `sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
@@ -542,7 +603,12 @@ counts are the `db.sql.connection.*` metrics.
 `sniffarr.classify.layer` is `rules`, `reuse` or `jev`;
 `sniffarr.search.lazy.result` is `in_time`, `late` or `failed`;
 `sniffarr.tmdb.layer` is `tmdb`, `jev` or `none`; `sniffarr.tmdb.status` is
-the HTTP status of TMDB's answer, or `error` without one.
+the HTTP status of TMDB's answer, or `error` without one;
+`sniffarr.arr.app` is `radarr` or `sonarr`; `sniffarr.arr.event` is `grab`
+or `import`; `sniffarr.arr.source` is `webhook` or `history`;
+`sniffarr.arr.outcome` is `matched` (the stored release got the work),
+`queued` (the infohash was queued), `unknown` (no infohash, no work, or a
+rejected torrent) or `duplicate` (recorded before).
 
 ## Container image
 

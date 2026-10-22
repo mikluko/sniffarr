@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The Radarr and Sonarr webhook at `POST /webhooks/arr`, behind HTTP Basic with `SNIFFARR_WEBHOOK_TOKEN` as the password: Grab and Download events are recorded as grabs and imports in the new table `arr_events`, once per app, event and download ID; Test and other events are ignored.
+- `SNIFFARR_RADARR_URL` and `SNIFFARR_RADARR_API_KEY`, `SNIFFARR_SONARR_URL` and `SNIFFARR_SONARR_API_KEY`: the API imports the app's grab history once, then every 24 hours the grabs since the latest recorded one.
+- A grab or import with a TMDB ID, or Sonarr's TVDB ID looked up on TMDB, stores the work and matches the release of its infohash to it under the new layer `arr`, `TMDB_LAYER_ARR`, which no TMDB search or Jev choice replaces; an infohash not stored is queued with `SOURCE_ARR`, ahead of announced ones, and matched when stored.
+- `grabs_week` in `WorkSummary`: the work's grabs over the last 7 days.
+- Metrics `sniffarr.arr.events` and `sniffarr.arr.outcomes`.
+
 ## [0.21.0] - 2026-10-22
 
 ### Added
