@@ -14,14 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/names"
@@ -176,14 +174,14 @@ func browse(t *testing.T, st *store.Store, tags []string) sniffarrv1connect.Brow
 	mux := http.NewServeMux()
 	b := &search.Browser{Store: st, TMDB: titleSearch{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, Languages: tags, Now: func() time.Time { return now },
 		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }}}
-	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b, connect.WithInterceptors(auth.NewBearer("search"))))
+	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b))
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)
 	srv := &http.Server{Handler: mux, Protocols: &p}
 	l := memconn.Listen()
 	go func() { _ = srv.Serve(l) }()
 	t.Cleanup(func() { require.NoError(t, srv.Shutdown(context.Background())) })
-	return sniffarrv1connect.NewBrowseServiceClient(l.Client(), memconn.URL, connect.WithInterceptors(auth.Client("search")))
+	return sniffarrv1connect.NewBrowseServiceClient(l.Client(), memconn.URL)
 }
 
 // get serves the path, as htmx asking for target when it is not "".

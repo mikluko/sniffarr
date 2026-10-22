@@ -48,11 +48,6 @@ spec:
               value: {{ $v.url | default (printf "http://%s-api:8080" .Release.Name) | quote }}
             - name: SNIFFARR_UI_ADDR
               value: {{ $v.addr | quote }}
-            - name: SNIFFARR_SEARCH_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ required "ui.existingSecret or api.existingSecret is required" ($v.existingSecret | default .Values.api.existingSecret) }}
-                  key: {{ $v.secretKey }}
             {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}

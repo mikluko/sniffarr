@@ -21,7 +21,6 @@ import (
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/arr"
 	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -43,7 +42,7 @@ func start(t *testing.T, cfg Config, qopts ...store.QueueOptions) (*httptest.Ser
 	q, err := store.NewQueue(ctx, db, qo)
 	require.NoError(t, err)
 	cfg.Queue = q
-	cfg.Store, cfg.IngestToken, cfg.SearchToken, cfg.Log = s, "ingest", "search", slog.New(slog.DiscardHandler)
+	cfg.Store, cfg.Log = s, slog.New(slog.DiscardHandler)
 	if cfg.Arr != nil {
 		cfg.Arr.Store, cfg.Arr.Queue, cfg.Arr.Log = s, q, cfg.Log
 	}
@@ -65,7 +64,7 @@ func hash(b byte) []byte {
 }
 
 func ingestClient(srv *httptest.Server, hc *http.Client, opts ...connect.ClientOption) sniffarrv1connect.IngestServiceClient {
-	return sniffarrv1connect.NewIngestServiceClient(hc, srv.URL, append(opts, connect.WithInterceptors(auth.Client("ingest")))...)
+	return sniffarrv1connect.NewIngestServiceClient(hc, srv.URL, opts...)
 }
 
 // droppable returns a client on connections of its own, and a func that
@@ -210,7 +209,7 @@ func testIngestAndSearch(t *testing.T, protocol connect.ClientOption) {
 		opts = append(opts, protocol)
 	}
 	ingest := ingestClient(srv, hc, opts...)
-	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, append(opts, connect.WithInterceptors(auth.Client("search")))...)
+	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, opts...)
 
 	res, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3, 3)
 	require.NoError(t, err)
@@ -297,7 +296,7 @@ func TestAudioHints(t *testing.T) {
 			f.torrent(4, "The.Thing.1982.BDRip.LostFilm", "The.Thing.avi")
 			f.finish()
 
-			search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("search")))
+			search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL)
 			res, err := search.Search(context.Background(), connect.NewRequest(&sniffarrv1.SearchRequest{}))
 			require.NoError(t, err)
 			got := map[string][]*sniffarrv1.Audio{}
@@ -464,33 +463,15 @@ func TestFetchNoPeers(t *testing.T) {
 	f.expect(1)
 }
 
-func TestAuth(t *testing.T) {
+func TestNoCredentials(t *testing.T) {
 	srv, hc := start(t, Config{})
 	ctx := context.Background()
-	for name, token := range map[string]string{"none": "", "wrong": "nope", "other group": "search"} {
-		t.Run(name, func(t *testing.T) {
-			var opts []connect.ClientOption
-			if token != "" {
-				opts = append(opts, connect.WithInterceptors(auth.Client(token)))
-			}
-			ingest := sniffarrv1connect.NewIngestServiceClient(hc, srv.URL, opts...)
-			_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
-			require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
-			stream := ingest.Fetch(ctx)
-			_ = stream.Send(&sniffarrv1.FetchRequest{Kind: &sniffarrv1.FetchRequest_Credit{Credit: &sniffarrv1.Credit{N: 1}}})
-			_, err = stream.Receive()
-			require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
-		})
-	}
-	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("ingest")))
-	_, err := search.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{}))
-	require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
-	browse := sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("ingest")))
-	_, err = browse.Torrents(ctx, connect.NewRequest(&sniffarrv1.TorrentsRequest{}))
-	require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
-	browse = sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("search")))
-	_, err = browse.Torrents(ctx, connect.NewRequest(&sniffarrv1.TorrentsRequest{}))
-	require.NoError(t, err, "the search token opens BrowseService")
+	_, err := sight(t, ingestClient(srv, hc), sniffarrv1.Source_SOURCE_SAMPLE, 1)
+	require.NoError(t, err)
+	_, err = sniffarrv1connect.NewSearchServiceClient(hc, srv.URL).Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{}))
+	require.NoError(t, err)
+	_, err = sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL).Torrents(ctx, connect.NewRequest(&sniffarrv1.TorrentsRequest{}))
+	require.NoError(t, err)
 
 	res, err := hc.Get(srv.URL + "/healthz")
 	require.NoError(t, err)
@@ -501,7 +482,7 @@ func TestAuth(t *testing.T) {
 func TestKindLayers(t *testing.T) {
 	srv, hc := start(t, Config{Poll: 20 * time.Millisecond})
 	ingest := ingestClient(srv, hc)
-	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL, connect.WithInterceptors(auth.Client("search")))
+	search := sniffarrv1connect.NewSearchServiceClient(hc, srv.URL)
 	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3)
 	require.NoError(t, err)
 

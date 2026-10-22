@@ -14,7 +14,6 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/rot13"
@@ -39,13 +38,13 @@ func serveMem(t *testing.T) (*store.Store, sniffarrv1connect.IngestServiceClient
 	_, _, err = s.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Alien.1979.1080p", Size: 8 << 30, Discovery: "sample", SeenAt: time.Now(),
 		Files: []rules.File{{Path: "Alien.mkv", Size: 8 << 30}}})
 	require.NoError(t, err)
-	h, err := New(Config{Store: s, Queue: q, IngestToken: "ingest", SearchToken: "search", Log: slog.New(slog.DiscardHandler)})
+	h, err := New(Config{Store: s, Queue: q, Log: slog.New(slog.DiscardHandler)})
 	require.NoError(t, err)
 	mem := memconn.Listen()
 	srv := &http.Server{Handler: h, Protocols: Protocols()}
 	go func() { _ = srv.Serve(mem) }()
 	t.Cleanup(func() { _ = srv.Close() })
-	return s, sniffarrv1connect.NewIngestServiceClient(mem.Client(), memconn.URL, connect.WithInterceptors(auth.Client("ingest")))
+	return s, sniffarrv1connect.NewIngestServiceClient(mem.Client(), memconn.URL)
 }
 
 func TestPeersEndToEnd(t *testing.T) {

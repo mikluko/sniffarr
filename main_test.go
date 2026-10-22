@@ -11,19 +11,17 @@ import (
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/anacrolix/dht/v2"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/auth"
 )
 
 func TestGraph(t *testing.T) {
-	apiEnv := []string{"SNIFFARR_DB", "/data/sniffarr.db", "SNIFFARR_INGEST_TOKEN", "in", "SNIFFARR_SEARCH_TOKEN", "se"}
-	remote := []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in", "SNIFFARR_SEARCH_TOKEN", "se"}
+	apiEnv := []string{"SNIFFARR_DB", "/data/sniffarr.db"}
+	remote := []string{"SNIFFARR_URL", "http://api:8080"}
 	tests := []struct {
 		name string
 		args []string
@@ -96,7 +94,6 @@ func TestRunWithTelemetryOff(t *testing.T) {
 	addr, uiAddr := freeAddr(t), freeAddr(t)
 	cfg, err := load([]string{"-api", "-ui", "-fetch", "-port", "0", "-fetchers", "2", "-peer-wait", "200ms"}, env(
 		"SNIFFARR_DB", filepath.Join(t.TempDir(), "sniffarr.db"), "SNIFFARR_ADDR", addr, "SNIFFARR_UI_ADDR", uiAddr,
-		"SNIFFARR_INGEST_TOKEN", "in", "SNIFFARR_SEARCH_TOKEN", "se",
 	), io.Discard)
 	require.NoError(t, err)
 	cfg.dht.Network.StartingNodes = func() ([]dht.Addr, error) { return nil, nil }
@@ -120,7 +117,7 @@ func TestRunWithTelemetryOff(t *testing.T) {
 
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)
-	ingest := sniffarrv1connect.NewIngestServiceClient(&http.Client{Transport: &http.Transport{Protocols: &p}}, "http://"+addr, connect.WithInterceptors(auth.Client("in")))
+	ingest := sniffarrv1connect.NewIngestServiceClient(&http.Client{Transport: &http.Transport{Protocols: &p}}, "http://"+addr)
 	sight := ingest.Sight(ctx)
 	require.NoError(t, sight.Send(&sniffarrv1.SightRequest{Infohash: []byte("01234567890123456789"), Source: sniffarrv1.Source_SOURCE_ANNOUNCE}))
 	res, err := sight.CloseAndReceive()

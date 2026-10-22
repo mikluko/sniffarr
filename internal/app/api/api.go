@@ -26,14 +26,10 @@ import (
 	"github.com/mikluko/sniffarr/internal/tmdb"
 )
 
-// Config is what Module needs; the tokens must be set.
+// Config is what Module needs.
 type Config struct {
 	// Addr is the listen address.
 	Addr string
-	// IngestToken is the bearer token of IngestService.
-	IngestToken string
-	// SearchToken is the bearer token of SearchService and BrowseService.
-	SearchToken string
 	// TypesafeKey is the TypeSafe API key; empty leaves Jev out.
 	TypesafeKey string
 	// TMDBKey is the TMDB API key or read access token; empty matches no
@@ -168,8 +164,6 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		TMDB:         titles,
 		Store:        s,
 		Queue:        q,
-		IngestToken:  cfg.IngestToken,
-		SearchToken:  cfg.SearchToken,
 		Lease:        cfg.Lease,
 		Attempts:     cfg.Attempts,
 		Backoff:      cfg.Backoff,

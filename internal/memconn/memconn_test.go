@@ -14,7 +14,6 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/auth"
 )
 
 // echo is an IngestService that counts sightings and answers every unit of
@@ -53,11 +52,11 @@ func (echo) Fetch(_ context.Context, stream *connect.BidiStream[sniffarrv1.Fetch
 	}
 }
 
-// serve serves the ingest API behind the token "secret" on a Listener.
+// serve serves the ingest API on a Listener.
 func serve(t *testing.T) *Listener {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(echo{}, connect.WithInterceptors(auth.NewBearer("secret"))))
+	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(echo{}))
 	var p http.Protocols
 	p.SetHTTP1(true)
 	p.SetUnencryptedHTTP2(true)
@@ -75,7 +74,7 @@ func serve(t *testing.T) *Listener {
 func TestConnectRoundTrip(t *testing.T) {
 	l := serve(t)
 	ctx := context.Background()
-	client := sniffarrv1connect.NewIngestServiceClient(l.Client(), URL, connect.WithInterceptors(auth.Client("secret")))
+	client := sniffarrv1connect.NewIngestServiceClient(l.Client(), URL)
 
 	sight := client.Sight(ctx)
 	for range 3 {
@@ -96,14 +95,6 @@ func TestConnectRoundTrip(t *testing.T) {
 	_, err = fetch.Receive()
 	require.ErrorIs(t, err, io.EOF)
 	require.NoError(t, fetch.CloseResponse())
-}
-
-func TestTokenChecked(t *testing.T) {
-	l := serve(t)
-	client := sniffarrv1connect.NewIngestServiceClient(l.Client(), URL, connect.WithInterceptors(auth.Client("wrong")))
-	sight := client.Sight(context.Background())
-	_, err := sight.CloseAndReceive()
-	require.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
 }
 
 func TestClosedListener(t *testing.T) {

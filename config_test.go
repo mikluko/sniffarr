@@ -52,7 +52,7 @@ func defaultNetwork(passive bool) sniffer.NetworkConfig {
 }
 
 func TestLoadComponents(t *testing.T) {
-	apiEnv := []string{"SNIFFARR_DB", "/data/sniffarr.db", "SNIFFARR_INGEST_TOKEN", "in", "SNIFFARR_SEARCH_TOKEN", "se"}
+	apiEnv := []string{"SNIFFARR_DB", "/data/sniffarr.db"}
 	tests := []struct {
 		name string
 		args []string
@@ -65,7 +65,7 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, components{api: true}, c.on)
 			require.Equal(t, "/data/sniffarr.db", c.db.Path)
 			require.Equal(t, ":8080", c.api.Addr)
-			require.Equal(t, client.Config{IngestToken: "in", SearchToken: "se"}, c.client, "clients would reach this process")
+			require.Equal(t, client.Config{}, c.client, "clients would reach this process")
 			require.Equal(t, ui.Config{}, c.ui, "the UI's variables are not read")
 			require.Equal(t, slog.LevelInfo, c.logLevel)
 		}},
@@ -75,37 +75,35 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, ui.Config{Addr: defaultUIAddr}, c.ui)
 		}},
 		{name: "api with a URL", args: []string{"-api", "-ui"}, env: append(apiEnv, "SNIFFARR_URL", "http://api:8080"), err: "SNIFFARR_URL is set, but -api serves the API in this process: unset it"},
-		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_SEARCH_TOKEN", "se", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},
+		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},
 			want: func(t *testing.T, c config) {
-				require.Equal(t, client.Config{URL: &url.URL{Scheme: "http", Host: "api:8080"}, SearchToken: "se"}, c.client)
+				require.Equal(t, client.Config{URL: &url.URL{Scheme: "http", Host: "api:8080"}}, c.client)
 				require.Equal(t, ui.Config{Addr: ":9001", OIDCIssuer: "https://id.example.com"}, c.ui)
 				require.Equal(t, api.Config{}, c.api, "the API's variables are not read, the unknown audio language among them")
 				require.Equal(t, db.Config{}, c.db)
 			}},
-		{name: "ui without a URL", args: []string{"-ui"}, env: []string{"SNIFFARR_SEARCH_TOKEN", "se"}, err: "SNIFFARR_URL is not set"},
-		{name: "ui without a token", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "SNIFFARR_SEARCH_TOKEN is not set"},
-		{name: "sniff and fetch", args: []string{"-sniff", "-fetch"}, env: []string{"SNIFFARR_URL", "https://api.example.com", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
+		{name: "ui without a URL", args: []string{"-ui"}, err: "SNIFFARR_URL is not set"},
+		{name: "sniff and fetch", args: []string{"-sniff", "-fetch"}, env: []string{"SNIFFARR_URL", "https://api.example.com"}, want: func(t *testing.T, c config) {
 			require.Equal(t, components{sniff: true, fetch: true}, c.on)
 			require.Equal(t, dht.Config{Network: defaultNetwork(false), STUN: stun.DefaultServer}, c.dht, "a discovering node is not passive")
 			require.Equal(t, sniff.Config{Walkers: sniffer.DefaultWalkers}, c.sniff)
 			require.Equal(t, fetch.Config{Workers: sniffer.DefaultFetchers}, c.fetch)
-			require.Equal(t, client.Config{URL: &url.URL{Scheme: "https", Host: "api.example.com"}, IngestToken: "in"}, c.client)
+			require.Equal(t, client.Config{URL: &url.URL{Scheme: "https", Host: "api.example.com"}}, c.client)
 		}},
-		{name: "fetch alone", args: []string{"-fetch", "-port", "0", "-fetchers", "100", "-upnp"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
+		{name: "fetch alone", args: []string{"-fetch", "-port", "0", "-fetchers", "100", "-upnp"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 			want := defaultNetwork(true)
 			want.Port, want.Fetchers, want.UPnP = 0, 100, true
 			require.Equal(t, dht.Config{Network: want, STUN: stun.DefaultServer}, c.dht, "a node that does not discover is passive")
 			require.Equal(t, fetch.Config{Workers: 100}, c.fetch)
 		}},
-		{name: "sniff with another STUN server", args: []string{"-sniff", "-stun", "stun.example.net:3478"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
+		{name: "sniff with another STUN server", args: []string{"-sniff", "-stun", "stun.example.net:3478"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 			require.Equal(t, dht.Config{Network: defaultNetwork(false), STUN: "stun.example.net:3478"}, c.dht)
 		}},
-		{name: "sniff without STUN", args: []string{"-sniff", "-stun", ""}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, want: func(t *testing.T, c config) {
+		{name: "sniff without STUN", args: []string{"-sniff", "-stun", ""}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 			require.Equal(t, dht.Config{Network: defaultNetwork(false)}, c.dht, "an empty -stun asks no server")
 		}},
-		{name: "sniff without a URL", args: []string{"-sniff"}, env: []string{"SNIFFARR_INGEST_TOKEN", "in"}, err: "SNIFFARR_URL is not set"},
-		{name: "fetch without a token", args: []string{"-fetch"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "SNIFFARR_INGEST_TOKEN is not set"},
-		{name: "bad scheme", args: []string{"-fetch"}, env: []string{"SNIFFARR_URL", "api:8080", "SNIFFARR_INGEST_TOKEN", "in"}, err: "SNIFFARR_URL: want an http or https URL"},
+		{name: "sniff without a URL", args: []string{"-sniff"}, err: "SNIFFARR_URL is not set"},
+		{name: "bad scheme", args: []string{"-fetch"}, env: []string{"SNIFFARR_URL", "api:8080"}, err: "SNIFFARR_URL: want an http or https URL"},
 		{name: "everything in one process", args: []string{"-api", "-ui", "-sniff", "-fetch"}, env: apiEnv, want: func(t *testing.T, c config) {
 			require.Equal(t, components{api: true, ui: true, sniff: true, fetch: true}, c.on)
 			require.Nil(t, c.client.URL)
@@ -143,10 +141,10 @@ func TestLoadAPI(t *testing.T) {
 	defaultScripts := rules.Scripts{unicode.Latin, unicode.Cyrillic}
 	russian, err := audio.Parse("ru")
 	require.NoError(t, err)
-	required := []string{"SNIFFARR_DB", "/data/sniffarr.db", "SNIFFARR_INGEST_TOKEN", "in", "SNIFFARR_SEARCH_TOKEN", "se"}
+	required := []string{"SNIFFARR_DB", "/data/sniffarr.db"}
 	with := func(kv ...string) []string { return append(append([]string{}, required...), kv...) }
 	defaults := func() (api.Config, db.Config) {
-		return api.Config{Addr: ":8080", IngestToken: "in", SearchToken: "se", TMDBKey: tmdb.DefaultKey, ClassifyConcurrency: 4,
+		return api.Config{Addr: ":8080", TMDBKey: tmdb.DefaultKey, ClassifyConcurrency: 4,
 				DailyTokens: classify.DefaultDailyTokens, SearchReserve: classify.DefaultSearchReserve, LazyMax: search.DefaultLazyMax, LazyWait: search.DefaultLazyWait,
 				LazyTMDB: search.DefaultLazyTMDB, TMDBConcurrency: tmdb.DefaultConcurrency, TMDBRate: tmdb.DefaultRate, TMDBRetry: tmdb.DefaultRetry,
 				Lease: ingest.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff,
@@ -172,7 +170,7 @@ func TestLoadAPI(t *testing.T) {
 			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_AUDIO_LANGUAGES", "ru",
 			"TMDB_API_KEY", "tm", "SNIFFARR_TORZNAB_TOKEN", "tz", "SNIFFARR_TMDB_CONCURRENCY", "3", "SNIFFARR_TMDB_RATE", "10", "SNIFFARR_TMDB_RETRY", "240h", "SNIFFARR_SEARCH_TMDB_MAX", "7"),
 			want: func(a *api.Config, d *db.Config) {
-				*a = api.Config{Addr: ":9000", IngestToken: "in", SearchToken: "se", TypesafeKey: "ts", TMDBKey: "tm", TorznabToken: "tz", ClassifyConcurrency: 8,
+				*a = api.Config{Addr: ":9000", TypesafeKey: "ts", TMDBKey: "tm", TorznabToken: "tz", ClassifyConcurrency: 8,
 					TMDBConcurrency: 3, TMDBRate: 10, TMDBRetry: 240 * time.Hour, LazyTMDB: 7, DailyTokens: 1000000, SearchReserve: 40,
 					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, RetentionIdle: 72 * time.Hour, StatsInterval: time.Minute, LazyMax: 5, LazyWait: 500 * time.Millisecond,
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian}
@@ -185,9 +183,7 @@ func TestLoadAPI(t *testing.T) {
 		{name: "audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru"), want: func(a *api.Config, d *db.Config) { a.Languages, d.Store.Languages = russian, []string{"ru"} }},
 		{name: "unknown audio language", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru,xx"), err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},
 		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
-		{name: "nothing set", env: nil, err: "SNIFFARR_DB is not set"},
-		{name: "no ingest token", env: with("SNIFFARR_INGEST_TOKEN", ""), err: "SNIFFARR_INGEST_TOKEN is not set"},
-		{name: "no search token", env: with("SNIFFARR_SEARCH_TOKEN", ""), err: "SNIFFARR_SEARCH_TOKEN is not set"},
+		{name: "nothing set", err: "SNIFFARR_DB is not set"},
 		{name: "concurrency not a number", env: with("SNIFFARR_CLASSIFY_CONCURRENCY", "four"), err: "SNIFFARR_CLASSIFY_CONCURRENCY: want a positive integer"},
 		{name: "zero concurrency", env: with("SNIFFARR_CLASSIFY_CONCURRENCY", "0"), err: "SNIFFARR_CLASSIFY_CONCURRENCY: want a positive integer"},
 		{name: "negative budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "-1"), err: "SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer"},

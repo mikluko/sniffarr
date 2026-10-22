@@ -222,8 +222,7 @@ creates.
 {{- /*
 sniffarr.dht is a Deployment of sniffarr with its DHT components, and the Service of its DHT
 port when v.service.enabled. It takes root, component, v (the component's values), sniff and
-fetch (the flags), url, existingSecret, secretKey, and secretRequired, the error when no Secret
-is set.
+fetch (the flags), and url.
 */}}
 {{- define "sniffarr.dht" -}}
 {{- $root := .root }}
@@ -288,11 +287,6 @@ spec:
           env:
             - name: SNIFFARR_URL
               value: {{ .url | default (printf "http://%s-api:8080" $root.Release.Name) | quote }}
-            - name: SNIFFARR_INGEST_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ required .secretRequired (.existingSecret | default $root.Values.api.existingSecret) }}
-                  key: {{ .secretKey }}
             {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}

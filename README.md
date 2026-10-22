@@ -34,9 +34,8 @@ until SIGINT or SIGTERM.
   sketches.
 
 `-ui`, `-sniff` and `-fetch` are clients of the API. In a process with `-api`
-they reach it over an in-process connection, with the process's own
-`SNIFFARR_INGEST_TOKEN` and `SNIFFARR_SEARCH_TOKEN`; without `-api` they dial
-`SNIFFARR_URL` with the same tokens, and fail at startup when it is unset.
+they reach it over an in-process connection; without `-api` they dial
+`SNIFFARR_URL`, and fail at startup when it is unset.
 Any number of sniffing and fetching processes can run against one API.
 `-sniff` and `-fetch` in one process share one DHT node.
 
@@ -199,26 +198,27 @@ page can sort by them.
 Both API groups are [ConnectRPC](https://connectrpc.com) services, defined in
 [`proto/sniffarr/v1`](proto/sniffarr/v1). The server speaks HTTP/1.1 and HTTP/2
 without TLS, so Connect, gRPC and gRPC-Web clients all work; `Fetch` streams
-both ways and needs HTTP/2 end to end. Each group needs its own bearer token
-in the `Authorization` header; `/healthz` needs none.
+both ways and needs HTTP/2 end to end. The services authenticate no caller:
+whoever reaches the port can call every RPC, so the network has to keep
+others out, as the chart's `api.networkPolicy` does.
 
-| Service                     | RPC      | Token                   |
-| --------------------------- | -------- | ----------------------- |
-| `sniffarr.v1.IngestService` | `Sight`  | `SNIFFARR_INGEST_TOKEN` |
-| `sniffarr.v1.IngestService` | `Fetch`  | `SNIFFARR_INGEST_TOKEN` |
-| `sniffarr.v1.IngestService` | `HashKey` | `SNIFFARR_INGEST_TOKEN` |
-| `sniffarr.v1.IngestService` | `Peers`  | `SNIFFARR_INGEST_TOKEN` |
-| `sniffarr.v1.SearchService` | `Search` | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.SearchService` | `Get`    | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `SearchTitles` | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `Title`  | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `TitleReleases` | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `Torrents` | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `Card`   | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `Stats`  | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `Home`   | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `Top`    | `SNIFFARR_SEARCH_TOKEN` |
-| `sniffarr.v1.BrowseService` | `Settings` | `SNIFFARR_SEARCH_TOKEN` |
+| Service                     | RPC             |
+| --------------------------- | --------------- |
+| `sniffarr.v1.IngestService` | `Sight`         |
+| `sniffarr.v1.IngestService` | `Fetch`         |
+| `sniffarr.v1.IngestService` | `HashKey`       |
+| `sniffarr.v1.IngestService` | `Peers`         |
+| `sniffarr.v1.SearchService` | `Search`        |
+| `sniffarr.v1.SearchService` | `Get`           |
+| `sniffarr.v1.BrowseService` | `SearchTitles`  |
+| `sniffarr.v1.BrowseService` | `Title`         |
+| `sniffarr.v1.BrowseService` | `TitleReleases` |
+| `sniffarr.v1.BrowseService` | `Torrents`      |
+| `sniffarr.v1.BrowseService` | `Card`          |
+| `sniffarr.v1.BrowseService` | `Stats`         |
+| `sniffarr.v1.BrowseService` | `Home`          |
+| `sniffarr.v1.BrowseService` | `Top`           |
+| `sniffarr.v1.BrowseService` | `Settings`      |
 
 - `Sight` is client-streaming: it queues every infohash the server has neither
   stored, rejected nor queued, and returns how many were new and how many
@@ -277,8 +277,7 @@ with `INVALID_ARGUMENT`, one of no stored work with `NOT_FOUND`.
 
 With `SNIFFARR_TORZNAB_TOKEN` set, the API port also serves a
 [Torznab](https://torznab.github.io/spec-1.3-draft/) indexer at
-`/torznab/api`, for Prowlarr, Radarr and Sonarr; without it the path answers 404. Each request carries the token as its `apikey` parameter, and no bearer
-token.
+`/torznab/api`, for Prowlarr, Radarr and Sonarr; without it the path answers 404. Each request carries the token as its `apikey` parameter.
 
 | `t`        | Parameters                                                        |
 | ---------- | ----------------------------------------------------------------- |
@@ -365,8 +364,8 @@ another.
 ## Web UI
 
 With `-ui`, sniffarr serves a web UI on `SNIFFARR_UI_ADDR`, in English or
-Russian. The UI touches no database: it reads `BrowseService` with
-`SNIFFARR_SEARCH_TOKEN`, in-process when `-api` is on and over the network at
+Russian. The UI touches no database: it reads `BrowseService`, in-process
+when `-api` is on and over the network at
 `SNIFFARR_URL` otherwise. At start it asks `Settings` for the API's audio
 languages, retrying every 5 seconds until the API answers, and listens only
 then; the languages are kept for the life of the process, so a change of the
@@ -405,7 +404,7 @@ see [Helm](#helm).
 ## Configuration
 
 Each component reads its own variables, listed below, and only when it is on.
-A variable several components read, such as a token, is read once and means
+A variable several components read, such as `SNIFFARR_URL`, is read once and means
 the same to each.
 
 ### Every component
@@ -425,8 +424,6 @@ the same to each.
 | Variable                           | Default          | Meaning                                                                                                                |
 | ---------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `SNIFFARR_DB`                      |                  | Path of the SQLite database; required                                                                                  |
-| `SNIFFARR_INGEST_TOKEN`            |                  | Bearer token of `IngestService`; required                                                                              |
-| `SNIFFARR_SEARCH_TOKEN`            |                  | Bearer token of `SearchService` and `BrowseService`; required                                                          |
 | `SNIFFARR_ADDR`                    | `:8080`          | Listen address                                                                                                         |
 | `TYPESAFE_API_KEY`                 |                  | TypeSafe API key; when unset, only rules and reuse classify                                                            |
 | `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |
@@ -474,15 +471,10 @@ the last 7 days.
 
 | Variable                   | Default | Meaning                                                                              |
 | -------------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `SNIFFARR_SEARCH_TOKEN`    |         | Bearer token of `BrowseService`; required                                            |
 | `SNIFFARR_UI_ADDR`         | `:8081` | Listen address                                                                       |
 | `SNIFFARR_OIDC_ISSUER`     |         | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none |
 
 ### `-sniff` and `-fetch`
-
-| Variable                | Meaning                                   |
-| ----------------------- | ----------------------------------------- |
-| `SNIFFARR_INGEST_TOKEN` | Bearer token of `IngestService`; required |
 
 | Flag             | Default | Meaning                                                |
 | ---------------- | ------- | ------------------------------------------------------ |
@@ -619,7 +611,7 @@ component flags.
 
 ```shell
 docker build -t sniffarr .
-docker run -e SNIFFARR_DB=/data/sniffarr.db -e SNIFFARR_INGEST_TOKEN=… -e SNIFFARR_SEARCH_TOKEN=… sniffarr -api -ui
+docker run -e SNIFFARR_DB=/data/sniffarr.db sniffarr -api -ui
 ```
 
 ## Helm
@@ -632,14 +624,29 @@ helm install sniffarr oci://sarak.sh/arr/charts/sniffarr --version X.Y.Z \
   --set api.existingSecret=sniffarr
 ```
 
-`api.existingSecret` is required: the name of a Secret holding
-`SNIFFARR_INGEST_TOKEN` and `SNIFFARR_SEARCH_TOKEN`, and optionally
-`TYPESAFE_API_KEY`, which the api pod takes as its environment. The ui, sniff
-and fetch pods read their token from the same Secret unless
-`ui.existingSecret`, `sniff.existingSecret` or `fetch.existingSecret` names
-another. With `api.litestream.enabled`, `api.litestream.existingConfigMap` is
-required too. Every value is described in
-[`values.yaml`](charts/sniffarr/values.yaml).
+`api.existingSecret` names a Secret the api pod takes as its environment,
+such as `TYPESAFE_API_KEY`, `SNIFFARR_TORZNAB_TOKEN` and
+`SNIFFARR_WEBHOOK_TOKEN`; without it the pod takes none. With
+`api.litestream.enabled`, `api.litestream.existingConfigMap` is required.
+Every value is described in [`values.yaml`](charts/sniffarr/values.yaml).
+
+With `api.networkPolicy.enabled`, true by default, a NetworkPolicy
+`<release>-api` admits to the API port, 8080, only the release's own pods and
+the peers listed in `api.networkPolicy.from`, which are NetworkPolicyPeers:
+Prowlarr, Radarr and Sonarr reach Torznab and the webhook on that port, so
+their namespaces or pods belong there. The api pod's other ports stay open.
+Kubernetes leaves it to the network plugin whether a pod in the host network,
+as `sniff` is by default, matches a pod selector; where it does not, list its
+nodes in `api.networkPolicy.from` or turn the policy off.
+
+```yaml
+api:
+  networkPolicy:
+    from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: media
+```
 
 The chart installs in one of two modes, both of the one image.
 
@@ -651,7 +658,7 @@ Service. `<release>-sniff` runs `sniffarr -sniff`, `sniff.discover` and
 `sniff.fetch` rendering `-sniff` and `-fetch`, in the host's network by default
 so that `announce_peer` queries reach its DHT port. `<release>-fetch` runs
 `sniffarr -fetch`, in the pod network by default, with `fetch.replicas`
-replicas and the URL and token Secret of `sniff` unless its own are set. A
+replicas and the URL of `sniff` unless its own is set. A
 fetcher's DHT node is passive and the fetcher dials the peers it fetches from,
 so it needs no open port.
 
@@ -691,9 +698,7 @@ exposes it as the Service `<release>-dht`. The chart refuses values the one
 process cannot honour: `single.replicas` other than 1, since the process owns
 the SQLite database; `ui.url`, `sniff.url` or `fetch.url`, since the clients
 reach the API in-process and the binary refuses `SNIFFARR_URL` with `-api`;
-`ui.existingSecret`, `sniff.existingSecret` or `fetch.existingSecret`, since
-the process reads each token once, from `api.existingSecret`; and one `env` or
-`flags` key set to different values by two components.
+and one `env` or `flags` key set to different values by two components.
 
 ## Generating code
 

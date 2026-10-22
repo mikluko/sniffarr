@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-22
+
+### Added
+
+- The chart's NetworkPolicy `<release>-api`, `api.networkPolicy.enabled`, true by default: only the release's own pods and the NetworkPolicyPeers in `api.networkPolicy.from` reach the API port, 8080; the api pod's other ports stay open.
+
+### Removed
+
+- **Breaking:** `SNIFFARR_INGEST_TOKEN` and `SNIFFARR_SEARCH_TOKEN` are gone: `IngestService`, `SearchService` and `BrowseService` take no bearer token and authenticate no caller.
+- **Breaking:** the chart values `ui.existingSecret`, `ui.secretKey`, `sniff.existingSecret`, `sniff.secretKey`, `fetch.existingSecret` and `fetch.secretKey`; set, they fail the render. `api.existingSecret` is optional.
+
 ## [0.22.1] - 2026-10-22
 
 ### Added
@@ -321,7 +332,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.1...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.0...HEAD
+[0.23.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.1...v0.23.0
 [0.22.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.0...v0.22.1
 [0.22.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.21.0...v0.22.0
 [0.21.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.20.0...v0.21.0

@@ -1,6 +1,6 @@
-// Package server assembles the sniffarr HTTP handler: the ingest API behind
-// its bearer token, the search and browse APIs behind theirs, the Torznab
-// API, the Radarr and Sonarr webhook, and an unauthenticated /healthz.
+// Package server assembles the sniffarr HTTP handler: the ingest, search and
+// browse APIs, which authenticate no caller, the Torznab API, the Radarr and
+// Sonarr webhook, and /healthz.
 package server
 
 import (
@@ -15,7 +15,6 @@ import (
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/arr"
 	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
@@ -26,17 +25,14 @@ import (
 // MaxMessage is the largest request message, in bytes, either API accepts.
 const MaxMessage = 32 << 20
 
-// Config is what New needs. Both tokens must be set; the fetch fields are
-// those of ingest.Service.
+// Config is what New needs; the fetch fields are those of ingest.Service.
 type Config struct {
-	Store       *store.Store
-	Queue       *store.Queue
-	IngestToken string
-	SearchToken string
-	Lease       time.Duration
-	Attempts    int
-	Backoff     time.Duration
-	Poll        time.Duration
+	Store    *store.Store
+	Queue    *store.Queue
+	Lease    time.Duration
+	Attempts int
+	Backoff  time.Duration
+	Poll     time.Duration
 	// Scripts are the writing systems a torrent's name may have letters of;
 	// rules.DefaultScripts when nil.
 	Scripts rules.Scripts
@@ -80,18 +76,18 @@ func New(c Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
 		&ingest.Service{Store: c.Store, Queue: c.Queue, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Meter: c.Meter},
-		connect.WithInterceptors(otel, auth.NewBearer(c.IngestToken)),
+		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	searchService := &search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy}
 	mux.Handle(sniffarrv1connect.NewSearchServiceHandler(
 		searchService,
-		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
+		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
 		&search.Browser{Store: c.Store, TMDB: c.TMDB, Log: c.Log, DailyTokens: c.DailyTokens, Languages: audio.Tags(c.Languages), Counts: c.Counts},
-		connect.WithInterceptors(otel, auth.NewBearer(c.SearchToken)),
+		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	if c.TorznabToken != "" {

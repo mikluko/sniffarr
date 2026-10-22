@@ -146,14 +146,6 @@ func required(on components) []string {
 	}
 	if on.api {
 		add("SNIFFARR_DB")
-		add("SNIFFARR_INGEST_TOKEN")
-		add("SNIFFARR_SEARCH_TOKEN")
-	}
-	if on.ui {
-		add("SNIFFARR_SEARCH_TOKEN")
-	}
-	if on.dht() {
-		add("SNIFFARR_INGEST_TOKEN")
 	}
 	if on.clients() && !on.api {
 		add("SNIFFARR_URL")
@@ -164,7 +156,7 @@ func required(on components) []string {
 // loadClient reads where the clients reach the API: in this process with
 // -api, where SNIFFARR_URL must be unset, else at SNIFFARR_URL.
 func loadClient(on components, getenv func(string) string) (client.Config, error) {
-	c := client.Config{IngestToken: getenv("SNIFFARR_INGEST_TOKEN"), SearchToken: getenv("SNIFFARR_SEARCH_TOKEN")}
+	var c client.Config
 	raw := getenv("SNIFFARR_URL")
 	switch {
 	case raw == "":
@@ -192,8 +184,6 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	}
 	a := api.Config{
 		Addr:         or(getenv("SNIFFARR_ADDR"), ":8080"),
-		IngestToken:  getenv("SNIFFARR_INGEST_TOKEN"),
-		SearchToken:  getenv("SNIFFARR_SEARCH_TOKEN"),
 		TypesafeKey:  getenv("TYPESAFE_API_KEY"),
 		TorznabToken: getenv("SNIFFARR_TORZNAB_TOKEN"),
 		WebhookToken: getenv("SNIFFARR_WEBHOOK_TOKEN"),

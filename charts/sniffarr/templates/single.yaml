@@ -15,9 +15,6 @@
 {{- if $cv.url }}
 {{- fail (printf "%s.url is set, but single.enabled serves the API in the same process: unset it" $c) }}
 {{- end }}
-{{- if $cv.existingSecret }}
-{{- fail (printf "%s.existingSecret is set, but single.enabled reads every token from api.existingSecret: unset it" $c) }}
-{{- end }}
 {{- end }}
 {{- end }}
 {{- if and $sniff.enabled (not (or $sniff.discover $sniff.fetch)) }}
@@ -137,9 +134,11 @@ spec:
             {{- with include "sniffarr.env" (dict "root" . "env" $env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
+          {{- with $api.existingSecret }}
           envFrom:
             - secretRef:
-                name: {{ required "api.existingSecret is required" $api.existingSecret }}
+                name: {{ . }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080

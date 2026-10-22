@@ -14,8 +14,13 @@ telemetry:
   enabled: false
 
 api:
-  # Secret the container takes its environment from: SNIFFARR_INGEST_TOKEN, SNIFFARR_SEARCH_TOKEN, optionally TYPESAFE_API_KEY; required.
+  # Secret the container takes its environment from, such as TYPESAFE_API_KEY; none when empty.
   existingSecret: ""
+  networkPolicy:
+    # Renders a NetworkPolicy admitting to the API port, 8080, only the release's own pods and from; the pod's other ports stay open.
+    enabled: true
+    # NetworkPolicyPeers also admitted to the API port, such as the namespaces of Prowlarr, Radarr and Sonarr.
+    from: []
   # Extra environment variables, name to value.
   env: {}
   persistence:
@@ -70,10 +75,6 @@ ui:
   replicas: 1
   # SNIFFARR_URL; the release's api Service when empty.
   url: ""
-  # Secret holding the search token; api.existingSecret when empty.
-  existingSecret: ""
-  # Key of the search token in that Secret.
-  secretKey: SNIFFARR_SEARCH_TOKEN
   # SNIFFARR_UI_ADDR; the container port ui is declared unless it is a loopback address.
   addr: ":8081"
   service:
@@ -133,10 +134,6 @@ sniff:
   hostNetwork: true
   # SNIFFARR_URL; the release's api Service when empty.
   url: ""
-  # Secret holding the ingest token; api.existingSecret when empty.
-  existingSecret: ""
-  # Key of the ingest token in that Secret.
-  secretKey: SNIFFARR_INGEST_TOKEN
   # Command-line flags, name to value, rendered as -name=value after the component flags.
   flags: {}
   # Rendered as -upnp: the node asks the gateways on its network to forward its port, TCP and UDP.
@@ -174,10 +171,6 @@ fetch:
   hostNetwork: false
   # SNIFFARR_URL; sniff.url when empty.
   url: ""
-  # Secret holding the ingest token; sniff.existingSecret when empty.
-  existingSecret: ""
-  # Key of the ingest token in that Secret; sniff.secretKey when empty.
-  secretKey: ""
   # Command-line flags, name to value, rendered as -name=value after the component flags.
   flags: {}
   # Rendered as -upnp: the node asks the gateways on its network to forward its port, TCP and UDP.

@@ -14,7 +14,6 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/server"
 )
@@ -23,10 +22,6 @@ import (
 type Config struct {
 	// URL is the base URL of the API; nil when the API runs in this process.
 	URL *url.URL
-	// IngestToken is the bearer token of IngestService.
-	IngestToken string
-	// SearchToken is the bearer token of BrowseService.
-	SearchToken string
 }
 
 // Module provides sniffarrv1connect.IngestServiceClient and
@@ -73,18 +68,18 @@ func httpClient(u *url.URL) *http.Client {
 	return &http.Client{Transport: &http.Transport{Protocols: &p}}
 }
 
-func newIngest(e endpoint, cfg Config) (sniffarrv1connect.IngestServiceClient, error) {
+func newIngest(e endpoint) (sniffarrv1connect.IngestServiceClient, error) {
 	otel, err := otelconnect.NewInterceptor()
 	if err != nil {
 		return nil, err
 	}
 	return sniffarrv1connect.NewIngestServiceClient(e.client, e.base,
-		connect.WithInterceptors(otel, auth.Client(cfg.IngestToken)),
+		connect.WithInterceptors(otel),
 		connect.WithSendMaxBytes(server.MaxMessage),
 	), nil
 }
 
-func newBrowse(e endpoint, cfg Config) (sniffarrv1connect.BrowseServiceClient, error) {
+func newBrowse(e endpoint) (sniffarrv1connect.BrowseServiceClient, error) {
 	otel, err := otelconnect.NewInterceptor()
 	if err != nil {
 		return nil, err
@@ -92,6 +87,6 @@ func newBrowse(e endpoint, cfg Config) (sniffarrv1connect.BrowseServiceClient, e
 	hc := *e.client
 	hc.Timeout = browseTimeout
 	return sniffarrv1connect.NewBrowseServiceClient(&hc, e.base,
-		connect.WithInterceptors(otel, auth.Client(cfg.SearchToken)),
+		connect.WithInterceptors(otel),
 	), nil
 }

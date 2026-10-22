@@ -5,6 +5,13 @@
 {{- if hasKey $v "ui" }}
 {{- fail "api.ui is not a value: the UI is the ui component, ui.enabled, with ui.addr and ui.service.targetPort in place of api.ui.addr and api.ui.targetPort" }}
 {{- end }}
+{{- range $c := list "ui" "sniff" "fetch" }}
+{{- range $k := list "existingSecret" "secretKey" }}
+{{- if hasKey (index $.Values $c) $k }}
+{{- fail (printf "%s.%s is not a value: the API takes no token, and api.networkPolicy closes it instead" $c $k) }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- if not .Values.single.enabled }}
 apiVersion: apps/v1
 kind: Deployment
@@ -55,9 +62,11 @@ spec:
             {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
+          {{- with $v.existingSecret }}
           envFrom:
             - secretRef:
-                name: {{ required "api.existingSecret is required" $v.existingSecret }}
+                name: {{ . }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080
@@ -117,6 +126,41 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+{{- if $v.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sniffarr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sniffarr.selector" (dict "root" . "component" "api") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Chart.Name }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- with $v.networkPolicy.from }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 8080
+    - ports:
+        - protocol: TCP
+          port: 1
+          endPort: 8079
+        - protocol: TCP
+          port: 8081
+          endPort: 65535
+        - protocol: UDP
+{{- end }}
 {{- if and (eq $p.type "pvc") (not $p.existingClaim) }}
 ---
 apiVersion: v1
