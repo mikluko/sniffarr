@@ -25,7 +25,7 @@ type Config struct {
 var Module = fx.Module("db", fx.Provide(open, newStore, newQueue))
 
 func open(lc fx.Lifecycle, cfg Config) (*database.DB, error) {
-	db, err := database.Open(context.Background(), cfg.Path)
+	db, err := database.Open(context.Background(), cfg.Path, database.Options{Meter: cfg.Store.Meter})
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", cfg.Path, err)
 	}

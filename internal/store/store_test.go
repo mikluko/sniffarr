@@ -19,7 +19,7 @@ import (
 func openAt(t *testing.T, path string) (*Store, *database.DB) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, path)
+	db, err := database.Open(ctx, path, database.Options{})
 	require.NoError(t, err)
 	s, err := New(ctx, db, Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestSweepPlans(t *testing.T) {
 
 func TestMigrateAudio(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	defer db.Close()
 	old := fstest.MapFS{}
@@ -245,7 +245,7 @@ func schema(t *testing.T, db *database.DB) []string {
 
 func TestMigrateModules(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	defer db.Close()
 	old := fstest.MapFS{}
@@ -360,7 +360,7 @@ func TestMigrateModules(t *testing.T) {
 		require.Zero(t, n, "%s cascades from torrent_releases", table)
 	}
 
-	fresh, err := database.Open(ctx, filepath.Join(t.TempDir(), "fresh.db"))
+	fresh, err := database.Open(ctx, filepath.Join(t.TempDir(), "fresh.db"), database.Options{})
 	require.NoError(t, err)
 	defer fresh.Close()
 	_, err = New(ctx, fresh, Options{})

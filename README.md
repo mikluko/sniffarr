@@ -490,6 +490,14 @@ Every RPC is traced and measured on both ends by
 stderr and carry `trace_id` and `span_id` when written inside a span. No
 BitTorrent peer address appears in spans, attributes or logs.
 
+The API's SQLite statements are instrumented by
+[otelsql](https://github.com/XSAM/otelsql): inside a traced request each
+statement is a child span carrying its text with placeholders, never its
+arguments, and every statement is measured in `db.client.operation.duration`
+(`s`), by `db.pool` (`write` or `read`), `db.operation.name` and
+`code.function.name`, the Go function that issued it. The pools' connection
+counts are the `db.sql.connection.*` metrics.
+
 | Component  | Metric                                 | Unit         | Attributes                                 |
 | ---------- | -------------------------------------- | ------------ | ------------------------------------------ |
 | `-api`     | `sniffarr.ingest.sightings`            | `{sighting}` | `sniffarr.sighting.result`                 |

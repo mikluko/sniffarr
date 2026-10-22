@@ -12,7 +12,7 @@ import (
 func TestMigrate(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "test.db")
-	db, err := Open(ctx, path)
+	db, err := Open(ctx, path, Options{})
 	require.NoError(t, err)
 	a := fstest.MapFS{"001.sql": {Data: []byte("CREATE TABLE a (x INTEGER)")}}
 	b := fstest.MapFS{"001.sql": {Data: []byte("CREATE TABLE b (x INTEGER)")}}
@@ -20,7 +20,7 @@ func TestMigrate(t *testing.T) {
 	require.NoError(t, db.Migrate(ctx, "b", b), "components count versions apart")
 	require.NoError(t, db.Close())
 
-	db, err = Open(ctx, path)
+	db, err = Open(ctx, path, Options{})
 	require.NoError(t, err)
 	defer db.Close()
 	a["002.sql"] = &fstest.MapFile{Data: []byte("INSERT INTO a VALUES (1)")}

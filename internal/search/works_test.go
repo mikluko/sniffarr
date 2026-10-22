@@ -64,7 +64,7 @@ func (f *fakeTitles) SearchWorks(ctx context.Context, typ, query, lang string) (
 func ranked(t *testing.T) *Browser {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}, TMDB: true})

@@ -122,7 +122,7 @@ func TestDeadKeyShared(t *testing.T) {
 
 func TestMigrateDeadKey(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	defer db.Close()
 	old := fstest.MapFS{}
@@ -181,7 +181,7 @@ func BenchmarkDeadExpiry(b *testing.B) {
 	for _, indexed := range []bool{true, false} {
 		b.Run(map[bool]string{true: "indexed", false: "unindexed"}[indexed], func(b *testing.B) {
 			ctx := context.Background()
-			db, err := database.Open(ctx, filepath.Join(b.TempDir(), "test.db"))
+			db, err := database.Open(ctx, filepath.Join(b.TempDir(), "test.db"), database.Options{})
 			require.NoError(b, err)
 			defer db.Close()
 			_, err = NewQueue(ctx, db, QueueOptions{})

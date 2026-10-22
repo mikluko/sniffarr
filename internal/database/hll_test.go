@@ -23,7 +23,7 @@ func peers(first, n int) []byte {
 
 func TestHLLFunctions(t *testing.T) {
 	ctx := context.Background()
-	db, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"), Options{})
 	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.W.ExecContext(ctx, "CREATE TABLE s (k INTEGER, sketch BLOB)")

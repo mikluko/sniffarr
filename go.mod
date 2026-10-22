@@ -10,6 +10,7 @@ tool (
 require (
 	connectrpc.com/connect v1.21.1
 	connectrpc.com/otelconnect v0.12.0
+	github.com/XSAM/otelsql v0.44.0
 	github.com/anacrolix/dht/v2 v2.24.0
 	github.com/anacrolix/torrent v1.61.0
 	github.com/dchest/siphash v1.2.3

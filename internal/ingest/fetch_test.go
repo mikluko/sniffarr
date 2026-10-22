@@ -23,7 +23,7 @@ func infohash(b byte) []byte {
 
 func TestResultOutlivesStream(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
@@ -56,7 +56,7 @@ func TestResultOutlivesStream(t *testing.T) {
 
 func TestResultFailures(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
@@ -84,7 +84,7 @@ func TestResultFailures(t *testing.T) {
 
 func TestSightStoredFlags(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
@@ -112,7 +112,7 @@ func TestSightStoredFlags(t *testing.T) {
 
 func TestResultStoresFeatures(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})

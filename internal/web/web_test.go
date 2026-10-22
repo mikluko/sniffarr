@@ -97,7 +97,7 @@ func handler(t *testing.T, l Locales) http.Handler {
 func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	languages, err := audio.Parse(langs)

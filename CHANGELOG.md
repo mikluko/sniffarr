@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- SQLite statements are traced as child spans of the request that runs them, with the statement text and without its arguments, and measured in `db.client.operation.duration` by `db.pool`, `db.operation.name` and `code.function.name`; `db.sql.connection.*` reports both pools.
+
 ## [0.19.0] - 2026-10-22
 
 ### Fixed
