@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-22
+
 ### Added
 
 - The Radarr and Sonarr webhook at `POST /webhooks/arr`, behind HTTP Basic with `SNIFFARR_WEBHOOK_TOKEN` as the password: Grab and Download events are recorded as grabs and imports in the new table `arr_events`, once per app, event and download ID; Test and other events are ignored.
@@ -308,7 +310,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.21.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.0...HEAD
+[0.22.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.21.0...v0.22.0
 [0.21.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.20.0...v0.21.0
 [0.20.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.19.0...v0.20.0
 [0.19.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.0...v0.19.0
