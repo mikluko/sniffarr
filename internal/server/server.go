@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
@@ -73,7 +74,14 @@ func New(c Config) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	var hopts []otelhttp.Option
+	if c.Meter != nil {
+		hopts = append(hopts, otelhttp.WithMeterProvider(c.Meter))
+	}
 	mux := http.NewServeMux()
+	traced := func(route string, h http.Handler) {
+		mux.Handle(route, otelhttp.NewHandler(h, route, hopts...))
+	}
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
 		&ingest.Service{Store: c.Store, Queue: c.Queue, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Meter: c.Meter},
 		connect.WithInterceptors(otel),
@@ -91,10 +99,10 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	if c.TorznabToken != "" {
-		mux.Handle("GET /torznab/api", &torznab.Handler{Search: searchService, Token: c.TorznabToken, Log: c.Log})
+		traced("GET /torznab/api", &torznab.Handler{Search: searchService, Token: c.TorznabToken, Log: c.Log})
 	}
 	if c.WebhookToken != "" && c.Arr != nil {
-		mux.Handle("POST /webhooks/arr", &arr.Webhook{Recorder: c.Arr, Token: c.WebhookToken, Log: c.Log})
+		traced("POST /webhooks/arr", &arr.Webhook{Recorder: c.Arr, Token: c.WebhookToken, Log: c.Log})
 	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))

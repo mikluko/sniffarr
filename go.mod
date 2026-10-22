@@ -18,6 +18,7 @@ require (
 	github.com/segmentio/go-hll v1.0.1
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/contrib/exporters/autoexport v0.72.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/metric v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
@@ -60,6 +61,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/edsrzf/mmap-go v1.1.0 // indirect
+	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/go-llsqlite/adapter v0.0.0-20230927005056-7f5ce7f0c916 // indirect
 	github.com/go-llsqlite/crawshaw v0.5.6-0.20250312230104-194977a03421 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect

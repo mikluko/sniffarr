@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-10-22
+
+### Added
+
+- Torznab and the Radarr/Sonarr webhook record OpenTelemetry server spans and continue the caller's trace.
+
 ## [0.23.0] - 2026-10-22
 
 ### Added
@@ -332,7 +338,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.1...HEAD
+[0.23.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.0...v0.23.1
 [0.23.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.1...v0.23.0
 [0.22.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.0...v0.22.1
 [0.22.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.21.0...v0.22.0
