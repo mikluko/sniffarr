@@ -69,6 +69,7 @@ func TestKnown(t *testing.T) {
 		require.NotEmpty(t, append(l.Words, l.Studios...), l.Tag)
 	}
 	require.Panics(t, func() { compile(Language{Tag: "xx", Scripts: []string{"Klingon"}}) })
+	require.Panics(t, func() { compile(Language{Tag: "xx", Studios: []string{"nameless"}}) })
 	require.False(t, compile(Language{Tag: "xx"}).Marker("Anything", nil), "no words, no marker")
 }
 
@@ -80,6 +81,16 @@ func TestMark(t *testing.T) {
 	require.Equal(t, "LostFilm", ru.Mark("Silo.S03E10.1080p.rus.LostFilm.TV.mkv", nil), "a studio over a word before it")
 	require.Equal(t, "HDRezka", ru.Mark("Silo.S02.rus.1080p", []rules.File{{Path: "Silo.S02E01.HDRezka.mkv"}}), "a studio in a file over a word in the name")
 	require.Equal(t, "rus", ru.Mark("Silo.S03E06.720p.rus.mkv", nil), "a word when there is no studio")
+}
+
+func TestStudiosIn(t *testing.T) {
+	ru := russian(t)
+	require.Equal(t, []string{"LostFilm", "HDRezka"}, ru.StudiosIn("Silo.S02.HDRezka.lostfilm.1080p", nil), "every studio, in the list's order, by its display name")
+	require.Equal(t, []string{"Кубик в Кубе"}, ru.StudiosIn("Severance.S02.1080p", []rules.File{{Path: "Rus/КУБИК В КУБЕ/Severance.S02E01.mkv"}}), "a file path")
+	require.Equal(t, []string{"Red Head Sound"}, ru.StudiosIn("Alien.1979.RHS", []rules.File{{Path: "Audio/Red Head Sound.ac3"}}), "spellings of one studio once")
+	require.Equal(t, []string{"NewStudio"}, ru.StudiosIn("Silo.S02.NewStudio", []rules.File{{Path: "Silo.S02E01.NewStudio.mkv"}}), "once across the name and paths")
+	require.Nil(t, ru.StudiosIn("Silo.S03E06.720p.rus.mkv", nil), "a word is not a studio")
+	require.Nil(t, ru.StudiosIn("Lostfilmish.2020", nil), "whole words only")
 }
 
 func TestLookup(t *testing.T) {

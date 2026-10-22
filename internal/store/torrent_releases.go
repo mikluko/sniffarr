@@ -236,8 +236,12 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 			return err
 		}
 		for _, a := range t.Audio {
-			if _, err := tx.ExecContext(ctx, "INSERT INTO torrent_audio (torrent_id, language, marker, mark, script_hint, probability, layer) VALUES (?, ?, ?, ?, ?, ?, ?)",
-				id, a.Language, a.Marker, null(a.Mark), a.ScriptHint, a.Probability, null(a.Layer)); err != nil {
+			studios, err := studiosColumn(a.Studios)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "INSERT INTO torrent_audio (torrent_id, language, marker, mark, studios, script_hint, probability, layer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				id, a.Language, a.Marker, null(a.Mark), studios, a.ScriptHint, a.Probability, null(a.Layer)); err != nil {
 				return err
 			}
 		}

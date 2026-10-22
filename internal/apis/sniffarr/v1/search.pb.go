@@ -1096,7 +1096,10 @@ type Audio struct {
 	ScriptHint bool `protobuf:"varint,4,opt,name=script_hint,json=scriptHint,proto3" json:"script_hint,omitempty"`
 	// The marker as written in the name, or else in a stored file path;
 	// empty without a marker, or for one in a path not stored.
-	Mark          string `protobuf:"bytes,5,opt,name=mark,proto3" json:"mark,omitempty"`
+	Mark string `protobuf:"bytes,5,opt,name=mark,proto3" json:"mark,omitempty"`
+	// Display names of the language's studios in the release's name or
+	// stored file paths, in the order the language lists them.
+	Studios       []string `protobuf:"bytes,6,rep,name=studios,proto3" json:"studios,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1164,6 +1167,13 @@ func (x *Audio) GetMark() string {
 		return x.Mark
 	}
 	return ""
+}
+
+func (x *Audio) GetStudios() []string {
+	if x != nil {
+		return x.Studios
+	}
+	return nil
 }
 
 var File_sniffarr_v1_search_proto protoreflect.FileDescriptor
@@ -1255,14 +1265,15 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"confidence\x18\x12 \x01(\x02R\n" +
 	"confidence\x129\n" +
 	"\n" +
-	"checked_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\"\xa7\x01\n" +
+	"checked_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\"\xc1\x01\n" +
 	"\x05Audio\x12\x1a\n" +
 	"\blanguage\x18\x01 \x01(\tR\blanguage\x12%\n" +
 	"\vprobability\x18\x02 \x01(\x02H\x00R\vprobability\x88\x01\x01\x12\x16\n" +
 	"\x06marker\x18\x03 \x01(\bR\x06marker\x12\x1f\n" +
 	"\vscript_hint\x18\x04 \x01(\bR\n" +
 	"scriptHint\x12\x12\n" +
-	"\x04mark\x18\x05 \x01(\tR\x04markB\x0e\n" +
+	"\x04mark\x18\x05 \x01(\tR\x04mark\x12\x18\n" +
+	"\astudios\x18\x06 \x03(\tR\astudiosB\x0e\n" +
 	"\f_probability*j\n" +
 	"\aQuality\x12\x17\n" +
 	"\x13QUALITY_UNSPECIFIED\x10\x00\x12\x11\n" +

@@ -273,7 +273,7 @@ func TestAudioHints(t *testing.T) {
 			"Нечто (1982) BDRip":            {{Language: "ru", ScriptHint: true}},
 			"The.Thing.1982.BDRip.Rus":      {{Language: "ru", Marker: true, Mark: "Rus", Probability: new(float32(1))}},
 			"The.Thing.1982.BDRip":          {{Language: "ru"}},
-			"The.Thing.1982.BDRip.LostFilm": {{Language: "ru", Marker: true, Mark: "LostFilm", Probability: new(float32(1))}},
+			"The.Thing.1982.BDRip.LostFilm": {{Language: "ru", Marker: true, Mark: "LostFilm", Studios: []string{"LostFilm"}, Probability: new(float32(1))}},
 		}},
 		{"none", nil, map[string][]*sniffarrv1.Audio{
 			"Нечто (1982) BDRip":            nil,

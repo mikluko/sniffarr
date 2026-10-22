@@ -259,10 +259,17 @@ func TestFillFeaturesAndMarks(t *testing.T) {
 	silo.Audio = []Audio{{Language: "ru", Marker: true, Mark: "rus"}}
 	_, _, err = s.Insert(ctx, silo)
 	require.NoError(t, err)
+	alien := torrent(3, "Alien.1979.1080p.HDRezka.Jaskier", "Alien.1979.LostFilm.mkv")
+	alien.Audio = []Audio{{Language: "ru", Marker: true, Mark: "HDRezka", Studios: []string{"HDRezka"}}}
+	_, _, err = s.Insert(ctx, alien)
+	require.NoError(t, err)
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)
 	require.Zero(t, r.Episode, "Insert takes the features it is given")
 	require.Empty(t, r.Audio[0].Mark)
+	r, err = s.Get(ctx, hash(3))
+	require.NoError(t, err)
+	require.Equal(t, []string{"HDRezka"}, r.Audio[0].Studios, "Insert takes the studios it is given")
 	for _, k := range []string{featuresFilled, marksFilled + "ru"} {
 		_, err := db.W.ExecContext(ctx, "DELETE FROM settings WHERE key = ?", k)
 		require.NoError(t, err)
@@ -280,6 +287,13 @@ func TestFillFeaturesAndMarks(t *testing.T) {
 	r, err = s.Get(ctx, hash(2))
 	require.NoError(t, err)
 	require.Equal(t, "LostFilm", r.Audio[0].Mark, "a stored mark is recomputed: the studio over the word")
+	require.Equal(t, []string{"LostFilm"}, r.Audio[0].Studios)
+	r, err = s.Get(ctx, hash(3))
+	require.NoError(t, err)
+	require.Equal(t, []string{"LostFilm", "Jaskier", "HDRezka"}, r.Audio[0].Studios, "every studio of the name and stored files")
+	r, err = s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Nil(t, r.Audio[0].Studios, "a marker without a studio")
 
 	_, err = db.W.ExecContext(ctx, "UPDATE torrent_releases SET quality = NULL, episode = NULL")
 	require.NoError(t, err)

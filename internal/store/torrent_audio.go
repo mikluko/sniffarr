@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/mikluko/sniffarr/internal/audio"
 )
@@ -16,6 +18,10 @@ type Audio struct {
 	// file path not stored.
 	Marker bool
 	Mark   string
+	// Studios are the display names of the language's studios in the
+	// torrent's name or stored file paths, as audio.Language.StudiosIn gives
+	// them; nil without a marker or without a studio.
+	Studios []string
 	// ScriptHint reports letters of the language's script in the torrent's
 	// names.
 	ScriptHint bool
@@ -43,8 +49,14 @@ func (s *Store) audio(ctx context.Context, rs []Release) error {
 		var id int64
 		var a Audio
 		var p sql.NullFloat64
-		if err := rows.Scan(&id, &a.Language, &a.Marker, &a.Mark, &a.ScriptHint, &p, &a.Layer); err != nil {
+		var studios sql.NullString
+		if err := rows.Scan(&id, &a.Language, &a.Marker, &a.Mark, &studios, &a.ScriptHint, &p, &a.Layer); err != nil {
 			return err
+		}
+		if studios.Valid {
+			if err := json.Unmarshal([]byte(studios.String), &a.Studios); err != nil {
+				return fmt.Errorf("torrent %d audio %s studios: %w", id, a.Language, err)
+			}
 		}
 		if p.Valid {
 			a.Probability = &p.Float64
@@ -52,18 +64,20 @@ func (s *Store) audio(ctx context.Context, rs []Release) error {
 		i := index[id]
 		rs[i].Audio = append(rs[i].Audio, a)
 		return nil
-	}, "SELECT torrent_id, language, marker, coalesce(mark, ''), script_hint, probability, coalesce(layer, '') FROM torrent_audio WHERE torrent_id IN ("+
+	}, "SELECT torrent_id, language, marker, coalesce(mark, ''), studios, script_hint, probability, coalesce(layer, '') FROM torrent_audio WHERE torrent_id IN ("+
 		placeholders(len(ids))+") AND language IN ("+placeholders(len(langs))+") ORDER BY torrent_id, language", append(int64Args(ids), langs...)...)
 }
 
 // marksFilled is the prefix of the settings key that records, per language,
 // that fillMarks has run. A new prefix makes every database recompute its
-// marks once more, which a change to audio.Language.Mark needs.
-const marksFilled = "audio_marks_studios_first:"
+// marks and studios once more, which a change to audio.Language.Mark or
+// audio.Language.StudiosIn needs.
+const marksFilled = "audio_marks_studios_all:"
 
-// fillMarks records, once per language of Options.Languages, the mark of
-// every stored marker as audio.Language.Mark gives it from the torrent's
-// name and stored files.
+// fillMarks records, once per language of Options.Languages, the mark and
+// studios of every stored marker as audio.Language.Mark and
+// audio.Language.StudiosIn give them from the torrent's name and stored
+// files.
 func (s *Store) fillMarks(ctx context.Context) error {
 	for _, tag := range s.opts.Languages {
 		l, ok := audio.Lookup(tag)
@@ -99,19 +113,24 @@ func (s *Store) fillMarks(ctx context.Context) error {
 				break
 			}
 			marks := make([]string, len(batch))
+			studios := make([]sql.NullString, len(batch))
 			for i, r := range batch {
 				files, err := s.files(ctx, r.id, s.opts.MaxFiles)
 				if err != nil {
 					return err
 				}
 				marks[i] = l.Mark(r.name, files)
+				if studios[i], err = studiosColumn(l.StudiosIn(r.name, files)); err != nil {
+					return err
+				}
 			}
 			if err := s.tx(ctx, func(tx *sql.Tx) error {
 				for i, r := range batch {
 					if marks[i] == "" {
 						continue
 					}
-					if _, err := tx.ExecContext(ctx, "UPDATE torrent_audio SET mark = ? WHERE torrent_id = ? AND language = ? AND mark IS NOT ?", marks[i], r.id, l.Tag, marks[i]); err != nil {
+					if _, err := tx.ExecContext(ctx, `UPDATE torrent_audio SET mark = ?1, studios = ?2 WHERE torrent_id = ?3 AND language = ?4
+						AND (mark IS NOT ?1 OR studios IS NOT ?2)`, marks[i], studios[i], r.id, l.Tag); err != nil {
 						return err
 					}
 				}
@@ -126,6 +145,16 @@ func (s *Store) fillMarks(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// studiosColumn is the torrent_audio.studios value of studios: a JSON array,
+// NULL for none.
+func studiosColumn(studios []string) (sql.NullString, error) {
+	if len(studios) == 0 {
+		return sql.NullString{}, nil
+	}
+	b, err := json.Marshal(studios)
+	return sql.NullString{String: string(b), Valid: true}, err
 }
 
 // flag reports whether the settings key is set.

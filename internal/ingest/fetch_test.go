@@ -128,7 +128,7 @@ func TestResultStoresFeatures(t *testing.T) {
 	leased, _, err := q.Lease(ctx, 1, 2, now, time.Minute)
 	require.NoError(t, err)
 	require.Len(t, leased, 2)
-	for i, name := range []string{"Heat.1995.1080p.BluRay.Rus", "The Office (US) S03E05 720p"} {
+	for i, name := range []string{"Heat.1995.1080p.BluRay.Rus.RHS", "The Office (US) S03E05 720p"} {
 		require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(byte(i + 1)),
 			Outcome: &sniffarrv1.Result_Torrent{Torrent: &sniffarrv1.Torrent{Name: name, Size: 8 << 30,
 				Files: []*sniffarrv1.File{{Path: name + ".mkv", Size: 8 << 30}}}}}))
@@ -140,8 +140,8 @@ func TestResultStoresFeatures(t *testing.T) {
 	require.Equal(t, 1995, movie.Year)
 	require.Zero(t, movie.Season)
 	require.Equal(t, "1080p", movie.Quality)
-	require.Equal(t, []store.Audio{{Language: "ru", Marker: true, Mark: "Rus", Probability: new(1.0), Layer: store.LayerRules}}, movie.Audio,
-		"the marker with its mark")
+	require.Equal(t, []store.Audio{{Language: "ru", Marker: true, Mark: "RHS", Studios: []string{"Red Head Sound"}, Probability: new(1.0),
+		Layer: store.LayerRules}}, movie.Audio, "the marker with its mark and studios")
 	series, err := st.Get(ctx, store.Hash{2})
 	require.NoError(t, err)
 	require.Equal(t, "s:the office", series.TitleKey)

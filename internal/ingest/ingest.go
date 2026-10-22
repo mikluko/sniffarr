@@ -259,13 +259,14 @@ func (s *Service) kind(ctx context.Context, t *store.Torrent) error {
 }
 
 // audioEntries returns an entry per language for a torrent of the name and
-// files; a marker decides the probability as 1 and carries its mark.
+// files; a marker decides the probability as 1 and carries its mark and
+// studios.
 func audioEntries(langs []audio.Language, name string, files []rules.File) []store.Audio {
 	out := make([]store.Audio, len(langs))
 	for i, l := range langs {
 		out[i] = store.Audio{Language: l.Tag, Marker: l.Marker(name, files), ScriptHint: l.ScriptHint(name, files)}
 		if out[i].Marker {
-			out[i].Mark, out[i].Probability, out[i].Layer = l.Mark(name, files), new(1.0), store.LayerRules
+			out[i].Mark, out[i].Studios, out[i].Probability, out[i].Layer = l.Mark(name, files), l.StudiosIn(name, files), new(1.0), store.LayerRules
 		}
 	}
 	return out

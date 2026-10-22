@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-23
+
+### Changed
+
+- Torznab titles end with `[RUS]` and the Russian dubbing studios found in the release's name or files, such as `[RUS LostFilm HDRezka]`, when the release has a Russian audio marker or the classifier gives Russian audio a probability of at least 0.9, so Radarr and Sonarr release-title custom formats can score it.
+
 ## [0.24.0] - 2026-10-22
 
 ### Added
@@ -349,7 +355,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.24.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.0...HEAD
+[0.25.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.24.0...v0.25.0
 [0.24.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.1...v0.24.0
 [0.23.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.0...v0.23.1
 [0.23.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.1...v0.23.0

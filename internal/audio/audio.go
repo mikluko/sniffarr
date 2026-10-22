@@ -6,6 +6,7 @@ package audio
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -26,12 +27,16 @@ type Language struct {
 	// Studios are the language's dubbing and voice-over studios and release
 	// groups, matched as Words are.
 	Studios []string
+	// StudioNames are the display names of the Studios, by studio as
+	// written in Studios; spellings of one studio share a name.
+	StudioNames map[string]string
 	// Signs tells the classifier how a release names or implies an audio
 	// track of the language.
 	Signs string
 
 	marker  *regexp.Regexp
 	studio  *regexp.Regexp
+	studios []*regexp.Regexp
 	scripts []*unicode.RangeTable
 }
 
@@ -45,6 +50,14 @@ var known = []Language{
 			"lostfilm", "newstudio", "jaskier", "hdrezka", "кубик в кубе", "alexfilm", "baibako", "coldfilm",
 			"tvshows", "novamedia", "amedia", "кураж-бамбей", "red head sound", "rhs", "гоблин", "anilibria",
 			"anidub", "shiza", "anistar", "dream cast", "selezen", "exkinoray", "scarabey", "hellywood", "generalfilm",
+		},
+		StudioNames: map[string]string{
+			"lostfilm": "LostFilm", "newstudio": "NewStudio", "jaskier": "Jaskier", "hdrezka": "HDRezka",
+			"кубик в кубе": "Кубик в Кубе", "alexfilm": "AlexFilm", "baibako": "BaibaKo", "coldfilm": "ColdFilm",
+			"tvshows": "TVShows", "novamedia": "NovaMedia", "amedia": "Amedia", "кураж-бамбей": "Кураж-Бамбей",
+			"red head sound": "Red Head Sound", "rhs": "Red Head Sound", "гоблин": "Гоблин", "anilibria": "AniLibria",
+			"anidub": "AniDub", "shiza": "SHIZA", "anistar": "AniStar", "dream cast": "Dream Cast", "selezen": "seleZen",
+			"exkinoray": "ExKinoRay", "scarabey": "Scarabey", "hellywood": "Hellywood", "generalfilm": "GeneralFilm",
 		},
 		Signs: "Russian audio is named or clearly implied: Rus, RUS, rus in a file or folder name, Дубляж, Dub, MVO, DVO, AVO, ПМ, " +
 			"a separate Rus*.ac3/.mka/.aac track, a Russian-language title of a video release",
@@ -65,10 +78,16 @@ func wholeWords(words []string) *regexp.Regexp {
 }
 
 // compile prepares l's matchers; it panics on a script name unicode.Scripts
-// does not have.
+// does not have, or on a studio without a display name.
 func compile(l Language) Language {
 	l.marker = wholeWords(append(append([]string{}, l.Words...), l.Studios...))
 	l.studio = wholeWords(l.Studios)
+	for _, st := range l.Studios {
+		if l.StudioNames[st] == "" {
+			panic(fmt.Sprintf("audio: language %s: no display name for studio %q", l.Tag, st))
+		}
+		l.studios = append(l.studios, wholeWords([]string{st}))
+	}
 	for _, s := range l.Scripts {
 		t, ok := unicode.Scripts[s]
 		if !ok {
@@ -151,6 +170,20 @@ func (l Language) Mark(name string, files []rules.File) string {
 		}
 	}
 	return ""
+}
+
+// StudiosIn returns the display names of the language's Studios found in the
+// name or a file path, in the order of Studios, each once; nil when there is
+// none.
+func (l Language) StudiosIn(name string, files []rules.File) []string {
+	var out []string
+	for i, re := range l.studios {
+		n := l.StudioNames[l.Studios[i]]
+		if !slices.Contains(out, n) && anyName(name, files, re.MatchString) {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func paths(files []rules.File) []string {

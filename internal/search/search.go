@@ -271,7 +271,7 @@ func release(r store.Release, lang string) *sniffarrv1.Release {
 		}
 	}
 	for _, a := range r.Audio {
-		pa := &sniffarrv1.Audio{Language: a.Language, Marker: a.Marker, ScriptHint: a.ScriptHint, Mark: a.Mark}
+		pa := &sniffarrv1.Audio{Language: a.Language, Marker: a.Marker, ScriptHint: a.ScriptHint, Mark: a.Mark, Studios: a.Studios}
 		if a.Probability != nil {
 			pa.Probability = new(float32(*a.Probability))
 		}

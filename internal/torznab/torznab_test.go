@@ -17,8 +17,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/names"
+	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/sketch"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -332,4 +335,52 @@ func TestErrors(t *testing.T) {
 		require.Equal(t, 201, code, tt.params)
 		require.Equal(t, tt.desc, desc, tt.params)
 	}
+}
+
+func TestTitleRussianAudio(t *testing.T) {
+	const name = "Silo.S02E01.1080p.WEB-DL"
+	ru := func(a *sniffarrv1.Audio) *sniffarrv1.Release {
+		a.Language = "ru"
+		return &sniffarrv1.Release{Name: name, Audio: []*sniffarrv1.Audio{a}}
+	}
+	for _, c := range []struct {
+		desc    string
+		release *sniffarrv1.Release
+		want    string
+	}{
+		{"a marker with studios", ru(&sniffarrv1.Audio{Marker: true, Probability: new(float32(1)), Studios: []string{"LostFilm", "HDRezka"}}),
+			name + " [RUS LostFilm HDRezka]"},
+		{"a marker without a studio", ru(&sniffarrv1.Audio{Marker: true}), name + " [RUS]"},
+		{"a likely track without a studio", ru(&sniffarrv1.Audio{Probability: new(float32(0.93))}), name + " [RUS]"},
+		{"the threshold", ru(&sniffarrv1.Audio{Probability: new(float32(russian))}), name + " [RUS]"},
+		{"an unlikely track", ru(&sniffarrv1.Audio{Probability: new(float32(0.6))}), name},
+		{"an unknown track", ru(&sniffarrv1.Audio{}), name},
+		{"another language", &sniffarrv1.Release{Name: name, Audio: []*sniffarrv1.Audio{{Language: "uk", Marker: true}}}, name},
+		{"no audio", &sniffarrv1.Release{Name: name}, name},
+	} {
+		require.Equal(t, c.want, itemOf(c.release).Title, c.desc)
+	}
+}
+
+func TestSearchRussianAudio(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	s, err := store.New(ctx, db, store.Options{TMDB: true, Languages: []string{"ru"}})
+	require.NoError(t, err)
+	l, ok := audio.Lookup("ru")
+	require.True(t, ok)
+	const name = "Alien.1979.1080p.BluRay.RHS"
+	files := []rules.File{{Path: "Alien.1979.Red Head Sound.mkv", Size: 8 << 30}}
+	_, _, err = s.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: name, Size: 8 << 30, Files: files, Discovery: "sample", SeenAt: t0,
+		Kind: "movie", KindLayer: store.LayerRules, Year: 1979,
+		Audio: []store.Audio{{Language: "ru", Marker: true, Mark: l.Mark(name, files), Studios: l.StudiosIn(name, files),
+			Probability: new(1.0), Layer: store.LayerRules}}})
+	require.NoError(t, err)
+	h := &Handler{Search: &search.Service{Store: s, Log: slog.New(slog.DiscardHandler)}, Token: "key", Log: slog.New(slog.DiscardHandler)}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	require.Equal(t, []string{name + " [RUS Red Head Sound]"}, titles(items(t, get(t, srv, "t", "search", "q", "alien"))),
+		"RHS and Red Head Sound are one studio")
 }

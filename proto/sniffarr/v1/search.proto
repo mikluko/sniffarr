@@ -197,6 +197,9 @@ message Audio {
   // The marker as written in the name, or else in a stored file path;
   // empty without a marker, or for one in a path not stored.
   string mark = 5;
+  // Display names of the language's studios in the release's name or
+  // stored file paths, in the order the language lists them.
+  repeated string studios = 6;
 }
 
 // Layer is what decided a release's kind.

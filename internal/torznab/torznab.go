@@ -263,6 +263,24 @@ func category(r *sniffarrv1.Release) int {
 	return sd
 }
 
+// russian is how sure a classifier must be of a Russian audio track for the
+// title to name it.
+const russian = 0.9
+
+// title is the release's name, followed by " [RUS]" with the Russian audio's
+// studios inside the brackets when the release has a Russian marker or a
+// probability of at least russian, for the release-title custom formats of
+// Radarr and Sonarr.
+func title(r *sniffarrv1.Release) string {
+	for _, a := range r.GetAudio() {
+		if a.GetLanguage() != "ru" || !a.GetMarker() && (a.Probability == nil || a.GetProbability() < russian) {
+			continue
+		}
+		return r.GetName() + " [" + strings.Join(append([]string{"RUS"}, a.GetStudios()...), " ") + "]"
+	}
+	return r.GetName()
+}
+
 // itemOf is the item of a release. Its seeders and peers are both the
 // release's distinct peers over the last 7 days, peers_week: the DHT does
 // not tell seeders apart, and a count over a shorter window would take a
@@ -272,7 +290,7 @@ func itemOf(r *sniffarrv1.Release) item {
 	cat := strconv.Itoa(category(r))
 	peers := strconv.FormatInt(r.GetPeersWeek(), 10)
 	it := item{
-		Title:     r.GetName(),
+		Title:     title(r),
 		GUID:      guid{Value: magnet},
 		Link:      magnet,
 		PubDate:   r.GetFirstSeen().AsTime().Format(time.RFC1123Z),
