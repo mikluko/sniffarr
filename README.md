@@ -700,6 +700,32 @@ the SQLite database; `ui.url`, `sniff.url` or `fetch.url`, since the clients
 reach the API in-process and the binary refuses `SNIFFARR_URL` with `-api`;
 and one `env` or `flags` key set to different values by two components.
 
+## Calling the API from a shell
+
+`hack/rpc` sends one unary request to the API over ConnectRPC and prints the
+response as indented protojson. It is a developer tool, not part of the image.
+
+```shell
+go run ./hack/rpc [flags] <Service>/<Method> [json|-]
+go run ./hack/rpc -l
+```
+
+The method is `Service/Method` of `sniffarr.v1` or its full name, such as
+`sniffarr.v1.SearchService/Search`; `-l` lists them, and streaming methods are
+refused. The request is protojson, from the argument, or from stdin when the
+argument is `-` or absent and stdin is not a terminal; empty is the zero
+message. `--url` names the API, such as `http://127.0.0.1:8080`. Without it,
+`rpc` runs `kubectl port-forward svc/<release>-api` on a free local port, in
+the kube context `--context`, the current one when empty, and the namespace
+`-n` or `--namespace`, `sniffarr` by default, with `--release` `sniffarr` by
+default, and stops it on exit. `-v` prints the method, the URL and the time
+taken to stderr; `--timeout`, 30 seconds by default, bounds the call.
+
+```shell
+go run ./hack/rpc --context saraksh SearchService/Search '{"query":"House of the Dragon","limit":5}'
+go run ./hack/rpc BrowseService/Home
+```
+
 ## Generating code
 
 The generated code under `internal/apis` is committed. After changing a `.proto` file,
