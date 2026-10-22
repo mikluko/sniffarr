@@ -83,6 +83,8 @@ message WorkSummary {
   // The work's place in the last 7 days' top of its kind among all voices,
   // 1 first; 0 when it is not in it.
   int32 rank = 6;
+  // Grabs of the work Radarr and Sonarr reported over the last 7 days.
+  int64 grabs_week = 7;
 }
 
 // WorkAudio sums up the audio in one language of a work's releases.

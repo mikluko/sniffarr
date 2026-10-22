@@ -60,6 +60,7 @@ var layers = map[string]sniffarrv1.Layer{
 var tmdbLayers = map[string]sniffarrv1.TMDBLayer{
 	store.LayerTMDB: sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH,
 	store.LayerJev:  sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER,
+	store.LayerArr:  sniffarrv1.TMDBLayer_TMDB_LAYER_ARR,
 }
 
 var sources = map[string]sniffarrv1.VideoSource{

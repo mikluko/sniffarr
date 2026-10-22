@@ -85,6 +85,31 @@ func TestLeaseOrder(t *testing.T) {
 	require.Empty(t, lease(t, q, 2, 3, t0), "everything is leased")
 }
 
+func TestEnqueueArr(t *testing.T) {
+	ctx := context.Background()
+	q := openQueue(t)
+	enqueue(t, q, Sample, 1)
+	enqueue(t, q, Announce, 2)
+	dead := hash(3)
+	_, err := q.db.W.ExecContext(ctx, "INSERT INTO ingest_dead (key, until) VALUES (?, ?)", deadKey(dead[:]), t0.Add(time.Hour).UnixMilli())
+	require.NoError(t, err)
+	queued, known := enqueue(t, q, Arr, 1, 3)
+	require.Equal(t, 1, queued, "arr revives a dead hash")
+	require.Equal(t, 1, known)
+
+	for _, b := range []byte{1, 3} {
+		d, err := q.Discovery(ctx, hash(b))
+		require.NoError(t, err)
+		require.Equal(t, Arr, d)
+	}
+	require.Equal(t, []Hash{hash(1), hash(3), hash(2)}, lease(t, q, 1, 3, t0), "arr first, then announced")
+	enqueue(t, q, Sample, 4)
+	enqueue(t, q, Announce, 4)
+	d, err := q.Discovery(ctx, hash(4))
+	require.NoError(t, err)
+	require.Equal(t, Announce, d)
+}
+
 func TestLeaseExpiryAndRelease(t *testing.T) {
 	ctx := context.Background()
 	q := openQueue(t)

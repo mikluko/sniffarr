@@ -277,6 +277,8 @@ func discovery(src sniffarrv1.Source) (string, error) {
 		return store.Sample, nil
 	case sniffarrv1.Source_SOURCE_ANNOUNCE:
 		return store.Announce, nil
+	case sniffarrv1.Source_SOURCE_ARR:
+		return store.Arr, nil
 	}
 	return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("source %v", src))
 }

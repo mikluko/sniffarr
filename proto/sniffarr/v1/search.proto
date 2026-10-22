@@ -172,6 +172,9 @@ enum TMDBLayer {
   TMDB_LAYER_SEARCH = 1;
   // The classifier, choosing among several.
   TMDB_LAYER_CLASSIFIER = 2;
+  // Radarr or Sonarr, which grabbed or imported a release of the title as
+  // the work; a search or the classifier never replaces it.
+  TMDB_LAYER_ARR = 3;
 }
 
 // Audio is what is known of a release's audio track in one language.

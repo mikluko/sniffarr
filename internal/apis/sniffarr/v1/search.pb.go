@@ -90,6 +90,9 @@ const (
 	TMDBLayer_TMDB_LAYER_SEARCH TMDBLayer = 1
 	// The classifier, choosing among several.
 	TMDBLayer_TMDB_LAYER_CLASSIFIER TMDBLayer = 2
+	// Radarr or Sonarr, which grabbed or imported a release of the title as
+	// the work; a search or the classifier never replaces it.
+	TMDBLayer_TMDB_LAYER_ARR TMDBLayer = 3
 )
 
 // Enum value maps for TMDBLayer.
@@ -98,11 +101,13 @@ var (
 		0: "TMDB_LAYER_UNSPECIFIED",
 		1: "TMDB_LAYER_SEARCH",
 		2: "TMDB_LAYER_CLASSIFIER",
+		3: "TMDB_LAYER_ARR",
 	}
 	TMDBLayer_value = map[string]int32{
 		"TMDB_LAYER_UNSPECIFIED": 0,
 		"TMDB_LAYER_SEARCH":      1,
 		"TMDB_LAYER_CLASSIFIER":  2,
+		"TMDB_LAYER_ARR":         3,
 	}
 )
 
@@ -1239,11 +1244,12 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\rQUALITY_1080P\x10\x02\x12\x10\n" +
 	"\fQUALITY_720P\x10\x03\x12\x0e\n" +
 	"\n" +
-	"QUALITY_SD\x10\x04*Y\n" +
+	"QUALITY_SD\x10\x04*m\n" +
 	"\tTMDBLayer\x12\x1a\n" +
 	"\x16TMDB_LAYER_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11TMDB_LAYER_SEARCH\x10\x01\x12\x19\n" +
-	"\x15TMDB_LAYER_CLASSIFIER\x10\x02*V\n" +
+	"\x15TMDB_LAYER_CLASSIFIER\x10\x02\x12\x12\n" +
+	"\x0eTMDB_LAYER_ARR\x10\x03*V\n" +
 	"\x05Layer\x12\x15\n" +
 	"\x11LAYER_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vLAYER_RULES\x10\x01\x12\x0f\n" +

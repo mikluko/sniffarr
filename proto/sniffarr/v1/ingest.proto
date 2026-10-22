@@ -53,6 +53,9 @@ enum Source {
   SOURCE_SAMPLE = 1;
   // An announce_peer query received by the sniffer's DHT node.
   SOURCE_ANNOUNCE = 2;
+  // A grab or import Radarr or Sonarr reported; the queue serves these
+  // first.
+  SOURCE_ARR = 3;
 }
 
 message FetchRequest {

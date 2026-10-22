@@ -52,7 +52,7 @@ var sorts = map[sniffarrv1.Sort]string{
 func summary(s store.Summary, lang string) *sniffarrv1.WorkSummary {
 	kind, _ := name(kinds, s.Work.Kind())
 	return &sniffarrv1.WorkSummary{Id: WorkID(s.Work), Kind: kind, Tmdb: tmdbOf(s.Work, lang), Releases: s.Releases,
-		Peers: s.Work.PeersWeek, Rank: int32(s.Rank)}
+		Peers: s.Work.PeersWeek, Rank: int32(s.Rank), GrabsWeek: s.GrabsWeek}
 }
 
 // workAudio is the API's view of a work's audio summaries.

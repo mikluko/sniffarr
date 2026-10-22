@@ -20,6 +20,7 @@ var ErrNotQueued = errors.New("not queued")
 // Discoveries name how a hash was sighted, in the order the queue serves
 // them.
 const (
+	Arr      = "arr"
 	Announce = "announce"
 	Sample   = "sample"
 )
@@ -90,14 +91,20 @@ func NewQueue(ctx context.Context, db *database.DB, opts QueueOptions) (*Queue, 
 }
 
 func priority(discovery string) int {
-	if discovery == Announce {
+	switch discovery {
+	case Arr:
+		return -1
+	case Announce:
 		return 0
 	}
 	return 1
 }
 
 func discovery(priority int) string {
-	if priority == 0 {
+	switch {
+	case priority < 0:
+		return Arr
+	case priority == 0:
 		return Announce
 	}
 	return Sample
@@ -105,8 +112,8 @@ func discovery(priority int) string {
 
 // Enqueue queues every sighted hash not yet queued, and returns how many it
 // queued and how many it knew. A dead hash is queued only when sighted by
-// announce, which revives it. A queued sample sighted by announce moves ahead
-// to the announce queue. The queue may outgrow MaxSize until the next Trim.
+// announce or arr, which revives it. A queued hash sighted by a discovery
+// served before its own moves ahead to that discovery's queue. The queue may outgrow MaxSize until the next Trim.
 func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time) (queued, known int, err error) {
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
 		for _, g := range sightings {
@@ -115,7 +122,7 @@ func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 				return err
 			}
 			if dead {
-				if g.Discovery != Announce {
+				if g.Discovery != Announce && g.Discovery != Arr {
 					known++
 					continue
 				}
@@ -195,9 +202,9 @@ func (q *Queue) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 }
 
 // Lease frees the leases expired by now, then leases up to n free hashes to
-// owner until now+d. It returns the leased hashes, announced ones first,
-// then oldest first, and how many leases expired. A hash is free when it has
-// no lease and its retry backoff has passed.
+// owner until now+d. It returns the leased hashes, arr ones first, then
+// announced ones, then oldest first, and how many leases expired. A hash is
+// free when it has no lease and its retry backoff has passed.
 func (q *Queue) Lease(ctx context.Context, owner int64, n int, now time.Time, d time.Duration) (hashes []Hash, expired int, err error) {
 	type leased struct {
 		hash         Hash
@@ -364,7 +371,7 @@ func (q *Queue) observe(mp metric.MeterProvider) error {
 			return err
 		}
 		defer rows.Close()
-		counts := map[string]int64{Announce: 0, Sample: 0}
+		counts := map[string]int64{Arr: 0, Announce: 0, Sample: 0}
 		var leased int64
 		for rows.Next() {
 			var p int

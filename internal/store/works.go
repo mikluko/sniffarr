@@ -23,6 +23,9 @@ type Summary struct {
 	// FirstSeen is the first sighting of the earliest release; zero without
 	// releases.
 	FirstSeen time.Time
+	// GrabsWeek counts the grabs of the work recorded by RecordArr that
+	// happened over the 7 days before the summary was read.
+	GrabsWeek int64
 }
 
 // WorkAudio sums up the audio in one language of a work's releases.
@@ -65,8 +68,23 @@ func (s *Store) summaries(ctx context.Context, ids []int64, v Voice, lang string
 		return out, nil
 	}
 	cond, cargs := voiceTest(v, lang, "t")
+	weekAgo := time.Now().Add(-7 * 24 * time.Hour).Unix()
 	for c := range slices.Chunk(ids, 500) {
 		in := placeholders(len(c))
+		if err := s.each(ctx, func(rows *sql.Rows) error {
+			var id, n int64
+			if err := rows.Scan(&id, &n); err != nil {
+				return err
+			}
+			if sum, ok := out[id]; ok {
+				sum.GrabsWeek = n
+				out[id] = sum
+			}
+			return nil
+		}, "SELECT work, count(*) FROM arr_events WHERE work IN ("+in+") AND event = ? AND at >= ? GROUP BY work",
+			slices.Concat(int64Args(c), []any{EventGrab, weekAgo})...); err != nil {
+			return nil, err
+		}
 		args := slices.Concat(int64Args(c), cargs)
 		if err := s.each(ctx, func(rows *sql.Rows) error {
 			var id, n, first int64

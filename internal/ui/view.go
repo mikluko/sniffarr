@@ -278,7 +278,7 @@ type Torrent struct {
 	FileCount     int // files in the torrent
 	FirstSeen     time.Time
 	LastSeen      time.Time
-	DiscoveredVia string // "announce" | "sample"
+	DiscoveredVia string // "announce" | "sample" | "arr"
 	TMDBQuery     string // cleaned title, used for TMDB/IMDb search links when not matched
 	Peers         PeerCounts
 

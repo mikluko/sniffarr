@@ -202,7 +202,8 @@ func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (store
 // files, and copies its kind, if it has one, to the stored torrents of the
 // same title key whose kind is unknown; it returns whether it stored the
 // torrent and how many it copied the kind to. It stores nothing when the hash
-// is already stored or rejected.
+// is already stored or rejected. A torrent RecordArr recorded an event with a
+// work for gets the work of the latest such event, as RecordArr gives it.
 func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied int, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var rejected bool
@@ -239,6 +240,9 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 				id, a.Language, a.Marker, null(a.Mark), a.ScriptHint, a.Probability, null(a.Layer)); err != nil {
 				return err
 			}
+		}
+		if err := applyPendingArr(ctx, tx, t.Hash, t.SeenAt); err != nil {
+			return err
 		}
 		if t.Kind == "" || t.TitleKey == "" {
 			return nil

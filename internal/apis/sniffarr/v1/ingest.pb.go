@@ -30,6 +30,9 @@ const (
 	Source_SOURCE_SAMPLE Source = 1
 	// An announce_peer query received by the sniffer's DHT node.
 	Source_SOURCE_ANNOUNCE Source = 2
+	// A grab or import Radarr or Sonarr reported; the queue serves these
+	// first.
+	Source_SOURCE_ARR Source = 3
 )
 
 // Enum value maps for Source.
@@ -38,11 +41,13 @@ var (
 		0: "SOURCE_UNSPECIFIED",
 		1: "SOURCE_SAMPLE",
 		2: "SOURCE_ANNOUNCE",
+		3: "SOURCE_ARR",
 	}
 	Source_value = map[string]int32{
 		"SOURCE_UNSPECIFIED": 0,
 		"SOURCE_SAMPLE":      1,
 		"SOURCE_ANNOUNCE":    2,
+		"SOURCE_ARR":         3,
 	}
 )
 
@@ -921,11 +926,13 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x06sketch\x18\x03 \x01(\fR\x06sketch\"A\n" +
 	"\rPeersResponse\x12\x16\n" +
 	"\x06merged\x18\x01 \x01(\x03R\x06merged\x12\x18\n" +
-	"\adropped\x18\x02 \x01(\x03R\adropped*H\n" +
+	"\adropped\x18\x02 \x01(\x03R\adropped*X\n" +
 	"\x06Source\x12\x16\n" +
 	"\x12SOURCE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSOURCE_SAMPLE\x10\x01\x12\x13\n" +
-	"\x0fSOURCE_ANNOUNCE\x10\x02*M\n" +
+	"\x0fSOURCE_ANNOUNCE\x10\x02\x12\x0e\n" +
+	"\n" +
+	"SOURCE_ARR\x10\x03*M\n" +
 	"\aFailure\x12\x17\n" +
 	"\x13FAILURE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10FAILURE_NO_PEERS\x10\x01\x12\x13\n" +

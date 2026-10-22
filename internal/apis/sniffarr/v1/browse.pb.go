@@ -365,7 +365,9 @@ type WorkSummary struct {
 	Peers int64 `protobuf:"varint,5,opt,name=peers,proto3" json:"peers,omitempty"`
 	// The work's place in the last 7 days' top of its kind among all voices,
 	// 1 first; 0 when it is not in it.
-	Rank          int32 `protobuf:"varint,6,opt,name=rank,proto3" json:"rank,omitempty"`
+	Rank int32 `protobuf:"varint,6,opt,name=rank,proto3" json:"rank,omitempty"`
+	// Grabs of the work Radarr and Sonarr reported over the last 7 days.
+	GrabsWeek     int64 `protobuf:"varint,7,opt,name=grabs_week,json=grabsWeek,proto3" json:"grabs_week,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -438,6 +440,13 @@ func (x *WorkSummary) GetPeers() int64 {
 func (x *WorkSummary) GetRank() int32 {
 	if x != nil {
 		return x.Rank
+	}
+	return 0
+}
+
+func (x *WorkSummary) GetGrabsWeek() int64 {
+	if x != nil {
+		return x.GrabsWeek
 	}
 	return 0
 }
@@ -2430,14 +2439,16 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x18sniffarr/v1/browse.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x18sniffarr/v1/ingest.proto\x1a\x18sniffarr/v1/search.proto\"\x11\n" +
 	"\x0fSettingsRequest\";\n" +
 	"\x10SettingsResponse\x12'\n" +
-	"\x0faudio_languages\x18\x01 \x03(\tR\x0eaudioLanguages\"\xb5\x01\n" +
+	"\x0faudio_languages\x18\x01 \x03(\tR\x0eaudioLanguages\"\xd4\x01\n" +
 	"\vWorkSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12%\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12)\n" +
 	"\x04tmdb\x18\x03 \x01(\v2\x15.sniffarr.v1.TMDBWorkR\x04tmdb\x12\x1a\n" +
 	"\breleases\x18\x04 \x01(\x03R\breleases\x12\x14\n" +
 	"\x05peers\x18\x05 \x01(\x03R\x05peers\x12\x12\n" +
-	"\x04rank\x18\x06 \x01(\x05R\x04rank\"m\n" +
+	"\x04rank\x18\x06 \x01(\x05R\x04rank\x12\x1d\n" +
+	"\n" +
+	"grabs_week\x18\a \x01(\x03R\tgrabsWeek\"m\n" +
 	"\tWorkAudio\x12\x1a\n" +
 	"\blanguage\x18\x01 \x01(\tR\blanguage\x12\x16\n" +
 	"\x06marked\x18\x02 \x01(\x03R\x06marked\x12\x14\n" +

@@ -17,6 +17,11 @@ import (
 // LayerTMDB names a title match TMDB's search decided alone.
 const LayerTMDB = "tmdb"
 
+// LayerArr names a title match Radarr or Sonarr decided by grabbing or
+// importing a release of the key as the work. RecordMatch never replaces
+// one with a match of another layer.
+const LayerArr = "arr"
+
 // Providers of ExternalID.
 const (
 	ProviderTMDB     = "tmdb"
@@ -253,9 +258,10 @@ func (s *Store) WithoutDetails(ctx context.Context, limit int) ([]Due, error) {
 }
 
 // RecordMatch records what looking the title key up found, replacing any
-// match before it, and points every release of the key at the work found,
-// or at none. It returns the work's ID, 0 for none, and whether its details
-// are fetched.
+// match before it but one of LayerArr, which only another of LayerArr
+// replaces, and points every release of the key at the work of the match
+// it records, or at none. It stores the work found either way, and returns
+// its ID, 0 for none, and whether its details are fetched.
 func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Time) (work int64, detailed bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var ref any
@@ -265,13 +271,19 @@ func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Ti
 			}
 			ref = work
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO tmdb_matches (title_key, work, layer, confidence, matched_at, error) VALUES (?, ?, ?, ?, ?, ?)
+		var one int
+		err := tx.QueryRowContext(ctx, `INSERT INTO tmdb_matches (title_key, work, layer, confidence, matched_at, error) VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT (title_key) DO UPDATE SET work = excluded.work, layer = excluded.layer, confidence = excluded.confidence,
-			matched_at = excluded.matched_at, error = excluded.error`,
-			key, ref, null(f.Layer), nullFloat(f.Hit != nil, f.Confidence), at.Unix(), null(f.Error)); err != nil {
+			matched_at = excluded.matched_at, error = excluded.error
+			WHERE tmdb_matches.layer IS NOT ? OR excluded.layer IS ? RETURNING 1`,
+			key, ref, null(f.Layer), nullFloat(f.Hit != nil, f.Confidence), at.Unix(), null(f.Error), LayerArr, LayerArr).Scan(&one)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE title_key = ? AND work IS NOT ?", ref, key, ref)
+		_, err = tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE title_key = ? AND work IS NOT ?", ref, key, ref)
 		return err
 	})
 	return work, detailed, err

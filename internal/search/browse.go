@@ -75,6 +75,7 @@ func (b *Browser) now() time.Time {
 var discoveries = map[string]sniffarrv1.Source{
 	"sample":   sniffarrv1.Source_SOURCE_SAMPLE,
 	"announce": sniffarrv1.Source_SOURCE_ANNOUNCE,
+	"arr":      sniffarrv1.Source_SOURCE_ARR,
 }
 
 var rejections = map[rules.Reason]sniffarrv1.Rejection{

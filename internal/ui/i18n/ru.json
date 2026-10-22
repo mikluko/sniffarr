@@ -53,6 +53,7 @@
   "card.files": "файлов",
   "card.via": "обнаружена",
   "via.announce": "announce",
+  "via.arr": "Radarr/Sonarr",
   "via.sample": "sample",
   "card.classification": "Классификация",
   "cls.feature": "Признак",

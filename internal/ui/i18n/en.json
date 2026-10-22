@@ -53,6 +53,7 @@
   "card.files": "files",
   "card.via": "discovered via",
   "via.announce": "announce",
+  "via.arr": "Radarr/Sonarr",
   "via.sample": "sample",
   "card.classification": "Classification",
   "cls.feature": "Feature",
