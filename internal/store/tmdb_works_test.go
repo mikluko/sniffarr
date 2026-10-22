@@ -30,6 +30,7 @@ func TestTMDB(t *testing.T) {
 		{3, "Severance.S02E01", "s:severance", "series"},
 		{4, "Moon.Safari.1998.FLAC", "y:moon safari 1998", "music"},
 		{5, "Heat.1995.Rus", "y:heat 1995", ""},
+		{6, "Alien.1979.OST.FLAC", "y:alien 1979", "music"},
 	} {
 		x := torrent(tr.b, tr.name)
 		x.TitleKey, x.Kind = tr.key, tr.kind
@@ -48,7 +49,11 @@ func TestTMDB(t *testing.T) {
 	}, keys, "movies and series only, newest first, with the newest name")
 	keys, err = s.UnmatchedTitles(ctx, []string{"y:alien 1979", "y:moon safari 1998"}, t0, 10)
 	require.NoError(t, err)
-	require.Equal(t, []TitleKey{{Key: "y:alien 1979", Kind: "movie", Name: "Alien.1979.Directors.Cut.2160p"}}, keys)
+	require.Equal(t, []TitleKey{{Key: "y:alien 1979", Kind: "movie", Name: "Alien.1979.Directors.Cut.2160p"}}, keys,
+		"the newest movie or series of the key, not its newest release")
+	keys, err = s.UnmatchedTitles(ctx, []string{"y:alien 1979", "s:severance"}, t0, 1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"s:severance"}, titleKeys(keys), "narrowed to keys, newest first up to limit")
 	keys, err = s.UnmatchedTitles(ctx, []string{}, t0, 10)
 	require.NoError(t, err)
 	require.Empty(t, keys)
@@ -66,6 +71,13 @@ func TestTMDB(t *testing.T) {
 	keys, err = s.UnmatchedTitles(ctx, nil, t0.Add(time.Second), 10)
 	require.NoError(t, err)
 	require.Equal(t, []string{"s:severance"}, titleKeys(keys), "then it is, and a match never is")
+	all := []string{"y:alien 1979", "s:severance", "y:moon safari 1998", "y:heat 1995", "y:none"}
+	keys, err = s.UnmatchedTitles(ctx, all, t0, 10)
+	require.NoError(t, err)
+	require.Empty(t, keys, "narrowed to keys, a failed match is not retried before its time either")
+	keys, err = s.UnmatchedTitles(ctx, append(all, "s:severance"), t0.Add(time.Second), 10)
+	require.NoError(t, err)
+	require.Equal(t, []TitleKey{{Key: "s:severance", Kind: "series", Name: "Severance.S02E01"}}, keys, "a key given twice is one")
 
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)

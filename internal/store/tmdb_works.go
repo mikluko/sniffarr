@@ -218,14 +218,19 @@ func (s *Store) UnmatchedTitles(ctx context.Context, keys []string, before time.
 	if keys != nil && len(keys) == 0 {
 		return nil, nil
 	}
-	where := "t.title_key IS NOT NULL AND t.kind IN ('movie', 'series') AND (m.title_key IS NULL OR m.work IS NULL AND m.matched_at < ?)"
-	args := []any{before.Unix()}
+	const due = "(m.title_key IS NULL OR m.work IS NULL AND m.matched_at < ?)"
+	stmt := `SELECT t.title_key, t.kind, t.name, max(t.id) FROM torrent_releases t
+		LEFT JOIN tmdb_matches m ON m.title_key = t.title_key
+		WHERE t.title_key IS NOT NULL AND t.kind IN ('movie', 'series') AND ` + due + `
+		GROUP BY t.title_key ORDER BY max(t.id) DESC LIMIT ?`
+	var args []any
 	if keys != nil {
-		where += " AND t.title_key IN (" + placeholders(len(keys)) + ")"
-		for _, k := range keys {
+		for _, k := range slices.Compact(slices.Sorted(slices.Values(keys))) {
 			args = append(args, k)
 		}
+		stmt = newestOfKeys(len(args), due)
 	}
+	args = append(args, before.Unix(), limit)
 	var out []TitleKey
 	err := s.each(ctx, func(rows *sql.Rows) error {
 		var k TitleKey
@@ -235,10 +240,21 @@ func (s *Store) UnmatchedTitles(ctx context.Context, keys []string, before time.
 		}
 		out = append(out, k)
 		return nil
-	}, `SELECT t.title_key, t.kind, t.name, max(t.id) FROM torrent_releases t
-		LEFT JOIN tmdb_matches m ON m.title_key = t.title_key WHERE `+where+`
-		GROUP BY t.title_key ORDER BY max(t.id) DESC LIMIT ?`, append(args, limit)...)
+	}, stmt, args...)
 	return out, err
+}
+
+// newestOfKeys is the statement of UnmatchedTitles for n distinct keys,
+// filtered by due; it reads one release of each due key, its newest movie
+// or series.
+func newestOfKeys(n int, due string) string {
+	values := strings.Repeat("(?), ", n-1) + "(?)"
+	return `WITH k (key) AS (VALUES ` + values + `)
+		SELECT t.title_key, t.kind, t.name, t.id FROM k
+		LEFT JOIN tmdb_matches m ON m.title_key = k.key
+		JOIN torrent_releases t ON t.id = (SELECT r.id FROM torrent_releases r
+			WHERE r.title_key = k.key AND r.kind IN ('movie', 'series') ORDER BY r.id DESC LIMIT 1)
+		WHERE ` + due + ` ORDER BY t.id DESC LIMIT ?`
 }
 
 // WithoutDetails returns up to limit works whose details are not fetched
