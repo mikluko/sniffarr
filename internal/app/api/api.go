@@ -1,6 +1,7 @@
-// Package api is the API component: the ingest, search and browse services
-// and the Torznab indexer over the store, with the classify and TMDB
-// workers, the store's maintenance, the rollup of peer sketches, the tops
+// Package api is the API component: the ingest, search and browse services,
+// the Torznab indexer and the Radarr and Sonarr webhook over the store,
+// with the classify and TMDB workers, the imports of the Radarr and Sonarr
+// histories, the store's maintenance, the rollup of peer sketches, the tops
 // of works and the counts of the browse service.
 package api
 
@@ -14,6 +15,7 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/mikluko/sniffarr/internal/app"
+	"github.com/mikluko/sniffarr/internal/arr"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/memconn"
@@ -70,13 +72,29 @@ type Config struct {
 	// StatsInterval is how often the counts BrowseService.Stats and Home
 	// serve are recomputed; positive.
 	StatsInterval time.Duration
+	// WebhookToken is the password of the Radarr and Sonarr webhook; empty
+	// serves no webhook.
+	WebhookToken string
+	// Radarr and Sonarr are the apps whose grab history is imported.
+	Radarr ArrHistory
+	Sonarr ArrHistory
 }
+
+// ArrHistory is where a Radarr or Sonarr serves its API; a zero one imports
+// no history.
+type ArrHistory struct {
+	URL    string
+	APIKey string
+}
+
+// arrTimeout bounds one request to a Radarr or Sonarr.
+const arrTimeout = time.Minute
 
 // Module provides *memconn.Listener, on which the API is served to the
 // process's own clients, and serves it on Config.Addr from start to stop
 // with its workers.
 var Module = fx.Module("api",
-	fx.Provide(memconn.Listen, newClassifiers, newCounts),
+	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder),
 	fx.Invoke(serve, work),
 )
 
@@ -132,7 +150,16 @@ func newCounts(s *store.Store, log *slog.Logger) *search.Counts {
 	return &search.Counts{Store: s, Log: log}
 }
 
-func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts, mem *memconn.Listener) error {
+func newRecorder(s *store.Store, q *store.Queue, c *classifiers, log *slog.Logger) *arr.Recorder {
+	r := &arr.Recorder{Store: s, Queue: q, Log: log}
+	if c.matcher != nil {
+		r.Finder = c.matcher.Client
+	}
+	return r
+}
+
+func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts,
+	rec *arr.Recorder, mem *memconn.Listener) error {
 	var titles search.TitleSearch
 	if c.matcher != nil {
 		titles = c.matcher
@@ -153,6 +180,8 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		TorznabToken: cfg.TorznabToken,
 		DailyTokens:  cfg.DailyTokens,
 		Counts:       counts,
+		WebhookToken: cfg.WebhookToken,
+		Arr:          rec,
 	})
 	if err != nil {
 		return err
@@ -162,7 +191,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 	return nil
 }
 
-func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts) {
+func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts, rec *arr.Recorder) {
 	app.Go(lc, sd, log, "maintenance", func(ctx context.Context) error {
 		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, cfg.RetentionIdle, log) })
 		return nil
@@ -187,6 +216,13 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *st
 			w.Budget = c.jev
 		}
 		app.Go(lc, sd, log, "tmdb worker", w.Run)
+	}
+	for name, h := range map[string]ArrHistory{store.AppRadarr: cfg.Radarr, store.AppSonarr: cfg.Sonarr} {
+		if h.URL == "" {
+			continue
+		}
+		hist := &arr.History{App: name, URL: h.URL, APIKey: h.APIKey, HTTP: &http.Client{Timeout: arrTimeout}, Recorder: rec, Log: log}
+		app.Go(lc, sd, log, name+" history", hist.Run)
 	}
 }
 

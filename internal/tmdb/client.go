@@ -232,6 +232,23 @@ func (c *Client) Details(ctx context.Context, series bool, id int, language stri
 	return d, nil
 }
 
+// FindTVDB returns the TMDB ID of the series with the TVDB ID, or 0 when
+// TMDB knows none.
+func (c *Client) FindTVDB(ctx context.Context, tvdbID int) (int, error) {
+	var res struct {
+		TVResults []struct {
+			ID int `json:"id"`
+		} `json:"tv_results"`
+	}
+	if err := c.get(ctx, "/3/find/"+strconv.Itoa(tvdbID), url.Values{"external_source": {"tvdb_id"}}, &res); err != nil {
+		return 0, err
+	}
+	if len(res.TVResults) == 0 {
+		return 0, nil
+	}
+	return res.TVResults[0].ID, nil
+}
+
 func yearOf(date string) int {
 	if len(date) < 4 {
 		return 0

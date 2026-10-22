@@ -202,6 +202,16 @@ func TestLoadAPI(t *testing.T) {
 		{name: "reserve a fraction", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0.25"), err: "SNIFFARR_CLASSIFY_SEARCH_RESERVE: want an integer from 0 to 100"},
 		{name: "unknown script", env: with("SNIFFARR_SCRIPTS", "Latin,Elvish"), err: `SNIFFARR_SCRIPTS: unknown script "Elvish"`},
 		{name: "zero tmdb rate", env: with("SNIFFARR_TMDB_RATE", "0"), err: "SNIFFARR_TMDB_RATE: want a positive integer"},
+		{name: "arr", env: with("SNIFFARR_WEBHOOK_TOKEN", "wh", "SNIFFARR_RADARR_URL", "http://radarr:7878", "SNIFFARR_RADARR_API_KEY", "rk",
+			"SNIFFARR_SONARR_URL", "https://example.org/sonarr", "SNIFFARR_SONARR_API_KEY", "sk"),
+			want: func(a *api.Config, _ *db.Config) {
+				a.WebhookToken = "wh"
+				a.Radarr = api.ArrHistory{URL: "http://radarr:7878", APIKey: "rk"}
+				a.Sonarr = api.ArrHistory{URL: "https://example.org/sonarr", APIKey: "sk"}
+			}},
+		{name: "arr url without key", env: with("SNIFFARR_SONARR_URL", "http://sonarr:8989"), err: "SNIFFARR_SONARR_URL and SNIFFARR_SONARR_API_KEY: set both or neither"},
+		{name: "arr key without url", env: with("SNIFFARR_RADARR_API_KEY", "rk"), err: "SNIFFARR_RADARR_URL and SNIFFARR_RADARR_API_KEY: set both or neither"},
+		{name: "arr url not http", env: with("SNIFFARR_RADARR_URL", "radarr:7878", "SNIFFARR_RADARR_API_KEY", "rk"), err: "SNIFFARR_RADARR_URL: want an http or https URL"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

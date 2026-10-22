@@ -196,6 +196,7 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 		SearchToken:  getenv("SNIFFARR_SEARCH_TOKEN"),
 		TypesafeKey:  getenv("TYPESAFE_API_KEY"),
 		TorznabToken: getenv("SNIFFARR_TORZNAB_TOKEN"),
+		WebhookToken: getenv("SNIFFARR_WEBHOOK_TOKEN"),
 	}
 	d := db.Config{Path: getenv("SNIFFARR_DB")}
 	var err error
@@ -262,6 +263,12 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.TMDBRetry, err = duration(getenv, "SNIFFARR_TMDB_RETRY", tmdb.DefaultRetry); err != nil {
 		return a, d, err
 	}
+	if a.Radarr, err = arrHistory(getenv, "RADARR"); err != nil {
+		return a, d, err
+	}
+	if a.Sonarr, err = arrHistory(getenv, "SONARR"); err != nil {
+		return a, d, err
+	}
 	if a.Scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
 		return a, d, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
 	}
@@ -273,6 +280,24 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	d.Store.TMDB = a.TMDBKey != ""
 	d.Store.Languages = audio.Tags(a.Languages)
 	return a, d, nil
+}
+
+// arrHistory reads SNIFFARR_<app>_URL and SNIFFARR_<app>_API_KEY, which
+// are set together or not at all.
+func arrHistory(getenv func(string) string, app string) (api.ArrHistory, error) {
+	urlName, keyName := "SNIFFARR_"+app+"_URL", "SNIFFARR_"+app+"_API_KEY"
+	h := api.ArrHistory{URL: getenv(urlName), APIKey: getenv(keyName)}
+	switch {
+	case h.URL == "" && h.APIKey == "":
+		return h, nil
+	case h.URL == "" || h.APIKey == "":
+		return h, fmt.Errorf("%s and %s: set both or neither", urlName, keyName)
+	}
+	u, err := url.Parse(h.URL)
+	if err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Host == "" {
+		return h, fmt.Errorf("%s: want an http or https URL", urlName)
+	}
+	return h, nil
 }
 
 func positive(getenv func(string) string, name string, def int) (int, error) {

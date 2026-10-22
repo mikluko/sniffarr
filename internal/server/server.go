@@ -1,6 +1,6 @@
 // Package server assembles the sniffarr HTTP handler: the ingest API behind
 // its bearer token, the search and browse APIs behind theirs, the Torznab
-// API, and an unauthenticated /healthz.
+// API, the Radarr and Sonarr webhook, and an unauthenticated /healthz.
 package server
 
 import (
@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"github.com/mikluko/sniffarr/internal/arr"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/ingest"
@@ -60,6 +61,10 @@ type Config struct {
 	// Counts, when set, holds the counts BrowseService.Stats and Home serve;
 	// nil computes them at every call.
 	Counts *search.Counts
+	// WebhookToken, when set with Arr, serves the Radarr and Sonarr webhook
+	// at POST /webhooks/arr to requests with it as their Basic password.
+	WebhookToken string
+	Arr          *arr.Recorder
 }
 
 // New returns the handler serving the APIs and /healthz.
@@ -91,6 +96,9 @@ func New(c Config) (http.Handler, error) {
 	))
 	if c.TorznabToken != "" {
 		mux.Handle("GET /torznab/api", &torznab.Handler{Search: searchService, Token: c.TorznabToken, Log: c.Log})
+	}
+	if c.WebhookToken != "" && c.Arr != nil {
+		mux.Handle("POST /webhooks/arr", &arr.Webhook{Recorder: c.Arr, Token: c.WebhookToken, Log: c.Log})
 	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"github.com/mikluko/sniffarr/internal/arr"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/auth"
 	"github.com/mikluko/sniffarr/internal/database"
@@ -42,6 +44,9 @@ func start(t *testing.T, cfg Config, qopts ...store.QueueOptions) (*httptest.Ser
 	require.NoError(t, err)
 	cfg.Queue = q
 	cfg.Store, cfg.IngestToken, cfg.SearchToken, cfg.Log = s, "ingest", "search", slog.New(slog.DiscardHandler)
+	if cfg.Arr != nil {
+		cfg.Arr.Store, cfg.Arr.Queue, cfg.Arr.Log = s, q, cfg.Log
+	}
 	h, err := New(cfg)
 	require.NoError(t, err)
 	srv := httptest.NewUnstartedServer(h)
@@ -325,6 +330,45 @@ func TestTorznab(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, string(b), `<server title="sniffarr">`, "no bearer token needed, only the apikey")
+}
+
+func TestWebhook(t *testing.T) {
+	ctx := context.Background()
+	grab := func(srv *httptest.Server, hc *http.Client) *http.Response {
+		t.Helper()
+		body := `{"eventType":"Grab","movie":{"id":1,"title":"Alien","year":1979,"tmdbId":348,"imdbId":"tt0078748"},
+			"release":{"releaseTitle":"Alien.1979.1080p.BluRay.x264","indexer":"tracker","size":8589934592},
+			"downloadClient":"qBittorrent","downloadClientType":"qBittorrent","downloadId":"0700000000000000000000000000000000000000"}`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL+"/webhooks/arr", strings.NewReader(body))
+		require.NoError(t, err)
+		req.SetBasicAuth("radarr", "wh")
+		res, err := hc.Do(req)
+		require.NoError(t, err)
+		t.Cleanup(func() { res.Body.Close() })
+		return res
+	}
+	srv, hc := start(t, Config{Arr: &arr.Recorder{}})
+	require.Equal(t, http.StatusNotFound, grab(srv, hc).StatusCode, "without a token there is no endpoint")
+
+	rec := &arr.Recorder{}
+	srv, hc = start(t, Config{WebhookToken: "wh", Arr: rec})
+	res := grab(srv, hc)
+	b, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Equal(t, arr.Queued+"\n", string(b))
+
+	f := openFetch(t, ingestClient(srv, hc))
+	f.credit(1)
+	f.expect(7)
+	f.torrent(7, "Alien.1979.1080p.BluRay.x264", "Alien.1979.1080p.BluRay.x264.mkv")
+	f.finish()
+	c, err := rec.Store.Card(ctx, store.Hash(hash(7)), 1, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, store.Arr, c.Discovery)
+	require.NotZero(t, c.Work, "the fetched torrent takes the work of the grab")
+	require.Equal(t, 348, c.Work.Work.TMDBID)
+	require.Equal(t, int64(1), c.Work.GrabsWeek)
 }
 
 func TestFetchCreditAndLeases(t *testing.T) {
