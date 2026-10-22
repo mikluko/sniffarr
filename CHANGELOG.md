@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The dead set keys an infohash by its first 8 bytes, about 40 bytes an entry with its index instead of 68; a migration converts the stored entries, keeping the latest expiry of the hashes that share a key. Two infohashes that share the first 8 bytes are kept out of the queue together.
 
-## [0.18.1] - 2026-10-21
+## [0.18.1] - 2026-10-22
 
 ### Fixed
 
