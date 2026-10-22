@@ -55,9 +55,16 @@ func freePort(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
-// started returns a Network started under id and closed with the test.
+// noNodes is the StartingNodes of a Network that must not reach the internet.
+func noNodes() ([]dht.Addr, error) { return nil, nil }
+
+// started returns a Network started under id and closed with the test; it
+// starts from no nodes unless cfg names some.
 func started(t *testing.T, cfg NetworkConfig, id [20]byte) *Network {
 	t.Helper()
+	if cfg.StartingNodes == nil {
+		cfg.StartingNodes = noNodes
+	}
 	n := New(cfg, nil, nil)
 	require.NoError(t, n.Start(id, netip.Addr{}))
 	t.Cleanup(n.Close)
@@ -169,8 +176,30 @@ func TestClientConfig(t *testing.T) {
 	}
 }
 
+func TestStartingNodes(t *testing.T) {
+	var sc dht.ServerConfig
+	New(NetworkConfig{Port: 6881}, nil, nil).clientConfig(testID, netip.Addr{}).ConfigureAnacrolixDhtServer(&sc)
+	require.Nil(t, sc.StartingNodes, "the library's global bootstrap hosts stay unless the config names others")
+
+	want := dht.NewAddr(&net.UDPAddr{IP: net.IPv4(192, 0, 2, 1), Port: 6881})
+	var sc2 dht.ServerConfig
+	New(NetworkConfig{Port: 6881, StartingNodes: func() ([]dht.Addr, error) { return []dht.Addr{want}, nil }}, nil, nil).
+		clientConfig(testID, netip.Addr{}).ConfigureAnacrolixDhtServer(&sc2)
+	got, err := sc2.StartingNodes()
+	require.NoError(t, err)
+	require.Equal(t, []dht.Addr{want}, got)
+}
+
+func TestMetadataFromNoNodes(t *testing.T) {
+	n := started(t, NetworkConfig{Port: freePort(t), PeerWait: time.Minute}, testID)
+	begin := time.Now()
+	_, err := n.Metadata(context.Background(), Hash{1})
+	require.ErrorIs(t, err, ErrNoPeers)
+	require.Less(t, time.Since(begin), 5*time.Second, "an empty routing table and no starting nodes end the lookup before PeerWait")
+}
+
 func TestStartPassiveOnAnyPort(t *testing.T) {
-	n := New(NetworkConfig{Passive: true}, nil, nil)
+	n := New(NetworkConfig{Passive: true, StartingNodes: noNodes}, nil, nil)
 	require.Zero(t, n.Port(), "before Start there is no port")
 	require.Zero(t, n.Nodes())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)

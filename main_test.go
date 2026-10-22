@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/anacrolix/dht/v2"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
 
@@ -98,6 +99,7 @@ func TestRunWithTelemetryOff(t *testing.T) {
 		"SNIFFARR_INGEST_TOKEN", "in", "SNIFFARR_SEARCH_TOKEN", "se",
 	), io.Discard)
 	require.NoError(t, err)
+	cfg.dht.Network.StartingNodes = func() ([]dht.Addr, error) { return nil, nil }
 	rec := &recorder{}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

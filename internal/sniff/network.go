@@ -63,6 +63,11 @@ type NetworkConfig struct {
 	// FetchTimeout is how long a fetch waits for metadata once it has peers;
 	// DefaultFetchTimeout.
 	FetchTimeout time.Duration
+	// StartingNodes returns the nodes that Bootstrap and a lookup with an
+	// empty routing table start from; nil keeps the library's global
+	// bootstrap hosts, resolved through DNS. Returning none leaves a lookup
+	// with an empty routing table failing at once with ErrNoPeers.
+	StartingNodes func() ([]dht.Addr, error)
 	// Meter records metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
 }
@@ -249,6 +254,9 @@ func (n *Network) clientConfig(id [20]byte, publicIP netip.Addr) *torrent.Client
 		sc.SendLimiter = rate.NewLimiter(rate.Limit(cfg.Rate), max(cfg.Rate/10, 1))
 		sc.Passive = cfg.Passive
 		sc.NodeId = nodeID(id, publicIP)
+		if cfg.StartingNodes != nil {
+			sc.StartingNodes = cfg.StartingNodes
+		}
 		if n.store != nil {
 			sc.PeerStore = n.store
 			s := newSocket(sc.Conn, sc.NodeId, n.store, n.replies)
