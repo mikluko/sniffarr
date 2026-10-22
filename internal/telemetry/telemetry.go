@@ -1,6 +1,6 @@
 // Package telemetry sets up OpenTelemetry traces and metrics exported over
-// OTLP, configured by the standard OTEL_* environment variables, and adds
-// trace and span IDs to slog records.
+// OTLP, configured by the standard OTEL_* environment variables, adds trace
+// and span IDs to slog records, and traces outgoing HTTP requests.
 package telemetry
 
 import (

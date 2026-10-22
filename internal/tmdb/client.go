@@ -13,10 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
+
+	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 // DefaultURL is the base URL of the TMDB API.
@@ -28,8 +31,10 @@ const DefaultRate = 20
 // Client is a client of the TMDB API v3. Its errors never carry the key.
 type Client struct {
 	// Key is a v3 API key, or an API read access token.
-	Key  string
-	URL  string
+	Key string
+	URL string
+	// HTTP sends the requests, each traced as a client span; it is read on
+	// the first request.
 	HTTP *http.Client
 	// Limiter paces every request, retries too.
 	Limiter *rate.Limiter
@@ -43,6 +48,7 @@ type Client struct {
 
 	once     sync.Once
 	requests metric.Int64Counter
+	traced   *http.Client
 }
 
 // DefaultKey is the TMDB read access token sniffarr ships with; TMDB_API_KEY
@@ -297,7 +303,8 @@ func (c *Client) try(ctx context.Context, path string, q url.Values, v any) (tim
 		req.Header.Set("Authorization", "Bearer "+c.Key)
 	}
 	req.Header.Set("Accept", "application/json")
-	res, err := c.HTTP.Do(req)
+	c.init()
+	res, err := c.traced.Do(req)
 	if err != nil {
 		c.count(ctx, "error")
 		var uErr *url.Error
@@ -319,12 +326,14 @@ func (c *Client) try(ctx context.Context, path string, q url.Values, v any) (tim
 	return 0, nil
 }
 
-func (c *Client) count(ctx context.Context, status string) {
+// init builds the traced HTTP client and the request counter.
+func (c *Client) init() {
 	c.once.Do(func() {
 		mp := c.Meter
 		if mp == nil {
 			mp = otel.GetMeterProvider()
 		}
+		c.traced = telemetry.HTTPClient(c.HTTP, otelhttp.WithMeterProvider(mp))
 		var err error
 		c.requests, err = mp.Meter(scope).Int64Counter("sniffarr.tmdb.requests", metric.WithUnit("{request}"),
 			metric.WithDescription("Requests to TMDB, by response status or error."))
@@ -332,5 +341,9 @@ func (c *Client) count(ctx context.Context, status string) {
 			otel.Handle(err)
 		}
 	})
+}
+
+func (c *Client) count(ctx context.Context, status string) {
+	c.init()
 	c.requests.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.tmdb.status", status)))
 }

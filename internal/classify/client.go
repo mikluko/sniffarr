@@ -12,11 +12,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/rules"
+	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 // DefaultURL is TypeSafe's evaluation endpoint.
@@ -27,13 +29,18 @@ type Client struct {
 	Key   string
 	URL   string
 	Model string
-	HTTP  *http.Client
+	// HTTP sends the requests, each traced as a client span; it is read on
+	// the first request.
+	HTTP *http.Client
 	// Retries is how many times a 429, 529 or other 5xx answer is retried.
 	Retries int
 	// Backoff is the wait before the first retry; it doubles each time.
 	Backoff time.Duration
 	// Languages are asked about, one audio question each.
 	Languages []audio.Language
+
+	once   sync.Once
+	traced *http.Client
 }
 
 // New returns a Client for the API key with the production endpoint and the
@@ -266,7 +273,8 @@ func (c *Client) post(ctx context.Context, body []byte) (response, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Key)
 	req.Header.Set("Content-Type", "application/json")
-	res, err := c.HTTP.Do(req)
+	c.once.Do(func() { c.traced = telemetry.HTTPClient(c.HTTP) })
+	res, err := c.traced.Do(req)
 	if err != nil {
 		return response{}, err
 	}

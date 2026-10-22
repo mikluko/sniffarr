@@ -22,6 +22,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/telemetry/telemetrytest"
 )
 
 type result struct {
@@ -593,6 +594,9 @@ func TestMetrics(t *testing.T) {
 	require.NoError(t, reader.Collect(ctx, &rm))
 	got := map[string]int64{}
 	for _, sm := range rm.ScopeMetrics {
+		if sm.Scope.Name != scope {
+			continue
+		}
 		for _, x := range sm.Metrics {
 			for _, p := range x.Data.(metricdata.Sum[int64]).DataPoints {
 				for _, kv := range p.Attributes.ToSlice() {
@@ -607,4 +611,24 @@ func TestMetrics(t *testing.T) {
 		"sniffarr.tmdb.requests 200": 4,
 		"sniffarr.tmdb.requests 429": 1,
 	}, got, "two searches and two details answered, one search throttled first")
+}
+
+func TestClientTrace(t *testing.T) {
+	f := newTMDB(t)
+	reader := sdkmetric.NewManualReader()
+	c := f.client()
+	c.Meter = sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	telemetrytest.RequireClientChild(t, func(ctx context.Context) {
+		_, err := c.Search(ctx, false, "Alien", 1979, "en-US")
+		require.NoError(t, err)
+	})
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	var names []string
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			names = append(names, m.Name)
+		}
+	}
+	require.Contains(t, names, "http.client.request.duration", "the transport records into the client's Meter")
 }

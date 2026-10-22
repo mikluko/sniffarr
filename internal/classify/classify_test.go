@@ -20,6 +20,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/telemetry/telemetrytest"
 )
 
 const answer200 = `{
@@ -314,4 +315,12 @@ func TestJevAsksKindOnlyWhenUnknown(t *testing.T) {
 	jev.DailyTokens = 1
 	require.ErrorIs(t, jev.Classify(ctx, store.Pending{ID: 1, Name: "Heat.1995"}), ErrBudget)
 	require.EqualValues(t, 2, f.requests.Load(), "no request once the budget is spent")
+}
+
+func TestClientTrace(t *testing.T) {
+	f := newFake(t)
+	telemetrytest.RequireClientChild(t, func(ctx context.Context) {
+		_, err := f.client().Classify(ctx, Input{Name: "Heat.1995.1080p.BluRay.REMUX", Size: 30 << 30, AskKind: true})
+		require.NoError(t, err)
+	})
 }

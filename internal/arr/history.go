@@ -11,9 +11,11 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 // Defaults of History.
@@ -34,8 +36,10 @@ type History struct {
 	// App is store.AppRadarr or store.AppSonarr.
 	App string
 	// URL is the app's base URL, with its URL base if it has one.
-	URL      string
-	APIKey   string
+	URL    string
+	APIKey string
+	// HTTP sends the requests, each traced as a client span;
+	// http.DefaultClient. It is read on the first request.
 	HTTP     *http.Client
 	Recorder *Recorder
 	// PageSize is how many records Import asks for at once;
@@ -47,6 +51,9 @@ type History struct {
 	Interval time.Duration
 	Retry    time.Duration
 	Log      *slog.Logger
+
+	once   sync.Once
+	traced *http.Client
 }
 
 // record is a history record of the history API, Radarr's and Sonarr's
@@ -236,17 +243,14 @@ func datum(data map[string]string, key string) string {
 
 // get fetches the path of the API and decodes its answer into v.
 func (h *History) get(ctx context.Context, path string, q url.Values, v any) error {
-	client := h.HTTP
-	if client == nil {
-		client = http.DefaultClient
-	}
+	h.once.Do(func() { h.traced = telemetry.HTTPClient(h.HTTP) })
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(h.URL, "/")+path+"?"+q.Encode(), nil)
 	if err != nil {
 		return fmt.Errorf("%s %s: %w", h.App, path, err)
 	}
 	req.Header.Set("X-Api-Key", h.APIKey)
 	req.Header.Set("Accept", "application/json")
-	res, err := client.Do(req)
+	res, err := h.traced.Do(req)
 	if err != nil {
 		var uErr *url.Error
 		if errors.As(err, &uErr) {

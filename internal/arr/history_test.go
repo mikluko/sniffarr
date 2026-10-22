@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/telemetry/telemetrytest"
 )
 
 // fakeArr serves records as the history API of the app does, paged in date
@@ -146,4 +147,13 @@ func TestHistorySonarr(t *testing.T) {
 	require.Zero(t, ep)
 	require.Equal(t, int64(42949672960), size)
 	require.Equal(t, int64(1), f.finder.calls.Load(), "the pack's TVDB ID is looked up once; the episode with a TMDB ID needs none")
+}
+
+func TestHistoryTrace(t *testing.T) {
+	f := setup(t)
+	arr := newArr(t, store.AppRadarr)
+	telemetrytest.RequireClientChild(t, func(ctx context.Context) {
+		_, err := f.history(store.AppRadarr, arr.URL).Import(ctx)
+		require.NoError(t, err)
+	})
 }
