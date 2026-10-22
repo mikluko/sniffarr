@@ -5,12 +5,14 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -63,6 +65,7 @@ type Lazy struct {
 	Meter metric.MeterProvider
 
 	once          sync.Once
+	classifying   singleflight.Group
 	duration      metric.Float64Histogram
 	outcomes      metric.Int64Counter
 	titleOutcomes metric.Int64Counter
@@ -83,12 +86,12 @@ func (l *Lazy) init() {
 			otel.Handle(err)
 		}
 		l.outcomes, err = m.Int64Counter("sniffarr.search.lazy.classifications", metric.WithUnit("{torrent}"),
-			metric.WithDescription("Candidates a search had classified, by whether the answer came in time."))
+			metric.WithDescription("Candidates a search had classified, by whether the answer came in time, late, or for a search that did not wait."))
 		if err != nil {
 			otel.Handle(err)
 		}
 		l.titleOutcomes, err = m.Int64Counter("sniffarr.search.lazy.titles", metric.WithUnit("{title}"),
-			metric.WithDescription("Title keys a search had matched, by whether the match came in time."))
+			metric.WithDescription("Title keys a search had matched, by whether the match came in time, late, or for a search that did not wait."))
 		if err != nil {
 			otel.Handle(err)
 		}
@@ -113,8 +116,10 @@ func (l *Lazy) init() {
 // search returns the releases matching q after classifying, within Wait, up
 // to Max candidates the classifier has not examined, and matching up to
 // MaxTMDB title keys of candidates due for a match; the filters on kind
-// and audio apply to what is known once it is done.
-func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query) ([]store.Release, error) {
+// and audio apply to what is known once it is done. Without wait it
+// answers from what the store holds and leaves the classifications and
+// matches to run in the background, past the end of ctx.
+func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query, wait bool) ([]store.Release, error) {
 	l.init()
 	limit := q.Limit
 	if len(q.Kinds) > 0 || q.MinAudioProbability != nil {
@@ -125,7 +130,11 @@ func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query) ([]sto
 	if err != nil {
 		return nil, err
 	}
-	classified, matched := l.examine(ctx, s, found)
+	if !wait {
+		go l.examine(context.WithoutCancel(ctx), s, slices.Clone(found), false)
+		return known(found, q, limit), nil
+	}
+	classified, matched := l.examine(ctx, s, found, true)
 	for i, r := range found {
 		if classified[r.ID] || matched[r.TitleKey] {
 			if found[i], err = s.Get(ctx, r.Hash); err != nil {
@@ -133,18 +142,25 @@ func (l *Lazy) search(ctx context.Context, s *store.Store, q store.Query) ([]sto
 			}
 		}
 	}
+	return known(found, q, limit), nil
+}
+
+// known returns, in place, up to limit of found that pass the filters of q.
+func known(found []store.Release, q store.Query, limit int) []store.Release {
 	out := found[:0]
 	for _, r := range found {
 		if matches(r, q) && len(out) < limit {
 			out = append(out, r)
 		}
 	}
-	return out, nil
+	return out
 }
 
 // examine classifies the candidates and matches their title keys, and
-// returns the IDs classified and the keys matched within Wait.
-func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Release) (map[int64]bool, map[string]bool) {
+// returns the IDs classified and the keys matched within Wait. Without
+// wait it returns once the jobs are started, with nothing classified or
+// matched in time.
+func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Release, wait bool) (map[int64]bool, map[string]bool) {
 	var (
 		jobs       []func(context.Context)
 		mu         sync.Mutex
@@ -152,6 +168,11 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 		classified = map[int64]bool{}
 		matched    = map[string]bool{}
 	)
+	late := result("late")
+	if !wait {
+		close(expired)
+		late = result("background")
+	}
 	var ids []int64
 	var keys []string
 	for _, r := range found {
@@ -168,8 +189,8 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 			l.Log.ErrorContext(ctx, "pending", "err", err)
 		}
 		for _, p := range pending {
-			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.Classifier.Classify(ctx, p) },
-				l.outcomes, &mu, expired, func() { classified[p.ID] = true }))
+			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.classify(ctx, p) },
+				l.outcomes, late, &mu, expired, func() { classified[p.ID] = true }))
 		}
 	}
 	if len(keys) > 0 {
@@ -179,10 +200,14 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 		}
 		for _, k := range due {
 			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.TMDB.Match(ctx, k) },
-				l.titleOutcomes, &mu, expired, func() { matched[k.Key] = true }))
+				l.titleOutcomes, late, &mu, expired, func() { matched[k.Key] = true }))
 		}
 	}
 	if len(jobs) == 0 {
+		return nil, nil
+	}
+	if !wait {
+		l.start(ctx, jobs)
 		return nil, nil
 	}
 	start := time.Now()
@@ -193,9 +218,19 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 	return maps.Clone(classified), maps.Clone(matched)
 }
 
+// classify classifies p, joining a classification of p already running for
+// another search.
+func (l *Lazy) classify(ctx context.Context, p store.Pending) error {
+	_, err, _ := l.classifying.Do(strconv.FormatInt(p.ID, 10), func() (any, error) {
+		return nil, l.Classifier.Classify(ctx, p)
+	})
+	return err
+}
+
 // job runs f under its own Timeout, counts the outcome, and, when f succeeds
-// before expired closes, calls done under mu.
-func (l *Lazy) job(f func(context.Context) error, outcomes metric.Int64Counter, mu *sync.Mutex, expired <-chan struct{}, done func()) func(context.Context) {
+// before expired closes, calls done under mu; a success after it counts as
+// late.
+func (l *Lazy) job(f func(context.Context) error, outcomes metric.Int64Counter, late metric.AddOption, mu *sync.Mutex, expired <-chan struct{}, done func()) func(context.Context) {
 	return func(ctx context.Context) {
 		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), l.Timeout)
 		defer cancel()
@@ -207,7 +242,7 @@ func (l *Lazy) job(f func(context.Context) error, outcomes metric.Int64Counter, 
 		defer mu.Unlock()
 		select {
 		case <-expired:
-			outcomes.Add(ctx, 1, result("late"))
+			outcomes.Add(ctx, 1, late)
 		default:
 			outcomes.Add(ctx, 1, result("in_time"))
 			done()
@@ -215,10 +250,24 @@ func (l *Lazy) job(f func(context.Context) error, outcomes metric.Int64Counter, 
 	}
 }
 
-// run starts the jobs, Concurrency at once, and returns after Wait, once ctx
-// is done, or once they all are, whichever is first, having closed expired.
-// The jobs still running go on.
+// run starts the jobs and returns after Wait, once ctx is done, or once
+// they all are, whichever is first, having closed expired. The jobs still
+// running go on.
 func (l *Lazy) run(ctx context.Context, jobs []func(context.Context), expired chan struct{}) {
+	all := l.start(ctx, jobs)
+	timer := time.NewTimer(l.Wait)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+	case <-all:
+	}
+	close(expired)
+}
+
+// start starts the jobs, Concurrency at once, and returns a channel closed
+// once they are all done.
+func (l *Lazy) start(ctx context.Context, jobs []func(context.Context)) <-chan struct{} {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, l.Concurrency)
 	for _, j := range jobs {
@@ -233,14 +282,7 @@ func (l *Lazy) run(ctx context.Context, jobs []func(context.Context), expired ch
 		wg.Wait()
 		close(all)
 	}()
-	timer := time.NewTimer(l.Wait)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-	case <-all:
-	}
-	close(expired)
+	return all
 }
 
 func result(r string) metric.AddOption {

@@ -256,6 +256,34 @@ func TestLazySlowClassifierDoesNotFailSearch(t *testing.T) {
 	require.Equal(t, 1, jev.total())
 }
 
+func TestLazyNoWait(t *testing.T) {
+	s, jev := setup(t,
+		store.Torrent{Name: "Heat 1995"},
+		store.Torrent{Name: "Ronin 1998", Kind: "movie", KindLayer: store.LayerRules},
+	)
+	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux"}
+	jev.answers["Ronin 1998"] = store.Classification{Source: "web"}
+	jev.delay = 100 * time.Millisecond
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), NoWait: true,
+		Lazy: &Lazy{Classifier: jev, Wait: time.Minute, Log: slog.New(slog.DiscardHandler)}}
+	movies := &sniffarrv1.SearchRequest{Kinds: []sniffarrv1.Kind{sniffarrv1.Kind_KIND_MOVIE}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	start := time.Now()
+	res, err := svc.Search(ctx, connect.NewRequest(movies))
+	cancel()
+	require.NoError(t, err)
+	require.Less(t, time.Since(start), jev.delay, "not waited for")
+	require.Len(t, res.Msg.GetReleases(), 1)
+	require.Equal(t, "Ronin 1998", res.Msg.GetReleases()[0].GetName(), "the kind the store holds; Heat's is still unknown")
+	require.False(t, res.Msg.GetReleases()[0].GetClassified())
+
+	require.Eventually(t, func() bool {
+		return len(search(t, svc, movies)) == 2
+	}, 5*time.Second, 20*time.Millisecond, "the classifications run past the request and serve later searches")
+	require.Equal(t, 2, jev.total())
+}
+
 func keys(m map[string]*sniffarrv1.Release) []string {
 	var out []string
 	for k := range m {

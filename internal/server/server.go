@@ -45,7 +45,9 @@ type Config struct {
 	// Meter records metrics; the global MeterProvider when nil. Traces go to
 	// the global TracerProvider.
 	Meter metric.MeterProvider
-	// Lazy, when set, has Search classify its candidates first.
+	// Lazy, when set, has SearchService.Search classify its candidates
+	// first, and has a Torznab search start the same in the background
+	// without waiting for them.
 	Lazy *search.Lazy
 	// TMDB, when set, has BrowseService.SearchTitles search TMDB too.
 	TMDB search.TitleSearch
@@ -99,7 +101,8 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	if c.TorznabToken != "" {
-		traced("GET /torznab/api", &torznab.Handler{Search: searchService, Token: c.TorznabToken, Log: c.Log})
+		torznabSearch := &search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy, NoWait: true}
+		traced("GET /torznab/api", &torznab.Handler{Search: torznabSearch, Token: c.TorznabToken, Log: c.Log})
 	}
 	if c.WebhookToken != "" && c.Arr != nil {
 		traced("POST /webhooks/arr", &arr.Webhook{Recorder: c.Arr, Token: c.WebhookToken, Log: c.Log})

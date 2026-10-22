@@ -38,6 +38,10 @@ type Service struct {
 	Log   *slog.Logger
 	// Lazy, when set, has Search classify candidates first; see Lazy.
 	Lazy *Lazy
+	// NoWait has Search answer from what the store holds while Lazy's
+	// classifications and matches run in the background, for later
+	// searches.
+	NoWait bool
 }
 
 var kinds = map[sniffarrv1.Kind]string{
@@ -132,7 +136,7 @@ func (s *Service) Search(ctx context.Context, req *connect.Request[sniffarrv1.Se
 	}
 	var found []store.Release
 	if s.Lazy != nil {
-		found, err = s.Lazy.search(ctx, s.Store, q)
+		found, err = s.Lazy.search(ctx, s.Store, q, !s.NoWait)
 	} else {
 		found, err = s.Store.Search(ctx, q)
 	}
