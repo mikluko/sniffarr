@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-10-23
+
+### Fixed
+
+- A Torznab search without a query, which Radarr and Sonarr send for their RSS sync, lists releases newest found first rather than most recently seen, so a newly found release reaches the feed.
+
 ## [0.25.1] - 2026-10-23
 
 ### Fixed
@@ -362,7 +368,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.1...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.2...HEAD
+[0.25.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.1...v0.25.2
 [0.25.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.0...v0.25.1
 [0.25.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.24.0...v0.25.0
 [0.24.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.1...v0.24.0

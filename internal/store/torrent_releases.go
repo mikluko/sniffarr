@@ -215,7 +215,9 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 
 // Query selects releases for Search.
 type Query struct {
-	// Text matches releases whose name or file paths contain all its words.
+	// Text matches releases whose name or file paths contain all its words,
+	// best match first. Empty matches every release, the most recently
+	// found first: a Torznab RSS feed reads it, newest by pubDate first.
 	Text string
 	// Kinds selects releases of these kinds; "" selects unclassified ones.
 	// Empty selects any kind.
@@ -250,7 +252,7 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 	var where []string
 	var args []any
 	from := "torrent_releases t"
-	order := "t.last_seen DESC"
+	order := "t.first_seen DESC, t.id DESC"
 	if m := matchExpr(q.Text); m != "" {
 		from = "torrent_releases_fts f JOIN torrent_releases t ON t.id = f.rowid"
 		where = append(where, "torrent_releases_fts MATCH ?")

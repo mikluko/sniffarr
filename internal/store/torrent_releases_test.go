@@ -32,6 +32,26 @@ func TestKnown(t *testing.T) {
 	require.Equal(t, t0.Add(2*time.Hour), r.LastSeen, "an older sighting never moves last_seen back")
 }
 
+func TestSearchNewestFound(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for _, tr := range []Torrent{torrent(1, "Old"), torrent(2, "Middle"), torrent(3, "New")} {
+		tr.SeenAt = t0.Add(time.Duration(tr.Hash[0]) * time.Minute)
+		_, _, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	_, _, err := s.Known(ctx, []Hash{hash(1)}, t0.Add(time.Hour))
+	require.NoError(t, err)
+
+	rs, err := s.Search(ctx, Query{Limit: 10})
+	require.NoError(t, err)
+	var got []string
+	for _, r := range rs {
+		got = append(got, r.Name)
+	}
+	require.Equal(t, []string{"New", "Middle", "Old"}, got, "a fresh sighting does not lift an old release")
+}
+
 func TestSearch(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
@@ -84,7 +104,7 @@ func TestSearch(t *testing.T) {
 		names(Query{AudioLanguage: "ru", MinAudioProbability: new(0.5), Unexamined: true}), "4 is unexamined and its audio unknown")
 	require.Equal(t, []string{"Aliens.1986.1080p"}, names(Query{AudioLanguage: "uk", MinAudioProbability: new(0.5)}),
 		"the filter reads the language's own entries")
-	require.Equal(t, []string{"Alien Parody 1979", "Collection", "Чужой 1979 BDRip"}, names(Query{Limit: 3}), "most recently seen first")
+	require.Equal(t, []string{"Alien Parody 1979", "Collection", "Чужой 1979 BDRip"}, names(Query{Limit: 3}), "most recently found first")
 
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)
