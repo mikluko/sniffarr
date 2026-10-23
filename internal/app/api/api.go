@@ -1,7 +1,7 @@
 // Package api is the API component: the ingest, search and browse services,
 // the Torznab indexer and the Radarr and Sonarr webhook over the store,
 // with the classify and TMDB workers, the imports of the Radarr and Sonarr
-// histories, the store's maintenance, the rollup of peer sketches, the tops
+// histories, the store's one-time backfills and maintenance, the rollup of peer sketches, the tops
 // of works and the counts of the browse service.
 package api
 
@@ -186,6 +186,10 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 }
 
 func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts, rec *arr.Recorder) {
+	app.Go(lc, sd, log, "backfill", func(ctx context.Context) error {
+		backfill(ctx, s, log)
+		return nil
+	})
 	app.Go(lc, sd, log, "maintenance", func(ctx context.Context) error {
 		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, cfg.RetentionIdle, log) })
 		return nil

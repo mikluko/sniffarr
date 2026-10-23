@@ -12,7 +12,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/rules"
 )
 
@@ -99,54 +98,6 @@ type Classification struct {
 	// Audio maps languages to the probability of an audio track in each; a
 	// probability decided by rules stays.
 	Audio map[string]float64
-}
-
-// featuresFilled is the settings key that records that fillFeatures has run.
-const featuresFilled = "release_features_filled"
-
-// fillFeatures derives, once, the year, season, episode and quality of the
-// stored torrents with neither an episode nor a quality from their names,
-// in batches.
-func (s *Store) fillFeatures(ctx context.Context) error {
-	done, err := s.flag(ctx, featuresFilled)
-	if err != nil || done {
-		return err
-	}
-	var after int64
-	for {
-		type row struct {
-			id int64
-			p  names.Parsed
-		}
-		var batch []row
-		if err := s.each(ctx, func(rows *sql.Rows) error {
-			var r row
-			var name string
-			if err := rows.Scan(&r.id, &name); err != nil {
-				return err
-			}
-			r.p = names.Parse(name)
-			batch = append(batch, r)
-			return nil
-		}, "SELECT id, name FROM torrent_releases WHERE id > ? AND quality IS NULL AND episode IS NULL ORDER BY id LIMIT 1000", after); err != nil {
-			return err
-		}
-		if len(batch) == 0 {
-			return s.setFlag(ctx, featuresFilled)
-		}
-		if err := s.tx(ctx, func(tx *sql.Tx) error {
-			for _, r := range batch {
-				if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET year = ?, season = ?, episode = ?, quality = ? WHERE id = ?",
-					nullInt(r.p.Year), nullInt(r.p.Season), nullInt(r.p.Episode), null(r.p.Quality), r.id); err != nil {
-					return err
-				}
-			}
-			return nil
-		}); err != nil {
-			return err
-		}
-		after = batch[len(batch)-1].id
-	}
 }
 
 // largest returns the at most n largest files, largest first.

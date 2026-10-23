@@ -280,6 +280,11 @@ func TestFillFeaturesAndMarks(t *testing.T) {
 	defer db.Close()
 	r, err = s.Get(ctx, hash(1))
 	require.NoError(t, err)
+	require.Zero(t, r.Episode, "New does not backfill")
+	require.Empty(t, r.Audio[0].Mark, "New does not backfill")
+	require.NoError(t, s.Backfill(ctx, nil))
+	r, err = s.Get(ctx, hash(1))
+	require.NoError(t, err)
 	require.Equal(t, 2, r.Season)
 	require.Equal(t, 5, r.Episode)
 	require.Equal(t, "1080p", r.Quality)
@@ -297,8 +302,11 @@ func TestFillFeaturesAndMarks(t *testing.T) {
 
 	_, err = db.W.ExecContext(ctx, "UPDATE torrent_releases SET quality = NULL, episode = NULL")
 	require.NoError(t, err)
-	_, err = New(ctx, db, Options{Languages: []string{"ru"}})
+	s, err = New(ctx, db, Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
+	var runs []Backfilled
+	require.NoError(t, s.Backfill(ctx, func(b Backfilled) { runs = append(runs, b) }))
+	require.Empty(t, runs, "a done backfill does not run")
 	r, err = s.Get(ctx, hash(1))
 	require.NoError(t, err)
 	require.Zero(t, r.Episode, "the backfill runs once")
@@ -350,6 +358,7 @@ func TestMigrateWorks(t *testing.T) {
 
 	s, err := New(ctx, db, Options{Languages: []string{"ru"}, TMDB: true})
 	require.NoError(t, err)
+	require.NoError(t, s.Backfill(ctx, nil))
 	var works int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM tmdb_works").Scan(&works))
 	require.Equal(t, 1, works, "two title keys matched to one TMDB ID are one work")

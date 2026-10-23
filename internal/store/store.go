@@ -55,6 +55,8 @@ type Store struct {
 	w, r    *sql.DB
 	opts    Options
 	deleted metric.Int64Counter
+	// backfillBatch is the most rows one Backfill transaction updates.
+	backfillBatch int
 
 	keyMu     sync.Mutex
 	key       sketch.Key
@@ -78,9 +80,8 @@ func migrate(ctx context.Context, db *database.DB) error {
 	return nil
 }
 
-// New returns the Store in db, applying any pending migrations, and, once
-// per database, deriving the episode and quality of stored torrents from
-// their names and the marks of their audio markers.
+// New returns the Store in db, applying any pending migrations; Backfill
+// does the one-time backfills of stored torrents.
 func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if opts.MaxFiles <= 0 {
 		opts.MaxFiles = DefaultMaxFiles
@@ -96,14 +97,7 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted}
-	if err := s.fillFeatures(ctx); err != nil {
-		return nil, fmt.Errorf("release features: %w", err)
-	}
-	if err := s.fillMarks(ctx); err != nil {
-		return nil, fmt.Errorf("audio marks: %w", err)
-	}
-	return s, nil
+	return &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted, backfillBatch: backfillBatch}, nil
 }
 
 // Swept is what one Sweep deleted.
