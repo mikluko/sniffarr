@@ -284,6 +284,23 @@ func TestLazyNoWait(t *testing.T) {
 	require.Equal(t, 2, jev.total())
 }
 
+func TestLazyClassifyRecordedMeanwhile(t *testing.T) {
+	s, jev := setup(t, store.Torrent{Name: "Heat 1995"})
+	jev.answers["Heat 1995"] = store.Classification{Source: "web"}
+	l := &Lazy{Classifier: jev, Log: slog.New(slog.DiscardHandler)}
+	ctx := context.Background()
+	r, err := s.Get(ctx, store.Hash{1})
+	require.NoError(t, err)
+	pending, err := s.Pending(ctx, []int64{r.ID}, 0)
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+
+	_, err = s.Classify(ctx, r.ID, store.Classification{Source: "remux"}, time.Now())
+	require.NoError(t, err)
+	require.NoError(t, l.classify(ctx, s, pending[0]))
+	require.Zero(t, jev.total(), "recorded since it was read")
+}
+
 func keys(m map[string]*sniffarrv1.Release) []string {
 	var out []string
 	for k := range m {

@@ -189,7 +189,7 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 			l.Log.ErrorContext(ctx, "pending", "err", err)
 		}
 		for _, p := range pending {
-			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.classify(ctx, p) },
+			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.classify(ctx, s, p) },
 				l.outcomes, late, &mu, expired, func() { classified[p.ID] = true }))
 		}
 	}
@@ -219,10 +219,18 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 }
 
 // classify classifies p, joining a classification of p already running for
-// another search.
-func (l *Lazy) classify(ctx context.Context, p store.Pending) error {
+// another search. A classification recorded since p was read, by a job that
+// ran to the end before this one started, is not repeated.
+func (l *Lazy) classify(ctx context.Context, s *store.Store, p store.Pending) error {
 	_, err, _ := l.classifying.Do(strconv.FormatInt(p.ID, 10), func() (any, error) {
-		return nil, l.Classifier.Classify(ctx, p)
+		pending, err := s.Pending(ctx, []int64{p.ID}, l.MaxFiles)
+		if err != nil {
+			return nil, err
+		}
+		if len(pending) == 0 {
+			return nil, nil
+		}
+		return nil, l.Classifier.Classify(ctx, pending[0])
 	})
 	return err
 }
