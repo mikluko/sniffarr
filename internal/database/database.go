@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/XSAM/otelsql"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
@@ -26,6 +27,7 @@ import (
 // is a pool for reads. It is safe for concurrent use.
 type DB struct {
 	W, R *sql.DB
+	path string
 	regs []metric.Registration
 }
 
@@ -45,16 +47,26 @@ const poolKey = attribute.Key("db.pool")
 // when its context carries a recording span; every statement is measured in
 // db.client.operation.duration, with the Go function that issued it as
 // code.function.name. Spans carry the statement text, never its arguments.
+// The WAL's size is the gauge sniffarr.db.wal.size.
 func Open(ctx context.Context, path string, opts Options) (*DB, error) {
-	q := url.Values{"_pragma": {"journal_mode(WAL)", "busy_timeout(10000)", "foreign_keys(1)", "synchronous(NORMAL)"}}
+	q := url.Values{"_pragma": {"journal_mode(WAL)", "busy_timeout(10000)", "foreign_keys(1)", "synchronous(NORMAL)",
+		fmt.Sprintf("journal_size_limit(%d)", journalSizeLimit)}}
 	dsn := "file:" + path + "?" + q.Encode()
-	db := &DB{}
+	db := &DB{path: path}
 	var err error
 	if db.W, err = db.open(dsn+"&_txlock=immediate", "write", opts); err != nil {
 		return nil, err
 	}
 	db.W.SetMaxOpenConns(1)
 	if db.R, err = db.open(dsn, "read", opts); err != nil {
+		db.Close()
+		return nil, err
+	}
+	mp := opts.Meter
+	if mp == nil {
+		mp = otel.GetMeterProvider()
+	}
+	if err := db.observeWAL(mp.Meter("github.com/mikluko/sniffarr/internal/database")); err != nil {
 		db.Close()
 		return nil, err
 	}

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sniffarr.db.wal.size`, the size of the write-ahead log in bytes.
+- Once a minute the API truncates the WAL when it has reached 1 GiB; a reader that holds it past the 10-second wait is logged with the frames it pins.
+
+### Changed
+
+- The WAL file is truncated to 64 MiB after a checkpoint resets it.
+
 ## [0.25.2] - 2026-10-23
 
 ### Fixed

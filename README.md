@@ -457,7 +457,10 @@ the same to each.
 | `SNIFFARR_SONARR_API_KEY`          |                  | That Sonarr's API key                                                                                                  |
 
 The database runs in WAL mode and its schema migrates on start; leases left
-over from a previous run are freed on start. A torrent keeps its true file
+over from a previous run are freed on start. Once a minute the API truncates
+the WAL when it has reached 1 GiB, waiting up to 10 seconds for readers; a
+reader that outlasts the wait is logged with the frames it pins. The WAL's
+size is the metric `sniffarr.db.wal.size`. A torrent keeps its true file
 count, but only its largest files are stored and searched. Once a minute the
 API deletes, in small batches, the torrents nobody has sighted within the
 retention period, or within the idle retention period for those matched to no
@@ -558,6 +561,7 @@ counts are the `db.sql.connection.*` metrics.
 
 | Component  | Metric                                 | Unit         | Attributes                                 |
 | ---------- | -------------------------------------- | ------------ | ------------------------------------------ |
+| `-api`     | `sniffarr.db.wal.size`                 | `By`         |                                            |
 | `-api`     | `sniffarr.ingest.sightings`            | `{sighting}` | `sniffarr.sighting.result`                 |
 | `-api`     | `sniffarr.queue.depth`                 | `{infohash}` | `sniffarr.discovery`                       |
 | `-api`     | `sniffarr.queue.leases`                | `{lease}`    |                                            |
