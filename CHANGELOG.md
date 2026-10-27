@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-27
+
 ### Added
 
 - `sniffarr.db.wal.size`, the size of the write-ahead log in bytes.
@@ -381,7 +383,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.2...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.26.0...HEAD
+[0.26.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.2...v0.26.0
 [0.25.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.1...v0.25.2
 [0.25.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.0...v0.25.1
 [0.25.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.24.0...v0.25.0
