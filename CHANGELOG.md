@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-01
+
 ### Added
 
 - `-fetch -probe-dir` probes stored releases for their tracks: it downloads, hash-verified, the pieces at the start of a release's largest Matroska or MP4 file and reads its track list, each audio track's language, name, codec and channels and the video's size and HDR or Dolby Vision. Releases a Radarr or Sonarr search returned go first, then the rest with the most peers over 7 days; releases without peers wait. Only movies and series are probed, each once; a probe whose peers or pieces do not come is repeated after 6 hours, doubled each time, until 3 have failed.
@@ -20,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A probe sets the probability of an audio track in a configured language to 1 when it found one, and to 0 when every audio track it found is in another language, unless a marker in the name says otherwise; the classifier no longer overrides either.
 - Torznab titles of probed releases name what the Russian tracks' names say, as `[Dub, MVO, RUS]`, leaving out a label the name already has, and name the languages of releases with no Russian track, as `[ENG, UKR]`.
-
 - The web UI is set in monospace — MonoLisa where installed, otherwise JetBrains Mono, IBM Plex Mono, Source Code Pro or the system monospace — with square corners, hairline table rules and an inverted search button. Titles of films and series are bold text instead of link-coloured, and charts and meters use the accent colour.
 
 ## [0.26.0] - 2026-10-27
@@ -399,7 +400,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.26.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.0...HEAD
+[0.27.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.26.0...v0.27.0
 [0.26.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.2...v0.26.0
 [0.25.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.1...v0.25.2
 [0.25.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.0...v0.25.1
