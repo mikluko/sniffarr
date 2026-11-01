@@ -2,7 +2,10 @@
 // Discoverer reports the infohashes the DHT reveals to the server, a
 // Fetcher takes tasks from the server, fetches their metadata from peers,
 // and returns it, and Peers counts the peers seen in sketches for the
-// server. A sniffer never downloads pieces, uploads, or announces itself.
+// server. A Prober reads the tracks of a stored release's main video file
+// from the pieces at its start, and a Seeder seeds those pieces until they
+// are uploaded as often as downloaded; without them a sniffer never
+// downloads pieces, uploads, or announces itself.
 // It keeps peer addresses in memory only: those of a fetch for its
 // duration, those announced to its DHT node for DefaultPeerTTL; a counted
 // peer is kept as its hash.

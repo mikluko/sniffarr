@@ -12,6 +12,7 @@ require (
 	connectrpc.com/otelconnect v0.12.0
 	github.com/XSAM/otelsql v0.44.0
 	github.com/anacrolix/dht/v2 v2.24.0
+	github.com/anacrolix/generics v0.1.1-0.20251125230353-15d98d46693b
 	github.com/anacrolix/torrent v1.61.0
 	github.com/dchest/siphash v1.2.3
 	github.com/pion/stun/v3 v3.0.0
@@ -39,7 +40,6 @@ require (
 	github.com/anacrolix/btree v0.0.0-20251201064447-d86c3fa41bd8 // indirect
 	github.com/anacrolix/chansync v0.7.0 // indirect
 	github.com/anacrolix/envpprof v1.4.0 // indirect
-	github.com/anacrolix/generics v0.1.1-0.20251125230353-15d98d46693b // indirect
 	github.com/anacrolix/go-libutp v1.3.2 // indirect
 	github.com/anacrolix/log v0.17.1-0.20251118025802-918f1157b7bb // indirect
 	github.com/anacrolix/missinggo v1.3.0 // indirect

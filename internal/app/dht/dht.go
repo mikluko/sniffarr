@@ -56,7 +56,11 @@ func start(p nodeParams) *sniff.Network {
 	if p.Peers != nil {
 		sink = p.Peers
 	}
-	n := sniff.New(p.Config.Network, p.Offer, sink)
+	cfg := p.Config.Network
+	if cfg.Seed.Log == nil {
+		cfg.Seed.Log = p.Log
+	}
+	n := sniff.New(cfg, p.Offer, sink)
 	p.Lifecycle.Append(fx.StopHook(n.Close))
 	app.Go(p.Lifecycle, p.Shutdowner, p.Log, "dht", func(ctx context.Context) error {
 		var (

@@ -96,6 +96,19 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, dht.Config{Network: want, STUN: stun.DefaultServer}, c.dht, "a node that does not discover is passive")
 			require.Equal(t, fetch.Config{Workers: 100}, c.fetch)
 		}},
+		{name: "fetch with probes", args: []string{"-fetch", "-probe-dir", "/var/lib/sniffarr", "-probers", "2", "-probe-timeout", "5m", "-seed-max-size", "50GiB", "-seed-max-age", "72h"},
+			env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
+				require.Equal(t, sniffer.SeederConfig{Dir: "/var/lib/sniffarr", MaxBytes: 50 << 30, MaxAge: 72 * time.Hour}, c.dht.Network.Seed)
+				require.Equal(t, fetch.Config{Workers: sniffer.DefaultFetchers, Probe: true, Probers: 2, ProbeTimeout: 5 * time.Minute}, c.fetch)
+			}},
+		{name: "probe defaults", args: []string{"-fetch", "-probe-dir", "/var/lib/sniffarr"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
+			require.Equal(t, sniffer.SeederConfig{Dir: "/var/lib/sniffarr", MaxBytes: sniffer.DefaultSeedMaxBytes, MaxAge: sniffer.DefaultSeedMaxAge}, c.dht.Network.Seed)
+			require.Equal(t, fetch.Config{Workers: sniffer.DefaultFetchers, Probe: true, Probers: sniffer.DefaultProbers, ProbeTimeout: sniffer.DefaultProbeTimeout}, c.fetch)
+		}},
+		{name: "probe dir without fetch", args: []string{"-sniff", "-probe-dir", "/var/lib/sniffarr"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-probe-dir: probes are taken by -fetch, which is off"},
+		{name: "seed size in decimal units", args: []string{"-fetch", "-seed-max-size", "10GB"}, err: `invalid value "10GB" for flag -seed-max-size`},
+		{name: "zero probers", args: []string{"-fetch", "-probers", "0"}, err: "-probers: want a positive integer"},
+		{name: "zero seed age", args: []string{"-fetch", "-seed-max-age", "0s"}, err: "-probe-timeout and -seed-max-age: want positive durations"},
 		{name: "sniff with another STUN server", args: []string{"-sniff", "-stun", "stun.example.net:3478"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 			require.Equal(t, dht.Config{Network: defaultNetwork(false), STUN: "stun.example.net:3478"}, c.dht)
 		}},

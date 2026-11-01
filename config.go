@@ -91,6 +91,14 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	fs.DurationVar(&c.dht.Network.PeerWait, "peer-wait", sniffer.DefaultPeerWait, "how long to look for a torrent's peers on the DHT")
 	fs.IntVar(&c.dht.Network.MinPeers, "min-peers", sniffer.DefaultMinPeers, "peers a torrent needs within -peer-wait to have its metadata fetched")
 	fs.IntVar(&c.sniff.Walkers, "walkers", sniffer.DefaultWalkers, "sample_infohashes queries at once")
+	var probeDir string
+	probers, probeTimeout, seedMaxAge := sniffer.DefaultProbers, sniffer.DefaultProbeTimeout, sniffer.DefaultSeedMaxAge
+	seedMaxSize := sizeFlag(sniffer.DefaultSeedMaxBytes)
+	fs.StringVar(&probeDir, "probe-dir", "", "directory where -fetch keeps the pieces it probes and seeds; empty probes nothing")
+	fs.IntVar(&probers, "probers", probers, "probes at once")
+	fs.DurationVar(&probeTimeout, "probe-timeout", probeTimeout, "how long one probe may take, from looking for peers to the tracks")
+	fs.Var(&seedMaxSize, "seed-max-size", "piece data kept for seeding, such as 200GiB; the oldest torrents go first beyond it")
+	fs.DurationVar(&seedMaxAge, "seed-max-age", seedMaxAge, "how long a probed torrent is seeded at most")
 	fs.TextVar(&c.logLevel, "log-level", slog.LevelInfo, "level to log at: debug, info, warn or error; SNIFFARR_LOG_LEVEL when not given")
 	if err := fs.Parse(args); err != nil {
 		return c, err
@@ -114,6 +122,17 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	}
 	c.dht.Network.Passive = !c.on.sniff
 	c.fetch.Workers = c.dht.Network.Fetchers
+	switch {
+	case probers < 1:
+		return c, errors.New("-probers: want a positive integer")
+	case probeTimeout <= 0, seedMaxAge <= 0:
+		return c, errors.New("-probe-timeout and -seed-max-age: want positive durations")
+	case probeDir != "" && !c.on.fetch:
+		return c, errors.New("-probe-dir: probes are taken by -fetch, which is off")
+	case probeDir != "":
+		c.dht.Network.Seed = sniffer.SeederConfig{Dir: probeDir, MaxBytes: int64(seedMaxSize), MaxAge: seedMaxAge}
+		c.fetch.Probe, c.fetch.Probers, c.fetch.ProbeTimeout = true, probers, probeTimeout
+	}
 
 	for _, name := range required(c.on) {
 		if getenv(name) == "" {
@@ -358,6 +377,20 @@ func size(getenv func(string) string, name string, def int64, positive bool) (in
 		return 0, fmt.Errorf("%s: want a %s size in B, KiB, MiB, GiB or TiB", name, want)
 	}
 	return n, nil
+}
+
+// sizeFlag is a flag of bytes, such as 200GiB.
+type sizeFlag int64
+
+func (f *sizeFlag) String() string { return strconv.FormatInt(int64(*f), 10) }
+
+func (f *sizeFlag) Set(s string) error {
+	n, err := parseSize(s)
+	if err != nil || n == 0 {
+		return errors.New("want a positive size in B, KiB, MiB, GiB or TiB")
+	}
+	*f = sizeFlag(n)
+	return nil
 }
 
 // sizeUnits are the units parseSize takes, longest first.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -15,6 +16,7 @@ import (
 	peer_store "github.com/anacrolix/dht/v2/peer-store"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
+	"github.com/anacrolix/torrent/storage"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
@@ -70,6 +72,10 @@ type NetworkConfig struct {
 	StartingNodes func() ([]dht.Addr, error)
 	// Meter records metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
+	// Seed, with Dir set, has the client upload and Probe work: the
+	// torrents a probe downloaded pieces of are kept in Dir and seeded by a
+	// Seeder of this configuration, its Meter Meter when nil.
+	Seed SeederConfig
 }
 
 func (c *NetworkConfig) defaults() {
@@ -81,10 +87,12 @@ func (c *NetworkConfig) defaults() {
 }
 
 // Network is a BitTorrent client with its own DHT node that fetches torrent
-// metadata only. It does not upload, seed, announce its torrents or
-// exchange peers. Unless passive, its node serves the peers announced to it
-// for DefaultPeerTTL, answers sample_infohashes and get_peers with scrape,
-// and keeps nothing across restarts. The zero value is not usable; use New.
+// metadata. Without NetworkConfig.Seed.Dir it does not upload, seed,
+// announce its torrents or exchange peers; with it, Probe downloads pieces
+// and the torrents probed are seeded and announced, and nothing else is
+// uploaded. Unless passive, its node serves the peers announced to it for
+// DefaultPeerTTL, answers sample_infohashes and get_peers with scrape, and
+// keeps nothing across restarts. The zero value is not usable; use New.
 type Network struct {
 	cfg   NetworkConfig
 	offer func(Hash, sniffarrv1.Source)
@@ -100,6 +108,11 @@ type Network struct {
 	swarm   swarm
 	answers metric.Int64Counter
 	replies metric.Int64Counter
+	// seeder, seedStorage and completion are nil without Seed.Dir.
+	seeder      *Seeder
+	seedStorage storage.ClientImplCloser
+	completion  storage.PieceCompletion
+	seedDone    chan struct{}
 }
 
 // swarm reaches the peers of a torrent.
@@ -130,8 +143,10 @@ func (s clientSwarm) lookup(h Hash) (<-chan dht.PeersValues, func(), error) {
 
 // fetch waits for the metadata for timeout at most.
 func (s clientSwarm) fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo) (Metadata, error) {
-	t, _ := s.client.AddTorrentInfoHash(metainfo.Hash(h))
-	defer t.Drop()
+	t, added := s.client.AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: metainfo.Hash(h), DisallowDataUpload: true})
+	if added {
+		defer t.Drop()
+	}
 	t.AddPeers(peers)
 	timer := time.NewTimer(s.timeout)
 	defer timer.Stop()
@@ -167,6 +182,13 @@ func New(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink)
 	if !cfg.Passive {
 		n.store = newPeerStore(peerStoreConfig{})
 	}
+	if cfg.Seed.Dir != "" {
+		if cfg.Seed.Meter == nil {
+			cfg.Seed.Meter = cfg.Meter
+		}
+		n.seeder = NewSeeder(cfg.Seed)
+		n.seedDone = make(chan struct{})
+	}
 	n.observe(meter(cfg.Meter))
 	return n
 }
@@ -174,8 +196,8 @@ func New(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink)
 // Start starts the client and its DHT node under the node ID id, random
 // when zero; it is called once. A valid publicIP, the address other nodes
 // see the node at, gives the ID its BEP 42 prefix; invalid leaves the ID as
-// given. The client creates, reads and writes no torrent files. Until Start
-// returns, the methods that use the node wait.
+// given. Without Seed.Dir the client creates, reads and writes no torrent
+// files. Until Start returns, the methods that use the node wait.
 func (n *Network) Start(id [20]byte, publicIP netip.Addr) error {
 	client, err := torrent.NewClient(n.clientConfig(id, publicIP))
 	if err != nil {
@@ -201,6 +223,21 @@ func (n *Network) Start(id [20]byte, publicIP netip.Addr) error {
 	}
 	n.client = client
 	n.swarm = clientSwarm{client: client, dht: n.dht, timeout: n.cfg.FetchTimeout}
+	if n.seeder != nil {
+		if err := n.openSeeds(); err != nil {
+			client.Close()
+			return fmt.Errorf("seeds: %w", err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			<-n.stop
+			cancel()
+		}()
+		go func() {
+			defer close(n.seedDone)
+			_ = n.seeder.Run(ctx)
+		}()
+	}
 	if n.store != nil {
 		go n.sweep()
 	}
@@ -239,8 +276,8 @@ func (n *Network) clientConfig(id [20]byte, publicIP netip.Addr) *torrent.Client
 	cfg := n.cfg
 	c := torrent.NewDefaultClientConfig()
 	c.DefaultStorage = noStorage{}
-	c.NoUpload = true
-	c.Seed = false
+	c.NoUpload = n.seeder == nil
+	c.Seed = n.seeder != nil
 	c.DisablePEX = true
 	c.DisableTrackers = true
 	c.DisableWebseeds = true
@@ -382,7 +419,13 @@ func (n *Network) Close() {
 		}
 		done := make(chan struct{})
 		go func() {
+			if n.seedDone != nil {
+				<-n.seedDone
+			}
 			n.client.Close()
+			if n.seedStorage != nil {
+				_ = n.seedStorage.Close()
+			}
 			close(done)
 		}()
 		select {
