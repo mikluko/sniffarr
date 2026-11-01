@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `-fetch -probe-dir` probes stored releases for their tracks: it downloads, hash-verified, the pieces at the start of a release's largest Matroska or MP4 file and reads its track list, each audio track's language, name, codec and channels and the video's size and HDR or Dolby Vision. Releases a Radarr or Sonarr search returned go first, then the rest with the most peers over 7 days; releases without peers wait. Only movies and series are probed, each once; a probe whose peers or pieces do not come is repeated after 6 hours, doubled each time, until 3 have failed.
+- The API meters probes at 100 GiB of piece data a UTC day, `SNIFFARR_PROBE_DAILY_BYTES`, of which 25 % is kept for releases a search returned, `SNIFFARR_PROBE_SEARCH_RESERVE`; one probe downloads 64 MiB at most, `SNIFFARR_PROBE_MAX_BYTES`. `SNIFFARR_PROBE_LEASE`, `SNIFFARR_PROBE_ATTEMPTS` and `SNIFFARR_PROBE_BACKOFF` tune the tasks.
+- The fetcher seeds what it probed until each torrent uploaded as much as it downloaded, announcing it on the DHT, and removes a torrent earlier after `-seed-max-age`, 7 days by default, or oldest first beyond `-seed-max-size`, 200 GiB by default.
+- `IngestService.ProbeTask` and `ProbeResult`, and `tracks` on `Release`.
+- The metrics `sniffarr.probe.tasks`, `sniffarr.probe.results` and `sniffarr.probe.downloaded` of the API, and `sniffarr.sniff.probe.outcomes`, `sniffarr.seed.downloaded`, `sniffarr.seed.uploaded`, `sniffarr.seed.torrents`, `sniffarr.seed.stored` and `sniffarr.seed.removals` of the fetcher.
+- The chart's `fetch.probe`, with a volume for the seeded pieces at `/seeds`.
+
 ### Changed
+
+- A probe sets the probability of an audio track in a configured language to 1 when it found one, and to 0 when every audio track it found is in another language, unless a marker in the name says otherwise; the classifier no longer overrides either.
+- Torznab titles of probed releases name what the Russian tracks' names say, as `[Dub, MVO, RUS]`, leaving out a label the name already has, and name the languages of releases with no Russian track, as `[ENG, UKR]`.
 
 - The web UI is set in monospace — MonoLisa where installed, otherwise JetBrains Mono, IBM Plex Mono, Source Code Pro or the system monospace — with square corners, hairline table rules and an inverted search button. Titles of films and series are bold text instead of link-coloured, and charts and meters use the accent colour.
 
