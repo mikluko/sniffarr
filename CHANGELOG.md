@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-01
+
 ### Changed
 
 - The data page is the web UI's first page, at `/`, and leads the navigation: data, torrents, top. The search box lives on the torrents page only.
@@ -426,7 +428,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.3...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.28.0...HEAD
+[0.28.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.3...v0.28.0
 [0.27.3]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.2...v0.27.3
 [0.27.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.1...v0.27.2
 [0.27.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.0...v0.27.1
