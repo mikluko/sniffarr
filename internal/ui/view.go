@@ -86,37 +86,6 @@ type WorkSummary struct {
 	Rank     int       // place in the top of its kind, 7 days; 0 = outside
 }
 
-// ---------- home (GET / without query or filters) ----------
-
-type HomePage struct {
-	Base
-	Summary Summary
-}
-
-type Summary struct {
-	Total   int64 // torrents stored
-	NewDay  int64 // new in the last 24 h
-	Pending int64 // classifier queue
-}
-
-// ---------- search (GET / with q or any filter) ----------
-
-// SearchPage lists movies and series only; raw torrents live on TorrentsPage.
-type SearchPage struct {
-	Base
-	Q      string
-	Titles WorkResults
-}
-
-// WorkResults is the list of titles. Items come ordered: ours by 7-day peers,
-// then TMDB-only by TMDB popularity.
-type WorkResults struct {
-	Kind     string // "" = movies and series, else a TopKinds value
-	Items    []WorkSummary
-	Ours     int // items with Releases > 0
-	TMDBOnly int // items with Releases == 0
-}
-
 // ---------- torrents (GET /torrents) ----------
 
 // TorrentsPage searches and filters torrents by recognized features, matched to

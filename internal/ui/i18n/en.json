@@ -1,7 +1,5 @@
 {
-  "nav.search": "Search",
   "nav.data": "Data",
-  "search.label": "Name or infohash",
   "search.placeholder": "name or infohash",
   "search.submit": "Search",
   "f.kind": "kind",
@@ -133,11 +131,6 @@
   "top.empty": "Empty: the top has not been computed yet.",
   "topkind.movie": "movies",
   "topkind.series": "series",
-  "home.top": "Top 100:",
-  "home.torrents": "torrents",
-  "home.perday": "in 24 h",
-  "home.pending": "classifier pending:",
-  "home.more": "details",
   "card.peers": "peers",
   "card.intop.movie": "among movies",
   "card.intop.series": "among series",
@@ -201,11 +194,6 @@
   "audio.hint.p50": "“{0}: ≥ 0.5”: only peers of releases with an explicit marker or a classifier probability of at least 0.5 are counted. Peers of other releases are left out, so a title can drop or leave the top.",
   "audio.prob": "Probability",
   "audio.script": "Script",
-  "search.kind.all": "all",
-  "search.ours": "ours:",
-  "search.tmdbonly": "TMDB only:",
-  "search.noreleases": "no releases",
-  "search.notintop": "not in the top",
   "work.back.movie": "top movies",
   "work.back.series": "top series",
   "work.intop.movie": "Place among top movies",
@@ -236,6 +224,5 @@
   "torrents.label": "Torrent name or infohash",
   "f.matched": "matched",
   "matched.yes": "to a movie or series",
-  "matched.no": "not matched",
-  "search.intorrents": "Search torrents for “{0}”"
+  "matched.no": "not matched"
 }

@@ -4,30 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>{{template "title" .}}{{if ne .Nav "home"}} · sniffarr{{end}}</title>
+<title>{{template "title" .}} · sniffarr</title>
 <link rel="stylesheet" href="/static/app.css">
 <script src="/static/vendor/htmx.min.js" defer></script>
 <script src="/static/vendor/idiomorph-ext.min.js" defer></script>
 <script src="/static/app.js" defer></script>
 </head>
 <body hx-ext="morph">
-{{if eq .Nav "home"}}
-{{template "main" .}}
-{{else}}
 <div class="wrap">
 <header class="top">
   <a href="/" class="brand">sniffarr<span class="glyph" aria-hidden="true">_</span></a>
   <nav>
+    <a href="/"{{if eq .Nav "data"}} class="on" aria-current="page"{{end}}>{{.T "nav.data"}}</a>
     <a href="/torrents"{{if eq .Nav "torrents"}} class="on" aria-current="page"{{end}}>{{.T "nav.torrents"}}</a>
     <a href="/top"{{if eq .Nav "top"}} class="on" aria-current="page"{{end}}>{{.T "nav.top"}}</a>
-    <a href="/data"{{if eq .Nav "data"}} class="on" aria-current="page"{{end}}>{{.T "nav.data"}}</a>
   </nav>
   {{template "langs" .}}
 </header>
 {{template "main" .}}
 <footer class="attr mu"><a href="https://www.themoviedb.org/" rel="noreferrer" target="_blank"><img src="/static/vendor/tmdb.svg" alt="TMDB" height="12"></a> <span lang="en">{{.T "attr.text"}}</span></footer>
 </div>
-{{end}}
 </body>
 </html>
 
@@ -35,13 +31,6 @@
   {{- range $i, $l := .Langs}}{{if $i}} · {{end}}{{if eq $l $.Lang}}<b>{{$l}}</b>{{else}}<a href="{{$.LangURL $l}}">{{$l}}</a>{{end}}{{end -}}
 </span>{{end}}
 
-{{define "searchbar"}}
-<form class="search" action="/" method="get">
-  <label for="q" class="vh">{{.T "search.label"}}</label>
-  <input id="q" name="q" type="search" placeholder="{{.T "search.placeholder"}}" autocomplete="off" spellcheck="false">
-  <button type="submit">{{.T "search.submit"}}</button>
-</form>
-{{end}}
 
 {{/* Dub cell of one release: per configured language the mark, else the probability, else "—".
      The language code is shown only when several languages are configured. */}}

@@ -4,7 +4,7 @@
 
 {{define "data"}}
 {{with .Stats}}
-<main id="data" hx-get="/data" hx-trigger="every 30s [document.visibilityState=='visible']" hx-swap="morph:outerHTML" hx-target="this">
+<main id="data" hx-get="/"hx-trigger="every 30s [document.visibilityState=='visible']" hx-swap="morph:outerHTML" hx-target="this">
 <div class="kpis">
   <div><span class="mu">{{$.T "d.total"}}</span> <b>{{$.Num .Total}}</b></div>
   <div><span class="mu">{{$.T "d.newday"}}</span> <b>{{$.Num .NewDay}}</b></div>

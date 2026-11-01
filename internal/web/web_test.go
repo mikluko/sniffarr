@@ -225,44 +225,17 @@ func fragment(t *testing.T, w *httptest.ResponseRecorder, target string) string 
 	return body
 }
 
-func TestHome(t *testing.T) {
+func TestRoot(t *testing.T) {
 	h := handler(t, nil)
 	body := page(t, get(t, h, "/", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
-	require.Contains(t, body, `<div class="home">`)
-	require.Contains(t, body, "<span>10 torrents</span>", "every stored release, adult ones too")
-	require.Contains(t, body, "<span>+7 in 24 h</span>", "first seen within the last 24 hours")
-	require.Contains(t, body, "<span>classifier pending: 1</span>")
-	require.Contains(t, body, `<a href="/top?kind=movie">`)
-	require.Contains(t, body, `<a href="/torrents">`)
+	require.Contains(t, body, `<main id="data"`, "the data page is the first page")
+	require.Contains(t, body, `<a href="/" class="on" aria-current="page">Data</a>`)
 	require.Contains(t, body, `<img src="/static/vendor/tmdb.svg" alt="TMDB" height="12">`, "the attribution")
 	require.Contains(t, body, "This product uses the TMDB API but is not endorsed or certified by TMDB.")
 	require.Equal(t, http.StatusOK, get(t, h, "/static/vendor/tmdb.svg", "").Code)
-	require.Contains(t, page(t, get(t, h, "/?q=", "")), `id="results"`, "q alone, empty, is a search")
-	require.NotContains(t, page(t, get(t, h, "/?lang=ru", "")), `id="results"`, "lang alone is not a search")
-}
-
-func TestSearch(t *testing.T) {
-	h := handler(t, nil)
-	body := page(t, get(t, h, "/?q=alien", ""))
-	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
-	require.Contains(t, body, `<a class="wrow-a" href="/w/m348">`, "ours, the merged Alien")
-	require.Contains(t, body, `<li class="wrow only-tmdb">`, "found on TMDB only")
-	require.Contains(t, body, `href="/w/m679"`)
-	require.Less(t, strings.Index(body, "/w/m348"), strings.Index(body, "/w/m679"), "ours first")
-	require.Contains(t, body, "<span>2 releases</span>", "both title keys")
-	require.Contains(t, body, "ours: 1 · TMDB only: 1")
-	require.Contains(t, body, `<img class="th th-l" src="https://image.tmdb.org/t/p/w92/p.jpg"`, "its poster")
-	require.Contains(t, body, `<a href="/torrents?q=alien">`, "the same words among torrents")
-	require.Contains(t, page(t, get(t, h, "/?q=alien&lang=ru", "")), `<span class="wrow-title">Чужой</span>`, "the title in the page's language")
-
-	frag := fragment(t, get(t, h, "/?q=alien&kind=series", "results"), "results")
-	require.Contains(t, frag, "Nothing found.", "no series by that name")
-	require.Contains(t, frag, `aria-current="true">series</a>`)
-	frag = fragment(t, get(t, h, "/?q=severance&kind=series", "results"), "results")
-	require.Contains(t, frag, `href="/w/tv95396"`)
-	frag = fragment(t, get(t, h, "/?q=", "results"), "results")
-	require.Contains(t, frag, "Nothing found.")
+	require.NotContains(t, page(t, get(t, h, "/?q=alien", "")), "wrow", "no search of titles")
+	require.Equal(t, http.StatusNotFound, get(t, h, "/data", "").Code, "the data page lives at / only")
 }
 
 func TestTorrents(t *testing.T) {
@@ -422,11 +395,6 @@ func TestWork(t *testing.T) {
 	body = page(t, get(t, h, "/w/m8195", ""))
 	require.Contains(t, body, `<div class="tm-poster tm-none" aria-hidden="true">no poster</div>`)
 
-	get(t, h, "/?q=alien", "")
-	body = page(t, get(t, h, "/w/m679", ""))
-	require.Contains(t, body, "No releases with us yet: found on TMDB only.")
-	require.NotContains(t, body, `id="releases"`)
-
 	require.Equal(t, http.StatusNotFound, get(t, h, "/w/m1", "").Code)
 	require.Equal(t, http.StatusNotFound, get(t, h, "/w/348", "").Code, "not an id")
 	require.Equal(t, http.StatusNotFound, get(t, h, "/w/tv348", "").Code, "a series is not the movie of its number")
@@ -500,8 +468,9 @@ func TestTMDBWork(t *testing.T) {
 
 func TestData(t *testing.T) {
 	h := handler(t, nil)
-	body := page(t, get(t, h, "/data", ""))
+	body := page(t, get(t, h, "/", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
+	require.Contains(t, body, `hx-get="/"`, "it refreshes itself from /")
 	require.Contains(t, body, `<a href="/torrents?kind=movie">movie</a></td><td class="r">5</td>`)
 	require.Contains(t, body, `<a href="/torrents?kind=other">other</a></td><td class="r">1</td>`, "music counts as other")
 	require.Contains(t, body, `<a href="/torrents?kind=unknown">unknown</a></td><td class="r">1</td>`)
@@ -509,7 +478,7 @@ func TestData(t *testing.T) {
 	require.Contains(t, body, `title="2026-10-20 11:53">updated 7 min ago</div>`, "when the API computed the counts")
 	require.Contains(t, body, "Dub by language")
 	require.NotContains(t, body, "Grafana")
-	frag := fragment(t, get(t, h, "/data", "data"), "data")
+	frag := fragment(t, get(t, h, "/", "data"), "data")
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<main id="data"`))
 	require.Equal(t, http.StatusOK, get(t, h, "/static/vendor/htmx.min.js", "").Code)
 }
@@ -526,12 +495,12 @@ func (locales) Locale(_ context.Context, token string) (string, error) {
 
 func TestLanguage(t *testing.T) {
 	h := handler(t, nil)
-	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, "ru-token")), `<html lang="en">`, "no lookup without Locales")
+	require.Contains(t, page(t, get(t, h, "/", "", TokenHeader, "ru-token")), `<html lang="en">`, "no lookup without Locales")
 	h = handler(t, locales{})
-	require.Contains(t, page(t, get(t, h, "/data", "")), `<html lang="en">`)
-	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, "ru-token")), `<html lang="ru">`, "the person's locale")
-	require.Contains(t, page(t, get(t, h, "/data", "", TokenHeader, "other")), `<html lang="en">`, "a failed lookup falls back")
-	require.Contains(t, page(t, get(t, h, "/data?lang=C", "", TokenHeader, "ru-token")), `<html lang="en">`, "the language picked wins")
+	require.Contains(t, page(t, get(t, h, "/", "")), `<html lang="en">`)
+	require.Contains(t, page(t, get(t, h, "/", "", TokenHeader, "ru-token")), `<html lang="ru">`, "the person's locale")
+	require.Contains(t, page(t, get(t, h, "/", "", TokenHeader, "other")), `<html lang="en">`, "a failed lookup falls back")
+	require.Contains(t, page(t, get(t, h, "/?lang=C", "", TokenHeader, "ru-token")), `<html lang="en">`, "the language picked wins")
 
 	w := get(t, h, "/?lang=ru", "")
 	require.Contains(t, page(t, w), `<html lang="ru">`)
@@ -552,7 +521,7 @@ func TestLanguage(t *testing.T) {
 
 func TestNoLanguages(t *testing.T) {
 	h := handlerLangs(t, nil, "")
-	for _, path := range []string{"/torrents", "/torrents?vl=ru&voice=explicit", "/top", "/top?voice=explicit", "/w/m348", "/w/m348?voice=explicit", "/t/" + hexOf(1), "/data"} {
+	for _, path := range []string{"/torrents", "/torrents?vl=ru&voice=explicit", "/top", "/top?voice=explicit", "/w/m348", "/w/m348?voice=explicit", "/t/" + hexOf(1), "/"} {
 		body := page(t, get(t, h, path, ""))
 		forbidden := []string{`name="vl"`, `name="voice"`, "Languages", "Dub by language", "<b>Rus</b>"}
 		if !strings.Contains(path, "voice=") {

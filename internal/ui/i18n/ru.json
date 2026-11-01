@@ -1,7 +1,5 @@
 {
-  "nav.search": "Поиск",
   "nav.data": "Данные",
-  "search.label": "Имя или infohash",
   "search.placeholder": "имя или infohash",
   "search.submit": "Искать",
   "f.kind": "вид",
@@ -133,11 +131,6 @@
   "top.empty": "Пока пусто: топ ещё не посчитан.",
   "topkind.movie": "фильмы",
   "topkind.series": "сериалы",
-  "home.top": "Топ 100:",
-  "home.torrents": "раздач",
-  "home.perday": "за сутки",
-  "home.pending": "классификатор: ожидает",
-  "home.more": "подробнее",
   "card.peers": "пиры",
   "card.intop.movie": "в топе фильмов",
   "card.intop.series": "в топе сериалов",
@@ -201,11 +194,6 @@
   "audio.hint.p50": "«{0}: ≥ 0,5»: считаются пиры только релизов с явным признаком или с вероятностью от классификатора не ниже 0,5. Пиры остальных релизов в сумму не входят, поэтому название может опуститься или пропасть из топа.",
   "audio.prob": "Вероятность",
   "audio.script": "Письменность",
-  "search.kind.all": "все",
-  "search.ours": "у нас:",
-  "search.tmdbonly": "только в TMDB:",
-  "search.noreleases": "релизов нет",
-  "search.notintop": "вне топа",
   "work.back.movie": "топ фильмов",
   "work.back.series": "топ сериалов",
   "work.intop.movie": "Место в топе фильмов",
@@ -236,6 +224,5 @@
   "torrents.label": "Имя раздачи или infohash",
   "f.matched": "сопоставлено",
   "matched.yes": "с фильмом или сериалом",
-  "matched.no": "не сопоставлено",
-  "search.intorrents": "Искать «{0}» среди раздач"
+  "matched.no": "не сопоставлено"
 }

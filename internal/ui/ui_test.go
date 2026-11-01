@@ -29,9 +29,6 @@ func TestRenderAll(t *testing.T) {
 	}
 	multi := func(b *Base) { b.VoiceLangs = []string{"ru", "uk"} }
 	cases := []tc{
-		{"home", "home", "/", "", func(b Base) any { b.Nav = "home"; return SampleHome(b) }},
-		{"search", "search", "/?q=spider", "", func(b Base) any { b.Nav = "search"; return SampleSearch(b, "spider", "") }},
-		{"search-series", "search", "/?q=spider&kind=series", "results", func(b Base) any { return SampleSearch(b, "spider", "series") }},
 		{"torrents", "torrents", "/torrents", "", func(b Base) any { b.Nav = "torrents"; return SampleTorrents(b, "", Filters{}) }},
 		{"torrents-unmatched", "torrents", "/torrents?matched=no", "torrents", func(b Base) any { return SampleTorrents(b, "", Filters{Matched: "no"}) }},
 		{"torrents-explicit", "torrents", "/torrents?voice=explicit", "torrents", func(b Base) any { return SampleTorrents(b, "", Filters{Voice: "explicit"}) }},
@@ -61,8 +58,8 @@ func TestRenderAll(t *testing.T) {
 		{"torrent-unchecked", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "unchecked") }},
 		{"torrent-multilang", "torrent", "/t/x", "", func(b Base) any { multi(&b); return SampleTorrent(b, false, "poster") }},
 		{"torrent-files", "torrent", "/t/x?files=all", "files", func(b Base) any { return SampleTorrent(b, true, "poster") }},
-		{"data", "data", "/data", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
-		{"data-frag", "data", "/data", "data", func(b Base) any { return SampleData(b) }},
+		{"data", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
+		{"data-frag", "data", "/", "data", func(b Base) any { return SampleData(b) }},
 	}
 	dir := os.Getenv("PREVIEW_DIR")
 	for _, lang := range []string{"ru", "en"} {
@@ -108,13 +105,11 @@ func TestRenderNoLanguages(t *testing.T) {
 		name, page, path string
 		data             func(Base) any
 	}{
-		{"home", "home", "/", func(b Base) any { return SampleHome(b) }},
-		{"search", "search", "/?q=spider", func(b Base) any { return SampleSearch(b, "spider", "") }},
 		{"torrents", "torrents", "/torrents", func(b Base) any { return SampleTorrents(b, "", Filters{}) }},
 		{"top", "top", "/top", func(b Base) any { return SampleTop(b, "movie", false) }},
 		{"work", "work", "/w/" + SampleSpiderID, func(b Base) any { return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
 		{"torrent", "torrent", "/t/x", func(b Base) any { return SampleTorrent(b, false, "poster") }},
-		{"data", "data", "/data", func(b Base) any {
+		{"data", "data", "/", func(b Base) any {
 			p := SampleData(b)
 			p.Stats.Voice = nil
 			return p

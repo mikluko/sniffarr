@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The data page is the web UI's first page, at `/`, and leads the navigation: data, torrents, top. The search box lives on the torrents page only.
+
+### Removed
+
+- The web UI's home page and its search of movies and series, with the titles found only on TMDB. `GET /data` answers 404, and `q` on `/` is ignored.
+
 ## [0.27.3] - 2026-11-01
 
 ### Fixed

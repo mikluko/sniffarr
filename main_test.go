@@ -113,7 +113,7 @@ func TestRunWithTelemetryOff(t *testing.T) {
 		}
 	}
 	require.Eventually(t, ok("http://"+addr+"/healthz"), 5*time.Second, 10*time.Millisecond)
-	require.Eventually(t, ok("http://"+uiAddr+"/data"), 5*time.Second, 10*time.Millisecond, "the UI reads the API in-process")
+	require.Eventually(t, ok("http://"+uiAddr+"/"), 5*time.Second, 10*time.Millisecond, "the UI reads the API in-process")
 
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)

@@ -93,7 +93,7 @@ func New(cfg Config) (http.Handler, error) {
 	s := &server{cfg: cfg, ui: r, tags: audio.Tags(cfg.Languages)}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", ui.Static())
-	mux.HandleFunc("GET /{$}", s.index)
+	mux.HandleFunc("GET /{$}", s.data)
 	mux.HandleFunc("GET /w/{id}", s.work)
 	mux.HandleFunc("GET /torrents", s.torrents)
 	mux.HandleFunc("GET /top", s.top)
@@ -101,7 +101,6 @@ func New(cfg Config) (http.Handler, error) {
 		http.Redirect(w, req, "/w/"+url.PathEscape(req.PathValue("id")), http.StatusMovedPermanently)
 	})
 	mux.HandleFunc("GET /t/{infohash}", s.torrent)
-	mux.HandleFunc("GET /data", s.data)
 	return mux, nil
 }
 
@@ -330,38 +329,6 @@ func pager(offset, shown int, total int64, at func(int) string) (prev, next stri
 		next = at(offset + PageSize)
 	}
 	return prev, next
-}
-
-// index serves GET /: the home page, or the search of movies and series
-// once q is in the query, empty or not.
-func (s *server) index(w http.ResponseWriter, req *http.Request) {
-	qs := req.URL.Query()
-	lang := s.lang(w, req)
-	if !qs.Has("q") {
-		res, err := s.cfg.Browse.Home(req.Context(), connect.NewRequest(&sniffarrv1.HomeRequest{}))
-		if err != nil {
-			s.fail(w, req, "home", err)
-			return
-		}
-		h := res.Msg
-		s.render(w, req, "home", ui.HomePage{Base: s.base(req, lang, "home"), Summary: ui.Summary{Total: h.GetTotal(), NewDay: h.GetNewDay(), Pending: h.GetPending()}})
-		return
-	}
-	q := strings.TrimSpace(qs.Get("q"))
-	kind := oneOf(qs.Get("kind"), ui.TopKinds)
-	page := ui.SearchPage{Base: s.base(req, lang, "search"), Q: q, Titles: ui.WorkResults{Kind: kind}}
-	if q != "" {
-		res, err := s.cfg.Browse.SearchTitles(req.Context(), connect.NewRequest(&sniffarrv1.SearchTitlesRequest{Query: q, Kind: key(kinds, kind), Lang: lang}))
-		if err != nil {
-			s.fail(w, req, "search titles", err)
-			return
-		}
-		for _, x := range res.Msg.GetWorks() {
-			page.Titles.Items = append(page.Titles.Items, *summary(x))
-		}
-		page.Titles.Ours, page.Titles.TMDBOnly = int(res.Msg.GetOurs()), int(res.Msg.GetTmdbOnly())
-	}
-	s.render(w, req, "search", page)
 }
 
 // work serves GET /w/{id}: a movie or series with its releases under the
@@ -619,13 +586,13 @@ func title(name string) string {
 }
 
 // backURL is the page of the UI's own the request came from, or "": the
-// search, the torrents, a movie's or series' page, or the top.
+// torrents, a movie's or series' page, or the top.
 func backURL(req *http.Request) string {
 	u, err := url.Parse(req.Referer())
 	if err != nil || (u.Host != "" && u.Host != req.Host) {
 		return ""
 	}
-	if u.Path == "/" || u.Path == "/torrents" || u.Path == "/top" || strings.HasPrefix(u.Path, "/w/") {
+	if u.Path == "/torrents" || u.Path == "/top" || strings.HasPrefix(u.Path, "/w/") {
 		return u.RequestURI()
 	}
 	return ""

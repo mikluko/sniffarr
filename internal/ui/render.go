@@ -18,8 +18,6 @@ var files embed.FS
 
 // Page names and the fragments (htmx targets) each one can return alone.
 var pages = map[string][]string{
-	"home":     {},
-	"search":   {"results"},
 	"torrents": {"torrents"},
 	"top":      {"top"},
 	"work":     {"releases"},
@@ -49,8 +47,6 @@ func baseOf(v any) Base {
 	switch p := v.(type) {
 	case Base:
 		return p
-	case SearchPage:
-		return p.Base
 	case TopPage:
 		return p.Base
 	case TorrentPage:
@@ -139,7 +135,7 @@ func New() (*Renderer, error) {
 
 // Base builds the common page model for a request.
 //
-//	lang: from Lang(); nav: "home" | "search" | "torrents" | "top" | "data" | "".
+//	lang: from Lang(); nav: "data" | "torrents" | "top" | "".
 func (r *Renderer) Base(req *http.Request, lang, nav string, voiceLangs []string, loc *time.Location) Base {
 	if _, ok := r.msgs[lang]; !ok {
 		lang = "en"

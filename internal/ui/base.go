@@ -14,7 +14,7 @@ import (
 type Base struct {
 	Lang       string   // "ru" | "en"
 	Langs      []string // switcher entries
-	Nav        string   // "home" | "search" | "torrents" | "top" | "data" | "" (card, title page)
+	Nav        string   // "data" | "torrents" | "top" | "" (card, title page)
 	VoiceLangs []string // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
 	Path       string   // current path+query, for the language switcher
 	Loc        *time.Location
@@ -227,16 +227,6 @@ func (p TopPage) setVoice(v url.Values, vl, voice string) {
 	if voice != "" && voice != "any" {
 		v.Set("voice", voice)
 	}
-}
-
-// KindURL filters the titles tab by kind ("" = movies and series).
-func (p SearchPage) KindURL(kind string) string {
-	v := url.Values{}
-	v.Set("q", p.Q)
-	if kind != "" {
-		v.Set("kind", kind)
-	}
-	return "/?" + v.Encode()
 }
 
 // Date formats a day: same year → "20.10" / "Oct 20", else "20.10.2025" / "2025-10-20".

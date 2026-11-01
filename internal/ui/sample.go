@@ -12,32 +12,6 @@ func fp(f float64) *float64 { return &f }
 const gb = int64(1) << 30
 const mb = int64(1) << 20
 
-func SampleHome(b Base) HomePage {
-	return HomePage{Base: b, Summary: Summary{Total: 1284311, NewDay: 9506, Pending: 3412}}
-}
-
-// SampleSearch lists titles: ours by peers, then TMDB-only.
-func SampleSearch(b Base, q, kind string) SearchPage {
-	p := SearchPage{Base: b, Q: q}
-	p.Titles.Kind = kind
-	ours := []titleSample{spiderMan, sampleMovies[1], sampleSeries[0]}
-	for i, s := range ours {
-		if kind != "" && s.kind != kind {
-			continue
-		}
-		p.Titles.Items = append(p.Titles.Items, s.summary(b.Lang, []int{1, 2, 1}[i]))
-		p.Titles.Ours++
-	}
-	for _, s := range sampleTMDBOnly {
-		if kind != "" && s.kind != kind {
-			continue
-		}
-		p.Titles.Items = append(p.Titles.Items, s.summary(b.Lang, 0))
-		p.Titles.TMDBOnly++
-	}
-	return p
-}
-
 // SampleTorrents mixes matched and unmatched torrents and applies f roughly.
 func SampleTorrents(b Base, q string, f Filters) TorrentsPage {
 	if f.VoiceLang == "" {
