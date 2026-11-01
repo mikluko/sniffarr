@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.2] - 2026-11-01
+
+### Changed
+
+- Torznab titles of probed releases with no Russian track open their bracket with `NORUS`, as `[NORUS FRA, ENG]`, so a custom format refuses them whatever languages they have.
+
 ## [0.27.1] - 2026-11-01
 
 ### Fixed
@@ -406,7 +412,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.1...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.2...HEAD
+[0.27.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.1...v0.27.2
 [0.27.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.0...v0.27.1
 [0.27.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.26.0...v0.27.0
 [0.26.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.2...v0.26.0

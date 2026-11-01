@@ -122,36 +122,27 @@ func russianLabels(tracks []*sniffarrv1.Track) ([]voice, bool) {
 	return out, found
 }
 
-// refused are the codes the custom format for releases without Russian
-// audio reads, in its order.
-var refused = []string{"ENG", "UKR"}
+// noRussian opens the marker of a release whose probed audio tracks are all
+// in other languages. No release name has it, and neither Radarr's language
+// parser nor a custom format reading RUS as a word takes it for Russian.
+const noRussian = "NORUS"
 
-// otherLanguages returns the ISO 639-2 codes of the audio tracks in the
-// form the custom format for releases without Russian audio reads, ENG and
-// UKR first and the rest after a slash, as "ENG, UKR / FRA"; "" when there
-// is no audio track or one gives no language.
+// otherLanguages returns noRussian and the ISO 639-2 codes of the audio
+// tracks in their order, as "NORUS FRA, ENG"; "" when there is no audio track
+// or one gives no language.
 func otherLanguages(tracks []*sniffarrv1.Track) string {
-	var known, other []string
+	var codes []string
 	for _, t := range tracks {
 		b, ok := base(t)
 		if !ok {
 			return ""
 		}
-		code := strings.ToUpper(b.ISO3())
-		switch {
-		case slices.Contains(known, code), slices.Contains(other, code):
-		case slices.Contains(refused, code):
-			known = append(known, code)
-		default:
-			other = append(other, code)
+		if code := strings.ToUpper(b.ISO3()); !slices.Contains(codes, code) {
+			codes = append(codes, code)
 		}
 	}
-	slices.SortFunc(known, func(a, b string) int { return slices.Index(refused, a) - slices.Index(refused, b) })
-	switch {
-	case len(known) == 0:
-		return strings.Join(other, ", ")
-	case len(other) == 0:
-		return strings.Join(known, ", ")
+	if len(codes) == 0 {
+		return ""
 	}
-	return strings.Join(known, ", ") + " / " + strings.Join(other, ", ")
+	return noRussian + " " + strings.Join(codes, ", ")
 }

@@ -298,8 +298,8 @@ const russian = 0.9
 // release-title custom formats of Radarr and Sonarr. With a Russian audio
 // track probed, they are the labels of the Russian tracks' names the name
 // lacks and RUS, as in " [Dub, MVO, RUS]"; with probed audio tracks all of
-// other languages and no Russian marker, the tracks' languages, as in
-// " [ENG, UKR]"; else " [RUS]" for a Russian marker or a probability of at
+// other languages and no Russian marker, NORUS and the tracks' languages,
+// as in " [NORUS ENG, UKR]"; else " [RUS]" for a Russian marker or a probability of at
 // least russian. RUS carries the Russian audio's studios.
 func title(r *sniffarrv1.Release) string {
 	name := r.GetName()

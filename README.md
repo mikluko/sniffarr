@@ -388,8 +388,9 @@ release-title custom formats of Radarr and Sonarr:
   left out when the name already has it as a word, then `RUS`:
   `Coraline.2009.2160p.HDR.BDRip.Master5 [Dub, MVO, RUS]`.
 - Probed audio tracks all in other languages, every one giving a language,
-  and no Russian marker: their ISO 639-2 codes, `ENG` and `UKR` first and
-  any other after a slash, `[ENG, UKR]` or `[ENG / FRA]`.
+  and no Russian marker: `NORUS` and their ISO 639-2 codes in the order of
+  the tracks, `[NORUS FRA, ENG]`. No release name has `NORUS`, and it does
+  not read as Russian.
 - Otherwise a Russian marker, or a probability of at least 0.9 of a Russian
   track: `[RUS]`.
 
