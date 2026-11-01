@@ -10,7 +10,10 @@ The database and the API are meant to stay private: run them for yourself, not
 as a public index. Peer IP addresses are never sent to the server or stored:
 peers are counted in HyperLogLog sketches of keyed hashes, from which no
 address comes back. The sniffer fetches metadata only: it never downloads
-pieces, never uploads, and never announces itself into a swarm.
+pieces, never uploads, and never announces itself into a swarm. The fetcher
+does so only with `-probe-dir`: it downloads the first pieces of a stored
+release's main video file to read its tracks, and seeds them back; see
+[Probes](#probes).
 
 ## Components
 
@@ -31,7 +34,8 @@ until SIGINT or SIGTERM.
 - `-fetch` takes tasks from the ingest API, finds each torrent's peers with
   `get_peers` on its own DHT node, fetches the metadata from them by BEP 9,
   and returns the name, size and file list, with the peers counted in
-  sketches.
+  sketches. With `-probe-dir` it also takes probe tasks, reading the tracks
+  of stored releases.
 
 `-ui`, `-sniff` and `-fetch` are clients of the API. In a process with `-api`
 they reach it over an in-process connection; without `-api` they dial
@@ -193,6 +197,67 @@ seasons of a series all count towards it. It refreshes the distinct peers
 over the last 7 days of each torrent and each work at the same time, so a
 page can sort by them.
 
+## Probes
+
+A probe reads the track list of a stored release's main video file from its
+container header, which lies in the file's first pieces. Only `-fetch` with
+`-probe-dir` probes, and the API hands out the tasks.
+
+The fetcher finds the torrent's peers with `get_peers`, fetches its
+metadata by BEP 9, and picks the largest file ending in `.mkv`, `.webm`,
+`.mp4`, `.m4v` or `.mov`; for a season pack that is one episode. It reads
+the file through the pieces each read covers, downloading them from the
+peers and verifying each against its hash before reading it. In Matroska
+and WebM it reads the EBML header and the Segment's top-level element
+headers up to Tracks, reading no body but those of SeekHead and Tracks, and
+follows SeekHead when Tracks comes after the first Cluster; in MP4 and MOV it reads the
+top-level box headers up to `moov`. A probe that would download more than
+the task's `max_bytes` stops there, and the tracks stay unknown. Of each
+track it records the kind, the language as ISO 639-2 and as BCP-47, the
+name, the codec, an audio track's channels, and a video track's size and
+dynamic range: `DV` for a Dolby Vision configuration (Matroska's
+BlockAdditionMapping, MP4's `dvcC`, `dvvC` or `dvwC`), else `HLG` or
+`HDR10` by the transfer characteristics, or `HDR10` for mastering metadata.
+
+Candidates are stored movies and series with a stored file of those
+formats and at least one distinct peer over the last 7 days. Releases a
+Torznab search with a query or an ID returned go first, the most recently
+returned first; then the rest, the most peers over 7 days first. A release
+without peers waits until it has some. Each release is probed once, and
+the outcome is stored, the tracks in their own table: read, unknown
+(no file of those formats, a track list beyond `max_bytes`, or a header the
+probe cannot read), or failed (fewer than `-min-peers` peers within
+`-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
+before `-probe-timeout`). A failed probe is repeated after
+`SNIFFARR_PROBE_BACKOFF`, doubled for each failure before, until
+`SNIFFARR_PROBE_ATTEMPTS` have failed. A task is leased for
+`SNIFFARR_PROBE_LEASE`; leases live in the API's memory, so a restart frees
+them.
+
+The API meters the piece data probes download per UTC day, as it meters
+the classifier's tokens: `SNIFFARR_PROBE_DAILY_BYTES`, 100 GiB by default.
+A lease counts as `SNIFFARR_PROBE_MAX_BYTES` until its result reports what
+it downloaded. Releases no search returned stop at 75% of the day's bytes
+by default, `SNIFFARR_PROBE_SEARCH_RESERVE` leaving the rest for searched
+ones.
+
+With the audio extension on, a probe that read the tracks sets the
+probability of an audio track in each configured language, under layer
+`probe`: 1 when an audio track is in it; 0 when every audio track gives
+another language, unless a marker in the name decided it, since a release
+may carry that audio in a file of its own. A track that gives no language
+leaves the probability as it was. Jev does not override a probe.
+
+What a probe downloaded is seeded back. The pieces stay in `-probe-dir` and
+the torrent in the client, which uploads them to its peers and announces
+itself on the DHT for the torrent every 30 minutes. The fetcher removes a
+torrent and deletes its pieces once it has uploaded as much as it
+downloaded; before that, once it has been seeded for `-seed-max-age`, or,
+oldest first, while the torrents kept hold more than `-seed-max-size` of
+piece data. It looks every minute. The seeded torrents, what each
+downloaded and uploaded, and which pieces are complete survive a restart.
+Metadata fetches upload nothing.
+
 ## API
 
 Both API groups are [ConnectRPC](https://connectrpc.com) services, defined in
@@ -208,6 +273,8 @@ others out, as the chart's `api.networkPolicy` does.
 | `sniffarr.v1.IngestService` | `Fetch`         |
 | `sniffarr.v1.IngestService` | `HashKey`       |
 | `sniffarr.v1.IngestService` | `Peers`         |
+| `sniffarr.v1.IngestService` | `ProbeTask`     |
+| `sniffarr.v1.IngestService` | `ProbeResult`   |
 | `sniffarr.v1.SearchService` | `Search`        |
 | `sniffarr.v1.SearchService` | `Get`           |
 | `sniffarr.v1.BrowseService` | `SearchTitles`  |
@@ -232,13 +299,19 @@ others out, as the chart's `api.networkPolicy` does.
   v1.0.0 (`log2m` 10, `regwidth` 5) of the peers seen sharing it in that
   hour, hashed with the key; the server returns how many sketches it merged
   and how many it dropped for an infohash it has not stored.
+- `ProbeTask` leases the next release to probe and the most piece data its
+  probe may download, or nothing while there is none or the day's budget is
+  spent.
+- `ProbeResult` records a probe's outcome: the file's path, format and
+  tracks, or why there are none, and the piece data it downloaded.
 - `Search` matches every word of the query against names and stored file
   paths, and filters by kind and by the probability of an audio track in one
   language. It has Jev examine a bounded number of its candidates first, so
   the filters apply to what is known once that is done. Each release carries
   the layer that decided its kind, whether Jev has examined it, its audio
   entries with their marks, its quality, season and episode, its work as
-  `work`, `m348` or `tv1399`, and the work's IDs, and `tmdb`, a `TMDBWork`: what TMDB knows of the
+  `work`, `m348` or `tv1399`, the work's IDs, the probed `tracks` of its
+  main video file, and `tmdb`, a `TMDBWork`: what TMDB knows of the
   work its title is matched to, with the title, overview and genres in the
   request's `lang`, `ru` or `en` (`en` when empty), falling back to the other
   language and the title to the original; absent while the title was never
@@ -304,6 +377,24 @@ first sighting as `pubDate`, and the attributes `category`, `size`,
 `/UHD` for a name with `2160p`, `4K` or `UHD`, `/HD` for `1080p`, `1080i` or
 `720p`, `/SD` otherwise. `seeders` and `peers` are both the release's distinct
 peers over the last 7 days, since the DHT does not tell seeders apart.
+
+The title is the release's name with markers in brackets after it, for the
+release-title custom formats of Radarr and Sonarr:
+
+- A probed Russian audio track: the labels the Russian tracks' names say,
+  `Dub` for a dub (`Дубляж`), `MVO`, `DVO`, `AVO` and `VO` for
+  many-voice, two-voice, author's and one-voice voice-over (`Многоголосый`,
+  `Двухголосый`, `Авторский`, `Одноголосый`, or the abbreviation), each
+  left out when the name already has it as a word, then `RUS`:
+  `Coraline.2009.2160p.HDR.BDRip.Master5 [Dub, MVO, RUS]`.
+- Probed audio tracks all in other languages, every one giving a language,
+  and no Russian marker: their ISO 639-2 codes, `ENG` and `UKR` first and
+  any other after a slash, `[ENG, UKR]` or `[ENG / FRA]`.
+- Otherwise a Russian marker, or a probability of at least 0.9 of a Russian
+  track: `[RUS]`.
+
+`RUS` is followed by the Russian studios in the name or stored file paths,
+`[RUS LostFilm]`. A release that has none of these keeps its name.
 
 In Prowlarr, add an indexer of type Generic Torznab with URL
 `http://<host>:8080/torznab`, API path `/api`, and the token as API key.
@@ -455,6 +546,12 @@ the same to each.
 | `SNIFFARR_RADARR_API_KEY`          |                  | That Radarr's API key                                                                                                  |
 | `SNIFFARR_SONARR_URL`              |                  | Base URL of the Sonarr whose grab history is imported; set with `SNIFFARR_SONARR_API_KEY` or not at all                |
 | `SNIFFARR_SONARR_API_KEY`          |                  | That Sonarr's API key                                                                                                  |
+| `SNIFFARR_PROBE_DAILY_BYTES`       | `100GiB`         | Piece data probes download per UTC day at most, in bytes or with a unit of `B`, `KiB`, `MiB`, `GiB` or `TiB`; `0` is no limit |
+| `SNIFFARR_PROBE_SEARCH_RESERVE`    | `25`             | Percentage of the daily bytes left to releases a Torznab search returned, `0` to `100`                                 |
+| `SNIFFARR_PROBE_MAX_BYTES`         | `64MiB`          | Piece data one probe downloads at most, units as above                                                                 |
+| `SNIFFARR_PROBE_LEASE`             | `15m`            | How long a fetcher may hold a probe task                                                                               |
+| `SNIFFARR_PROBE_ATTEMPTS`          | `3`              | Failed probes after which a release is not probed again                                                                |
+| `SNIFFARR_PROBE_BACKOFF`           | `6h`             | Wait before repeating a failed probe, doubled per failure                                                              |
 
 The database runs in WAL mode and its schema migrates on start; leases left
 over from a previous run are freed on start. Once a minute the API truncates
@@ -490,6 +587,11 @@ the last 7 days.
 | `-peer-wait`     | `8s`    | How long to look for a torrent's peers on the DHT      |
 | `-min-peers`     | `1`     | Peers needed within `-peer-wait` to fetch the metadata |
 | `-walkers`       | `16`    | `sample_infohashes` queries at once                    |
+| `-probe-dir`     |         | Directory of the pieces `-fetch` probes and seeds; empty probes nothing, and it needs `-fetch` |
+| `-probers`       | `4`     | Probes at once                                         |
+| `-probe-timeout` | `10m`   | How long one probe may take, from looking for peers to the tracks |
+| `-seed-max-size` | `200GiB` | Piece data kept for seeding, units as `SNIFFARR_PROBE_MAX_BYTES`; the oldest torrents go first beyond it |
+| `-seed-max-age`  | `168h`  | How long a probed torrent is seeded at most            |
 
 With `-upnp` the node asks the gateways it finds on the local network to
 forward the port it listens on, TCP and UDP. Without `-sniff` the node is
@@ -582,6 +684,9 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
 | `-api`     | `sniffarr.arr.events`                  | `{event}`    | `sniffarr.arr.app`, `sniffarr.arr.event`, `sniffarr.arr.source` |
 | `-api`     | `sniffarr.arr.outcomes`                | `{event}`    | `sniffarr.arr.app`, `sniffarr.arr.outcome` |
+| `-api`     | `sniffarr.probe.tasks`                 | `{task}`     | `sniffarr.probe.priority`                  |
+| `-api`     | `sniffarr.probe.results`               | `{result}`   | `sniffarr.probe.outcome`                   |
+| `-api`     | `sniffarr.probe.downloaded`            | `By`         |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
 | `-sniff`   | `sniffarr.dht.replies`                 | `{reply}`    | `sniffarr.dht.query`                       |
@@ -591,6 +696,12 @@ counts are the `db.sql.connection.*` metrics.
 | `-fetch`   | `sniffarr.sniff.fetch.in_flight`       | `{task}`     |                                            |
 | `-fetch`   | `sniffarr.sniff.fetch.outcomes`        | `{task}`     | `sniffarr.fetch.outcome`                   |
 | `-fetch`   | `sniffarr.sniff.fetch.duration`        | `s`          | `sniffarr.fetch.outcome`                   |
+| `-fetch`   | `sniffarr.sniff.probe.outcomes`        | `{task}`     | `sniffarr.probe.outcome`                   |
+| `-fetch`   | `sniffarr.seed.downloaded`             | `By`         |                                            |
+| `-fetch`   | `sniffarr.seed.uploaded`               | `By`         |                                            |
+| `-fetch`   | `sniffarr.seed.torrents`               | `{torrent}`  |                                            |
+| `-fetch`   | `sniffarr.seed.stored`                 | `By`         |                                            |
+| `-fetch`   | `sniffarr.seed.removals`               | `{torrent}`  | `sniffarr.seed.reason`                     |
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
 `sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` too; `sniffarr.dht.query` is
@@ -606,7 +717,11 @@ the HTTP status of TMDB's answer, or `error` without one;
 or `import`; `sniffarr.arr.source` is `webhook` or `history`;
 `sniffarr.arr.outcome` is `matched` (the stored release got the work),
 `queued` (the infohash was queued), `unknown` (no infohash, no work, or a
-rejected torrent) or `duplicate` (recorded before).
+rejected torrent) or `duplicate` (recorded before);
+`sniffarr.probe.priority` is `search` or `background`;
+`sniffarr.probe.outcome` is `tracks`, `unknown`, `no_peers` or `timeout`;
+`sniffarr.seed.reason` is `ratio` (uploaded as much as downloaded), `age`
+or `size`, the last two removals before the ratio.
 
 ## Container image
 
@@ -666,6 +781,16 @@ replicas and the URL of `sniff` unless its own is set. A
 fetcher's DHT node is passive and the fetcher dials the peers it fetches from,
 so it needs no open port.
 
+With `fetch.probe.enabled`, `<release>-fetch` probes too, rendering
+`-probe-dir=/seeds` and `fetch.probe`'s `probers`, `timeout`, `maxSize` and
+`maxAge` as `-probers`, `-probe-timeout`, `-seed-max-size` and
+`-seed-max-age`. `/seeds` is `fetch.probe.persistence`: an `emptyDir`, a
+`hostPath`, or a claim, `<release>-fetch-seeds` when the chart creates it.
+The directory is one process's, so the chart refuses `fetch.probe.enabled`
+with `fetch.replicas` other than 1. The fetcher reaches the peers it seeds
+to and is reached by them on its DHT port, so it belongs in the host's
+network, `fetch.hostNetwork`, or behind `fetch.service`.
+
 With `ui.enabled`, `<release>-ui` runs `sniffarr -ui`, with `ui.replicas`
 replicas, behind the Service `<release>-ui` on `ui.service.port` (8081).
 `ui.addr` is `SNIFFARR_UI_ADDR`, and `ui.env` carries the rest of the UI's
@@ -691,7 +816,7 @@ flags. The Services `<release>-api` and, with `ui.enabled`, `<release>-ui`
 select that pod. The components keep their values and the pod takes the union
 of them: `api.persistence`, `api.litestream`, `api.existingSecret`, the `env`
 of every enabled component, `ui.addr`, the `flags` and `upnp` of `sniff` and
-`fetch`, their `hostNetwork`, and the `extraContainers` and `extraVolumes` of
+`fetch`, `fetch.probe`, their `hostNetwork`, and the `extraContainers` and `extraVolumes` of
 `api` and `ui`. The pod's `resources`, `podAnnotations`, `podLabels`,
 `nodeSelector`, `tolerations` and `affinity` come from the `single` block; the
 components' own are not read. With `sniff.hostNetwork`, every listener binds on
