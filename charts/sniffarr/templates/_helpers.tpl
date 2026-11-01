@@ -297,7 +297,7 @@ metadata:
     app.kubernetes.io/component: {{ .component }}
 spec:
   replicas: {{ $v.replicas }}
-  {{- if $v.hostNetwork }}
+  {{- if or $v.hostNetwork $probe }}
   strategy:
     type: Recreate
   {{- end }}
