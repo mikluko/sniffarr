@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The web UI is set in monospace — MonoLisa where installed, otherwise JetBrains Mono, IBM Plex Mono, Source Code Pro or the system monospace — with square corners, hairline table rules and an inverted search button. Titles of films and series are bold text instead of link-coloured, and charts and meters use the accent colour.
+
 ## [0.26.0] - 2026-10-27
 
 ### Added
