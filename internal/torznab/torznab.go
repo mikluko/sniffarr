@@ -21,6 +21,7 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/search"
+	"github.com/mikluko/sniffarr/internal/store"
 )
 
 const (
@@ -57,11 +58,20 @@ type Searcher interface {
 	Search(ctx context.Context, req *connect.Request[sniffarrv1.SearchRequest]) (*connect.Response[sniffarrv1.SearchResponse], error)
 }
 
+// ProbeWanter takes the releases a search with a query or an ID returned;
+// *store.Store is one.
+type ProbeWanter interface {
+	WantProbe(ctx context.Context, hashes []store.Hash, at time.Time) error
+}
+
 // Handler serves the Torznab API at any path. Every request must carry
 // Token as its apikey parameter.
 type Handler struct {
 	Search Searcher
 	Token  string
+	// Probes, unless nil, takes the releases of every search with a query
+	// or an ID; a failure to record them is logged and fails no search.
+	Probes ProbeWanter
 	Log    *slog.Logger
 }
 
@@ -136,10 +146,27 @@ func (h *Handler) search(ctx context.Context, t string, q map[string][]string) (
 	}
 	releases := res.Msg.GetReleases()
 	releases = releases[min(offset, len(releases)):]
-	for _, r := range releases[:min(limit, len(releases))] {
+	releases = releases[:min(limit, len(releases))]
+	for _, r := range releases {
 		f.Channel.Items = append(f.Channel.Items, itemOf(r))
 	}
+	if h.Probes != nil && (req.GetQuery() != "" || req.GetId() != nil) {
+		h.want(ctx, releases)
+	}
 	return f, 0, nil
+}
+
+// want records the releases with Probes.
+func (h *Handler) want(ctx context.Context, releases []*sniffarrv1.Release) {
+	hashes := make([]store.Hash, 0, len(releases))
+	for _, r := range releases {
+		if len(r.GetInfohash()) == len(store.Hash{}) {
+			hashes = append(hashes, store.Hash(r.GetInfohash()))
+		}
+	}
+	if err := h.Probes.WantProbe(ctx, hashes, time.Now()); err != nil {
+		h.Log.ErrorContext(ctx, "torznab want probes", "err", err)
+	}
 }
 
 func number(s string, def int) (int, error) {
@@ -267,18 +294,39 @@ func category(r *sniffarrv1.Release) int {
 // title to name it.
 const russian = 0.9
 
-// title is the release's name, followed by " [RUS]" with the Russian audio's
-// studios inside the brackets when the release has a Russian marker or a
-// probability of at least russian, for the release-title custom formats of
-// Radarr and Sonarr.
+// title is the release's name, followed by markers in brackets for the
+// release-title custom formats of Radarr and Sonarr. With a Russian audio
+// track probed, they are the labels of the Russian tracks' names the name
+// lacks and RUS, as in " [Dub, MVO, RUS]"; with probed audio tracks all of
+// other languages and no Russian marker, the tracks' languages, as in
+// " [ENG, UKR]"; else " [RUS]" for a Russian marker or a probability of at
+// least russian. RUS carries the Russian audio's studios.
 func title(r *sniffarrv1.Release) string {
+	name := r.GetName()
+	var ru *sniffarrv1.Audio
 	for _, a := range r.GetAudio() {
-		if a.GetLanguage() != "ru" || !a.GetMarker() && (a.Probability == nil || a.GetProbability() < russian) {
-			continue
+		if a.GetLanguage() == "ru" {
+			ru = a
 		}
-		return r.GetName() + " [" + strings.Join(append([]string{"RUS"}, a.GetStudios()...), " ") + "]"
 	}
-	return r.GetName()
+	rus := strings.Join(append([]string{"RUS"}, ru.GetStudios()...), " ")
+	tracks := audioTracks(r.GetTracks())
+	if labels, ok := russianLabels(tracks); ok {
+		var add []string
+		for _, l := range labels {
+			if !l.inName(name) {
+				add = append(add, l.label)
+			}
+		}
+		return name + " [" + strings.Join(append(add, rus), ", ") + "]"
+	}
+	if langs := otherLanguages(tracks); langs != "" && !ru.GetMarker() {
+		return name + " [" + langs + "]"
+	}
+	if ru != nil && (ru.GetMarker() || ru.Probability != nil && ru.GetProbability() >= russian) {
+		return name + " [" + rus + "]"
+	}
+	return name
 }
 
 // itemOf is the item of a release. Its seeders and peers are both the

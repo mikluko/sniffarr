@@ -384,3 +384,93 @@ func TestSearchRussianAudio(t *testing.T) {
 	require.Equal(t, []string{name + " [RUS Red Head Sound]"}, titles(items(t, get(t, srv, "t", "search", "q", "alien"))),
 		"RHS and Red Head Sound are one studio")
 }
+
+func audioTrack(lang, name string) *sniffarrv1.Track {
+	return &sniffarrv1.Track{Kind: sniffarrv1.TrackKind_TRACK_KIND_AUDIO, Language: lang, Name: name}
+}
+
+func TestTitleProbedTracks(t *testing.T) {
+	const name = "Coraline.2009.2160p.HDR.BDRip.Master5"
+	video := &sniffarrv1.Track{Kind: sniffarrv1.TrackKind_TRACK_KIND_VIDEO, Language: "eng", Codec: "V_MPEGH/ISO/HEVC"}
+	probed := func(name string, audio *sniffarrv1.Audio, tracks ...*sniffarrv1.Track) *sniffarrv1.Release {
+		r := &sniffarrv1.Release{Name: name, Tracks: append([]*sniffarrv1.Track{video}, tracks...)}
+		if audio != nil {
+			audio.Language = "ru"
+			r.Audio = []*sniffarrv1.Audio{audio}
+		}
+		return r
+	}
+	one := new(float32(1))
+	for _, c := range []struct {
+		desc    string
+		release *sniffarrv1.Release
+		want    string
+	}{
+		{"a dub and voice-overs", probed(name, &sniffarrv1.Audio{Probability: one},
+			audioTrack("rus", "Дубляж [Blu-ray CEE]"), audioTrack("rus", "MVO LostFilm"), audioTrack("rus", "Профессиональный (многоголосый закадровый)"),
+			audioTrack("rus", "AVO Гаврилов"), audioTrack("eng", "Original")),
+			name + " [Dub, MVO, AVO, RUS]"},
+		{"two- and one-voice", probed(name, nil, audioTrack("rus", "Двухголосый закадровый"), audioTrack("rus", "Одноголосый, Сербин"), audioTrack("rus", "DVO")),
+			name + " [DVO, VO, RUS]"},
+		{"a Russian track without a name", probed(name, &sniffarrv1.Audio{Probability: one}, &sniffarrv1.Track{Kind: sniffarrv1.TrackKind_TRACK_KIND_AUDIO, LanguageBcp47: "ru-RU"}),
+			name + " [RUS]"},
+		{"the studios of a marker stay", probed(name, &sniffarrv1.Audio{Marker: true, Probability: one, Studios: []string{"LostFilm"}}, audioTrack("rus", "MVO")),
+			name + " [MVO, RUS LostFilm]"},
+		{"a label the name has", probed("Coraline.2009.2160p.2xDub.MVO", nil, audioTrack("rus", "Дубляж"), audioTrack("rus", "Многоголосый"), audioTrack("rus", "АВО")),
+			"Coraline.2009.2160p.2xDub.MVO [AVO, RUS]"},
+		{"a Ukrainian dub in the name", probed("Coraline.2009.2160p.Dub (Ukr)", nil, audioTrack("rus", "Дубляж")),
+			"Coraline.2009.2160p.Dub (Ukr) [Dub, RUS]"},
+		{"no Russian track", probed(name, &sniffarrv1.Audio{Probability: new(float32(0))}, audioTrack("eng", ""), audioTrack("ukr", "Дубляж")),
+			name + " [ENG, UKR]"},
+		{"no Russian track, with others", probed(name, nil, audioTrack("fre", ""), audioTrack("eng", ""), audioTrack("eng", "Commentary")),
+			name + " [ENG / FRA]"},
+		{"no Russian track, BCP-47 only", probed(name, nil, &sniffarrv1.Track{Kind: sniffarrv1.TrackKind_TRACK_KIND_AUDIO, LanguageBcp47: "uk"}),
+			name + " [UKR]"},
+		{"no Russian track, but a marker", probed(name, &sniffarrv1.Audio{Marker: true, Probability: one}, audioTrack("eng", "")),
+			name + " [RUS]"},
+		{"a track of no language", probed(name, nil, audioTrack("eng", ""), audioTrack("", "")), name},
+		{"no audio track", probed(name, nil), name},
+	} {
+		require.Equal(t, c.want, itemOf(c.release).Title, c.desc)
+	}
+}
+
+type wanted struct{ hashes []store.Hash }
+
+func (w *wanted) WantProbe(_ context.Context, hashes []store.Hash, _ time.Time) error {
+	w.hashes = append(w.hashes, hashes...)
+	return nil
+}
+
+func TestSearchWantsProbes(t *testing.T) {
+	srv, s := serve(t, stored{"Alien.1979.1080p.BluRay", "movie", "alien|1979"}, stored{"Heat.1995.1080p.BluRay", "movie", "heat|1995"})
+	w := &wanted{}
+	h := &Handler{Search: &search.Service{Store: s, Log: slog.New(slog.DiscardHandler)}, Token: "key", Probes: w, Log: slog.New(slog.DiscardHandler)}
+	srv.Config.Handler = h
+	require.Len(t, items(t, get(t, srv, "t", "movie")), 2)
+	require.Empty(t, w.hashes, "a feed without a query or an ID wants nothing")
+	require.Len(t, items(t, get(t, srv, "t", "movie", "q", "alien")), 1)
+	require.Equal(t, []store.Hash{{1}}, w.hashes, "a search wants what it returns")
+}
+
+func TestSearchProbedTitle(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	s, err := store.New(ctx, db, store.Options{TMDB: true, Languages: []string{"ru"}})
+	require.NoError(t, err)
+	const name = "Coraline.2009.2160p.HDR.BDRip.Master5"
+	_, _, err = s.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: name, Size: 8 << 30, Files: []rules.File{{Path: name + ".mkv", Size: 8 << 30}},
+		Discovery: "sample", SeenAt: t0, Kind: "movie", KindLayer: store.LayerRules, Year: 2009})
+	require.NoError(t, err)
+	require.NoError(t, s.ProbeDone(ctx, store.Hash{1}, store.Probe{Outcome: store.ProbeTracks, Tracks: []store.Track{
+		{Kind: "video", Language: "eng", Width: 3840, Height: 2160, HDR: "DV"},
+		{Kind: "audio", Language: "rus", Name: "Дубляж"},
+		{Kind: "audio", Language: "eng"},
+	}}, t0))
+	h := &Handler{Search: &search.Service{Store: s, Log: slog.New(slog.DiscardHandler)}, Token: "key", Log: slog.New(slog.DiscardHandler)}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	require.Equal(t, []string{name + " [Dub, RUS]"}, titles(items(t, get(t, srv, "t", "search", "q", "coraline"))))
+}

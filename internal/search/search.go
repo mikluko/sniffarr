@@ -277,7 +277,17 @@ func release(r store.Release, lang string) *sniffarrv1.Release {
 		}
 		out.Audio = append(out.Audio, pa)
 	}
+	for _, t := range r.Tracks {
+		out.Tracks = append(out.Tracks, &sniffarrv1.Track{Kind: trackKinds[t.Kind], Language: t.Language, LanguageBcp47: t.LanguageBCP47, Name: t.Name,
+			Codec: t.Codec, Channels: int32(t.Channels), Width: int32(t.Width), Height: int32(t.Height), Hdr: t.HDR})
+	}
 	return out
+}
+
+var trackKinds = map[string]sniffarrv1.TrackKind{
+	"video":    sniffarrv1.TrackKind_TRACK_KIND_VIDEO,
+	"audio":    sniffarrv1.TrackKind_TRACK_KIND_AUDIO,
+	"subtitle": sniffarrv1.TrackKind_TRACK_KIND_SUBTITLE,
 }
 
 // Magnet returns the magnet URI of the torrent with the infohash and display

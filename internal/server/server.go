@@ -104,7 +104,7 @@ func New(c Config) (http.Handler, error) {
 	))
 	if c.TorznabToken != "" {
 		torznabSearch := &search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy, NoWait: true}
-		traced("GET /torznab/api", &torznab.Handler{Search: torznabSearch, Token: c.TorznabToken, Log: c.Log})
+		traced("GET /torznab/api", &torznab.Handler{Search: torznabSearch, Token: c.TorznabToken, Probes: c.Store, Log: c.Log})
 	}
 	if c.WebhookToken != "" && c.Arr != nil {
 		traced("POST /webhooks/arr", &arr.Webhook{Recorder: c.Arr, Token: c.WebhookToken, Log: c.Log})
