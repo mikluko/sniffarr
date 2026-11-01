@@ -1,5 +1,9 @@
 {{- if and .Values.fetch.enabled (not .Values.single.enabled) }}
 {{- $v := .Values.fetch }}
 {{- $d := .Values.sniff }}
-{{- include "sniffarr.dht" (dict "root" . "component" "fetch" "v" $v "sniff" false "fetch" true "url" ($v.url | default $d.url)) }}
+{{- include "sniffarr.dht" (dict "root" . "component" "fetch" "v" $v "sniff" false "fetch" true "url" ($v.url | default $d.url) "probe" $v.probe) }}
+{{- end }}
+{{- with include "sniffarr.seedsClaim" . | trim }}
+---
+{{ . }}
 {{- end }}

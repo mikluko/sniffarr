@@ -198,3 +198,26 @@ fetch:
   tolerations: []
   # Affinity of the fetch pod.
   affinity: {}
+  probe:
+    # Takes probe tasks too: reads the tracks of stored releases from the first pieces of their main video file and seeds those pieces, kept in /seeds, rendered as -probe-dir=/seeds; needs fetch.replicas 1.
+    enabled: false
+    # Probes at once, rendered as -probers.
+    probers: 4
+    # How long one probe may take, rendered as -probe-timeout.
+    timeout: 10m
+    # Piece data kept for seeding, the oldest torrents removed first beyond it, rendered as -seed-max-size; keep it below the volume's size.
+    maxSize: 200GiB
+    # How long a probed torrent is seeded at most, rendered as -seed-max-age.
+    maxAge: 168h
+    persistence:
+      # Volume of /seeds: emptyDir, hostPath or pvc.
+      type: emptyDir
+      hostPath:
+        # Host directory mounted at /seeds when type is hostPath.
+        path: ""
+      # Claim mounted at /seeds when type is pvc; the chart creates <release>-fetch-seeds when empty.
+      existingClaim: ""
+      # Size of the claim the chart creates.
+      size: 250Gi
+      # Storage class of the claim the chart creates; the cluster default when empty.
+      storageClass: ""

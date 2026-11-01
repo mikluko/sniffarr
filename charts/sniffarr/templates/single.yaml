@@ -64,6 +64,7 @@
 {{- $port := int $dht.port }}
 {{- $nodePort := int $dht.nodePort }}
 {{- $loopback := include "sniffarr.uiLoopback" $ui.addr }}
+{{- $probe := and $fetch.enabled $fetch.probe.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -124,6 +125,9 @@ spec:
             {{- . | nindent 12 }}
             {{- end }}
             {{- end }}
+            {{- if $probe }}
+            {{- include "sniffarr.probeArgs" $fetch.probe | trim | nindent 12 }}
+            {{- end }}
           env:
             - name: SNIFFARR_DB
               value: /data/sniffarr.db
@@ -169,6 +173,10 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+            {{- if $probe }}
+            - name: seeds
+              mountPath: /seeds
+            {{- end }}
         {{- with $api.extraContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -179,6 +187,9 @@ spec:
         {{- end }}
       volumes:
         {{- include "sniffarr.dataVolumes" (dict "root" . "claim" (printf "%s-api" $name)) | trim | nindent 8 }}
+        {{- if $probe }}
+        {{- include "sniffarr.seedsVolume" (dict "root" . "probe" $fetch.probe) | trim | nindent 8 }}
+        {{- end }}
         {{- with $api.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

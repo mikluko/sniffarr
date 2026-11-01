@@ -1,0 +1,13 @@
+fetch:
+  hostNetwork: true
+  flags:
+    port: 51001
+  probe:
+    enabled: true
+    probers: 8
+    maxSize: 100GiB
+    maxAge: 72h
+    persistence:
+      type: pvc
+      size: 120Gi
+      storageClass: local-path
