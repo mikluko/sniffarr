@@ -74,8 +74,11 @@ type Release struct {
 	PeersWeek int64
 	// Classified reports whether the classifier has examined the torrent.
 	Classified bool
-	FirstSeen  time.Time
-	LastSeen   time.Time
+	// Tracks are those a probe read in the main video file, in its order;
+	// Search and Get fill them in.
+	Tracks    []Track
+	FirstSeen time.Time
+	LastSeen  time.Time
 }
 
 // Pending is a torrent awaiting classification.
@@ -96,7 +99,7 @@ type Classification struct {
 	Source           string
 	SourceConfidence float64
 	// Audio maps languages to the probability of an audio track in each; a
-	// probability decided by rules stays.
+	// probability decided by rules or a probe stays.
 	Audio map[string]float64
 }
 
@@ -332,7 +335,7 @@ func (s *Store) Search(ctx context.Context, q Query) ([]Release, error) {
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return nil, err
 	}
-	if err := s.audio(ctx, out); err != nil {
+	if err := errors.Join(s.audio(ctx, out), s.tracks(ctx, out)); err != nil {
 		return nil, err
 	}
 	return out, s.tmdb(ctx, out)
@@ -348,7 +351,7 @@ func (s *Store) Get(ctx context.Context, h Hash) (Release, error) {
 		return Release{}, err
 	}
 	rs := []Release{r}
-	if err := errors.Join(s.audio(ctx, rs), s.tmdb(ctx, rs)); err != nil {
+	if err := errors.Join(s.audio(ctx, rs), s.tracks(ctx, rs), s.tmdb(ctx, rs)); err != nil {
 		return Release{}, err
 	}
 	return rs[0], nil
@@ -451,8 +454,8 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 		for _, lang := range slices.Sorted(maps.Keys(c.Audio)) {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer)
 				VALUES (?, ?, 0, 0, ?, ?) ON CONFLICT (torrent_id, language) DO UPDATE SET
-				probability = excluded.probability, layer = excluded.layer WHERE torrent_audio.layer IS NOT ?`,
-				id, lang, c.Audio[lang], LayerJev, LayerRules); err != nil {
+				probability = excluded.probability, layer = excluded.layer WHERE torrent_audio.layer IS NOT ? AND torrent_audio.layer IS NOT ?`,
+				id, lang, c.Audio[lang], LayerJev, LayerRules, LayerProbe); err != nil {
 				return err
 			}
 		}

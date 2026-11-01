@@ -1,0 +1,189 @@
+package store
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+func setPeersWeek(t *testing.T, s *Store, h Hash, n int64) {
+	t.Helper()
+	_, err := s.w.ExecContext(context.Background(), "UPDATE torrent_releases SET peers_week = ? WHERE infohash = ?", n, h[:])
+	require.NoError(t, err)
+}
+
+func insertProbeable(t *testing.T, s *Store, b byte, name string, peers int64, paths ...string) Hash {
+	t.Helper()
+	tr := torrent(b, name, paths...)
+	tr.Kind, tr.KindLayer = "movie", LayerRules
+	if b == markedByte {
+		tr.Audio = []Audio{{Language: "ru", Marker: true, Mark: "Rus", Probability: new(1.0), Layer: LayerRules}}
+	}
+	inserted, _, err := s.Insert(context.Background(), tr)
+	require.NoError(t, err)
+	require.True(t, inserted)
+	setPeersWeek(t, s, tr.Hash, peers)
+	return tr.Hash
+}
+
+// markedByte is the hash byte insertProbeable gives a Russian marker.
+const markedByte = 3
+
+func nextProbe(t *testing.T, s *Store, now time.Time, background bool, exclude ...int64) (ProbeCandidate, bool) {
+	t.Helper()
+	c, ok, err := s.NextProbe(context.Background(), now, background, exclude)
+	require.NoError(t, err)
+	return c, ok
+}
+
+func TestNextProbeOrder(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	few := insertProbeable(t, s, 1, "Few.2001.1080p", 3, "Few.2001.1080p.mkv")
+	many := insertProbeable(t, s, 2, "Many.2002.1080p", 50, "Many/Many.2002.1080p.MP4")
+	insertProbeable(t, s, 3, "Nobody.2003.1080p", 0, "Nobody.2003.1080p.mkv")
+	insertProbeable(t, s, 4, "Disc.2004.1080p", 90, "Disc/BDMV/STREAM/00001.m2ts")
+	music := torrent(5, "Album 2005 FLAC", "Album/01.flac")
+	music.Kind, music.KindLayer = "music", LayerRules
+	_, _, err := s.Insert(ctx, music)
+	require.NoError(t, err)
+	setPeersWeek(t, s, music.Hash, 100)
+
+	c, ok := nextProbe(t, s, t0, true)
+	require.True(t, ok)
+	require.Equal(t, many, c.Hash, "most peers first")
+	require.False(t, c.Wanted)
+
+	require.NoError(t, s.WantProbe(ctx, []Hash{few, hash(99)}, t0))
+	c, ok = nextProbe(t, s, t0, true)
+	require.True(t, ok)
+	require.Equal(t, few, c.Hash, "a searched release before the rest")
+	require.True(t, c.Wanted)
+
+	_, ok = nextProbe(t, s, t0, false, c.ID)
+	require.False(t, ok, "only searched releases without background, and the leased one is left out")
+
+	c, ok = nextProbe(t, s, t0, true, c.ID)
+	require.True(t, ok)
+	require.Equal(t, many, c.Hash)
+}
+
+func TestProbeFailedRetries(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+
+	final, err := s.ProbeFailed(ctx, h, t0, 2, time.Hour)
+	require.NoError(t, err)
+	require.False(t, final)
+	_, ok := nextProbe(t, s, t0.Add(59*time.Minute), true)
+	require.False(t, ok, "waits out the backoff")
+	_, ok = nextProbe(t, s, t0.Add(time.Hour), true)
+	require.True(t, ok)
+
+	final, err = s.ProbeFailed(ctx, h, t0.Add(time.Hour), 2, time.Hour)
+	require.NoError(t, err)
+	require.True(t, final, "the last attempt")
+	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
+	require.False(t, ok)
+}
+
+func TestProbeDoneOnce(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0))
+	_, ok := nextProbe(t, s, t0.Add(1000*time.Hour), true)
+	require.False(t, ok)
+	require.NoError(t, s.WantProbe(ctx, []Hash{h}, t0))
+	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
+	require.False(t, ok, "a search does not repeat a probe")
+}
+
+func TestProbeDoneTracksAndAudio(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	ru := insertProbeable(t, s, 1, "Coraline.2009.2160p.HDR.BDRip.Master5", 5, "Coraline.2009.2160p.HDR.BDRip.Master5.mkv")
+	en := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	marked := insertProbeable(t, s, markedByte, "Alien.1979.1080p.Rus", 5, "Alien.1979.1080p.Rus.mkv")
+	und := insertProbeable(t, s, 4, "Brazil.1985.1080p", 5, "Brazil.1985.1080p.mkv")
+	_, err := s.Classify(ctx, mustGet(t, s, und).ID, Classification{Audio: map[string]float64{"ru": 0.4}}, t0)
+	require.NoError(t, err)
+
+	video := Track{Kind: "video", Language: "und", Codec: "V_MPEGH/ISO/HEVC", Width: 3840, Height: 2160, HDR: "DV"}
+	require.NoError(t, s.ProbeDone(ctx, ru, Probe{Outcome: ProbeTracks, Path: "Coraline.2009.2160p.HDR.BDRip.Master5.mkv", Format: "matroska", Downloaded: 16 << 20, Tracks: []Track{
+		video,
+		{Kind: "audio", Language: "rus", Name: "Дубляж", Codec: "A_AC3", Channels: 6},
+		{Kind: "audio", Language: "eng", Name: "Original", Codec: "A_DTS", Channels: 6},
+	}}, t0))
+	require.NoError(t, s.ProbeDone(ctx, en, Probe{Outcome: ProbeTracks, Tracks: []Track{video, {Kind: "audio", Language: "eng", LanguageBCP47: "en-US"}}}, t0))
+	require.NoError(t, s.ProbeDone(ctx, marked, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "audio", Language: "eng"}}}, t0))
+	require.NoError(t, s.ProbeDone(ctx, und, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "audio", Language: "eng"}, {Kind: "audio"}}}, t0))
+
+	r := mustGet(t, s, ru)
+	require.Len(t, r.Tracks, 3)
+	require.Equal(t, "Дубляж", r.Tracks[1].Name)
+	require.Equal(t, video, r.Tracks[0])
+	requireAudio(t, r, 1, LayerProbe)
+	requireAudio(t, mustGet(t, s, en), 0, LayerProbe)
+	requireAudio(t, mustGet(t, s, marked), 1, LayerRules)
+	requireAudio(t, mustGet(t, s, und), 0.4, LayerJev)
+
+	_, err = s.Classify(ctx, r.ID, Classification{Audio: map[string]float64{"ru": 0.2}}, t0)
+	require.NoError(t, err)
+	requireAudio(t, mustGet(t, s, ru), 1, LayerProbe)
+
+	rs, err := s.Search(ctx, Query{Text: "coraline", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, rs, 1)
+	require.Len(t, rs[0].Tracks, 3)
+}
+
+func TestProbeTracksMatchLanguageTags(t *testing.T) {
+	for _, tc := range []struct {
+		track Track
+		want  bool
+	}{
+		{Track{Language: "rus"}, true},
+		{Track{Language: "eng", LanguageBCP47: "ru-RU"}, true},
+		{Track{Language: "ru"}, true},
+		{Track{Language: "ukr"}, false},
+		{Track{Language: "und"}, false},
+		{Track{}, false},
+	} {
+		require.Equal(t, tc.want, tc.track.In("ru"), "%+v", tc.track)
+	}
+	require.True(t, Track{Language: "und"}.Undetermined())
+	require.True(t, Track{}.Undetermined())
+	require.False(t, Track{LanguageBCP47: "en"}.Undetermined())
+}
+
+func TestProbeUsage(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	n, err := s.ProbeBytesUsed(ctx, "2026-10-01")
+	require.NoError(t, err)
+	require.Zero(t, n)
+	require.NoError(t, s.AddProbeBytes(ctx, "2026-10-01", 3<<20))
+	require.NoError(t, s.AddProbeBytes(ctx, "2026-10-01", 1<<20))
+	n, err = s.ProbeBytesUsed(ctx, "2026-10-01")
+	require.NoError(t, err)
+	require.EqualValues(t, 4<<20, n)
+}
+
+func mustGet(t *testing.T, s *Store, h Hash) Release {
+	t.Helper()
+	r, err := s.Get(context.Background(), h)
+	require.NoError(t, err)
+	return r
+}
+
+func requireAudio(t *testing.T, r Release, p float64, layer string) {
+	t.Helper()
+	require.Len(t, r.Audio, 1)
+	require.NotNil(t, r.Audio[0].Probability, r.Name)
+	require.InDelta(t, p, *r.Audio[0].Probability, 1e-9, r.Name)
+	require.Equal(t, layer, r.Audio[0].Layer, r.Name)
+}
