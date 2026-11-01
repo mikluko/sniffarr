@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.3] - 2026-11-01
+
+### Fixed
+
+- The API picks the next release a search wants probed from the wanted releases alone; it took some 30 seconds a task, walking every release.
+
 ## [0.27.2] - 2026-11-01
 
 ### Changed
@@ -412,7 +418,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.2...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.3...HEAD
+[0.27.3]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.2...v0.27.3
 [0.27.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.1...v0.27.2
 [0.27.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.0...v0.27.1
 [0.27.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.26.0...v0.27.0

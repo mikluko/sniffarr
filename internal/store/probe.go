@@ -122,25 +122,44 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) erro
 // peers, a stored file of a format a probe reads, and no probe done, or a
 // failed one due again. It returns false when there is none.
 func (s *Store) NextProbe(ctx context.Context, now time.Time, background bool, exclude []int64) (ProbeCandidate, bool, error) {
-	cond := `t.kind IN ('movie', 'series') AND t.peers_week > 0
-		AND (p.outcome IS NULL OR p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ?)
-		AND EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = t.id AND (f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ?))`
 	args := []any{now.Unix()}
 	for _, e := range probeExtensions {
 		args = append(args, e)
 	}
-	if len(exclude) > 0 {
-		cond += " AND t.id NOT IN (" + placeholders(len(exclude)) + ")"
-		args = append(args, int64Args(exclude)...)
-	}
-	c, err := s.nextProbe(ctx, `SELECT t.id, t.infohash, 1 FROM probe_releases p JOIN torrent_releases t ON t.id = p.torrent_id
-		WHERE p.wanted_at IS NOT NULL AND `+cond+` ORDER BY p.wanted_at DESC, t.peers_week DESC LIMIT 1`, args...)
+	args = append(args, int64Args(exclude)...)
+	c, err := s.nextProbe(ctx, wantedProbe(len(exclude)), args...)
 	if err == nil || !errors.Is(err, sql.ErrNoRows) || !background {
 		return c, err == nil, ignoreNoRows(err)
 	}
-	c, err = s.nextProbe(ctx, `SELECT t.id, t.infohash, 0 FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
-		WHERE `+cond+` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`, args...)
+	c, err = s.nextProbe(ctx, backgroundProbe(len(exclude)), args...)
 	return c, err == nil, ignoreNoRows(err)
+}
+
+// probeCond selects releases due a probe, other than excluded ones; its
+// arguments are the time, probeExtensions and the excluded IDs.
+func probeCond(excluded int) string {
+	cond := `t.kind IN ('movie', 'series') AND t.peers_week > 0
+		AND (p.outcome IS NULL OR p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ?)
+		AND EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = t.id AND (f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ?))`
+	if excluded > 0 {
+		cond += " AND t.id NOT IN (" + placeholders(excluded) + ")"
+	}
+	return cond
+}
+
+// wantedProbe is the query of the most recently wanted release due a probe.
+// CROSS JOIN keeps SQLite walking the wanted releases rather than every
+// release.
+func wantedProbe(excluded int) string {
+	return `SELECT t.id, t.infohash, 1 FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
+		WHERE p.wanted_at IS NOT NULL AND ` + probeCond(excluded) + ` ORDER BY p.wanted_at DESC, t.peers_week DESC LIMIT 1`
+}
+
+// backgroundProbe is the query of the release due a probe with the most
+// peers over 7 days.
+func backgroundProbe(excluded int) string {
+	return `SELECT t.id, t.infohash, 0 FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
+		WHERE ` + probeCond(excluded) + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
 }
 
 func (s *Store) nextProbe(ctx context.Context, query string, args ...any) (ProbeCandidate, error) {

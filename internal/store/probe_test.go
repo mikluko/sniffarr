@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -186,4 +187,29 @@ func requireAudio(t *testing.T, r Release, p float64, layer string) {
 	require.NotNil(t, r.Audio[0].Probability, r.Name)
 	require.InDelta(t, p, *r.Audio[0].Probability, 1e-9, r.Name)
 	require.Equal(t, layer, r.Audio[0].Layer, r.Name)
+}
+
+func TestProbePlans(t *testing.T) {
+	s := open(t)
+	args := []any{0}
+	for _, e := range probeExtensions {
+		args = append(args, e)
+	}
+	args = append(args, 1)
+	for _, tt := range []struct{ query, want string }{
+		{wantedProbe(1), "SEARCH p USING INDEX probe_releases_wanted (wanted_at>?)"},
+		{backgroundProbe(1), "SEARCH t USING INDEX torrent_releases_peers_week (peers_week>?)"},
+	} {
+		var plan []string
+		require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
+			var id, parent, unused int
+			var detail string
+			if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+				return err
+			}
+			plan = append(plan, detail)
+			return nil
+		}, "EXPLAIN QUERY PLAN "+tt.query, args...))
+		require.Contains(t, plan, tt.want, tt.query)
+	}
 }
