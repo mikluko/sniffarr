@@ -3,6 +3,7 @@ syntax = "proto3";
 package sniffarr.v1;
 
 import "google/protobuf/timestamp.proto";
+import "sniffarr/v1/track.proto";
 
 option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
@@ -108,6 +109,10 @@ message Release {
   // season has no episode.
   int32 season = 23;
   int32 episode = 24;
+  // The tracks of the release's main video file, as its container header
+  // declares them; empty while the file was not probed or the probe found
+  // none.
+  repeated Track tracks = 25;
 }
 
 // Quality is a release's resolution as its name gives it.
@@ -187,8 +192,10 @@ enum TMDBLayer {
 message Audio {
   // BCP-47 tag.
   string language = 1;
-  // Probability of an audio track in the language: 1 when marker is set,
-  // else the classifier's answer; absent while unknown.
+  // Probability of an audio track in the language: 1 or 0 when a probe of
+  // the main video file found a track in it or found tracks and none in it,
+  // else 1 when marker is set, else the classifier's answer; absent while
+  // unknown. A probe that found no track in it leaves a marker's 1.
   optional float probability = 2;
   // A word or studio of the language is in the release's name or paths.
   bool marker = 3;

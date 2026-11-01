@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mikluko/sniffarr/internal/app/api"
@@ -211,6 +213,9 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Backoff, err = duration(getenv, "SNIFFARR_FETCH_BACKOFF", ingest.DefaultBackoff); err != nil {
 		return a, d, err
 	}
+	if a.Probe, err = loadProbe(getenv); err != nil {
+		return a, d, err
+	}
 	if d.Queue.MaxSize, err = positive(getenv, "SNIFFARR_QUEUE_MAX_SIZE", store.DefaultMaxSize); err != nil {
 		return a, d, err
 	}
@@ -272,6 +277,29 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	return a, d, nil
 }
 
+// loadProbe reads the probe tasks' settings.
+func loadProbe(getenv func(string) string) (ingest.ProbeConfig, error) {
+	var p ingest.ProbeConfig
+	var err error
+	if p.DailyBytes, err = size(getenv, "SNIFFARR_PROBE_DAILY_BYTES", ingest.DefaultProbeDailyBytes, false); err != nil {
+		return p, err
+	}
+	if p.SearchReserve, err = percent(getenv, "SNIFFARR_PROBE_SEARCH_RESERVE", ingest.DefaultProbeSearchReserve); err != nil {
+		return p, err
+	}
+	if p.MaxBytes, err = size(getenv, "SNIFFARR_PROBE_MAX_BYTES", ingest.DefaultProbeMaxBytes, true); err != nil {
+		return p, err
+	}
+	if p.Lease, err = duration(getenv, "SNIFFARR_PROBE_LEASE", ingest.DefaultProbeLease); err != nil {
+		return p, err
+	}
+	if p.Attempts, err = positive(getenv, "SNIFFARR_PROBE_ATTEMPTS", ingest.DefaultProbeAttempts); err != nil {
+		return p, err
+	}
+	p.Backoff, err = duration(getenv, "SNIFFARR_PROBE_BACKOFF", ingest.DefaultProbeBackoff)
+	return p, err
+}
+
 // arrHistory reads SNIFFARR_<app>_URL and SNIFFARR_<app>_API_KEY, which
 // are set together or not at all.
 func arrHistory(getenv func(string) string, app string) (api.ArrHistory, error) {
@@ -312,6 +340,47 @@ func percent(getenv func(string) string, name string, def int) (int, error) {
 		return 0, fmt.Errorf("%s: want an integer from 0 to 100", name)
 	}
 	return n, nil
+}
+
+// size reads a variable of bytes, such as 100GiB; 0 is refused when
+// positive.
+func size(getenv func(string) string, name string, def int64, positive bool) (int64, error) {
+	v := getenv(name)
+	if v == "" {
+		return def, nil
+	}
+	n, err := parseSize(v)
+	if err != nil || positive && n == 0 {
+		want := "non-negative"
+		if positive {
+			want = "positive"
+		}
+		return 0, fmt.Errorf("%s: want a %s size in B, KiB, MiB, GiB or TiB", name, want)
+	}
+	return n, nil
+}
+
+// sizeUnits are the units parseSize takes, longest first.
+var sizeUnits = []struct {
+	suffix string
+	shift  uint
+}{{"TiB", 40}, {"GiB", 30}, {"MiB", 20}, {"KiB", 10}, {"B", 0}}
+
+// parseSize parses a non-negative count of bytes with an optional binary
+// unit, such as 100GiB or 4096.
+func parseSize(s string) (int64, error) {
+	var shift uint
+	for _, u := range sizeUnits {
+		if num, ok := strings.CutSuffix(s, u.suffix); ok {
+			s, shift = num, u.shift
+			break
+		}
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n < 0 || n > math.MaxInt64>>shift {
+		return 0, fmt.Errorf("size %q", s)
+	}
+	return n << shift, nil
 }
 
 func duration(getenv func(string) string, name string, def time.Duration) (time.Duration, error) {

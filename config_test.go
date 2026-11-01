@@ -139,6 +139,8 @@ func TestLoadComponents(t *testing.T) {
 
 func TestLoadAPI(t *testing.T) {
 	defaultScripts := rules.Scripts{unicode.Latin, unicode.Cyrillic}
+	defaultProbe := ingest.ProbeConfig{DailyBytes: ingest.DefaultProbeDailyBytes, SearchReserve: ingest.DefaultProbeSearchReserve,
+		MaxBytes: ingest.DefaultProbeMaxBytes, Lease: ingest.DefaultProbeLease, Attempts: ingest.DefaultProbeAttempts, Backoff: ingest.DefaultProbeBackoff}
 	russian, err := audio.Parse("ru")
 	require.NoError(t, err)
 	required := []string{"SNIFFARR_DB", "/data/sniffarr.db"}
@@ -148,7 +150,8 @@ func TestLoadAPI(t *testing.T) {
 				DailyTokens: classify.DefaultDailyTokens, SearchReserve: classify.DefaultSearchReserve, LazyMax: search.DefaultLazyMax, LazyWait: search.DefaultLazyWait,
 				LazyTMDB: search.DefaultLazyTMDB, TMDBConcurrency: tmdb.DefaultConcurrency, TMDBRate: tmdb.DefaultRate, TMDBRetry: tmdb.DefaultRetry,
 				Lease: ingest.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff,
-				Retention: defaultRetention, RetentionIdle: defaultRetentionIdle, StatsInterval: defaultStatsInterval, Scripts: defaultScripts},
+				Retention: defaultRetention, RetentionIdle: defaultRetentionIdle, StatsInterval: defaultStatsInterval, Scripts: defaultScripts,
+				Probe: defaultProbe},
 			db.Config{Path: "/data/sniffarr.db",
 				Queue: store.QueueOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor},
 				Store: store.Options{MaxFiles: store.DefaultMaxFiles, TMDB: true}}
@@ -164,6 +167,8 @@ func TestLoadAPI(t *testing.T) {
 		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
+			"SNIFFARR_PROBE_DAILY_BYTES", "20GiB", "SNIFFARR_PROBE_SEARCH_RESERVE", "10", "SNIFFARR_PROBE_MAX_BYTES", "32MiB",
+			"SNIFFARR_PROBE_LEASE", "5m", "SNIFFARR_PROBE_ATTEMPTS", "2", "SNIFFARR_PROBE_BACKOFF", "12h",
 			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
 			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h", "SNIFFARR_RETENTION_IDLE", "72h", "SNIFFARR_STATS_INTERVAL", "1m",
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
@@ -173,12 +178,18 @@ func TestLoadAPI(t *testing.T) {
 				*a = api.Config{Addr: ":9000", TypesafeKey: "ts", TMDBKey: "tm", TorznabToken: "tz", ClassifyConcurrency: 8,
 					TMDBConcurrency: 3, TMDBRate: 10, TMDBRetry: 240 * time.Hour, LazyTMDB: 7, DailyTokens: 1000000, SearchReserve: 40,
 					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, RetentionIdle: 72 * time.Hour, StatsInterval: time.Minute, LazyMax: 5, LazyWait: 500 * time.Millisecond,
-					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian}
+					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian,
+					Probe: ingest.ProbeConfig{DailyBytes: 20 << 30, SearchReserve: 10, MaxBytes: 32 << 20, Lease: 5 * time.Minute, Attempts: 2, Backoff: 12 * time.Hour}}
 				d.Queue = store.QueueOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour}
 				d.Store = store.Options{MaxFiles: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: func(a *api.Config, _ *db.Config) { a.DailyTokens = 0 }},
 		{name: "no reserve", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0"), want: func(a *api.Config, _ *db.Config) { a.SearchReserve = 0 }},
+		{name: "unlimited downloads", env: with("SNIFFARR_PROBE_DAILY_BYTES", "0"), want: func(a *api.Config, _ *db.Config) { a.Probe.DailyBytes = 0 }},
+		{name: "download budget in bytes", env: with("SNIFFARR_PROBE_DAILY_BYTES", "1000"), want: func(a *api.Config, _ *db.Config) { a.Probe.DailyBytes = 1000 }},
+		{name: "download budget in a unit not known", env: with("SNIFFARR_PROBE_DAILY_BYTES", "100GB"), err: "SNIFFARR_PROBE_DAILY_BYTES: want a non-negative size in B, KiB, MiB, GiB or TiB"},
+		{name: "probe size zero", env: with("SNIFFARR_PROBE_MAX_BYTES", "0"), err: "SNIFFARR_PROBE_MAX_BYTES: want a positive size in B, KiB, MiB, GiB or TiB"},
+		{name: "probe reserve over 100", env: with("SNIFFARR_PROBE_SEARCH_RESERVE", "101"), err: "SNIFFARR_PROBE_SEARCH_RESERVE: want an integer from 0 to 100"},
 		{name: "audio languages set but empty", env: with("SNIFFARR_AUDIO_LANGUAGES", ""), want: func(*api.Config, *db.Config) {}},
 		{name: "audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru"), want: func(a *api.Config, d *db.Config) { a.Languages, d.Store.Languages = russian, []string{"ru"} }},
 		{name: "unknown audio language", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru,xx"), err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},

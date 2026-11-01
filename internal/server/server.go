@@ -64,6 +64,8 @@ type Config struct {
 	// at POST /webhooks/arr to requests with it as their Basic password.
 	WebhookToken string
 	Arr          *arr.Recorder
+	// Probe tunes IngestService's probe tasks.
+	Probe ingest.ProbeConfig
 }
 
 // New returns the handler serving the APIs and /healthz.
@@ -85,7 +87,7 @@ func New(c Config) (http.Handler, error) {
 		mux.Handle(route, otelhttp.NewHandler(h, route, hopts...))
 	}
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
-		&ingest.Service{Store: c.Store, Queue: c.Queue, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Meter: c.Meter},
+		&ingest.Service{Store: c.Store, Queue: c.Queue, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Meter: c.Meter},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

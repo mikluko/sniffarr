@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package sniffarr.v1;
+
+option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
+
+// Track is one track of a video file as its container header declares it.
+message Track {
+  TrackKind kind = 1;
+  // The ISO 639-2 code the header gives, such as "rus"; Matroska's "eng"
+  // when its header gives none, empty for MP4's "und".
+  string language = 2;
+  // The BCP-47 tag the header gives, such as "ru"; empty when it gives none.
+  string language_bcp47 = 3;
+  // The track's name, such as "Дубляж"; empty when the header gives none.
+  string name = 4;
+  // Matroska's CodecID, such as "A_AC3", or MP4's sample entry type, such
+  // as "ac-3".
+  string codec = 5;
+  // Audio channels; 0 for other kinds.
+  int32 channels = 6;
+  // Video pixel size; 0 for other kinds.
+  int32 width = 7;
+  int32 height = 8;
+  // Video dynamic range: "DV", "HDR10" or "HLG"; empty for SDR, unknown,
+  // or other kinds.
+  string hdr = 9;
+}
+
+enum TrackKind {
+  TRACK_KIND_UNSPECIFIED = 0;
+  TRACK_KIND_VIDEO = 1;
+  TRACK_KIND_AUDIO = 2;
+  TRACK_KIND_SUBTITLE = 3;
+}

@@ -60,10 +60,13 @@ type Service struct {
 	// Languages get an audio entry in every stored torrent.
 	Languages []audio.Language
 	Now       func() time.Time
+	// Probe tunes the probe tasks.
+	Probe ProbeConfig
 	// Meter records the service's metrics; the global MeterProvider when
 	// nil.
 	Meter metric.MeterProvider
 
+	probes      probeLeases
 	owners      atomic.Int64
 	wake        notifier
 	metricsOnce sync.Once

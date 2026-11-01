@@ -41,6 +41,11 @@ const (
 	IngestServiceHashKeyProcedure = "/sniffarr.v1.IngestService/HashKey"
 	// IngestServicePeersProcedure is the fully-qualified name of the IngestService's Peers RPC.
 	IngestServicePeersProcedure = "/sniffarr.v1.IngestService/Peers"
+	// IngestServiceProbeTaskProcedure is the fully-qualified name of the IngestService's ProbeTask RPC.
+	IngestServiceProbeTaskProcedure = "/sniffarr.v1.IngestService/ProbeTask"
+	// IngestServiceProbeResultProcedure is the fully-qualified name of the IngestService's ProbeResult
+	// RPC.
+	IngestServiceProbeResultProcedure = "/sniffarr.v1.IngestService/ProbeResult"
 )
 
 // IngestServiceClient is a client for the sniffarr.v1.IngestService service.
@@ -64,6 +69,13 @@ type IngestServiceClient interface {
 	// torrent and hour, and reports the totals when the client closes the
 	// stream. A sketch of an infohash that is not stored is dropped.
 	Peers(context.Context) *connect.ClientStreamForClient[v1.PeersRequest, v1.PeersResponse]
+	// ProbeTask leases the next stored release whose main video file is to be
+	// probed for its tracks, or none while there is none or the day's
+	// download budget is spent.
+	ProbeTask(context.Context, *connect.Request[v1.ProbeTaskRequest]) (*connect.Response[v1.ProbeTaskResponse], error)
+	// ProbeResult records the outcome of a probe and the piece data it
+	// downloaded.
+	ProbeResult(context.Context, *connect.Request[v1.ProbeResultRequest]) (*connect.Response[v1.ProbeResultResponse], error)
 }
 
 // NewIngestServiceClient constructs a client for the sniffarr.v1.IngestService service. By default,
@@ -101,15 +113,29 @@ func NewIngestServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(ingestServiceMethods.ByName("Peers")),
 			connect.WithClientOptions(opts...),
 		),
+		probeTask: connect.NewClient[v1.ProbeTaskRequest, v1.ProbeTaskResponse](
+			httpClient,
+			baseURL+IngestServiceProbeTaskProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("ProbeTask")),
+			connect.WithClientOptions(opts...),
+		),
+		probeResult: connect.NewClient[v1.ProbeResultRequest, v1.ProbeResultResponse](
+			httpClient,
+			baseURL+IngestServiceProbeResultProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("ProbeResult")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // ingestServiceClient implements IngestServiceClient.
 type ingestServiceClient struct {
-	sight   *connect.Client[v1.SightRequest, v1.SightResponse]
-	fetch   *connect.Client[v1.FetchRequest, v1.FetchResponse]
-	hashKey *connect.Client[v1.HashKeyRequest, v1.HashKeyResponse]
-	peers   *connect.Client[v1.PeersRequest, v1.PeersResponse]
+	sight       *connect.Client[v1.SightRequest, v1.SightResponse]
+	fetch       *connect.Client[v1.FetchRequest, v1.FetchResponse]
+	hashKey     *connect.Client[v1.HashKeyRequest, v1.HashKeyResponse]
+	peers       *connect.Client[v1.PeersRequest, v1.PeersResponse]
+	probeTask   *connect.Client[v1.ProbeTaskRequest, v1.ProbeTaskResponse]
+	probeResult *connect.Client[v1.ProbeResultRequest, v1.ProbeResultResponse]
 }
 
 // Sight calls sniffarr.v1.IngestService.Sight.
@@ -130,6 +156,16 @@ func (c *ingestServiceClient) HashKey(ctx context.Context, req *connect.Request[
 // Peers calls sniffarr.v1.IngestService.Peers.
 func (c *ingestServiceClient) Peers(ctx context.Context) *connect.ClientStreamForClient[v1.PeersRequest, v1.PeersResponse] {
 	return c.peers.CallClientStream(ctx)
+}
+
+// ProbeTask calls sniffarr.v1.IngestService.ProbeTask.
+func (c *ingestServiceClient) ProbeTask(ctx context.Context, req *connect.Request[v1.ProbeTaskRequest]) (*connect.Response[v1.ProbeTaskResponse], error) {
+	return c.probeTask.CallUnary(ctx, req)
+}
+
+// ProbeResult calls sniffarr.v1.IngestService.ProbeResult.
+func (c *ingestServiceClient) ProbeResult(ctx context.Context, req *connect.Request[v1.ProbeResultRequest]) (*connect.Response[v1.ProbeResultResponse], error) {
+	return c.probeResult.CallUnary(ctx, req)
 }
 
 // IngestServiceHandler is an implementation of the sniffarr.v1.IngestService service.
@@ -153,6 +189,13 @@ type IngestServiceHandler interface {
 	// torrent and hour, and reports the totals when the client closes the
 	// stream. A sketch of an infohash that is not stored is dropped.
 	Peers(context.Context, *connect.ClientStream[v1.PeersRequest]) (*connect.Response[v1.PeersResponse], error)
+	// ProbeTask leases the next stored release whose main video file is to be
+	// probed for its tracks, or none while there is none or the day's
+	// download budget is spent.
+	ProbeTask(context.Context, *connect.Request[v1.ProbeTaskRequest]) (*connect.Response[v1.ProbeTaskResponse], error)
+	// ProbeResult records the outcome of a probe and the piece data it
+	// downloaded.
+	ProbeResult(context.Context, *connect.Request[v1.ProbeResultRequest]) (*connect.Response[v1.ProbeResultResponse], error)
 }
 
 // NewIngestServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -186,6 +229,18 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(ingestServiceMethods.ByName("Peers")),
 		connect.WithHandlerOptions(opts...),
 	)
+	ingestServiceProbeTaskHandler := connect.NewUnaryHandler(
+		IngestServiceProbeTaskProcedure,
+		svc.ProbeTask,
+		connect.WithSchema(ingestServiceMethods.ByName("ProbeTask")),
+		connect.WithHandlerOptions(opts...),
+	)
+	ingestServiceProbeResultHandler := connect.NewUnaryHandler(
+		IngestServiceProbeResultProcedure,
+		svc.ProbeResult,
+		connect.WithSchema(ingestServiceMethods.ByName("ProbeResult")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sniffarr.v1.IngestService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IngestServiceSightProcedure:
@@ -196,6 +251,10 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 			ingestServiceHashKeyHandler.ServeHTTP(w, r)
 		case IngestServicePeersProcedure:
 			ingestServicePeersHandler.ServeHTTP(w, r)
+		case IngestServiceProbeTaskProcedure:
+			ingestServiceProbeTaskHandler.ServeHTTP(w, r)
+		case IngestServiceProbeResultProcedure:
+			ingestServiceProbeResultHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -219,4 +278,12 @@ func (UnimplementedIngestServiceHandler) HashKey(context.Context, *connect.Reque
 
 func (UnimplementedIngestServiceHandler) Peers(context.Context, *connect.ClientStream[v1.PeersRequest]) (*connect.Response[v1.PeersResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.Peers is not implemented"))
+}
+
+func (UnimplementedIngestServiceHandler) ProbeTask(context.Context, *connect.Request[v1.ProbeTaskRequest]) (*connect.Response[v1.ProbeTaskResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.ProbeTask is not implemented"))
+}
+
+func (UnimplementedIngestServiceHandler) ProbeResult(context.Context, *connect.Request[v1.ProbeResultRequest]) (*connect.Response[v1.ProbeResultResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.ProbeResult is not implemented"))
 }

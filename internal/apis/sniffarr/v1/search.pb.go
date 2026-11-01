@@ -623,8 +623,12 @@ type Release struct {
 	Quality Quality `protobuf:"varint,22,opt,name=quality,proto3,enum=sniffarr.v1.Quality" json:"quality,omitempty"`
 	// The season and episode the name gives, 0 when it gives none; a whole
 	// season has no episode.
-	Season        int32 `protobuf:"varint,23,opt,name=season,proto3" json:"season,omitempty"`
-	Episode       int32 `protobuf:"varint,24,opt,name=episode,proto3" json:"episode,omitempty"`
+	Season  int32 `protobuf:"varint,23,opt,name=season,proto3" json:"season,omitempty"`
+	Episode int32 `protobuf:"varint,24,opt,name=episode,proto3" json:"episode,omitempty"`
+	// The tracks of the release's main video file, as its container header
+	// declares them; empty while the file was not probed or the probe found
+	// none.
+	Tracks        []*Track `protobuf:"bytes,25,rep,name=tracks,proto3" json:"tracks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -818,6 +822,13 @@ func (x *Release) GetEpisode() int32 {
 		return x.Episode
 	}
 	return 0
+}
+
+func (x *Release) GetTracks() []*Track {
+	if x != nil {
+		return x.Tracks
+	}
+	return nil
 }
 
 // ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
@@ -1087,8 +1098,10 @@ type Audio struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// BCP-47 tag.
 	Language string `protobuf:"bytes,1,opt,name=language,proto3" json:"language,omitempty"`
-	// Probability of an audio track in the language: 1 when marker is set,
-	// else the classifier's answer; absent while unknown.
+	// Probability of an audio track in the language: 1 or 0 when a probe of
+	// the main video file found a track in it or found tracks and none in it,
+	// else 1 when marker is set, else the classifier's answer; absent while
+	// unknown. A probe that found no track in it leaves a marker's 1.
 	Probability *float32 `protobuf:"fixed32,2,opt,name=probability,proto3,oneof" json:"probability,omitempty"`
 	// A word or studio of the language is in the release's name or paths.
 	Marker bool `protobuf:"varint,3,opt,name=marker,proto3" json:"marker,omitempty"`
@@ -1180,7 +1193,7 @@ var File_sniffarr_v1_search_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\n" +
-	"\x18sniffarr/v1/search.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xab\x03\n" +
+	"\x18sniffarr/v1/search.proto\x12\vsniffarr.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17sniffarr/v1/track.proto\"\xab\x03\n" +
 	"\rSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12'\n" +
 	"\x05kinds\x18\x02 \x03(\x0e2\x11.sniffarr.v1.KindR\x05kinds\x12\x14\n" +
@@ -1205,7 +1218,7 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04lang\x18\x02 \x01(\tR\x04lang\"=\n" +
 	"\vGetResponse\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xfb\x06\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xa7\a\n" +
 	"\aRelease\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1236,7 +1249,8 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\x04work\x18\x15 \x01(\tR\x04work\x12.\n" +
 	"\aquality\x18\x16 \x01(\x0e2\x14.sniffarr.v1.QualityR\aquality\x12\x16\n" +
 	"\x06season\x18\x17 \x01(\x05R\x06season\x12\x18\n" +
-	"\aepisode\x18\x18 \x01(\x05R\aepisodeJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
+	"\aepisode\x18\x18 \x01(\x05R\aepisode\x12*\n" +
+	"\x06tracks\x18\x19 \x03(\v2\x12.sniffarr.v1.TrackR\x06tracksJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
 	"\n" +
 	"ExternalId\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x0e\n" +
@@ -1345,6 +1359,7 @@ var file_sniffarr_v1_search_proto_goTypes = []any{
 	(*TMDBWork)(nil),              // 11: sniffarr.v1.TMDBWork
 	(*Audio)(nil),                 // 12: sniffarr.v1.Audio
 	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
+	(*Track)(nil),                 // 14: sniffarr.v1.Track
 }
 var file_sniffarr_v1_search_proto_depIdxs = []int32{
 	3,  // 0: sniffarr.v1.SearchRequest.kinds:type_name -> sniffarr.v1.Kind
@@ -1361,17 +1376,18 @@ var file_sniffarr_v1_search_proto_depIdxs = []int32{
 	1,  // 11: sniffarr.v1.Release.tmdb_layer:type_name -> sniffarr.v1.TMDBLayer
 	11, // 12: sniffarr.v1.Release.tmdb:type_name -> sniffarr.v1.TMDBWork
 	0,  // 13: sniffarr.v1.Release.quality:type_name -> sniffarr.v1.Quality
-	1,  // 14: sniffarr.v1.TMDBWork.layer:type_name -> sniffarr.v1.TMDBLayer
-	13, // 15: sniffarr.v1.TMDBWork.checked_at:type_name -> google.protobuf.Timestamp
-	5,  // 16: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
-	7,  // 17: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
-	6,  // 18: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
-	8,  // 19: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
-	18, // [18:20] is the sub-list for method output_type
-	16, // [16:18] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	14, // 14: sniffarr.v1.Release.tracks:type_name -> sniffarr.v1.Track
+	1,  // 15: sniffarr.v1.TMDBWork.layer:type_name -> sniffarr.v1.TMDBLayer
+	13, // 16: sniffarr.v1.TMDBWork.checked_at:type_name -> google.protobuf.Timestamp
+	5,  // 17: sniffarr.v1.SearchService.Search:input_type -> sniffarr.v1.SearchRequest
+	7,  // 18: sniffarr.v1.SearchService.Get:input_type -> sniffarr.v1.GetRequest
+	6,  // 19: sniffarr.v1.SearchService.Search:output_type -> sniffarr.v1.SearchResponse
+	8,  // 20: sniffarr.v1.SearchService.Get:output_type -> sniffarr.v1.GetResponse
+	19, // [19:21] is the sub-list for method output_type
+	17, // [17:19] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_search_proto_init() }
@@ -1379,6 +1395,7 @@ func file_sniffarr_v1_search_proto_init() {
 	if File_sniffarr_v1_search_proto != nil {
 		return
 	}
+	file_sniffarr_v1_track_proto_init()
 	file_sniffarr_v1_search_proto_msgTypes[0].OneofWrappers = []any{}
 	file_sniffarr_v1_search_proto_msgTypes[7].OneofWrappers = []any{}
 	type x struct{}

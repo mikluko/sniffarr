@@ -30,6 +30,8 @@ func hash(b byte) Hash {
 // fakeIngest is an IngestService that hands out todo as tasks, as far as each
 // stream's credit allows, and records what it is told.
 type fakeIngest struct {
+	sniffarrv1connect.UnimplementedIngestServiceHandler
+
 	mu   sync.Mutex
 	cond *sync.Cond
 

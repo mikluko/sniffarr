@@ -20,6 +20,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/database"
+	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
@@ -76,6 +77,8 @@ type Config struct {
 	// Radarr and Sonarr are the apps whose grab history is imported.
 	Radarr ArrHistory
 	Sonarr ArrHistory
+	// Probe tunes the probe tasks of the ingest service.
+	Probe ingest.ProbeConfig
 }
 
 // ArrHistory is where a Radarr or Sonarr serves its API; a zero one imports
@@ -178,6 +181,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		Counts:       counts,
 		WebhookToken: cfg.WebhookToken,
 		Arr:          rec,
+		Probe:        cfg.Probe,
 	})
 	if err != nil {
 		return err

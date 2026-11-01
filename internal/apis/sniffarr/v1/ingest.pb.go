@@ -130,6 +130,64 @@ func (Failure) EnumDescriptor() ([]byte, []int) {
 	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{1}
 }
 
+// ProbeFailure is why a probe returned no tracks.
+type ProbeFailure int32
+
+const (
+	ProbeFailure_PROBE_FAILURE_UNSPECIFIED ProbeFailure = 0
+	// No peers were found on the DHT.
+	ProbeFailure_PROBE_FAILURE_NO_PEERS ProbeFailure = 1
+	// The metadata or the pieces did not arrive in time.
+	ProbeFailure_PROBE_FAILURE_TIMEOUT ProbeFailure = 2
+	// The torrent has no Matroska or MP4 file, the file's format is not one,
+	// its track list lies beyond max_bytes of piece data, or its header is
+	// malformed. A probe that ends so is not repeated.
+	ProbeFailure_PROBE_FAILURE_UNKNOWN ProbeFailure = 3
+)
+
+// Enum value maps for ProbeFailure.
+var (
+	ProbeFailure_name = map[int32]string{
+		0: "PROBE_FAILURE_UNSPECIFIED",
+		1: "PROBE_FAILURE_NO_PEERS",
+		2: "PROBE_FAILURE_TIMEOUT",
+		3: "PROBE_FAILURE_UNKNOWN",
+	}
+	ProbeFailure_value = map[string]int32{
+		"PROBE_FAILURE_UNSPECIFIED": 0,
+		"PROBE_FAILURE_NO_PEERS":    1,
+		"PROBE_FAILURE_TIMEOUT":     2,
+		"PROBE_FAILURE_UNKNOWN":     3,
+	}
+)
+
+func (x ProbeFailure) Enum() *ProbeFailure {
+	p := new(ProbeFailure)
+	*p = x
+	return p
+}
+
+func (x ProbeFailure) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ProbeFailure) Descriptor() protoreflect.EnumDescriptor {
+	return file_sniffarr_v1_ingest_proto_enumTypes[2].Descriptor()
+}
+
+func (ProbeFailure) Type() protoreflect.EnumType {
+	return &file_sniffarr_v1_ingest_proto_enumTypes[2]
+}
+
+func (x ProbeFailure) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ProbeFailure.Descriptor instead.
+func (ProbeFailure) EnumDescriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{2}
+}
+
 type SightRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The BitTorrent v1 infohash, 20 bytes.
@@ -882,11 +940,344 @@ func (x *PeersResponse) GetDropped() int64 {
 	return 0
 }
 
+type ProbeTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeTaskRequest) Reset() {
+	*x = ProbeTaskRequest{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeTaskRequest) ProtoMessage() {}
+
+func (x *ProbeTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeTaskRequest.ProtoReflect.Descriptor instead.
+func (*ProbeTaskRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{13}
+}
+
+type ProbeTaskResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Absent when there is nothing to probe.
+	Task          *ProbeTask `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeTaskResponse) Reset() {
+	*x = ProbeTaskResponse{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeTaskResponse) ProtoMessage() {}
+
+func (x *ProbeTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeTaskResponse.ProtoReflect.Descriptor instead.
+func (*ProbeTaskResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ProbeTaskResponse) GetTask() *ProbeTask {
+	if x != nil {
+		return x.Task
+	}
+	return nil
+}
+
+// ProbeTask asks for the tracks of one release's main video file.
+type ProbeTask struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	// The most piece data, in bytes, the probe may download.
+	MaxBytes      int64 `protobuf:"varint,2,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeTask) Reset() {
+	*x = ProbeTask{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeTask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeTask) ProtoMessage() {}
+
+func (x *ProbeTask) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeTask.ProtoReflect.Descriptor instead.
+func (*ProbeTask) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ProbeTask) GetInfohash() []byte {
+	if x != nil {
+		return x.Infohash
+	}
+	return nil
+}
+
+func (x *ProbeTask) GetMaxBytes() int64 {
+	if x != nil {
+		return x.MaxBytes
+	}
+	return 0
+}
+
+type ProbeResultRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	// Piece data downloaded for the probe, in bytes.
+	Downloaded int64 `protobuf:"varint,2,opt,name=downloaded,proto3" json:"downloaded,omitempty"`
+	// Types that are valid to be assigned to Outcome:
+	//
+	//	*ProbeResultRequest_File
+	//	*ProbeResultRequest_Failure
+	Outcome       isProbeResultRequest_Outcome `protobuf_oneof:"outcome"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeResultRequest) Reset() {
+	*x = ProbeResultRequest{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeResultRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeResultRequest) ProtoMessage() {}
+
+func (x *ProbeResultRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeResultRequest.ProtoReflect.Descriptor instead.
+func (*ProbeResultRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ProbeResultRequest) GetInfohash() []byte {
+	if x != nil {
+		return x.Infohash
+	}
+	return nil
+}
+
+func (x *ProbeResultRequest) GetDownloaded() int64 {
+	if x != nil {
+		return x.Downloaded
+	}
+	return 0
+}
+
+func (x *ProbeResultRequest) GetOutcome() isProbeResultRequest_Outcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return nil
+}
+
+func (x *ProbeResultRequest) GetFile() *ProbedFile {
+	if x != nil {
+		if x, ok := x.Outcome.(*ProbeResultRequest_File); ok {
+			return x.File
+		}
+	}
+	return nil
+}
+
+func (x *ProbeResultRequest) GetFailure() ProbeFailure {
+	if x != nil {
+		if x, ok := x.Outcome.(*ProbeResultRequest_Failure); ok {
+			return x.Failure
+		}
+	}
+	return ProbeFailure_PROBE_FAILURE_UNSPECIFIED
+}
+
+type isProbeResultRequest_Outcome interface {
+	isProbeResultRequest_Outcome()
+}
+
+type ProbeResultRequest_File struct {
+	File *ProbedFile `protobuf:"bytes,3,opt,name=file,proto3,oneof"`
+}
+
+type ProbeResultRequest_Failure struct {
+	Failure ProbeFailure `protobuf:"varint,4,opt,name=failure,proto3,enum=sniffarr.v1.ProbeFailure,oneof"`
+}
+
+func (*ProbeResultRequest_File) isProbeResultRequest_Outcome() {}
+
+func (*ProbeResultRequest_Failure) isProbeResultRequest_Outcome() {}
+
+// ProbedFile is what a probe read of the file it chose.
+type ProbedFile struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Path inside the torrent, components joined by "/".
+	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	// "matroska" or "mp4".
+	Format        string   `protobuf:"bytes,2,opt,name=format,proto3" json:"format,omitempty"`
+	Tracks        []*Track `protobuf:"bytes,3,rep,name=tracks,proto3" json:"tracks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbedFile) Reset() {
+	*x = ProbedFile{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbedFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbedFile) ProtoMessage() {}
+
+func (x *ProbedFile) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbedFile.ProtoReflect.Descriptor instead.
+func (*ProbedFile) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ProbedFile) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *ProbedFile) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+func (x *ProbedFile) GetTracks() []*Track {
+	if x != nil {
+		return x.Tracks
+	}
+	return nil
+}
+
+type ProbeResultResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeResultResponse) Reset() {
+	*x = ProbeResultResponse{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeResultResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeResultResponse) ProtoMessage() {}
+
+func (x *ProbeResultResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeResultResponse.ProtoReflect.Descriptor instead.
+func (*ProbeResultResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{18}
+}
+
 var File_sniffarr_v1_ingest_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\n" +
-	"\x18sniffarr/v1/ingest.proto\x12\vsniffarr.v1\"W\n" +
+	"\x18sniffarr/v1/ingest.proto\x12\vsniffarr.v1\x1a\x17sniffarr/v1/track.proto\"W\n" +
 	"\fSightRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12+\n" +
 	"\x06source\x18\x02 \x01(\x0e2\x13.sniffarr.v1.SourceR\x06source\"O\n" +
@@ -926,7 +1317,27 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x06sketch\x18\x03 \x01(\fR\x06sketch\"A\n" +
 	"\rPeersResponse\x12\x16\n" +
 	"\x06merged\x18\x01 \x01(\x03R\x06merged\x12\x18\n" +
-	"\adropped\x18\x02 \x01(\x03R\adropped*X\n" +
+	"\adropped\x18\x02 \x01(\x03R\adropped\"\x12\n" +
+	"\x10ProbeTaskRequest\"?\n" +
+	"\x11ProbeTaskResponse\x12*\n" +
+	"\x04task\x18\x01 \x01(\v2\x16.sniffarr.v1.ProbeTaskR\x04task\"D\n" +
+	"\tProbeTask\x12\x1a\n" +
+	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x1b\n" +
+	"\tmax_bytes\x18\x02 \x01(\x03R\bmaxBytes\"\xc1\x01\n" +
+	"\x12ProbeResultRequest\x12\x1a\n" +
+	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x1e\n" +
+	"\n" +
+	"downloaded\x18\x02 \x01(\x03R\n" +
+	"downloaded\x12-\n" +
+	"\x04file\x18\x03 \x01(\v2\x17.sniffarr.v1.ProbedFileH\x00R\x04file\x125\n" +
+	"\afailure\x18\x04 \x01(\x0e2\x19.sniffarr.v1.ProbeFailureH\x00R\afailureB\t\n" +
+	"\aoutcome\"d\n" +
+	"\n" +
+	"ProbedFile\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
+	"\x06format\x18\x02 \x01(\tR\x06format\x12*\n" +
+	"\x06tracks\x18\x03 \x03(\v2\x12.sniffarr.v1.TrackR\x06tracks\"\x15\n" +
+	"\x13ProbeResultResponse*X\n" +
 	"\x06Source\x12\x16\n" +
 	"\x12SOURCE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSOURCE_SAMPLE\x10\x01\x12\x13\n" +
@@ -936,12 +1347,19 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\aFailure\x12\x17\n" +
 	"\x13FAILURE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10FAILURE_NO_PEERS\x10\x01\x12\x13\n" +
-	"\x0fFAILURE_TIMEOUT\x10\x022\x9d\x02\n" +
+	"\x0fFAILURE_TIMEOUT\x10\x02*\x7f\n" +
+	"\fProbeFailure\x12\x1d\n" +
+	"\x19PROBE_FAILURE_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16PROBE_FAILURE_NO_PEERS\x10\x01\x12\x19\n" +
+	"\x15PROBE_FAILURE_TIMEOUT\x10\x02\x12\x19\n" +
+	"\x15PROBE_FAILURE_UNKNOWN\x10\x032\xbb\x03\n" +
 	"\rIngestService\x12@\n" +
 	"\x05Sight\x12\x19.sniffarr.v1.SightRequest\x1a\x1a.sniffarr.v1.SightResponse(\x01\x12B\n" +
 	"\x05Fetch\x12\x19.sniffarr.v1.FetchRequest\x1a\x1a.sniffarr.v1.FetchResponse(\x010\x01\x12D\n" +
 	"\aHashKey\x12\x1b.sniffarr.v1.HashKeyRequest\x1a\x1c.sniffarr.v1.HashKeyResponse\x12@\n" +
-	"\x05Peers\x12\x19.sniffarr.v1.PeersRequest\x1a\x1a.sniffarr.v1.PeersResponse(\x01BBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
+	"\x05Peers\x12\x19.sniffarr.v1.PeersRequest\x1a\x1a.sniffarr.v1.PeersResponse(\x01\x12J\n" +
+	"\tProbeTask\x12\x1d.sniffarr.v1.ProbeTaskRequest\x1a\x1e.sniffarr.v1.ProbeTaskResponse\x12P\n" +
+	"\vProbeResult\x12\x1f.sniffarr.v1.ProbeResultRequest\x1a .sniffarr.v1.ProbeResultResponseBBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
 
 var (
 	file_sniffarr_v1_ingest_proto_rawDescOnce sync.Once
@@ -955,46 +1373,62 @@ func file_sniffarr_v1_ingest_proto_rawDescGZIP() []byte {
 	return file_sniffarr_v1_ingest_proto_rawDescData
 }
 
-var file_sniffarr_v1_ingest_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_sniffarr_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_sniffarr_v1_ingest_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_sniffarr_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_sniffarr_v1_ingest_proto_goTypes = []any{
-	(Source)(0),             // 0: sniffarr.v1.Source
-	(Failure)(0),            // 1: sniffarr.v1.Failure
-	(*SightRequest)(nil),    // 2: sniffarr.v1.SightRequest
-	(*SightResponse)(nil),   // 3: sniffarr.v1.SightResponse
-	(*FetchRequest)(nil),    // 4: sniffarr.v1.FetchRequest
-	(*Credit)(nil),          // 5: sniffarr.v1.Credit
-	(*Result)(nil),          // 6: sniffarr.v1.Result
-	(*Torrent)(nil),         // 7: sniffarr.v1.Torrent
-	(*File)(nil),            // 8: sniffarr.v1.File
-	(*FetchResponse)(nil),   // 9: sniffarr.v1.FetchResponse
-	(*Task)(nil),            // 10: sniffarr.v1.Task
-	(*HashKeyRequest)(nil),  // 11: sniffarr.v1.HashKeyRequest
-	(*HashKeyResponse)(nil), // 12: sniffarr.v1.HashKeyResponse
-	(*PeersRequest)(nil),    // 13: sniffarr.v1.PeersRequest
-	(*PeersResponse)(nil),   // 14: sniffarr.v1.PeersResponse
+	(Source)(0),                 // 0: sniffarr.v1.Source
+	(Failure)(0),                // 1: sniffarr.v1.Failure
+	(ProbeFailure)(0),           // 2: sniffarr.v1.ProbeFailure
+	(*SightRequest)(nil),        // 3: sniffarr.v1.SightRequest
+	(*SightResponse)(nil),       // 4: sniffarr.v1.SightResponse
+	(*FetchRequest)(nil),        // 5: sniffarr.v1.FetchRequest
+	(*Credit)(nil),              // 6: sniffarr.v1.Credit
+	(*Result)(nil),              // 7: sniffarr.v1.Result
+	(*Torrent)(nil),             // 8: sniffarr.v1.Torrent
+	(*File)(nil),                // 9: sniffarr.v1.File
+	(*FetchResponse)(nil),       // 10: sniffarr.v1.FetchResponse
+	(*Task)(nil),                // 11: sniffarr.v1.Task
+	(*HashKeyRequest)(nil),      // 12: sniffarr.v1.HashKeyRequest
+	(*HashKeyResponse)(nil),     // 13: sniffarr.v1.HashKeyResponse
+	(*PeersRequest)(nil),        // 14: sniffarr.v1.PeersRequest
+	(*PeersResponse)(nil),       // 15: sniffarr.v1.PeersResponse
+	(*ProbeTaskRequest)(nil),    // 16: sniffarr.v1.ProbeTaskRequest
+	(*ProbeTaskResponse)(nil),   // 17: sniffarr.v1.ProbeTaskResponse
+	(*ProbeTask)(nil),           // 18: sniffarr.v1.ProbeTask
+	(*ProbeResultRequest)(nil),  // 19: sniffarr.v1.ProbeResultRequest
+	(*ProbedFile)(nil),          // 20: sniffarr.v1.ProbedFile
+	(*ProbeResultResponse)(nil), // 21: sniffarr.v1.ProbeResultResponse
+	(*Track)(nil),               // 22: sniffarr.v1.Track
 }
 var file_sniffarr_v1_ingest_proto_depIdxs = []int32{
 	0,  // 0: sniffarr.v1.SightRequest.source:type_name -> sniffarr.v1.Source
-	5,  // 1: sniffarr.v1.FetchRequest.credit:type_name -> sniffarr.v1.Credit
-	6,  // 2: sniffarr.v1.FetchRequest.result:type_name -> sniffarr.v1.Result
-	7,  // 3: sniffarr.v1.Result.torrent:type_name -> sniffarr.v1.Torrent
+	6,  // 1: sniffarr.v1.FetchRequest.credit:type_name -> sniffarr.v1.Credit
+	7,  // 2: sniffarr.v1.FetchRequest.result:type_name -> sniffarr.v1.Result
+	8,  // 3: sniffarr.v1.Result.torrent:type_name -> sniffarr.v1.Torrent
 	1,  // 4: sniffarr.v1.Result.failure:type_name -> sniffarr.v1.Failure
-	8,  // 5: sniffarr.v1.Torrent.files:type_name -> sniffarr.v1.File
-	10, // 6: sniffarr.v1.FetchResponse.task:type_name -> sniffarr.v1.Task
-	2,  // 7: sniffarr.v1.IngestService.Sight:input_type -> sniffarr.v1.SightRequest
-	4,  // 8: sniffarr.v1.IngestService.Fetch:input_type -> sniffarr.v1.FetchRequest
-	11, // 9: sniffarr.v1.IngestService.HashKey:input_type -> sniffarr.v1.HashKeyRequest
-	13, // 10: sniffarr.v1.IngestService.Peers:input_type -> sniffarr.v1.PeersRequest
-	3,  // 11: sniffarr.v1.IngestService.Sight:output_type -> sniffarr.v1.SightResponse
-	9,  // 12: sniffarr.v1.IngestService.Fetch:output_type -> sniffarr.v1.FetchResponse
-	12, // 13: sniffarr.v1.IngestService.HashKey:output_type -> sniffarr.v1.HashKeyResponse
-	14, // 14: sniffarr.v1.IngestService.Peers:output_type -> sniffarr.v1.PeersResponse
-	11, // [11:15] is the sub-list for method output_type
-	7,  // [7:11] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	9,  // 5: sniffarr.v1.Torrent.files:type_name -> sniffarr.v1.File
+	11, // 6: sniffarr.v1.FetchResponse.task:type_name -> sniffarr.v1.Task
+	18, // 7: sniffarr.v1.ProbeTaskResponse.task:type_name -> sniffarr.v1.ProbeTask
+	20, // 8: sniffarr.v1.ProbeResultRequest.file:type_name -> sniffarr.v1.ProbedFile
+	2,  // 9: sniffarr.v1.ProbeResultRequest.failure:type_name -> sniffarr.v1.ProbeFailure
+	22, // 10: sniffarr.v1.ProbedFile.tracks:type_name -> sniffarr.v1.Track
+	3,  // 11: sniffarr.v1.IngestService.Sight:input_type -> sniffarr.v1.SightRequest
+	5,  // 12: sniffarr.v1.IngestService.Fetch:input_type -> sniffarr.v1.FetchRequest
+	12, // 13: sniffarr.v1.IngestService.HashKey:input_type -> sniffarr.v1.HashKeyRequest
+	14, // 14: sniffarr.v1.IngestService.Peers:input_type -> sniffarr.v1.PeersRequest
+	16, // 15: sniffarr.v1.IngestService.ProbeTask:input_type -> sniffarr.v1.ProbeTaskRequest
+	19, // 16: sniffarr.v1.IngestService.ProbeResult:input_type -> sniffarr.v1.ProbeResultRequest
+	4,  // 17: sniffarr.v1.IngestService.Sight:output_type -> sniffarr.v1.SightResponse
+	10, // 18: sniffarr.v1.IngestService.Fetch:output_type -> sniffarr.v1.FetchResponse
+	13, // 19: sniffarr.v1.IngestService.HashKey:output_type -> sniffarr.v1.HashKeyResponse
+	15, // 20: sniffarr.v1.IngestService.Peers:output_type -> sniffarr.v1.PeersResponse
+	17, // 21: sniffarr.v1.IngestService.ProbeTask:output_type -> sniffarr.v1.ProbeTaskResponse
+	21, // 22: sniffarr.v1.IngestService.ProbeResult:output_type -> sniffarr.v1.ProbeResultResponse
+	17, // [17:23] is the sub-list for method output_type
+	11, // [11:17] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_ingest_proto_init() }
@@ -1002,6 +1436,7 @@ func file_sniffarr_v1_ingest_proto_init() {
 	if File_sniffarr_v1_ingest_proto != nil {
 		return
 	}
+	file_sniffarr_v1_track_proto_init()
 	file_sniffarr_v1_ingest_proto_msgTypes[2].OneofWrappers = []any{
 		(*FetchRequest_Credit)(nil),
 		(*FetchRequest_Result)(nil),
@@ -1010,13 +1445,17 @@ func file_sniffarr_v1_ingest_proto_init() {
 		(*Result_Torrent)(nil),
 		(*Result_Failure)(nil),
 	}
+	file_sniffarr_v1_ingest_proto_msgTypes[16].OneofWrappers = []any{
+		(*ProbeResultRequest_File)(nil),
+		(*ProbeResultRequest_Failure)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_ingest_proto_rawDesc), len(file_sniffarr_v1_ingest_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   13,
+			NumEnums:      3,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

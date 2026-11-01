@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package sniffarr.v1;
 
+import "sniffarr/v1/track.proto";
+
 option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
 // IngestService is the work queue between sniffers: discoverers report the
@@ -27,6 +29,13 @@ service IngestService {
   // torrent and hour, and reports the totals when the client closes the
   // stream. A sketch of an infohash that is not stored is dropped.
   rpc Peers(stream PeersRequest) returns (PeersResponse);
+  // ProbeTask leases the next stored release whose main video file is to be
+  // probed for its tracks, or none while there is none or the day's
+  // download budget is spent.
+  rpc ProbeTask(ProbeTaskRequest) returns (ProbeTaskResponse);
+  // ProbeResult records the outcome of a probe and the piece data it
+  // downloaded.
+  rpc ProbeResult(ProbeResultRequest) returns (ProbeResultResponse);
 }
 
 message SightRequest {
@@ -140,3 +149,51 @@ message PeersResponse {
   // Sketches of infohashes not stored.
   int64 dropped = 2;
 }
+
+message ProbeTaskRequest {}
+
+message ProbeTaskResponse {
+  // Absent when there is nothing to probe.
+  ProbeTask task = 1;
+}
+
+// ProbeTask asks for the tracks of one release's main video file.
+message ProbeTask {
+  bytes infohash = 1;
+  // The most piece data, in bytes, the probe may download.
+  int64 max_bytes = 2;
+}
+
+message ProbeResultRequest {
+  bytes infohash = 1;
+  // Piece data downloaded for the probe, in bytes.
+  int64 downloaded = 2;
+  oneof outcome {
+    ProbedFile file = 3;
+    ProbeFailure failure = 4;
+  }
+}
+
+// ProbedFile is what a probe read of the file it chose.
+message ProbedFile {
+  // Path inside the torrent, components joined by "/".
+  string path = 1;
+  // "matroska" or "mp4".
+  string format = 2;
+  repeated Track tracks = 3;
+}
+
+// ProbeFailure is why a probe returned no tracks.
+enum ProbeFailure {
+  PROBE_FAILURE_UNSPECIFIED = 0;
+  // No peers were found on the DHT.
+  PROBE_FAILURE_NO_PEERS = 1;
+  // The metadata or the pieces did not arrive in time.
+  PROBE_FAILURE_TIMEOUT = 2;
+  // The torrent has no Matroska or MP4 file, the file's format is not one,
+  // its track list lies beyond max_bytes of piece data, or its header is
+  // malformed. A probe that ends so is not repeated.
+  PROBE_FAILURE_UNKNOWN = 3;
+}
+
+message ProbeResultResponse {}

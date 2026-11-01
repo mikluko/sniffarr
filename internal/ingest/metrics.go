@@ -10,6 +10,7 @@ const scope = "github.com/mikluko/sniffarr/internal/ingest"
 
 type metrics struct {
 	sightings, expiries, results, rejections, stored, classifications, sketches metric.Int64Counter
+	probeTasks, probeResults, probeBytes                                        metric.Int64Counter
 }
 
 func newMetrics(mp metric.MeterProvider) *metrics {
@@ -32,7 +33,10 @@ func newMetrics(mp metric.MeterProvider) *metrics {
 		stored:     counter("sniffarr.ingest.stored", "{torrent}", "Fetched torrents stored."),
 		classifications: counter("sniffarr.classify.classifications", "{torrent}",
 			"Torrents whose kind was decided, by kind and by the layer that decided it."),
-		sketches: counter("sniffarr.ingest.sketches", "{sketch}", "Peer sketches received, by whether their infohash was stored."),
+		sketches:     counter("sniffarr.ingest.sketches", "{sketch}", "Peer sketches received, by whether their infohash was stored."),
+		probeTasks:   counter("sniffarr.probe.tasks", "{task}", "Probe tasks handed out, by whether a search returned the release."),
+		probeResults: counter("sniffarr.probe.results", "{result}", "Probe results received, by outcome."),
+		probeBytes:   counter("sniffarr.probe.downloaded", "By", "Piece data probes reported downloading."),
 	}
 }
 
@@ -53,4 +57,16 @@ func outcome(o string) metric.AddOption {
 
 func reasonAttr(r string) metric.AddOption {
 	return metric.WithAttributes(attribute.String("sniffarr.rules.reason", r))
+}
+
+func priorityAttr(wanted bool) metric.AddOption {
+	p := "background"
+	if wanted {
+		p = "search"
+	}
+	return metric.WithAttributes(attribute.String("sniffarr.probe.priority", p))
+}
+
+func probeOutcomeAttr(o string) metric.AddOption {
+	return metric.WithAttributes(attribute.String("sniffarr.probe.outcome", o))
 }
