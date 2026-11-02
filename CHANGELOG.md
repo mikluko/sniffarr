@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-11-02
+
+### Changed
+
+- The web UI is set in the system's monospace face, SF Mono on macOS and Consolas on Windows; it no longer looks for MonoLisa, JetBrains Mono, IBM Plex Mono or Source Code Pro.
+
 ## [0.29.0] - 2026-11-02
 
 ### Added
@@ -445,7 +451,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.29.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.30.0...HEAD
+[0.30.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.29.0...v0.30.0
 [0.29.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.28.0...v0.29.0
 [0.28.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.3...v0.28.0
 [0.27.3]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.2...v0.27.3
