@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-02
+
+### Added
+
+- The data page shows the piece data probes downloaded on the UTC day against `SNIFFARR_PROBE_DAILY_BYTES`, and what the fetchers uploaded back.
+- `ProbeUpload`: a fetcher with `-probe-dir` reports once a minute the piece data it uploaded to the swarms of probed releases.
+- `Stats` carries `probe_bytes_rx_day`, `probe_bytes_tx_day` and `probe_bytes_limit_day`.
+- `sniffarr.probe.uploaded`, the piece data the fetchers reported uploading.
+
+### Changed
+
+- The pages link the stylesheet, the scripts and the TMDB logo with a version in `v` that changes with the file; a static file at its version is cached for a year, at any other URL the browser revalidates it by ETag.
+
+### Fixed
+
+- `sniffarr.seed.uploaded` no longer counts the upload before a restart again at the first check after it.
+
 ## [0.28.0] - 2026-11-01
 
 ### Changed
@@ -428,7 +445,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.28.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.29.0...HEAD
+[0.29.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.28.0...v0.29.0
 [0.28.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.3...v0.28.0
 [0.27.3]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.2...v0.27.3
 [0.27.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.1...v0.27.2
