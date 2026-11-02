@@ -2,7 +2,9 @@ package ui
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -60,14 +62,20 @@ func baseOf(v any) Base {
 }
 
 type Renderer struct {
-	tpl   map[string]*template.Template
-	msgs  map[string]map[string]string
-	langs []string
+	tpl    map[string]*template.Template
+	msgs   map[string]map[string]string
+	langs  []string
+	static map[string]string // file under static/ → version, a hash of its content
 }
 
 func New() (*Renderer, error) {
 	r := &Renderer{tpl: map[string]*template.Template{}, msgs: map[string]map[string]string{}}
+	var err error
+	if r.static, err = staticVersions(); err != nil {
+		return nil, err
+	}
 	funcs := template.FuncMap{
+		"static":      r.StaticURL,
 		"kinds":       func() []string { return Kinds },
 		"sources":     func() []string { return Sources },
 		"layers":      func() []string { return Layers },
@@ -205,10 +213,51 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, page string,
 	return err
 }
 
+// staticVersions hashes every file under static/, keyed by its path there.
+func staticVersions() (map[string]string, error) {
+	versions := map[string]string{}
+	err := fs.WalkDir(files, "static", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := files.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(b)
+		versions[strings.TrimPrefix(p, "static/")] = hex.EncodeToString(sum[:8])
+		return nil
+	})
+	return versions, err
+}
+
+// StaticURL returns the URL of a file under static/ with its version, which
+// changes with the file's content; a file that is not there has no version.
+func (r *Renderer) StaticURL(p string) string {
+	v, ok := r.static[p]
+	if !ok {
+		return "/static/" + p
+	}
+	return "/static/" + p + "?v=" + v
+}
+
 // Static serves /static/ (app.css, app.js and the vendored htmx + idiomorph).
-func Static() http.Handler {
+// A file asked for at its StaticURL is immutable for a year; at any other
+// URL the browser revalidates it by ETag.
+func (r *Renderer) Static() http.Handler {
 	sub, _ := fs.Sub(files, "static")
-	return http.StripPrefix("/static/", http.FileServer(http.FS(sub)))
+	server := http.StripPrefix("/static/", http.FileServer(http.FS(sub)))
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if v, ok := r.static[strings.TrimPrefix(req.URL.Path, "/static/")]; ok {
+			h := w.Header()
+			h.Set("ETag", `"`+v+`"`)
+			h.Set("Cache-Control", "no-cache")
+			if req.URL.Query().Get("v") == v {
+				h.Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+		}
+		server.ServeHTTP(w, req)
+	})
 }
 
 // LangURL returns the current URL with lang=<l>, for the switcher.

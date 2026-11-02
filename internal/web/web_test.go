@@ -231,7 +231,7 @@ func TestRoot(t *testing.T) {
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, `<main id="data"`, "the data page is the first page")
 	require.Contains(t, body, `<a href="/" class="on" aria-current="page">Data</a>`)
-	require.Contains(t, body, `<img src="/static/vendor/tmdb.svg" alt="TMDB" height="12">`, "the attribution")
+	require.Contains(t, body, `<img src="/static/vendor/tmdb.svg?v=`, "the attribution, the image linked at its version")
 	require.Contains(t, body, "This product uses the TMDB API but is not endorsed or certified by TMDB.")
 	require.Equal(t, http.StatusOK, get(t, h, "/static/vendor/tmdb.svg", "").Code)
 	require.NotContains(t, page(t, get(t, h, "/?q=alien", "")), "wrow", "no search of titles")

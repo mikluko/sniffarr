@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -171,5 +172,59 @@ func TestFormat(t *testing.T) {
 	}
 	if niceCeil(15740) != 20000 || niceCeil(89187) != 100000 {
 		t.Error("niceCeil")
+	}
+}
+
+// The pages link static files at their versions; a file at its version is
+// immutable, at any other URL it revalidates by ETag.
+func TestStatic(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := r.StaticURL("app.css")
+	if !strings.HasPrefix(u, "/static/app.css?v=") || len(u) != len("/static/app.css?v=")+16 {
+		t.Fatalf("StaticURL = %q", u)
+	}
+	if got := r.StaticURL("nope.css"); got != "/static/nope.css" {
+		t.Errorf("StaticURL of a missing file = %q", got)
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "data", SampleData(r.Base(req, "en", "data", nil, time.UTC))); err != nil {
+		t.Fatal(err)
+	}
+	if m := regexp.MustCompile(`/static/[^"?]*"`).FindString(w.Body.String()); m != "" {
+		t.Errorf("a static file linked without its version: %s", m)
+	}
+
+	h := r.Static()
+	serve := func(path string, hdr ...string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", path, nil)
+		for i := 0; i+1 < len(hdr); i += 2 {
+			req.Header.Set(hdr[i], hdr[i+1])
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w
+	}
+	w = serve(u)
+	if w.Code != 200 || w.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+		t.Errorf("at its version: %d %q", w.Code, w.Header().Get("Cache-Control"))
+	}
+	etag := w.Header().Get("ETag")
+	if etag != `"`+strings.TrimPrefix(u, "/static/app.css?v=")+`"` {
+		t.Errorf("ETag = %q", etag)
+	}
+	for _, p := range []string{"/static/app.css", "/static/app.css?v=stale"} {
+		if w = serve(p); w.Code != 200 || w.Header().Get("Cache-Control") != "no-cache" {
+			t.Errorf("%s: %d %q", p, w.Code, w.Header().Get("Cache-Control"))
+		}
+	}
+	if w = serve("/static/app.css", "If-None-Match", etag); w.Code != 304 {
+		t.Errorf("revalidated: %d", w.Code)
+	}
+	if w = serve("/static/nope.css"); w.Code != 404 || w.Header().Get("Cache-Control") != "" {
+		t.Errorf("missing: %d %q", w.Code, w.Header().Get("Cache-Control"))
 	}
 }

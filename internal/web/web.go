@@ -92,7 +92,7 @@ func New(cfg Config) (http.Handler, error) {
 	}
 	s := &server{cfg: cfg, ui: r, tags: audio.Tags(cfg.Languages)}
 	mux := http.NewServeMux()
-	mux.Handle("GET /static/", ui.Static())
+	mux.Handle("GET /static/", r.Static())
 	mux.HandleFunc("GET /{$}", s.data)
 	mux.HandleFunc("GET /w/{id}", s.work)
 	mux.HandleFunc("GET /torrents", s.torrents)
