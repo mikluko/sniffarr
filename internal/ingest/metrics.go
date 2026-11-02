@@ -10,7 +10,7 @@ const scope = "github.com/mikluko/sniffarr/internal/ingest"
 
 type metrics struct {
 	sightings, expiries, results, rejections, stored, classifications, sketches metric.Int64Counter
-	probeTasks, probeResults, probeBytes                                        metric.Int64Counter
+	probeTasks, probeResults, probeBytes, probeUploaded                         metric.Int64Counter
 }
 
 func newMetrics(mp metric.MeterProvider) *metrics {
@@ -33,10 +33,11 @@ func newMetrics(mp metric.MeterProvider) *metrics {
 		stored:     counter("sniffarr.ingest.stored", "{torrent}", "Fetched torrents stored."),
 		classifications: counter("sniffarr.classify.classifications", "{torrent}",
 			"Torrents whose kind was decided, by kind and by the layer that decided it."),
-		sketches:     counter("sniffarr.ingest.sketches", "{sketch}", "Peer sketches received, by whether their infohash was stored."),
-		probeTasks:   counter("sniffarr.probe.tasks", "{task}", "Probe tasks handed out, by whether a search returned the release."),
-		probeResults: counter("sniffarr.probe.results", "{result}", "Probe results received, by outcome."),
-		probeBytes:   counter("sniffarr.probe.downloaded", "By", "Piece data probes reported downloading."),
+		sketches:      counter("sniffarr.ingest.sketches", "{sketch}", "Peer sketches received, by whether their infohash was stored."),
+		probeTasks:    counter("sniffarr.probe.tasks", "{task}", "Probe tasks handed out, by whether a search returned the release."),
+		probeResults:  counter("sniffarr.probe.results", "{result}", "Probe results received, by outcome."),
+		probeBytes:    counter("sniffarr.probe.downloaded", "By", "Piece data probes reported downloading."),
+		probeUploaded: counter("sniffarr.probe.uploaded", "By", "Piece data fetchers reported uploading to the swarms of probed releases."),
 	}
 }
 

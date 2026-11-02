@@ -164,14 +164,15 @@ func TestProbeTracksMatchLanguageTags(t *testing.T) {
 func TestProbeUsage(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	n, err := s.ProbeBytesUsed(ctx, "2026-10-01")
+	tr, err := s.ProbeTraffic(ctx, "2026-10-01")
 	require.NoError(t, err)
-	require.Zero(t, n)
-	require.NoError(t, s.AddProbeBytes(ctx, "2026-10-01", 3<<20))
-	require.NoError(t, s.AddProbeBytes(ctx, "2026-10-01", 1<<20))
-	n, err = s.ProbeBytesUsed(ctx, "2026-10-01")
+	require.Zero(t, tr)
+	require.NoError(t, s.AddProbeTraffic(ctx, "2026-10-01", ProbeTraffic{Rx: 3 << 20}))
+	require.NoError(t, s.AddProbeTraffic(ctx, "2026-10-01", ProbeTraffic{Rx: 1 << 20, Tx: 2 << 20}))
+	require.NoError(t, s.AddProbeTraffic(ctx, "2026-10-01", ProbeTraffic{Tx: 5 << 20}))
+	tr, err = s.ProbeTraffic(ctx, "2026-10-01")
 	require.NoError(t, err)
-	require.EqualValues(t, 4<<20, n)
+	require.Equal(t, ProbeTraffic{Rx: 4 << 20, Tx: 7 << 20}, tr)
 }
 
 func mustGet(t *testing.T, s *Store, h Hash) Release {

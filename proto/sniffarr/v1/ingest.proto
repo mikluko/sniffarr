@@ -36,6 +36,9 @@ service IngestService {
   // ProbeResult records the outcome of a probe and the piece data it
   // downloaded.
   rpc ProbeResult(ProbeResultRequest) returns (ProbeResultResponse);
+  // ProbeUpload records piece data a fetcher uploaded to the swarms of the
+  // releases it probed.
+  rpc ProbeUpload(ProbeUploadRequest) returns (ProbeUploadResponse);
 }
 
 message SightRequest {
@@ -197,3 +200,10 @@ enum ProbeFailure {
 }
 
 message ProbeResultResponse {}
+
+message ProbeUploadRequest {
+  // Piece data uploaded since the last report, in bytes.
+  int64 uploaded = 1;
+}
+
+message ProbeUploadResponse {}

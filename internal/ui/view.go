@@ -309,6 +309,7 @@ type Stats struct {
 	Dropped  []Count // Key from DropReasons
 
 	Classifier ClassifierStats
+	Probe      ProbeStats
 
 	Daily  Chart // new torrents per day
 	Weekly Chart // new torrents per 7 days
@@ -327,5 +328,13 @@ type VoiceStats struct {
 type ClassifierStats struct {
 	Pending  int64
 	DoneDay  int64
+	LimitDay int64
+}
+
+// ProbeStats is the piece data of probes on the UTC day, in bytes: RxDay
+// downloaded, against LimitDay, 0 for none, and TxDay uploaded back.
+type ProbeStats struct {
+	RxDay    int64
+	TxDay    int64
 	LimitDay int64
 }

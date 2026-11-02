@@ -109,15 +109,15 @@ func (s *Service) ProbeTask(ctx context.Context, _ *connect.Request[sniffarrv1.P
 	now := s.now()
 	leased := s.probes.active(now)
 	reserved := int64(len(leased)) * cfg.maxBytes()
-	used, err := s.Store.ProbeBytesUsed(ctx, day(now))
+	traffic, err := s.Store.ProbeTraffic(ctx, day(now))
 	if err != nil {
-		return nil, s.internal(ctx, "probe bytes used", err)
+		return nil, s.internal(ctx, "probe traffic", err)
 	}
 	res := connect.NewResponse(&sniffarrv1.ProbeTaskResponse{})
-	if !cfg.admits(used, reserved, true) {
+	if !cfg.admits(traffic.Rx, reserved, true) {
 		return res, nil
 	}
-	c, ok, err := s.Store.NextProbe(ctx, now, cfg.admits(used, reserved, false), leased)
+	c, ok, err := s.Store.NextProbe(ctx, now, cfg.admits(traffic.Rx, reserved, false), leased)
 	if err != nil {
 		return nil, s.internal(ctx, "next probe", err)
 	}
@@ -179,8 +179,8 @@ func (s *Service) ProbeResult(ctx context.Context, req *connect.Request[sniffarr
 	delete(s.probes.m, h)
 	s.probes.mu.Unlock()
 	if n := m.GetDownloaded(); n > 0 {
-		if err := s.Store.AddProbeBytes(ctx, day(now), n); err != nil {
-			return nil, s.internal(ctx, "add probe bytes", err)
+		if err := s.Store.AddProbeTraffic(ctx, day(now), store.ProbeTraffic{Rx: n}); err != nil {
+			return nil, s.internal(ctx, "add probe traffic", err)
 		}
 		s.metrics().probeBytes.Add(ctx, n)
 	}
@@ -189,6 +189,20 @@ func (s *Service) ProbeResult(ctx context.Context, req *connect.Request[sniffarr
 	}
 	s.metrics().probeResults.Add(ctx, 1, probeOutcomeAttr(name))
 	return connect.NewResponse(&sniffarrv1.ProbeResultResponse{}), nil
+}
+
+func (s *Service) ProbeUpload(ctx context.Context, req *connect.Request[sniffarrv1.ProbeUploadRequest]) (*connect.Response[sniffarrv1.ProbeUploadResponse], error) {
+	n := req.Msg.GetUploaded()
+	if n < 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("uploaded %d", n))
+	}
+	if n > 0 {
+		if err := s.Store.AddProbeTraffic(ctx, day(s.now()), store.ProbeTraffic{Tx: n}); err != nil {
+			return nil, s.internal(ctx, "add probe traffic", err)
+		}
+		s.metrics().probeUploaded.Add(ctx, n)
+	}
+	return connect.NewResponse(&sniffarrv1.ProbeUploadResponse{}), nil
 }
 
 func trackOf(t *sniffarrv1.Track) store.Track {

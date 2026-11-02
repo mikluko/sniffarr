@@ -60,6 +60,9 @@ func start(p nodeParams) *sniff.Network {
 	if cfg.Seed.Log == nil {
 		cfg.Seed.Log = p.Log
 	}
+	if cfg.Seed.Ingest == nil {
+		cfg.Seed.Ingest = p.Ingest
+	}
 	n := sniff.New(cfg, p.Offer, sink)
 	p.Lifecycle.Append(fx.StopHook(n.Close))
 	app.Go(p.Lifecycle, p.Shutdowner, p.Log, "dht", func(ctx context.Context) error {

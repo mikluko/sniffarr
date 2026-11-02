@@ -46,6 +46,9 @@ const (
 	// IngestServiceProbeResultProcedure is the fully-qualified name of the IngestService's ProbeResult
 	// RPC.
 	IngestServiceProbeResultProcedure = "/sniffarr.v1.IngestService/ProbeResult"
+	// IngestServiceProbeUploadProcedure is the fully-qualified name of the IngestService's ProbeUpload
+	// RPC.
+	IngestServiceProbeUploadProcedure = "/sniffarr.v1.IngestService/ProbeUpload"
 )
 
 // IngestServiceClient is a client for the sniffarr.v1.IngestService service.
@@ -76,6 +79,9 @@ type IngestServiceClient interface {
 	// ProbeResult records the outcome of a probe and the piece data it
 	// downloaded.
 	ProbeResult(context.Context, *connect.Request[v1.ProbeResultRequest]) (*connect.Response[v1.ProbeResultResponse], error)
+	// ProbeUpload records piece data a fetcher uploaded to the swarms of the
+	// releases it probed.
+	ProbeUpload(context.Context, *connect.Request[v1.ProbeUploadRequest]) (*connect.Response[v1.ProbeUploadResponse], error)
 }
 
 // NewIngestServiceClient constructs a client for the sniffarr.v1.IngestService service. By default,
@@ -125,6 +131,12 @@ func NewIngestServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(ingestServiceMethods.ByName("ProbeResult")),
 			connect.WithClientOptions(opts...),
 		),
+		probeUpload: connect.NewClient[v1.ProbeUploadRequest, v1.ProbeUploadResponse](
+			httpClient,
+			baseURL+IngestServiceProbeUploadProcedure,
+			connect.WithSchema(ingestServiceMethods.ByName("ProbeUpload")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -136,6 +148,7 @@ type ingestServiceClient struct {
 	peers       *connect.Client[v1.PeersRequest, v1.PeersResponse]
 	probeTask   *connect.Client[v1.ProbeTaskRequest, v1.ProbeTaskResponse]
 	probeResult *connect.Client[v1.ProbeResultRequest, v1.ProbeResultResponse]
+	probeUpload *connect.Client[v1.ProbeUploadRequest, v1.ProbeUploadResponse]
 }
 
 // Sight calls sniffarr.v1.IngestService.Sight.
@@ -168,6 +181,11 @@ func (c *ingestServiceClient) ProbeResult(ctx context.Context, req *connect.Requ
 	return c.probeResult.CallUnary(ctx, req)
 }
 
+// ProbeUpload calls sniffarr.v1.IngestService.ProbeUpload.
+func (c *ingestServiceClient) ProbeUpload(ctx context.Context, req *connect.Request[v1.ProbeUploadRequest]) (*connect.Response[v1.ProbeUploadResponse], error) {
+	return c.probeUpload.CallUnary(ctx, req)
+}
+
 // IngestServiceHandler is an implementation of the sniffarr.v1.IngestService service.
 type IngestServiceHandler interface {
 	// Sight queues every infohash the server has neither stored, rejected nor
@@ -196,6 +214,9 @@ type IngestServiceHandler interface {
 	// ProbeResult records the outcome of a probe and the piece data it
 	// downloaded.
 	ProbeResult(context.Context, *connect.Request[v1.ProbeResultRequest]) (*connect.Response[v1.ProbeResultResponse], error)
+	// ProbeUpload records piece data a fetcher uploaded to the swarms of the
+	// releases it probed.
+	ProbeUpload(context.Context, *connect.Request[v1.ProbeUploadRequest]) (*connect.Response[v1.ProbeUploadResponse], error)
 }
 
 // NewIngestServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -241,6 +262,12 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(ingestServiceMethods.ByName("ProbeResult")),
 		connect.WithHandlerOptions(opts...),
 	)
+	ingestServiceProbeUploadHandler := connect.NewUnaryHandler(
+		IngestServiceProbeUploadProcedure,
+		svc.ProbeUpload,
+		connect.WithSchema(ingestServiceMethods.ByName("ProbeUpload")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sniffarr.v1.IngestService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IngestServiceSightProcedure:
@@ -255,6 +282,8 @@ func NewIngestServiceHandler(svc IngestServiceHandler, opts ...connect.HandlerOp
 			ingestServiceProbeTaskHandler.ServeHTTP(w, r)
 		case IngestServiceProbeResultProcedure:
 			ingestServiceProbeResultHandler.ServeHTTP(w, r)
+		case IngestServiceProbeUploadProcedure:
+			ingestServiceProbeUploadHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -286,4 +315,8 @@ func (UnimplementedIngestServiceHandler) ProbeTask(context.Context, *connect.Req
 
 func (UnimplementedIngestServiceHandler) ProbeResult(context.Context, *connect.Request[v1.ProbeResultRequest]) (*connect.Response[v1.ProbeResultResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.ProbeResult is not implemented"))
+}
+
+func (UnimplementedIngestServiceHandler) ProbeUpload(context.Context, *connect.Request[v1.ProbeUploadRequest]) (*connect.Response[v1.ProbeUploadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.IngestService.ProbeUpload is not implemented"))
 }

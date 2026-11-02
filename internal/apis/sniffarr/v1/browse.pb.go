@@ -2039,11 +2039,18 @@ type StatsResponse struct {
 	// for none.
 	TokensUsedDay  int64 `protobuf:"varint,9,opt,name=tokens_used_day,json=tokensUsedDay,proto3" json:"tokens_used_day,omitempty"`
 	TokensLimitDay int64 `protobuf:"varint,10,opt,name=tokens_limit_day,json=tokensLimitDay,proto3" json:"tokens_limit_day,omitempty"`
-	// When every count but tokens_used_day was computed; days are the 24-hour
-	// periods before it. tokens_used_day is read at the request.
-	ComputedAt    *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// When every count but tokens_used_day, probe_bytes_rx_day and
+	// probe_bytes_tx_day was computed; days are the 24-hour periods before
+	// it. Those three are read at the request.
+	ComputedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
+	// Piece data probes downloaded on the current UTC day, in bytes, the
+	// day's limit on it, 0 for none, and the piece data the fetchers reported
+	// uploading to the swarms of probed releases on the day.
+	ProbeBytesRxDay    int64 `protobuf:"varint,12,opt,name=probe_bytes_rx_day,json=probeBytesRxDay,proto3" json:"probe_bytes_rx_day,omitempty"`
+	ProbeBytesLimitDay int64 `protobuf:"varint,13,opt,name=probe_bytes_limit_day,json=probeBytesLimitDay,proto3" json:"probe_bytes_limit_day,omitempty"`
+	ProbeBytesTxDay    int64 `protobuf:"varint,14,opt,name=probe_bytes_tx_day,json=probeBytesTxDay,proto3" json:"probe_bytes_tx_day,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *StatsResponse) Reset() {
@@ -2151,6 +2158,27 @@ func (x *StatsResponse) GetComputedAt() *timestamppb.Timestamp {
 		return x.ComputedAt
 	}
 	return nil
+}
+
+func (x *StatsResponse) GetProbeBytesRxDay() int64 {
+	if x != nil {
+		return x.ProbeBytesRxDay
+	}
+	return 0
+}
+
+func (x *StatsResponse) GetProbeBytesLimitDay() int64 {
+	if x != nil {
+		return x.ProbeBytesLimitDay
+	}
+	return 0
+}
+
+func (x *StatsResponse) GetProbeBytesTxDay() int64 {
+	if x != nil {
+		return x.ProbeBytesTxDay
+	}
+	return 0
 }
 
 type KindCount struct {
@@ -2573,7 +2601,7 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"first_seen\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeenB\b\n" +
 	"\x06_deltaJ\x04\b\x02\x10\x03\"\"\n" +
 	"\fStatsRequest\x12\x12\n" +
-	"\x04days\x18\x01 \x01(\x05R\x04days\"\xde\x03\n" +
+	"\x04days\x18\x01 \x01(\x05R\x04days\"\xeb\x04\n" +
 	"\rStatsResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x03R\x05total\x12,\n" +
 	"\x05kinds\x18\x02 \x03(\v2\x16.sniffarr.v1.KindCountR\x05kinds\x12/\n" +
@@ -2587,7 +2615,10 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x10tokens_limit_day\x18\n" +
 	" \x01(\x03R\x0etokensLimitDay\x12;\n" +
 	"\vcomputed_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"computedAt\"H\n" +
+	"computedAt\x12+\n" +
+	"\x12probe_bytes_rx_day\x18\f \x01(\x03R\x0fprobeBytesRxDay\x121\n" +
+	"\x15probe_bytes_limit_day\x18\r \x01(\x03R\x12probeBytesLimitDay\x12+\n" +
+	"\x12probe_bytes_tx_day\x18\x0e \x01(\x03R\x0fprobeBytesTxDay\"H\n" +
 	"\tKindCount\x12%\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x03R\x05count\"L\n" +

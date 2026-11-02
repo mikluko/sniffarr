@@ -53,7 +53,8 @@ func browser(t *testing.T) *Browser {
 		require.NoError(t, err)
 	}
 	require.NoError(t, s.AddTokens(ctx, now.Format(time.DateOnly), 250))
-	return &Browser{Store: s, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, Languages: []string{"ru"}, Now: func() time.Time { return now }}
+	require.NoError(t, s.AddProbeTraffic(ctx, now.Format(time.DateOnly), store.ProbeTraffic{Rx: 3 << 30, Tx: 1 << 30}))
+	return &Browser{Store: s, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Languages: []string{"ru"}, Now: func() time.Time { return now }}
 }
 
 func relNames(rs []*sniffarrv1.Release) []string {
@@ -185,6 +186,9 @@ func TestBrowserStats(t *testing.T) {
 	require.Equal(t, []int64{4, 1, 0}, m.GetDays())
 	require.EqualValues(t, 250, m.GetTokensUsedDay())
 	require.EqualValues(t, 1000, m.GetTokensLimitDay())
+	require.EqualValues(t, 3<<30, m.GetProbeBytesRxDay())
+	require.EqualValues(t, 1<<30, m.GetProbeBytesTxDay())
+	require.EqualValues(t, 100<<30, m.GetProbeBytesLimitDay())
 
 	_, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Days: MaxStatsDays + 1}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))

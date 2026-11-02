@@ -389,6 +389,7 @@ func SampleData(b Base) DataPage {
 		Voice:      []VoiceStats{{Lang: "ru", Bands: [4]int64{96412, 71905, 412330, 703664}}},
 		Dropped:    []Count{{"adult", 2114820}, {"filetype", 1507332}, {"size", 611290}, {"software", 388401}, {"course", 92115}, {"script", 41008}},
 		Classifier: ClassifierStats{Pending: 3412, DoneDay: 41280, LimitDay: 50000},
+		Probe:      ProbeStats{RxDay: 61 << 30, TxDay: 38 << 30, LimitDay: 100 << 30},
 		Daily:      NewBarChart(daily, dl, 7),
 		Weekly:     NewBarChart(weekly, wl, 4),
 	}}

@@ -38,6 +38,9 @@ type Browser struct {
 	// DailyTokens is the classifier's daily token limit Stats reports; 0 is
 	// none.
 	DailyTokens int64
+	// ProbeDailyBytes is the probes' daily download limit Stats reports; 0
+	// is none.
+	ProbeDailyBytes int64
 	// Languages are the audio languages Settings reports, tags in configured
 	// order; nil when the audio extension is off.
 	Languages []string
@@ -269,12 +272,18 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 		return nil, b.internal(ctx, "stats", err)
 	}
 	st := snap.Stats
-	used, err := b.Store.TokensUsed(ctx, b.now().UTC().Format(time.DateOnly))
+	day := b.now().UTC().Format(time.DateOnly)
+	used, err := b.Store.TokensUsed(ctx, day)
+	if err != nil {
+		return nil, b.internal(ctx, "stats", err)
+	}
+	traffic, err := b.Store.ProbeTraffic(ctx, day)
 	if err != nil {
 		return nil, b.internal(ctx, "stats", err)
 	}
 	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Days: slices.Clone(st.Days[:days]), TokensUsedDay: used,
-		TokensLimitDay: b.DailyTokens, ComputedAt: timestamppb.New(snap.At)}
+		TokensLimitDay: b.DailyTokens, ProbeBytesRxDay: traffic.Rx, ProbeBytesTxDay: traffic.Tx, ProbeBytesLimitDay: b.ProbeDailyBytes,
+		ComputedAt: timestamppb.New(snap.At)}
 	byKind := map[sniffarrv1.Kind]int64{}
 	for kind, n := range st.Kinds {
 		if slices.Contains(others, kind) {

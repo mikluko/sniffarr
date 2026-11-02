@@ -622,6 +622,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 		Total:      st.GetTotal(),
 		NewDay:     days[0],
 		Classifier: ui.ClassifierStats{Pending: st.GetPending(), DoneDay: st.GetTokensUsedDay(), LimitDay: st.GetTokensLimitDay()},
+		Probe:      ui.ProbeStats{RxDay: st.GetProbeBytesRxDay(), TxDay: st.GetProbeBytesTxDay(), LimitDay: st.GetProbeBytesLimitDay()},
 	}
 	for _, n := range days[:7] {
 		out.NewWeek += n

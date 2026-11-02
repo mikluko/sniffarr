@@ -1273,6 +1273,87 @@ func (*ProbeResultResponse) Descriptor() ([]byte, []int) {
 	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{18}
 }
 
+type ProbeUploadRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Piece data uploaded since the last report, in bytes.
+	Uploaded      int64 `protobuf:"varint,1,opt,name=uploaded,proto3" json:"uploaded,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeUploadRequest) Reset() {
+	*x = ProbeUploadRequest{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeUploadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeUploadRequest) ProtoMessage() {}
+
+func (x *ProbeUploadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeUploadRequest.ProtoReflect.Descriptor instead.
+func (*ProbeUploadRequest) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ProbeUploadRequest) GetUploaded() int64 {
+	if x != nil {
+		return x.Uploaded
+	}
+	return 0
+}
+
+type ProbeUploadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeUploadResponse) Reset() {
+	*x = ProbeUploadResponse{}
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeUploadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeUploadResponse) ProtoMessage() {}
+
+func (x *ProbeUploadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_ingest_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeUploadResponse.ProtoReflect.Descriptor instead.
+func (*ProbeUploadResponse) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{20}
+}
+
 var File_sniffarr_v1_ingest_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_ingest_proto_rawDesc = "" +
@@ -1337,7 +1418,10 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06format\x18\x02 \x01(\tR\x06format\x12*\n" +
 	"\x06tracks\x18\x03 \x03(\v2\x12.sniffarr.v1.TrackR\x06tracks\"\x15\n" +
-	"\x13ProbeResultResponse*X\n" +
+	"\x13ProbeResultResponse\"0\n" +
+	"\x12ProbeUploadRequest\x12\x1a\n" +
+	"\buploaded\x18\x01 \x01(\x03R\buploaded\"\x15\n" +
+	"\x13ProbeUploadResponse*X\n" +
 	"\x06Source\x12\x16\n" +
 	"\x12SOURCE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSOURCE_SAMPLE\x10\x01\x12\x13\n" +
@@ -1352,14 +1436,15 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x19PROBE_FAILURE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PROBE_FAILURE_NO_PEERS\x10\x01\x12\x19\n" +
 	"\x15PROBE_FAILURE_TIMEOUT\x10\x02\x12\x19\n" +
-	"\x15PROBE_FAILURE_UNKNOWN\x10\x032\xbb\x03\n" +
+	"\x15PROBE_FAILURE_UNKNOWN\x10\x032\x8d\x04\n" +
 	"\rIngestService\x12@\n" +
 	"\x05Sight\x12\x19.sniffarr.v1.SightRequest\x1a\x1a.sniffarr.v1.SightResponse(\x01\x12B\n" +
 	"\x05Fetch\x12\x19.sniffarr.v1.FetchRequest\x1a\x1a.sniffarr.v1.FetchResponse(\x010\x01\x12D\n" +
 	"\aHashKey\x12\x1b.sniffarr.v1.HashKeyRequest\x1a\x1c.sniffarr.v1.HashKeyResponse\x12@\n" +
 	"\x05Peers\x12\x19.sniffarr.v1.PeersRequest\x1a\x1a.sniffarr.v1.PeersResponse(\x01\x12J\n" +
 	"\tProbeTask\x12\x1d.sniffarr.v1.ProbeTaskRequest\x1a\x1e.sniffarr.v1.ProbeTaskResponse\x12P\n" +
-	"\vProbeResult\x12\x1f.sniffarr.v1.ProbeResultRequest\x1a .sniffarr.v1.ProbeResultResponseBBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
+	"\vProbeResult\x12\x1f.sniffarr.v1.ProbeResultRequest\x1a .sniffarr.v1.ProbeResultResponse\x12P\n" +
+	"\vProbeUpload\x12\x1f.sniffarr.v1.ProbeUploadRequest\x1a .sniffarr.v1.ProbeUploadResponseBBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
 
 var (
 	file_sniffarr_v1_ingest_proto_rawDescOnce sync.Once
@@ -1374,7 +1459,7 @@ func file_sniffarr_v1_ingest_proto_rawDescGZIP() []byte {
 }
 
 var file_sniffarr_v1_ingest_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_sniffarr_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_sniffarr_v1_ingest_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_sniffarr_v1_ingest_proto_goTypes = []any{
 	(Source)(0),                 // 0: sniffarr.v1.Source
 	(Failure)(0),                // 1: sniffarr.v1.Failure
@@ -1398,7 +1483,9 @@ var file_sniffarr_v1_ingest_proto_goTypes = []any{
 	(*ProbeResultRequest)(nil),  // 19: sniffarr.v1.ProbeResultRequest
 	(*ProbedFile)(nil),          // 20: sniffarr.v1.ProbedFile
 	(*ProbeResultResponse)(nil), // 21: sniffarr.v1.ProbeResultResponse
-	(*Track)(nil),               // 22: sniffarr.v1.Track
+	(*ProbeUploadRequest)(nil),  // 22: sniffarr.v1.ProbeUploadRequest
+	(*ProbeUploadResponse)(nil), // 23: sniffarr.v1.ProbeUploadResponse
+	(*Track)(nil),               // 24: sniffarr.v1.Track
 }
 var file_sniffarr_v1_ingest_proto_depIdxs = []int32{
 	0,  // 0: sniffarr.v1.SightRequest.source:type_name -> sniffarr.v1.Source
@@ -1411,21 +1498,23 @@ var file_sniffarr_v1_ingest_proto_depIdxs = []int32{
 	18, // 7: sniffarr.v1.ProbeTaskResponse.task:type_name -> sniffarr.v1.ProbeTask
 	20, // 8: sniffarr.v1.ProbeResultRequest.file:type_name -> sniffarr.v1.ProbedFile
 	2,  // 9: sniffarr.v1.ProbeResultRequest.failure:type_name -> sniffarr.v1.ProbeFailure
-	22, // 10: sniffarr.v1.ProbedFile.tracks:type_name -> sniffarr.v1.Track
+	24, // 10: sniffarr.v1.ProbedFile.tracks:type_name -> sniffarr.v1.Track
 	3,  // 11: sniffarr.v1.IngestService.Sight:input_type -> sniffarr.v1.SightRequest
 	5,  // 12: sniffarr.v1.IngestService.Fetch:input_type -> sniffarr.v1.FetchRequest
 	12, // 13: sniffarr.v1.IngestService.HashKey:input_type -> sniffarr.v1.HashKeyRequest
 	14, // 14: sniffarr.v1.IngestService.Peers:input_type -> sniffarr.v1.PeersRequest
 	16, // 15: sniffarr.v1.IngestService.ProbeTask:input_type -> sniffarr.v1.ProbeTaskRequest
 	19, // 16: sniffarr.v1.IngestService.ProbeResult:input_type -> sniffarr.v1.ProbeResultRequest
-	4,  // 17: sniffarr.v1.IngestService.Sight:output_type -> sniffarr.v1.SightResponse
-	10, // 18: sniffarr.v1.IngestService.Fetch:output_type -> sniffarr.v1.FetchResponse
-	13, // 19: sniffarr.v1.IngestService.HashKey:output_type -> sniffarr.v1.HashKeyResponse
-	15, // 20: sniffarr.v1.IngestService.Peers:output_type -> sniffarr.v1.PeersResponse
-	17, // 21: sniffarr.v1.IngestService.ProbeTask:output_type -> sniffarr.v1.ProbeTaskResponse
-	21, // 22: sniffarr.v1.IngestService.ProbeResult:output_type -> sniffarr.v1.ProbeResultResponse
-	17, // [17:23] is the sub-list for method output_type
-	11, // [11:17] is the sub-list for method input_type
+	22, // 17: sniffarr.v1.IngestService.ProbeUpload:input_type -> sniffarr.v1.ProbeUploadRequest
+	4,  // 18: sniffarr.v1.IngestService.Sight:output_type -> sniffarr.v1.SightResponse
+	10, // 19: sniffarr.v1.IngestService.Fetch:output_type -> sniffarr.v1.FetchResponse
+	13, // 20: sniffarr.v1.IngestService.HashKey:output_type -> sniffarr.v1.HashKeyResponse
+	15, // 21: sniffarr.v1.IngestService.Peers:output_type -> sniffarr.v1.PeersResponse
+	17, // 22: sniffarr.v1.IngestService.ProbeTask:output_type -> sniffarr.v1.ProbeTaskResponse
+	21, // 23: sniffarr.v1.IngestService.ProbeResult:output_type -> sniffarr.v1.ProbeResultResponse
+	23, // 24: sniffarr.v1.IngestService.ProbeUpload:output_type -> sniffarr.v1.ProbeUploadResponse
+	18, // [18:25] is the sub-list for method output_type
+	11, // [11:18] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -1455,7 +1544,7 @@ func file_sniffarr_v1_ingest_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_ingest_proto_rawDesc), len(file_sniffarr_v1_ingest_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

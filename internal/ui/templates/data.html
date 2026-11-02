@@ -4,7 +4,7 @@
 
 {{define "data"}}
 {{with .Stats}}
-<main id="data" hx-get="/"hx-trigger="every 30s [document.visibilityState=='visible']" hx-swap="morph:outerHTML" hx-target="this">
+<main id="data" hx-get="/" hx-trigger="every 30s [document.visibilityState=='visible']" hx-swap="morph:outerHTML" hx-target="this">
 <div class="kpis">
   <div><span class="mu">{{$.T "d.total"}}</span> <b>{{$.Num .Total}}</b></div>
   <div><span class="mu">{{$.T "d.newday"}}</span> <b>{{$.Num .NewDay}}</b></div>
@@ -61,6 +61,18 @@
     </table>
     <div class="meter" role="img" aria-label="{{$.Pct .DoneDay .LimitDay}}"><div style="width: {{$.PctW .DoneDay .LimitDay | safeCSS}}"></div></div>
     <p class="mu">{{$.Pct .DoneDay .LimitDay}} {{$.T "d.oflimit"}}</p>
+    {{end}}
+  </section>
+  <section>
+    <h2>{{$.T "d.probes"}}</h2>
+    {{with .Probe}}
+    <table class="t">
+      <tr><td>{{$.T "d.proberx"}}</td><td class="r">{{$.Size .RxDay}}</td></tr>
+      <tr><td>{{$.T "d.probetx"}}</td><td class="r">{{$.Size .TxDay}}</td></tr>
+      <tr><td>{{$.T "d.probelimitday"}}</td><td class="r">{{if .LimitDay}}{{$.Size .LimitDay}}{{else}}—{{end}}</td></tr>
+    </table>
+    <div class="meter" role="img" aria-label="{{$.Pct .RxDay .LimitDay}}"><div style="width: {{$.PctW .RxDay .LimitDay | safeCSS}}"></div></div>
+    <p class="mu">{{$.Pct .RxDay .LimitDay}} {{$.T "d.oflimit"}}</p>
     {{end}}
   </section>
 </div>

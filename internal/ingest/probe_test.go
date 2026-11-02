@@ -106,9 +106,9 @@ func TestProbeTaskBudget(t *testing.T) {
 			{Kind: sniffarrv1.TrackKind_TRACK_KIND_VIDEO, Codec: "V_MPEG4/ISO/AVC", Width: 1920, Height: 800},
 			{Kind: sniffarrv1.TrackKind_TRACK_KIND_AUDIO, Language: "rus", Name: "MVO", Codec: "A_AC3", Channels: 6},
 		}}}})
-	used, err := f.st.ProbeBytesUsed(ctx, "2026-11-01")
+	traffic, err := f.st.ProbeTraffic(ctx, "2026-11-01")
 	require.NoError(t, err)
-	require.EqualValues(t, 16<<20, used)
+	require.Equal(t, store.ProbeTraffic{Rx: 16 << 20}, traffic)
 	r, err := f.st.Get(ctx, a)
 	require.NoError(t, err)
 	require.Len(t, r.Tracks, 2)
@@ -142,4 +142,18 @@ func TestProbeResultRejectsBadInput(t *testing.T) {
 	_, err = f.s.ProbeResult(context.Background(), connect.NewRequest(&sniffarrv1.ProbeResultRequest{Infohash: infohash(1), Downloaded: -1,
 		Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_TIMEOUT}}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "negative bytes")
+}
+
+func TestProbeUpload(t *testing.T) {
+	ctx := context.Background()
+	f := newProbeFixture(t, ProbeConfig{DailyBytes: 100 << 20})
+	for _, n := range []int64{0, 3 << 20, 5 << 20} {
+		_, err := f.s.ProbeUpload(ctx, connect.NewRequest(&sniffarrv1.ProbeUploadRequest{Uploaded: n}))
+		require.NoError(t, err)
+	}
+	traffic, err := f.st.ProbeTraffic(ctx, "2026-11-01")
+	require.NoError(t, err)
+	require.Equal(t, store.ProbeTraffic{Tx: 8 << 20}, traffic, "upload counts against no budget")
+	_, err = f.s.ProbeUpload(ctx, connect.NewRequest(&sniffarrv1.ProbeUploadRequest{Uploaded: -1}))
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }

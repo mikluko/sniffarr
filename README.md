@@ -254,9 +254,11 @@ itself on the DHT for the torrent every 30 minutes. The fetcher removes a
 torrent and deletes its pieces once it has uploaded as much as it
 downloaded; before that, once it has been seeded for `-seed-max-age`, or,
 oldest first, while the torrents kept hold more than `-seed-max-size` of
-piece data. It looks every minute. The seeded torrents, what each
-downloaded and uploaded, and which pieces are complete survive a restart.
-Metadata fetches upload nothing.
+piece data. It looks every minute, and tells the API by `ProbeUpload` what
+the torrents uploaded since the last look; a report the API refuses goes
+with the next. The seeded torrents, what each downloaded and uploaded, and
+which pieces are complete survive a restart. Metadata fetches upload
+nothing.
 
 ## API
 
@@ -275,6 +277,7 @@ others out, as the chart's `api.networkPolicy` does.
 | `sniffarr.v1.IngestService` | `Peers`         |
 | `sniffarr.v1.IngestService` | `ProbeTask`     |
 | `sniffarr.v1.IngestService` | `ProbeResult`   |
+| `sniffarr.v1.IngestService` | `ProbeUpload`   |
 | `sniffarr.v1.SearchService` | `Search`        |
 | `sniffarr.v1.SearchService` | `Get`           |
 | `sniffarr.v1.BrowseService` | `SearchTitles`  |
@@ -304,6 +307,8 @@ others out, as the chart's `api.networkPolicy` does.
   spent.
 - `ProbeResult` records a probe's outcome: the file's path, format and
   tracks, or why there are none, and the piece data it downloaded.
+- `ProbeUpload` records the piece data a fetcher uploaded to the swarms of
+  the releases it probed since its last report.
 - `Search` matches every word of the query against names and stored file
   paths, and filters by kind and by the probability of an audio track in one
   language. It has Jev examine a bounded number of its candidates first, so
@@ -334,13 +339,13 @@ others out, as the chart's `api.networkPolicy` does.
 | `Torrents`      | `query`, words or an infohash; `kind` (`KIND_OTHER` takes music, books and software in) or `unknown_kind`; `matched`; `quality`; `audio_language` and `voice`; `source`, `layer`, `min_size`; `sort`; `offset`, `limit`; `lang` | `rows`, each a release with its `work` when matched, adult releases left out; `total`                                                      |
 | `Card`          | `infohash`, `lang`                                                                                                                                                               | the release, with `tmdb` the state of its title's match; discovery, every stored file, peers over the day, week and month; its `work` and `rank_in_work`, its place among the work's releases by peers; its `rules`, those that recognised features in the name (kind, year, season, episode, quality) or audio markers in the name or file paths, each with the matched fragment, recomputed when the card is opened |
 | `Top`           | `kind` (movie or series), `window`, `voice` and `voice_language` (the first audio language by default), `offset`, `limit`, `lang`                                                | `entries`: rank, `work`, peers, change against the window before, `audio`, sources and first sighting of the releases the voice admits; `total`, `computed_at` |
-| `Stats`         | `days`                                                                                                                                                                           | counts by kind (movie, series, other, unknown; music, books and software are other), layer, source and audio language, rejections by reason, pending, tokens spent today and the day's limit, new torrents per day, `computed_at` |
+| `Stats`         | `days`                                                                                                                                                                           | counts by kind (movie, series, other, unknown; music, books and software are other), layer, source and audio language, rejections by reason, pending, tokens spent today and the day's limit, piece data probes downloaded today, the day's limit on it, and what the fetchers uploaded back today, new torrents per day, `computed_at` |
 | `Home`          |                                                                                                                                                                                  | stored, new in 24 hours and pending, `computed_at`                                                                                         |
 | `Settings`      |                                                                                                                                                                                  | the API's audio languages, BCP-47 tags in its order, empty while the audio extension is off; the web UI asks it at start                  |
 
 `Stats` and `Home` serve the counts the API computed last, at start and then
-every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day` is
-read at the request.
+every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
+`probe_bytes_rx_day` and `probe_bytes_tx_day` are read at the request.
 
 `lang` is `ru` or `en`, `en` when empty: the language of `tmdb` texts, and
 of TMDB's search for `SearchTitles`. A work's `id` that is not one fails
@@ -465,7 +470,7 @@ API's needs the UI restarted.
 
 | Route               | Page                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /`             | The store's counts: kinds, layers, sources, audio per language, rejections by reason, the classifier's pending torrents and tokens used, and new torrents per day and per week, with how many minutes ago the API computed them                                                                                                                                                                                                      |
+| `GET /`             | The store's counts: kinds, layers, sources, audio per language, rejections by reason, the classifier's pending torrents and tokens used, the piece data probes downloaded against the day's limit and what the fetchers uploaded back, and new torrents per day and per week, with how many minutes ago the API computed them                                                                                                                                           |
 | `GET /w/{id}`       | A movie or series, `id` `m348` or `tv1399`: what TMDB knows of it, its places in the tops over 24 h, 7 days and 30 days, its releases and peers, the audio of its releases, and its releases under `quality` (`2160p`, `1080p`, `720p`, `sd`), `source` (`web`, `rip`, `remux`, `disc`), `min` and `max` in GB, `vl` and `voice`, a series' `season` and `episode`, sorted by `sort` (`peers`, `first_seen`, `size`), 50 a page from `o` |
 | `GET /torrents`     | Every release, matched or not, by name or infohash in `q`, under `kind` (`movie`, `series`, `other`, `unknown`), `matched` (`yes`, `no`), `quality`, `vl` and `voice`, `source`, `layer`, `min` in GB, sorted by `sort` (`peers`, `last_seen`, `size`), 50 a page from `o`; a matched release links to its movie or series                                                                                                             |
 | `GET /top`          | The 100 movies or series with the most peers over a window: `kind` is `movie` or `series`, `win` is `24h`, `7d` or `30d`, `voice` is `any`, `p50` or `explicit` in the audio language `vl`, narrowing each to its releases with a marker or a probability of at least 0.5, or to those with a marker; the first 25 until `all=1`. A row leads to its movie's or series' page                                                       |
@@ -686,6 +691,7 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.probe.tasks`                 | `{task}`     | `sniffarr.probe.priority`                  |
 | `-api`     | `sniffarr.probe.results`               | `{result}`   | `sniffarr.probe.outcome`                   |
 | `-api`     | `sniffarr.probe.downloaded`            | `By`         |                                            |
+| `-api`     | `sniffarr.probe.uploaded`              | `By`         |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
 | `-sniff`   | `sniffarr.dht.replies`                 | `{reply}`    | `sniffarr.dht.query`                       |

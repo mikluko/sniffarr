@@ -304,16 +304,24 @@ func (s *Store) tracks(ctx context.Context, rs []Release) error {
 		WHERE torrent_id IN (`+placeholders(len(ids))+`) ORDER BY torrent_id, idx`, int64Args(ids)...)
 }
 
-// ProbeBytesUsed returns the piece data probes downloaded on the day.
-func (s *Store) ProbeBytesUsed(ctx context.Context, day string) (int64, error) {
-	var n int64
-	err := s.r.QueryRowContext(ctx, "SELECT bytes FROM probe_usage WHERE day = ?", day).Scan(&n)
-	return n, ignoreNoRows(err)
+// ProbeTraffic is piece data of probes on a UTC day, in bytes: Rx what the
+// probes downloaded, Tx what the fetchers uploaded to the swarms of probed
+// releases.
+type ProbeTraffic struct {
+	Rx, Tx int64
 }
 
-// AddProbeBytes adds n to the piece data probes downloaded on the day.
-func (s *Store) AddProbeBytes(ctx context.Context, day string, n int64) error {
-	_, err := s.w.ExecContext(ctx, "INSERT INTO probe_usage (day, bytes) VALUES (?, ?) ON CONFLICT (day) DO UPDATE SET bytes = bytes + excluded.bytes", day, n)
+// ProbeTraffic returns the probes' traffic on the day.
+func (s *Store) ProbeTraffic(ctx context.Context, day string) (ProbeTraffic, error) {
+	var t ProbeTraffic
+	err := s.r.QueryRowContext(ctx, "SELECT rx, tx FROM probe_usage WHERE day = ?", day).Scan(&t.Rx, &t.Tx)
+	return t, ignoreNoRows(err)
+}
+
+// AddProbeTraffic adds t to the probes' traffic on the day.
+func (s *Store) AddProbeTraffic(ctx context.Context, day string, t ProbeTraffic) error {
+	_, err := s.w.ExecContext(ctx, `INSERT INTO probe_usage (day, rx, tx) VALUES (?, ?, ?)
+		ON CONFLICT (day) DO UPDATE SET rx = rx + excluded.rx, tx = tx + excluded.tx`, day, t.Rx, t.Tx)
 	return err
 }
 

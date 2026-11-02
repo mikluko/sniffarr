@@ -14,9 +14,13 @@ import (
 	"sync"
 	"time"
 
+	"connectrpc.com/connect"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+
+	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 )
 
 const (
@@ -83,6 +87,9 @@ type SeederConfig struct {
 	MaxBytes int64
 	// MaxAge caps how long a torrent is seeded; DefaultSeedMaxAge.
 	MaxAge time.Duration
+	// Ingest, when set, is told by ProbeUpload what the torrents uploaded,
+	// once a minute.
+	Ingest sniffarrv1connect.IngestServiceClient
 	// Log discards everything when nil.
 	Log *slog.Logger
 	// Meter records metrics; the global MeterProvider when nil.
@@ -101,6 +108,8 @@ type Seeder struct {
 	entries []*seedEntry
 	// reported is the upload each entry's counter reached, by hash.
 	reported map[Hash]int64
+	// unsent is the upload Ingest has not been told of; Run alone uses it.
+	unsent int64
 
 	downloaded, uploaded, removals metric.Int64Counter
 }
@@ -196,6 +205,7 @@ func (s *Seeder) Restore(open seedOpener) error {
 			continue
 		}
 		s.entries = append(s.entries, &seedEntry{hash: h, added: st.Added, downloaded: st.Downloaded, uploadedBefore: st.Uploaded, t: t})
+		s.reported[h] = st.Uploaded
 	}
 	slices.SortStableFunc(s.entries, func(a, b *seedEntry) int { return a.added.Compare(b.added) })
 	return s.saveLocked()
@@ -231,16 +241,18 @@ func (s *Seeder) Has(h Hash) bool {
 	return slices.ContainsFunc(s.entries, func(e *seedEntry) bool { return e.hash == h })
 }
 
-// check removes the torrents plan says to, records the upload since the
-// last check, and saves the state.
-func (s *Seeder) check(ctx context.Context) {
+// check removes the torrents plan says to, saves the state, and returns
+// the upload since the last check, which it also counts.
+func (s *Seeder) check(ctx context.Context) int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var uploaded int64
 	status := make([]seedStatus, len(s.entries))
 	for i, e := range s.entries {
 		up := e.uploaded()
 		if d := up - s.reported[e.hash]; d > 0 {
 			s.uploaded.Add(ctx, d)
+			uploaded += d
 		}
 		s.reported[e.hash] = up
 		status[i] = seedStatus{added: e.added, downloaded: e.downloaded, uploaded: up}
@@ -266,6 +278,23 @@ func (s *Seeder) check(ctx context.Context) {
 	if err := s.saveLocked(); err != nil {
 		s.cfg.Log.Warn("save seeds", "err", err)
 	}
+	return uploaded
+}
+
+// report tells Ingest of uploaded, and of what earlier reports failed to
+// send; nothing without Ingest.
+func (s *Seeder) report(ctx context.Context, uploaded int64) {
+	s.unsent += uploaded
+	if s.cfg.Ingest == nil || s.unsent == 0 {
+		return
+	}
+	if _, err := s.cfg.Ingest.ProbeUpload(ctx, connect.NewRequest(&sniffarrv1.ProbeUploadRequest{Uploaded: s.unsent})); err != nil {
+		if ctx.Err() == nil {
+			s.cfg.Log.Warn("report upload", "err", err)
+		}
+		return
+	}
+	s.unsent = 0
 }
 
 // announce announces every seeded torrent.
@@ -281,8 +310,8 @@ func (s *Seeder) announce() {
 	}
 }
 
-// Run checks the torrents every minute and announces them every 30
-// minutes, until ctx is done.
+// Run checks the torrents every minute, reporting their upload to Ingest,
+// and announces them every 30 minutes, until ctx is done.
 func (s *Seeder) Run(ctx context.Context) error {
 	checkTick := time.NewTicker(seedCheck)
 	defer checkTick.Stop()
@@ -292,10 +321,11 @@ func (s *Seeder) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			s.check(context.WithoutCancel(ctx))
+			last := context.WithoutCancel(ctx)
+			s.report(last, s.check(last))
 			return ctx.Err()
 		case <-checkTick.C:
-			s.check(ctx)
+			s.report(ctx, s.check(ctx))
 		case <-announceTick.C:
 			s.announce()
 		}

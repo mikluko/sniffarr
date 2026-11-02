@@ -398,9 +398,16 @@ message StatsResponse {
   // for none.
   int64 tokens_used_day = 9;
   int64 tokens_limit_day = 10;
-  // When every count but tokens_used_day was computed; days are the 24-hour
-  // periods before it. tokens_used_day is read at the request.
+  // When every count but tokens_used_day, probe_bytes_rx_day and
+  // probe_bytes_tx_day was computed; days are the 24-hour periods before
+  // it. Those three are read at the request.
   google.protobuf.Timestamp computed_at = 11;
+  // Piece data probes downloaded on the current UTC day, in bytes, the
+  // day's limit on it, 0 for none, and the piece data the fetchers reported
+  // uploading to the swarms of probed releases on the day.
+  int64 probe_bytes_rx_day = 12;
+  int64 probe_bytes_limit_day = 13;
+  int64 probe_bytes_tx_day = 14;
 }
 
 message KindCount {

@@ -2,13 +2,21 @@ package sniff
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
+
+	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 )
 
 func TestPlan(t *testing.T) {
@@ -107,4 +115,67 @@ func TestSeederRestoreForgetsWhatFailsToOpen(t *testing.T) {
 	require.NoError(t, restored.Restore(func(Hash, []byte) (seedTorrent, error) { return nil, os.ErrInvalid }))
 	require.False(t, restored.Has(Hash{1}))
 	require.NoError(t, NewSeeder(SeederConfig{Dir: t.TempDir()}).Restore(nil), "no state file restores none")
+}
+
+// uploadIngest records what ProbeUpload is told, refusing while down.
+type uploadIngest struct {
+	sniffarrv1connect.UnimplementedIngestServiceHandler
+	mu       sync.Mutex
+	uploaded []int64
+	down     bool
+}
+
+func (u *uploadIngest) ProbeUpload(_ context.Context, req *connect.Request[sniffarrv1.ProbeUploadRequest]) (*connect.Response[sniffarrv1.ProbeUploadResponse], error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.down {
+		return nil, connect.NewError(connect.CodeUnavailable, errors.New("down"))
+	}
+	u.uploaded = append(u.uploaded, req.Msg.GetUploaded())
+	return connect.NewResponse(&sniffarrv1.ProbeUploadResponse{}), nil
+}
+
+func (u *uploadIngest) setDown(down bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.down = down
+}
+
+func TestSeederReportsUpload(t *testing.T) {
+	ctx := context.Background()
+	ingest := &uploadIngest{}
+	mux := http.NewServeMux()
+	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(ingest))
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	cfg := SeederConfig{Dir: t.TempDir(), MaxBytes: 1 << 30, MaxAge: 24 * time.Hour,
+		Ingest: sniffarrv1connect.NewIngestServiceClient(srv.Client(), srv.URL)}
+	s := NewSeeder(cfg)
+	a, b := &fakeSeed{}, &fakeSeed{}
+	require.NoError(t, s.Add(ctx, Hash{1}, a, 1000, nil))
+	require.NoError(t, s.Add(ctx, Hash{2}, b, 1000, nil))
+	s.report(ctx, s.check(ctx))
+	require.Empty(t, ingest.uploaded, "nothing uploaded, nothing reported")
+	a.up.Store(100)
+	b.up.Store(50)
+	s.report(ctx, s.check(ctx))
+	require.Equal(t, []int64{150}, ingest.uploaded)
+
+	ingest.setDown(true)
+	a.up.Store(130)
+	s.report(ctx, s.check(ctx))
+	ingest.setDown(false)
+	b.up.Store(70)
+	s.report(ctx, s.check(ctx))
+	require.Equal(t, []int64{150, 50}, ingest.uploaded, "what a refused report held goes with the next")
+
+	restored := NewSeeder(cfg)
+	seeds := map[Hash]*fakeSeed{}
+	require.NoError(t, restored.Restore(func(h Hash, _ []byte) (seedTorrent, error) {
+		seeds[h] = &fakeSeed{}
+		return seeds[h], nil
+	}))
+	seeds[Hash{1}].up.Store(10)
+	restored.report(ctx, restored.check(ctx))
+	require.Equal(t, []int64{150, 50, 10}, ingest.uploaded, "the upload before the restart is not reported again")
 }
