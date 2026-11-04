@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-11-04
+
+### Fixed
+
+- Releases never probed go before those due a probe again, and a release out of attempts is due again only with twice the peers over 7 days it had at its last probe and at least two more; in 0.31.0 the releases let back in, mostly without live peers, filled the queue ahead of new ones.
+
 ## [0.32.0] - 2026-11-04
 
 ### Added
@@ -463,7 +469,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.1...HEAD
+[0.32.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.0...v0.32.1
 [0.32.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.31.0...v0.32.0
 [0.31.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.30.0...v0.31.0
 [0.30.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.29.0...v0.30.0
