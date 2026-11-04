@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-04
+
 ### Changed
 
 - The top's column against the previous window shows the places a work moved, "+3" or "−1", and "new" for a work with no peers then; it showed the change of peers as a percentage. The `Top` RPC's entries carry `prev_rank` instead of `delta`.
@@ -479,7 +481,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.2...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.0...HEAD
+[0.34.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.2...v0.34.0
 [0.32.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.1...v0.32.2
 [0.32.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.0...v0.32.1
 [0.32.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.31.0...v0.32.0
