@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "sniffarr",
+  "project_id": "102761fb-21e9-4064-af7f-c54270599b4f"
+}

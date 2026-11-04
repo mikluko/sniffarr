@@ -1,3 +1,11 @@
+.*
+!.gitignore
+!.dockerignore
+!.forgejo
+!/.beads/
+/.beads/*
+!/.beads/config.yaml
+!/.beads/metadata.json
 /tmp/
 *.db
 *.db-shm
