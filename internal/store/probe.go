@@ -122,28 +122,39 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) erro
 
 // NextProbe returns the release to probe next at now, other than those of
 // exclude: the most recently wanted one, else, with background, the one
-// with the most peers over 7 days. Either is a movie or a series with
-// peers, a stored file of a format a probe reads, and no probe done, or a
-// failed one due again. It returns false when there is none.
+// never probed with the most peers over 7 days, else the one due a probe
+// again with the most. Each is a movie or a series with peers and a stored
+// file of a format a probe reads. It returns false when there is none.
 func (s *Store) NextProbe(ctx context.Context, now time.Time, background bool, exclude []int64) (ProbeCandidate, bool, error) {
-	args := []any{now.Unix()}
+	var base []any
 	for _, e := range probeExtensions {
-		args = append(args, e)
+		base = append(base, e)
 	}
-	args = append(args, int64Args(exclude)...)
-	c, err := s.nextProbe(ctx, wantedProbe(len(exclude)), args...)
+	base = append(base, int64Args(exclude)...)
+	withNow := append([]any{now.Unix()}, base...)
+	c, err := s.nextProbe(ctx, wantedProbe(len(exclude)), withNow...)
 	if err == nil || !errors.Is(err, sql.ErrNoRows) || !background {
 		return c, err == nil, ignoreNoRows(err)
 	}
-	c, err = s.nextProbe(ctx, backgroundProbe(len(exclude)), args...)
+	c, err = s.nextProbe(ctx, backgroundProbe(len(exclude)), base...)
+	if err == nil || !errors.Is(err, sql.ErrNoRows) {
+		return c, err == nil, ignoreNoRows(err)
+	}
+	c, err = s.nextProbe(ctx, retryProbe(len(exclude)), withNow...)
 	return c, err == nil, ignoreNoRows(err)
 }
 
-// probeCond selects releases due a probe, other than excluded ones; its
-// arguments are the time, probeExtensions and the excluded IDs.
-func probeCond(excluded int) string {
-	cond := `t.kind IN ('movie', 'series') AND t.peers_week > 0
-		AND (p.outcome IS NULL OR p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND (p.peers_week IS NULL OR t.peers_week > p.peers_week))
+// probeDue selects a failed probe due again: its backoff out and, once the
+// attempts ran out, the release with twice the peers over 7 days it had at
+// the last probe, and at least two more. Its argument is the time.
+const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ?
+	AND (p.peers_week IS NULL OR t.peers_week >= 2 * p.peers_week AND t.peers_week >= p.peers_week + 2)`
+
+// probeCond selects releases a probe can read, other than excluded ones,
+// whose probe row p passes state; its arguments are those of state, then
+// probeExtensions and the excluded IDs.
+func probeCond(state string, excluded int) string {
+	cond := `t.kind IN ('movie', 'series') AND t.peers_week > 0 AND (` + state + `)
 		AND EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = t.id AND (f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ?))`
 	if excluded > 0 {
 		cond += " AND t.id NOT IN (" + placeholders(excluded) + ")"
@@ -156,14 +167,21 @@ func probeCond(excluded int) string {
 // release.
 func wantedProbe(excluded int) string {
 	return `SELECT t.id, t.infohash, 1 FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
-		WHERE p.wanted_at IS NOT NULL AND ` + probeCond(excluded) + ` ORDER BY p.wanted_at DESC, t.peers_week DESC LIMIT 1`
+		WHERE p.wanted_at IS NOT NULL AND ` + probeCond("p.outcome IS NULL OR "+probeDue, excluded) + ` ORDER BY p.wanted_at DESC, t.peers_week DESC LIMIT 1`
 }
 
-// backgroundProbe is the query of the release due a probe with the most
+// backgroundProbe is the query of the release never probed with the most
 // peers over 7 days.
 func backgroundProbe(excluded int) string {
 	return `SELECT t.id, t.infohash, 0 FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
-		WHERE ` + probeCond(excluded) + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
+		WHERE ` + probeCond("p.outcome IS NULL", excluded) + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
+}
+
+// retryProbe is the query of the release due a probe again with the most
+// peers over 7 days.
+func retryProbe(excluded int) string {
+	return `SELECT t.id, t.infohash, 0 FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
+		WHERE ` + probeCond(probeDue, excluded) + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
 }
 
 func (s *Store) nextProbe(ctx context.Context, query string, args ...any) (ProbeCandidate, error) {

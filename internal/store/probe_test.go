@@ -69,6 +69,13 @@ func TestNextProbeOrder(t *testing.T) {
 	c, ok = nextProbe(t, s, t0, true, c.ID)
 	require.True(t, ok)
 	require.Equal(t, many, c.Hash)
+
+	_, err = s.ProbeFailed(ctx, many, t0, 3, time.Hour)
+	require.NoError(t, err)
+	setPeersWeek(t, s, hash(3), 1)
+	c, ok = nextProbe(t, s, t0.Add(2*time.Hour), true, mustGet(t, s, few).ID)
+	require.True(t, ok)
+	require.Equal(t, hash(3), c.Hash, "a release never probed before one due again, whatever their peers")
 }
 
 func TestProbeFailedRetries(t *testing.T) {
@@ -90,22 +97,36 @@ func TestProbeFailedRetries(t *testing.T) {
 	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
 	require.False(t, ok, "no more peers than at the last probe")
 
-	setPeersWeek(t, s, h, 6)
+	setPeersWeek(t, s, h, 9)
+	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
+	require.False(t, ok, "fewer than twice the peers of the last probe")
+	setPeersWeek(t, s, h, 10)
 	_, ok = nextProbe(t, s, t0.Add(2*time.Hour), true)
-	require.False(t, ok, "more peers, but the backoff, 2h after the second failure, is not out")
+	require.False(t, ok, "twice the peers, but the backoff, 2h after the second failure, is not out")
 	_, ok = nextProbe(t, s, t0.Add(3*time.Hour), true)
-	require.True(t, ok, "more peers once the backoff is out")
+	require.True(t, ok, "twice the peers once the backoff is out")
 
 	final, err = s.ProbeFailed(ctx, h, t0.Add(3*time.Hour), 2, time.Hour)
 	require.NoError(t, err)
 	require.True(t, final)
 	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
 	require.False(t, ok, "the peers at the last probe are the new mark")
-	setPeersWeek(t, s, h, 7)
+	setPeersWeek(t, s, h, 20)
 	_, ok = nextProbe(t, s, t0.Add(4*time.Hour), true)
 	require.False(t, ok, "the backoff stays at its last doubling")
 	_, ok = nextProbe(t, s, t0.Add(5*time.Hour), true)
 	require.True(t, ok)
+
+	one := insertProbeable(t, s, 2, "Brazil.1985.1080p", 1, "Brazil.1985.1080p.mkv")
+	_, err = s.ProbeFailed(ctx, one, t0, 1, time.Hour)
+	require.NoError(t, err)
+	setPeersWeek(t, s, one, 2)
+	c, ok := nextProbe(t, s, t0.Add(1000*time.Hour), true, mustGet(t, s, h).ID)
+	require.False(t, ok, "one peer to two is twice, but not two more")
+	setPeersWeek(t, s, one, 3)
+	c, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true, mustGet(t, s, h).ID)
+	require.True(t, ok)
+	require.Equal(t, one, c.Hash)
 }
 
 func TestProbeDoneOnce(t *testing.T) {
