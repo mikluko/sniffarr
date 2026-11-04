@@ -171,10 +171,10 @@ func (b Base) Ago(t time.Time) string {
 }
 
 // Moved formats the places a work moved from prev to rank: "+3", "−1", "0";
-// prev 0 means it had no peers then ("new").
+// prev 0 means it had no peers then, "—".
 func (b Base) Moved(rank, prev int) string {
 	if prev == 0 {
-		return b.T("top.new")
+		return "—"
 	}
 	switch d := prev - rank; {
 	case d > 0:

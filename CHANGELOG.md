@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.1] - 2026-11-04
+
+### Changed
+
+- A work with no peers in the previous window shows "—" in the top's places column, not "new".
+
+### Fixed
+
+- The ten-minute top recount in 0.34.0 took over ten minutes, ranking the previous window once per kind; the tops showed every work as new until its first run was through. It unions peers once per voice and ranks both kinds from that.
+
 ## [0.34.0] - 2026-11-04
 
 ### Changed
@@ -481,7 +491,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.1...HEAD
+[0.34.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.0...v0.34.1
 [0.34.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.2...v0.34.0
 [0.32.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.1...v0.32.2
 [0.32.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.0...v0.32.1

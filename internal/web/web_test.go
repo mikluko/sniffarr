@@ -304,7 +304,7 @@ func TestTop(t *testing.T) {
 	require.Contains(t, body, `<a href="/w/m348">Alien</a> <span class="mu">1979</span>`, "a row leads to its work")
 	require.Contains(t, body, `<img class="th" src="https://image.tmdb.org/t/p/w92/p.jpg" width="28" height="42"`, "its poster")
 	require.Contains(t, body, `<td class="r mu">1</td>`, "its place")
-	require.Contains(t, body, `<td class="r dl">new</td>`, "no peers the week before")
+	require.Contains(t, body, `<td class="r dl">—</td>`, "no peers the week before")
 	require.Contains(t, body, `<td class="r rl" data-l="releases">2</td>`, "both title keys")
 	require.Contains(t, body, "explicit in 1 of 2 <span class=\"mu\">(Rus)</span>", "the audio summary")
 	require.Less(t, strings.Index(body, "/w/m348"), strings.Index(body, "/w/m8195"), "more peers first")

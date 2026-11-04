@@ -116,20 +116,28 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 			if week, err = counts(ctx, conn, "SELECT torrent_id, hll_card(sketch) FROM win"); err != nil {
 				return err
 			}
-			if works, err = counts(ctx, conn, `SELECT t.work, hll_card(hll_union_agg(w.sketch)) FROM win w JOIN torrent_releases t ON t.id = w.torrent_id
-				WHERE t.work IS NOT NULL GROUP BY t.work`); err != nil {
-				return err
-			}
 		}
-		for _, kind := range TopKinds {
-			for _, vc := range voices {
-				cond, args := voiceTest(vc.v, vc.lang, "t")
-				rcond, rargs := voiceTest(vc.v, vc.lang, "r")
-				res, err := conn.QueryContext(ctx, `SELECT t.work, hll_card(hll_union_agg(w.sketch)) AS peers,
-						(SELECT count(*) FROM torrent_releases r WHERE r.work = t.work`+and(rcond)+`)
-					FROM win w JOIN torrent_releases t ON t.id = w.torrent_id JOIN tmdb_works k ON k.id = t.work
-					WHERE k.type = ?`+and(cond)+`
-					GROUP BY t.work ORDER BY peers DESC, t.work LIMIT ?`, slices.Concat(rargs, []any{TypeOf(kind)}, args, []any{TopSize})...)
+		for _, vc := range voices {
+			cond, args := voiceTest(vc.v, vc.lang, "t")
+			filter := ""
+			if cond != "" {
+				filter = " WHERE " + cond
+			}
+			for _, tbl := range []string{"win", "prev"} {
+				if _, err := conn.ExecContext(ctx, "CREATE TEMP TABLE "+tbl+`w AS SELECT t.work AS work, k.type AS type, hll_card(hll_union_agg(s.sketch)) AS peers
+					FROM `+tbl+` s JOIN torrent_releases t ON t.id = s.torrent_id JOIN tmdb_works k ON k.id = t.work`+filter+` GROUP BY t.work`, args...); err != nil {
+					return err
+				}
+			}
+			if w == WindowWeek && vc.v == VoiceAny {
+				if works, err = counts(ctx, conn, "SELECT work, peers FROM winw"); err != nil {
+					return err
+				}
+			}
+			rcond, rargs := voiceTest(vc.v, vc.lang, "r")
+			for _, kind := range TopKinds {
+				res, err := conn.QueryContext(ctx, `SELECT work, peers, (SELECT count(*) FROM torrent_releases r WHERE r.work = winw.work`+and(rcond)+`)
+					FROM winw WHERE type = ? ORDER BY peers DESC, work LIMIT ?`, slices.Concat(rargs, []any{TypeOf(kind), TopSize})...)
 				if err != nil {
 					return err
 				}
@@ -149,10 +157,7 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 				if len(top) == 0 {
 					continue
 				}
-				before, err := ranks(ctx, conn, `SELECT t.work FROM prev p JOIN torrent_releases t ON t.id = p.torrent_id JOIN tmdb_works k ON k.id = t.work
-					WHERE k.type = ?`+and(cond)+`
-					GROUP BY t.work HAVING hll_card(hll_union_agg(p.sketch)) > 0 ORDER BY hll_card(hll_union_agg(p.sketch)) DESC, t.work`,
-					slices.Concat([]any{TypeOf(kind)}, args)...)
+				before, err := ranks(ctx, conn, "SELECT work FROM prevw WHERE type = ? AND peers > 0 ORDER BY peers DESC, work", TypeOf(kind))
 				if err != nil {
 					return err
 				}
@@ -160,6 +165,9 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 					top[i].prev = before[top[i].work]
 				}
 				rows = append(rows, top...)
+			}
+			if _, err := conn.ExecContext(ctx, "DROP TABLE winw; DROP TABLE prevw"); err != nil {
+				return err
 			}
 		}
 		if _, err := conn.ExecContext(ctx, "DROP TABLE win; DROP TABLE prev"); err != nil {
