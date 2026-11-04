@@ -89,7 +89,7 @@ func SampleTopFiltered(b Base, kind, vl, mode string, all bool) TopPage {
 		p.VoiceLang, p.VoiceMode = "", "any"
 	}
 	for i, x := range list {
-		wk := Work{WorkSummary: x.summary(b.Lang, i+1), Delta: x.delta,
+		wk := Work{WorkSummary: x.summary(b.Lang, i+1), PrevRank: x.prev,
 			Audio: sampleAudio(x, i, b.VoiceLangs), Sources: x.sources, FirstSeen: b.Now.Add(-time.Duration(x.ageDays) * day)}
 		if p.VoiceMode == "explicit" || p.VoiceMode == "p50" {
 			a := WorkAudioOf(wk.Audio, p.VoiceLang)

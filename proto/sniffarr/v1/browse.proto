@@ -353,10 +353,8 @@ message TopEntry {
   reserved 2;
   // Distinct peers of the releases the voice admits over the window.
   int64 peers = 3;
-  // Change of peers against the window of the same length before it, as a
-  // fraction of the earlier count: 0.5 is half as many more; absent when the
-  // work had no peers then.
-  optional float delta = 4;
+  reserved 4;
+  reserved "delta";
   // The work; releases counts those the voice admits.
   WorkSummary work = 5;
   // One entry per audio language the server is configured with, in its
@@ -367,6 +365,10 @@ message TopEntry {
   repeated VideoSource sources = 7;
   // The first sighting of the earliest release.
   google.protobuf.Timestamp first_seen = 8;
+  // The work's place in the window of the same length before this one,
+  // under the same kind and voice, among every work with a peer then; absent
+  // when it had none.
+  optional int32 prev_rank = 9;
 }
 
 message StatsRequest {

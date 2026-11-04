@@ -286,8 +286,8 @@ func (b *Browser) Top(ctx context.Context, req *connect.Request[sniffarrv1.TopRe
 		if !e.Work.FirstSeen.IsZero() {
 			pe.FirstSeen = timestamppb.New(e.Work.FirstSeen)
 		}
-		if e.Delta != nil {
-			pe.Delta = new(float32(*e.Delta))
+		if e.PrevRank > 0 {
+			pe.PrevRank = new(int32(e.PrevRank))
 		}
 		for _, s := range e.Work.Sources {
 			pe.Sources = append(pe.Sources, sources[s])

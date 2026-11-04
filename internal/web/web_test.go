@@ -317,7 +317,7 @@ func TestTop(t *testing.T) {
 	body = page(t, get(t, h, "/top?kind=series&win=24h&all=1", ""))
 	require.Contains(t, body, `aria-current="page">series</a>`)
 	require.Contains(t, body, `<a href="/w/tv95396">Severance</a>`)
-	require.Regexp(t, `<td class="r dl">−\d+%</td>`, body, "fewer peers than the day before")
+	require.Contains(t, body, `<td class="r dl">0</td>`, "first the day before too, with more peers then")
 	require.Contains(t, body, "web", "its source")
 	require.NotContains(t, body, ">show all 100</a>", "every work is listed")
 

@@ -1,0 +1,2 @@
+ALTER TABLE stat_top ADD COLUMN prev_rank INTEGER;
+ALTER TABLE stat_top DROP COLUMN delta;

@@ -489,9 +489,7 @@ func (s *server) top(w http.ResponseWriter, req *http.Request) {
 	for _, e := range res.Msg.GetEntries() {
 		wk := ui.Work{WorkSummary: *summary(e.GetWork()), Audio: workAudio(e.GetAudio())}
 		wk.Rank, wk.Peers = int(e.GetRank()), e.GetPeers()
-		if e.Delta != nil {
-			wk.Delta = new(float64(e.GetDelta()))
-		}
+		wk.PrevRank = int(e.GetPrevRank())
 		if e.FirstSeen != nil {
 			wk.FirstSeen = e.GetFirstSeen().AsTime()
 		}

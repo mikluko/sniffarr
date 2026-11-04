@@ -1872,10 +1872,6 @@ type TopEntry struct {
 	Rank int32 `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
 	// Distinct peers of the releases the voice admits over the window.
 	Peers int64 `protobuf:"varint,3,opt,name=peers,proto3" json:"peers,omitempty"`
-	// Change of peers against the window of the same length before it, as a
-	// fraction of the earlier count: 0.5 is half as many more; absent when the
-	// work had no peers then.
-	Delta *float32 `protobuf:"fixed32,4,opt,name=delta,proto3,oneof" json:"delta,omitempty"`
 	// The work; releases counts those the voice admits.
 	Work *WorkSummary `protobuf:"bytes,5,opt,name=work,proto3" json:"work,omitempty"`
 	// One entry per audio language the server is configured with, in its
@@ -1885,7 +1881,11 @@ type TopEntry struct {
 	// without a source adds none.
 	Sources []VideoSource `protobuf:"varint,7,rep,packed,name=sources,proto3,enum=sniffarr.v1.VideoSource" json:"sources,omitempty"`
 	// The first sighting of the earliest release.
-	FirstSeen     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=first_seen,json=firstSeen,proto3" json:"first_seen,omitempty"`
+	FirstSeen *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=first_seen,json=firstSeen,proto3" json:"first_seen,omitempty"`
+	// The work's place in the window of the same length before this one,
+	// under the same kind and voice, among every work with a peer then; absent
+	// when it had none.
+	PrevRank      *int32 `protobuf:"varint,9,opt,name=prev_rank,json=prevRank,proto3,oneof" json:"prev_rank,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1934,13 +1934,6 @@ func (x *TopEntry) GetPeers() int64 {
 	return 0
 }
 
-func (x *TopEntry) GetDelta() float32 {
-	if x != nil && x.Delta != nil {
-		return *x.Delta
-	}
-	return 0
-}
-
 func (x *TopEntry) GetWork() *WorkSummary {
 	if x != nil {
 		return x.Work
@@ -1967,6 +1960,13 @@ func (x *TopEntry) GetFirstSeen() *timestamppb.Timestamp {
 		return x.FirstSeen
 	}
 	return nil
+}
+
+func (x *TopEntry) GetPrevRank() int32 {
+	if x != nil && x.PrevRank != nil {
+		return *x.PrevRank
+	}
+	return 0
 }
 
 type StatsRequest struct {
@@ -2589,17 +2589,18 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\aentries\x18\x01 \x03(\v2\x15.sniffarr.v1.TopEntryR\aentries\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12;\n" +
 	"\vcomputed_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"computedAt\"\xaa\x02\n" +
+	"computedAt\"\xc2\x02\n" +
 	"\bTopEntry\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\x05R\x04rank\x12\x14\n" +
-	"\x05peers\x18\x03 \x01(\x03R\x05peers\x12\x19\n" +
-	"\x05delta\x18\x04 \x01(\x02H\x00R\x05delta\x88\x01\x01\x12,\n" +
+	"\x05peers\x18\x03 \x01(\x03R\x05peers\x12,\n" +
 	"\x04work\x18\x05 \x01(\v2\x18.sniffarr.v1.WorkSummaryR\x04work\x12,\n" +
 	"\x05audio\x18\x06 \x03(\v2\x16.sniffarr.v1.WorkAudioR\x05audio\x122\n" +
 	"\asources\x18\a \x03(\x0e2\x18.sniffarr.v1.VideoSourceR\asources\x129\n" +
 	"\n" +
-	"first_seen\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeenB\b\n" +
-	"\x06_deltaJ\x04\b\x02\x10\x03\"\"\n" +
+	"first_seen\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeen\x12 \n" +
+	"\tprev_rank\x18\t \x01(\x05H\x00R\bprevRank\x88\x01\x01B\f\n" +
+	"\n" +
+	"_prev_rankJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05R\x05delta\"\"\n" +
 	"\fStatsRequest\x12\x12\n" +
 	"\x04days\x18\x01 \x01(\x05R\x04days\"\xeb\x04\n" +
 	"\rStatsResponse\x12\x14\n" +

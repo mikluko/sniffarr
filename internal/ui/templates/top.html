@@ -33,7 +33,7 @@
   <div class="scroll">
   <table class="t tt">
     <thead><tr>
-      <th class="r">#</th><th>{{.T (concat "top.unit." .Kind)}}</th><th class="r">{{.T "top.peers"}}</th><th class="r">{{.T "top.delta"}}</th>
+      <th class="r">#</th><th>{{.T (concat "top.unit." .Kind)}}</th><th class="r">{{.T "top.peers"}}</th><th class="r">{{.T "top.moved"}}</th>
       <th class="r">{{.T "top.releases"}}</th>
       {{if .VoiceLangs}}<th>{{.T "top.audio"}}</th>{{end}}
       <th>{{.T "top.sources"}}</th><th>{{.T "col.first"}}</th>
@@ -47,7 +47,7 @@
         <span class="tw-t"><a href="{{.Path}}">{{.TMDB.Title}}</a>{{if .TMDB.Year}} <span class="mu">{{.TMDB.Year}}</span>{{end}}
         {{- if .TMDB.ShowOriginal}}<span class="orig mu">{{.TMDB.OriginalTitle}}</span>{{end}}</span></span></td>
       <td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>
-      <td class="r dl">{{$.Delta .Delta}}</td>
+      <td class="r dl">{{$.Moved .Rank .PrevRank}}</td>
       <td class="r rl" data-l="{{$.T "top.releases_lc"}}">{{.Releases}}</td>
       {{if $.VoiceLangs}}<td class="au">{{template "workaudio" (workAudioArgs $.Base .Audio .Releases)}}</td>{{end}}
       <td class="src">{{$.SourceList .Sources}}</td>

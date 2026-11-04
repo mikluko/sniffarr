@@ -38,9 +38,10 @@ type TopEntry struct {
 	// Work counts, sums up and dates the releases the voice admits.
 	Work  Summary
 	Peers int64
-	// Delta is the change of Peers against the window before, as a fraction
-	// of the earlier count; nil when the work had no peers then.
-	Delta *float64
+	// PrevRank is the work's place in the window of the same length before,
+	// under the same kind and voice, among every work with a peer then; 0
+	// when it had none.
+	PrevRank int
 }
 
 // voiceTest returns the SQL condition admitting the torrents of alias t
@@ -82,7 +83,7 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 		rank     int
 		work     int64
 		peers    int64
-		delta    *float64
+		prev     int
 		releases int64
 	}
 	type voice struct {
@@ -148,19 +149,15 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 				if len(top) == 0 {
 					continue
 				}
-				ids := make([]any, len(top))
-				for i, r := range top {
-					ids[i] = r.work
-				}
-				before, err := counts(ctx, conn, `SELECT t.work, hll_card(hll_union_agg(p.sketch)) FROM prev p JOIN torrent_releases t ON t.id = p.torrent_id
-					WHERE t.work IN (`+placeholders(len(ids))+`)`+and(cond)+` GROUP BY t.work`, slices.Concat(ids, args)...)
+				before, err := ranks(ctx, conn, `SELECT t.work FROM prev p JOIN torrent_releases t ON t.id = p.torrent_id JOIN tmdb_works k ON k.id = t.work
+					WHERE k.type = ?`+and(cond)+`
+					GROUP BY t.work HAVING hll_card(hll_union_agg(p.sketch)) > 0 ORDER BY hll_card(hll_union_agg(p.sketch)) DESC, t.work`,
+					slices.Concat([]any{TypeOf(kind)}, args)...)
 				if err != nil {
 					return err
 				}
 				for i := range top {
-					if b := before[top[i].work]; b > 0 {
-						top[i].delta = new(float64(top[i].peers-b) / float64(b))
-					}
+					top[i].prev = before[top[i].work]
 				}
 				rows = append(rows, top...)
 			}
@@ -182,8 +179,8 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 			return err
 		}
 		for _, r := range rows {
-			if _, err := tx.ExecContext(ctx, "INSERT INTO stat_top (kind, window, voice, rank, work, peers, delta, releases, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-				r.kind, r.window, r.voice, r.rank, r.work, r.peers, r.delta, r.releases, now.Unix()); err != nil {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO stat_top (kind, window, voice, rank, work, peers, prev_rank, releases, computed_at) VALUES (?, ?, ?, ?, ?, ?, nullif(?, 0), ?, ?)",
+				r.kind, r.window, r.voice, r.rank, r.work, r.peers, r.prev, r.releases, now.Unix()); err != nil {
 				return err
 			}
 		}
@@ -196,6 +193,25 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 		return err
 	}
 	return s.writePeersWeek(ctx, "tmdb_works", wc)
+}
+
+// ranks returns, by the IDs the query selects on conn, their places in its
+// order, 1 first.
+func ranks(ctx context.Context, conn *sql.Conn, query string, args ...any) (map[int64]int, error) {
+	rows, err := conn.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = len(out) + 1
+	}
+	return out, rows.Err()
 }
 
 // counts returns the pairs of IDs and counts the query selects on conn.
@@ -280,17 +296,13 @@ func (s *Store) Top(ctx context.Context, kind string, w Window, v Voice, lang st
 	var ids []int64
 	if err := s.each(ctx, func(rows *sql.Rows) error {
 		var e TopEntry
-		var delta sql.NullFloat64
-		if err := rows.Scan(&e.Rank, &e.Work.Work.ID, &e.Peers, &delta, &e.Work.Releases); err != nil {
+		if err := rows.Scan(&e.Rank, &e.Work.Work.ID, &e.Peers, &e.PrevRank, &e.Work.Releases); err != nil {
 			return err
-		}
-		if delta.Valid {
-			e.Delta = &delta.Float64
 		}
 		out = append(out, e)
 		ids = append(ids, e.Work.Work.ID)
 		return nil
-	}, "SELECT rank, work, peers, delta, releases FROM stat_top WHERE kind = ? AND window = ? AND voice = ? ORDER BY rank LIMIT ? OFFSET ?",
+	}, "SELECT rank, work, peers, coalesce(prev_rank, 0), releases FROM stat_top WHERE kind = ? AND window = ? AND voice = ? ORDER BY rank LIMIT ? OFFSET ?",
 		kind, w.Name, key, limit, offset); err != nil {
 		return nil, 0, time.Time{}, err
 	}

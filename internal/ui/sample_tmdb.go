@@ -14,7 +14,7 @@ type titleSample struct {
 	m       func(lang string) *TMDBWork
 	rels    int // 0 = only in TMDB
 	peers   int64
-	delta   *float64
+	prev    int // place in the previous window, 0 = new
 	voice   sv
 	sources []string
 	ageDays int
@@ -61,7 +61,7 @@ var spiderMan = titleSample{kind: "movie", m: tm(900001 /* illustrative */, "mov
 		t.Runtime, t.Rating, t.Votes, t.Countries, t.Language = 132, 7.1, 1400, []string{"US"}, "en"
 		t.Genres = g(lang, []string{"боевик", "приключения", "фантастика"}, []string{"Action", "Adventure", "Science Fiction"})
 		t.Overview = ov(lang)
-	}), rels: 95, peers: 61240, delta: fp(.12), voice: sv{Explicit: true}, sources: []string{"web", "rip", "remux"}, ageDays: 40, ranks: [3]int{2, 1, 3}}
+	}), rels: 95, peers: 61240, prev: 2, voice: sv{Explicit: true}, sources: []string{"web", "rip", "remux"}, ageDays: 40, ranks: [3]int{2, 1, 3}}
 
 var sampleMovies = []titleSample{
 	spiderMan,
@@ -70,26 +70,26 @@ var sampleMovies = []titleSample{
 			t.Runtime, t.Rating, t.Votes, t.Countries, t.Language = 130, 7.4, 9800, []string{"US"}, "en"
 			t.Genres = g(lang, []string{"комедия", "драма"}, []string{"Comedy", "Drama"})
 			t.Overview = ov(lang)
-		}), rels: 18, peers: 41760, delta: fp(.41), voice: sv{Explicit: true}, sources: []string{"web", "rip"}, ageDays: 900},
+		}), rels: 18, peers: 41760, prev: 5, voice: sv{Explicit: true}, sources: []string{"web", "rip"}, ageDays: 900},
 	{kind: "movie", m: tm(508943 /* db */, "movie", "", "classifier", 1, 2021, "/sample-508943.jpg",
 		"Лука", "Luca", "Luca", func(t *TMDBWork, lang string) { t.Runtime, t.Countries, t.Language = 95, []string{"US"}, "en" }),
-		rels: 6, peers: 35020, delta: fp(.06), voice: sv{Explicit: true}, sources: []string{"web", "rip"}, ageDays: 400},
+		rels: 6, peers: 35020, prev: 3, voice: sv{Explicit: true}, sources: []string{"web", "rip"}, ageDays: 400},
 	{kind: "movie", m: tm(49802 /* db */, "movie", "", "search", 1, 1981, "/sample-49802.jpg",
 		"Тайна третьей планеты", "The Mystery of the Third Planet", "Тайна третьей планеты", func(t *TMDBWork, lang string) {
 			t.Runtime, t.Countries, t.Language = 50, []string{"SU"}, "ru"
-		}), rels: 8, peers: 31880, delta: fp(-.02), voice: sv{Explicit: true}, sources: []string{"web", "rip"}, ageDays: 900},
+		}), rels: 8, peers: 31880, prev: 4, voice: sv{Explicit: true}, sources: []string{"web", "rip"}, ageDays: 900},
 	{kind: "movie", m: tm(1368337 /* db */, "movie", "", "search", 1, 2026, "",
 		"Одиссея", "The Odyssey", "The Odyssey", func(t *TMDBWork, lang string) { t.Countries, t.Language = []string{"US"}, "en" }),
-		rels: 3, peers: 27310, delta: nil, voice: sv{Prob: fp(.91)}, sources: []string{"web"}, ageDays: 4},
+		rels: 3, peers: 27310, voice: sv{Prob: fp(.91)}, sources: []string{"web"}, ageDays: 4},
 	{kind: "movie", m: tm(1124566 /* db */, "movie", "tt27714581", "search", 1, 2025, "/sample-1124566.jpg",
 		"Sentimental Value", "Sentimental Value", "Sentimental Value", func(t *TMDBWork, lang string) { t.Language = "no" }),
-		rels: 4, peers: 25990, delta: fp(-.04), voice: sv{Prob: fp(.22)}, sources: []string{"web"}, ageDays: 30},
+		rels: 4, peers: 25990, prev: 7, voice: sv{Prob: fp(.22)}, sources: []string{"web"}, ageDays: 30},
 	{kind: "movie", m: tm(851479 /* db */, "movie", "", "search", 1, 2024, "",
 		"Я, Побєда і Берлін", "Я, Побєда і Берлін", "Я, Побєда і Берлін", func(t *TMDBWork, lang string) { t.Countries, t.Language = []string{"UA"}, "uk" }),
-		rels: 2, peers: 20470, delta: fp(-.01), voice: sv{Prob: fp(.31)}, sources: []string{"web"}, ageDays: 300},
+		rels: 2, peers: 20470, prev: 6, voice: sv{Prob: fp(.31)}, sources: []string{"web"}, ageDays: 300},
 	{kind: "movie", m: tm(2179 /* db */, "movie", "tt0365830", "search", 1, 2006, "/sample-2179.jpg",
 		"Tenacious D in The Pick of Destiny", "Tenacious D in The Pick of Destiny", "Tenacious D in The Pick of Destiny", func(t *TMDBWork, lang string) { t.Language = "en" }),
-		rels: 5, peers: 19880, delta: fp(-.11), voice: sv{Explicit: true}, sources: []string{"rip"}, ageDays: 1200},
+		rels: 5, peers: 19880, prev: 8, voice: sv{Explicit: true}, sources: []string{"rip"}, ageDays: 1200},
 }
 
 var sampleSeries = []titleSample{
@@ -98,24 +98,24 @@ var sampleSeries = []titleSample{
 			t.Status, t.Seasons, t.Countries, t.Language, t.Runtime = "Returning Series", 2, []string{"US"}, "en", 60
 			t.Genres = g(lang, []string{"драма", "фантастика"}, []string{"Drama", "Sci-Fi & Fantasy"})
 			t.Overview = ov(lang)
-		}), rels: 41, peers: 88410, delta: nil, voice: sv{Explicit: true}, sources: []string{"web"}, ageDays: 23},
+		}), rels: 41, peers: 88410, voice: sv{Explicit: true}, sources: []string{"web"}, ageDays: 23},
 	{kind: "series", m: tm(1413 /* db */, "tv", "tt1844624", "search", .9, 2011, "/sample-1413.jpg",
 		"Американская история ужасов", "American Horror Story", "American Horror Story", func(t *TMDBWork, lang string) { t.Countries, t.Language = []string{"US"}, "en" }),
-		rels: 64, peers: 52930, delta: fp(-.18), voice: sv{Explicit: true}, sources: []string{"web"}, ageDays: 20},
+		rels: 64, peers: 52930, prev: 1, voice: sv{Explicit: true}, sources: []string{"web"}, ageDays: 20},
 	{kind: "series", m: tm(1399 /* db */, "tv", "tt0944947", "search", .9, 2011, "/sample-1399.jpg",
 		"Игра престолов", "Game of Thrones", "Game of Thrones", func(t *TMDBWork, lang string) {
 			t.Status, t.Seasons, t.Countries, t.Language = "Ended", 8, []string{"US"}, "en"
-		}), rels: 120, peers: 33010, delta: fp(-.03), voice: sv{Explicit: true}, sources: []string{"web", "remux"}, ageDays: 2000},
+		}), rels: 120, peers: 33010, prev: 2, voice: sv{Explicit: true}, sources: []string{"web", "remux"}, ageDays: 2000},
 	{kind: "series", m: tm(289560 /* db */, "tv", "", "classifier", .61, 2026, "/sample-289560.jpg",
 		"CIA", "CIA", "CIA", func(t *TMDBWork, lang string) {
 			t.Status, t.Runtime, t.Rating, t.Votes, t.Countries, t.Language = "Returning Series", 45, 6.8, 210, []string{"US"}, "en"
-		}), rels: 10, peers: 30880, delta: fp(-.04), voice: sv{Prob: fp(.4)}, sources: []string{"web"}, ageDays: 14},
+		}), rels: 10, peers: 30880, prev: 3, voice: sv{Prob: fp(.4)}, sources: []string{"web"}, ageDays: 14},
 	{kind: "series", m: tm(318485 /* db */, "tv", "", "search", .85, 2025, "",
 		"Грачи", "Грачи", "Грачи", func(t *TMDBWork, lang string) { t.Countries, t.Language = []string{"RU"}, "ru" }),
-		rels: 8, peers: 28440, delta: fp(.01), voice: sv{Explicit: true}, sources: []string{"web", "rip"}, ageDays: 40},
+		rels: 8, peers: 28440, prev: 5, voice: sv{Explicit: true}, sources: []string{"web", "rip"}, ageDays: 40},
 	{kind: "series", m: tm(82728 /* db */, "tv", "", "classifier", 1, 2018, "/sample-82728.jpg",
 		"Блуи", "Bluey", "Bluey", func(t *TMDBWork, lang string) { t.Countries, t.Language = []string{"AU"}, "en" }),
-		rels: 7, peers: 19870, delta: fp(.02), voice: sv{Explicit: true}, sources: []string{"web"}, ageDays: 700},
+		rels: 7, peers: 19870, prev: 8, voice: sv{Explicit: true}, sources: []string{"web"}, ageDays: 700},
 }
 
 // TMDB-only titles: found by the TMDB search, no releases with us.

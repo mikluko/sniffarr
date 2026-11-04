@@ -170,20 +170,19 @@ func (b Base) Ago(t time.Time) string {
 	return b.Fmt("ago.min", b.Num(m))
 }
 
-// Delta formats a change against the previous window: "+12%", "−8%", "0%";
-// nil means the work was absent then ("new").
-func (b Base) Delta(d *float64) string {
-	if d == nil {
+// Moved formats the places a work moved from prev to rank: "+3", "−1", "0";
+// prev 0 means it had no peers then ("new").
+func (b Base) Moved(rank, prev int) string {
+	if prev == 0 {
 		return b.T("top.new")
 	}
-	v := math.Round(*d * 100)
-	switch {
-	case v > 0:
-		return "+" + strconv.FormatFloat(v, 'f', 0, 64) + "%"
-	case v < 0:
-		return "−" + strconv.FormatFloat(-v, 'f', 0, 64) + "%"
+	switch d := prev - rank; {
+	case d > 0:
+		return "+" + strconv.Itoa(d)
+	case d < 0:
+		return "−" + strconv.Itoa(-d)
 	}
-	return "0%"
+	return "0"
 }
 
 // SourceList joins translated source keys: "WEB, ремукс".

@@ -172,7 +172,7 @@ type TopPage struct {
 // Work is one row of the top. The row links to the title page.
 type Work struct {
 	WorkSummary             // Rank here is the place in this top (window and filter)
-	Delta       *float64    // change against the previous window, nil = was absent ("new")
+	PrevRank    int         // place in the previous window, 0 = had no peers then ("new")
 	Audio       []WorkAudio // one entry per configured language, in Base.VoiceLangs order
 	Sources     []string    // Sources values present among releases
 	FirstSeen   time.Time   // earliest release

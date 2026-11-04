@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The top's column against the previous window shows the places a work moved, "+3" or "−1", and "new" for a work with no peers then; it showed the change of peers as a percentage. The `Top` RPC's entries carry `prev_rank` instead of `delta`.
+
 ## [0.32.2] - 2026-11-04
 
 ### Fixed
