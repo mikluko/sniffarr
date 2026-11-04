@@ -18,7 +18,8 @@ type Audio struct {
 	Mark   string
 	// Studios are the display names of the language's studios in the
 	// torrent's name or stored file paths, as audio.Language.StudiosIn gives
-	// them; nil without a marker or without a studio.
+	// them, and in the names of the probed tracks in the language; nil
+	// without a studio.
 	Studios []string
 	// ScriptHint reports letters of the language's script in the torrent's
 	// names.

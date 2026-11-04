@@ -91,6 +91,8 @@ func TestStudiosIn(t *testing.T) {
 	require.Equal(t, []string{"NewStudio"}, ru.StudiosIn("Silo.S02.NewStudio", []rules.File{{Path: "Silo.S02E01.NewStudio.mkv"}}), "once across the name and paths")
 	require.Nil(t, ru.StudiosIn("Silo.S03E06.720p.rus.mkv", nil), "a word is not a studio")
 	require.Nil(t, ru.StudiosIn("Lostfilmish.2020", nil), "whole words only")
+	require.Equal(t, []string{"LostFilm", "HDRezka"}, ru.StudiosInTexts([]string{"MVO HDRezka", "Дубляж", "lostfilm"}), "track names")
+	require.Nil(t, ru.StudiosInTexts(nil))
 }
 
 func TestLookup(t *testing.T) {

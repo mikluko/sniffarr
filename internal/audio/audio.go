@@ -176,10 +176,17 @@ func (l Language) Mark(name string, files []rules.File) string {
 // name or a file path, in the order of Studios, each once; nil when there is
 // none.
 func (l Language) StudiosIn(name string, files []rules.File) []string {
+	return l.StudiosInTexts(append([]string{name}, paths(files)...))
+}
+
+// StudiosInTexts returns the display names of the language's Studios found
+// in any of the texts, in the order of Studios, each once; nil when there is
+// none.
+func (l Language) StudiosInTexts(texts []string) []string {
 	var out []string
 	for i, re := range l.studios {
 		n := l.StudioNames[l.Studios[i]]
-		if !slices.Contains(out, n) && anyName(name, files, re.MatchString) {
+		if !slices.Contains(out, n) && slices.ContainsFunc(texts, re.MatchString) {
 			out = append(out, n)
 		}
 	}

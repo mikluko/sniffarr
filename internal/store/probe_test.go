@@ -231,3 +231,23 @@ func TestProbePlans(t *testing.T) {
 		require.Contains(t, plan, tt.want, tt.query)
 	}
 }
+
+func TestProbeDoneStudios(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	tr := torrent(1, "Silo.S02.HDRezka.1080p", "Silo.S02E01.mkv")
+	tr.Kind, tr.KindLayer = "movie", LayerRules
+	tr.Audio = []Audio{{Language: "ru", Marker: true, Mark: "HDRezka", Studios: []string{"HDRezka"}, Probability: new(1.0), Layer: LayerRules}}
+	_, _, err := s.Insert(ctx, tr)
+	require.NoError(t, err)
+	bare := insertProbeable(t, s, 2, "Severance.S02.1080p", 5, "Severance.S02E01.mkv")
+
+	require.NoError(t, s.ProbeDone(ctx, tr.Hash, Probe{Outcome: ProbeTracks, Tracks: []Track{
+		{Kind: "audio", Language: "rus", Name: "MVO LostFilm"}, {Kind: "audio", Language: "rus", Name: "HDRezka"}, {Kind: "audio", Language: "eng", Name: "NewStudio"}}}, t0))
+	require.Equal(t, []string{"HDRezka", "LostFilm"}, mustGet(t, s, tr.Hash).Audio[0].Studios, "the stored studios first, then those the Russian tracks name, each once; an English track's name is not read")
+
+	require.NoError(t, s.ProbeDone(ctx, bare, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "audio", Language: "rus", Name: "Дубляж"}}}, t0))
+	require.Nil(t, mustGet(t, s, bare).Audio[0].Studios, "a track name without a studio")
+	require.NoError(t, s.ProbeDone(ctx, bare, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "audio", Language: "rus", Name: "Кубик в Кубе"}}}, t0))
+	require.Equal(t, []string{"Кубик в Кубе"}, mustGet(t, s, bare).Audio[0].Studios, "a studio with no mark in the name")
+}

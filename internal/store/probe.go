@@ -3,10 +3,14 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"golang.org/x/text/language"
+
+	"github.com/mikluko/sniffarr/internal/audio"
 )
 
 // LayerProbe decides an audio probability by the tracks a probe read in the
@@ -252,31 +256,62 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 // probeAudio sets the probability of an audio track in lang that the
 // tracks decide, if they decide one.
 func probeAudio(ctx context.Context, tx *sql.Tx, id int64, lang string, tracks []Track) error {
-	var audio, in, undetermined int
+	var count, in, undetermined int
+	var names []string
 	for _, t := range tracks {
 		if t.Kind != "audio" {
 			continue
 		}
-		audio++
+		count++
 		switch {
 		case t.In(lang):
 			in++
+			names = append(names, t.Name)
 		case t.Undetermined():
 			undetermined++
 		}
 	}
 	switch {
 	case in > 0:
-		_, err := tx.ExecContext(ctx, `INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer)
-			VALUES (?1, ?2, 0, 0, 1, ?3) ON CONFLICT (torrent_id, language) DO UPDATE SET probability = 1, layer = ?3`, id, lang, LayerProbe)
+		studios, err := mergedStudios(ctx, tx, id, lang, names)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer, studios)
+			VALUES (?1, ?2, 0, 0, 1, ?3, ?4) ON CONFLICT (torrent_id, language) DO UPDATE SET probability = 1, layer = ?3, studios = ?4`, id, lang, LayerProbe, studios)
 		return err
-	case audio > 0 && undetermined == 0:
+	case count > 0 && undetermined == 0:
 		_, err := tx.ExecContext(ctx, `INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer)
 			VALUES (?1, ?2, 0, 0, 0, ?3) ON CONFLICT (torrent_id, language) DO UPDATE SET probability = 0, layer = ?3
 			WHERE torrent_audio.layer IS NOT ?4`, id, lang, LayerProbe, LayerRules)
 		return err
 	}
 	return nil
+}
+
+// mergedStudios is the studios column of the release's audio in lang with
+// the language's studios named in the track names added, after those
+// stored, each once.
+func mergedStudios(ctx context.Context, tx *sql.Tx, id int64, lang string, names []string) (sql.NullString, error) {
+	var stored sql.NullString
+	err := tx.QueryRowContext(ctx, "SELECT studios FROM torrent_audio WHERE torrent_id = ? AND language = ?", id, lang).Scan(&stored)
+	if err = ignoreNoRows(err); err != nil {
+		return sql.NullString{}, err
+	}
+	var studios []string
+	if stored.Valid {
+		if err := json.Unmarshal([]byte(stored.String), &studios); err != nil {
+			return sql.NullString{}, err
+		}
+	}
+	if l, ok := audio.Lookup(lang); ok {
+		for _, s := range l.StudiosInTexts(names) {
+			if !slices.Contains(studios, s) {
+				studios = append(studios, s)
+			}
+		}
+	}
+	return studiosColumn(studios)
 }
 
 // tracks fills in the Tracks of the releases.

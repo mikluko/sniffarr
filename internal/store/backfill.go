@@ -24,6 +24,11 @@ const featuresFilled = "release_features_filled"
 // audio.Language.Mark or audio.Language.StudiosIn needs.
 const marksFilled = "audio_marks_studios_all:"
 
+// probeStudiosFilled is the prefix of the settings key that records, per
+// language, that the studios named in probed tracks were added to the
+// studios of releases probed before they were read.
+const probeStudiosFilled = "probe_studios:"
+
 // Backfilled is the progress of one backfill within one Backfill call.
 type Backfilled struct {
 	Name string
@@ -56,6 +61,12 @@ func (s *Store) Backfill(ctx context.Context, progress func(Backfilled)) error {
 		name := "audio marks " + l.Tag
 		if err := s.backfill(ctx, name, marksFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
 			return s.marksBatch(ctx, l, after)
+		}); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		name = "probe studios " + l.Tag
+		if err := s.backfill(ctx, name, probeStudiosFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
+			return s.probeStudiosBatch(ctx, l, after)
 		}); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
@@ -210,6 +221,55 @@ func (s *Store) marksBatch(ctx context.Context, l audio.Language, after int64) (
 			}
 			if _, err := tx.ExecContext(ctx, `UPDATE torrent_audio SET mark = ?1, studios = ?2 WHERE torrent_id = ?3 AND language = ?4
 				AND (mark IS NOT ?1 OR studios IS NOT ?2)`, r.mark, r.studios, r.id, l.Tag); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, nil
+}
+
+// probeStudiosBatch reads the releases with probed audio tracks after the
+// row ID after, and writes the studios of l named in the tracks in l to
+// each release's audio in l, after those stored.
+func (s *Store) probeStudiosBatch(ctx context.Context, l audio.Language, after int64) (int, int64, func(*sql.Tx) error, error) {
+	var ids []int64
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+		return nil
+	}, "SELECT DISTINCT torrent_id FROM probe_tracks WHERE kind = 'audio' AND torrent_id > ? ORDER BY torrent_id LIMIT ?", after, s.backfillBatch); err != nil {
+		return 0, 0, nil, err
+	}
+	if len(ids) == 0 {
+		return 0, 0, nil, nil
+	}
+	names := map[int64][]string{}
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var id int64
+		var t Track
+		if err := rows.Scan(&id, &t.Language, &t.LanguageBCP47, &t.Name); err != nil {
+			return err
+		}
+		if t.In(l.Tag) {
+			names[id] = append(names[id], t.Name)
+		}
+		return nil
+	}, "SELECT torrent_id, language, language_bcp47, name FROM probe_tracks WHERE kind = 'audio' AND torrent_id IN ("+placeholders(len(ids))+")", int64Args(ids)...); err != nil {
+		return 0, 0, nil, err
+	}
+	return len(ids), ids[len(ids)-1], func(tx *sql.Tx) error {
+		for _, id := range ids {
+			if len(names[id]) == 0 {
+				continue
+			}
+			studios, err := mergedStudios(ctx, tx, id, l.Tag, names[id])
+			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE torrent_audio SET studios = ?1 WHERE torrent_id = ?2 AND language = ?3 AND studios IS NOT ?1", studios, id, l.Tag); err != nil {
 				return err
 			}
 		}

@@ -248,7 +248,9 @@ probability of an audio track in each configured language, under layer
 `probe`: 1 when an audio track is in it; 0 when every audio track gives
 another language, unless a marker in the name decided it, since a release
 may carry that audio in a file of its own. A track that gives no language
-leaves the probability as it was. Jev does not override a probe.
+leaves the probability as it was. Jev does not override a probe. The
+language's studios named in its tracks, as `MVO LostFilm`, join the
+release's studios for the language.
 
 What a probe downloaded is seeded back. The pieces stay in `-probe-dir` and
 the torrent in the client, which uploads them to its peers and announces
