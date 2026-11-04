@@ -139,7 +139,7 @@ func (s *Store) NextProbe(ctx context.Context, now time.Time, background bool, e
 // arguments are the time, probeExtensions and the excluded IDs.
 func probeCond(excluded int) string {
 	cond := `t.kind IN ('movie', 'series') AND t.peers_week > 0
-		AND (p.outcome IS NULL OR p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ?)
+		AND (p.outcome IS NULL OR p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND (p.peers_week IS NULL OR t.peers_week > p.peers_week))
 		AND EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = t.id AND (f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ?))`
 	if excluded > 0 {
 		cond += " AND t.id NOT IN (" + placeholders(excluded) + ")"
@@ -180,15 +180,16 @@ func ignoreNoRows(err error) error {
 }
 
 // ProbeFailed records a failed probe of the stored release at the time. The
-// release is due again after backoff, doubled for each failure before, until
-// attempts probes have failed; ProbeFailed reports whether this was the
-// last.
+// release is due again after backoff, doubled for each failure before up to
+// attempts; once attempts probes have failed it is due again only with more
+// peers over 7 days than it had at the last, and ProbeFailed reports whether
+// the attempts have run out.
 func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts int, backoff time.Duration) (final bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
-		var id int64
+		var id, peers int64
 		var failed int
-		err := tx.QueryRowContext(ctx, `SELECT t.id, coalesce(p.attempts, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
-			WHERE t.infohash = ?`, h[:]).Scan(&id, &failed)
+		err := tx.QueryRowContext(ctx, `SELECT t.id, t.peers_week, coalesce(p.attempts, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
+			WHERE t.infohash = ?`, h[:]).Scan(&id, &peers, &failed)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -196,13 +197,11 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts 
 			return err
 		}
 		failed++
-		var retry sql.NullInt64
-		if final = failed >= attempts; !final {
-			retry = sql.NullInt64{Int64: at.Add(backoff << (failed - 1)).Unix(), Valid: true}
-		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at) VALUES (?1, ?2, ?3, ?4, ?5)
-			ON CONFLICT (torrent_id) DO UPDATE SET outcome = ?2, attempts = ?3, retry_at = ?4, probed_at = ?5`,
-			id, ProbeFailed, failed, retry, at.Unix())
+		final = failed >= attempts
+		retry := at.Add(backoff << min(failed-1, attempts-1)).Unix()
+		_, err = tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, peers_week) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+			ON CONFLICT (torrent_id) DO UPDATE SET outcome = ?2, attempts = ?3, retry_at = ?4, probed_at = ?5, peers_week = ?6`,
+			id, ProbeFailed, failed, retry, at.Unix(), sql.NullInt64{Int64: peers, Valid: final})
 		return err
 	})
 	return final, err

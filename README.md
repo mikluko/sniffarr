@@ -229,8 +229,10 @@ the outcome is stored, the tracks in their own table: read, unknown
 probe cannot read), or failed (fewer than `-min-peers` peers within
 `-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
 before `-probe-timeout`). A failed probe is repeated after
-`SNIFFARR_PROBE_BACKOFF`, doubled for each failure before, until
-`SNIFFARR_PROBE_ATTEMPTS` have failed. A task is leased for
+`SNIFFARR_PROBE_BACKOFF`, doubled for each failure before; once
+`SNIFFARR_PROBE_ATTEMPTS` have failed, the backoff stays at its last doubling
+and the release is probed again only when it has more peers over 7 days than
+at its last probe. A task is leased for
 `SNIFFARR_PROBE_LEASE`; leases live in the API's memory, so a restart frees
 them.
 
@@ -554,7 +556,7 @@ the same to each.
 | `SNIFFARR_PROBE_SEARCH_RESERVE`    | `25`             | Percentage of the daily bytes left to releases a Torznab search returned, `0` to `100`                                 |
 | `SNIFFARR_PROBE_MAX_BYTES`         | `64MiB`          | Piece data one probe downloads at most, units as above                                                                 |
 | `SNIFFARR_PROBE_LEASE`             | `15m`            | How long a fetcher may hold a probe task                                                                               |
-| `SNIFFARR_PROBE_ATTEMPTS`          | `3`              | Failed probes after which a release is not probed again                                                                |
+| `SNIFFARR_PROBE_ATTEMPTS`          | `3`              | Failed probes after which a release is probed again only with more peers than at its last probe                       |
 | `SNIFFARR_PROBE_BACKOFF`           | `6h`             | Wait before repeating a failed probe, doubled per failure                                                              |
 
 The database runs in WAL mode and its schema migrates on start; leases left

@@ -86,9 +86,26 @@ func TestProbeFailedRetries(t *testing.T) {
 
 	final, err = s.ProbeFailed(ctx, h, t0.Add(time.Hour), 2, time.Hour)
 	require.NoError(t, err)
-	require.True(t, final, "the last attempt")
+	require.True(t, final, "the attempts ran out")
 	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
-	require.False(t, ok)
+	require.False(t, ok, "no more peers than at the last probe")
+
+	setPeersWeek(t, s, h, 6)
+	_, ok = nextProbe(t, s, t0.Add(2*time.Hour), true)
+	require.False(t, ok, "more peers, but the backoff, 2h after the second failure, is not out")
+	_, ok = nextProbe(t, s, t0.Add(3*time.Hour), true)
+	require.True(t, ok, "more peers once the backoff is out")
+
+	final, err = s.ProbeFailed(ctx, h, t0.Add(3*time.Hour), 2, time.Hour)
+	require.NoError(t, err)
+	require.True(t, final)
+	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
+	require.False(t, ok, "the peers at the last probe are the new mark")
+	setPeersWeek(t, s, h, 7)
+	_, ok = nextProbe(t, s, t0.Add(4*time.Hour), true)
+	require.False(t, ok, "the backoff stays at its last doubling")
+	_, ok = nextProbe(t, s, t0.Add(5*time.Hour), true)
+	require.True(t, ok)
 }
 
 func TestProbeDoneOnce(t *testing.T) {
