@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-11-04
+
+### Changed
+
+- A release whose `SNIFFARR_PROBE_ATTEMPTS` probes have failed is probed again once it has more peers over 7 days than at its last probe, after the last backoff, rather than never; releases written off before are due again on the same terms.
+
 ## [0.30.0] - 2026-11-02
 
 ### Changed
@@ -451,7 +457,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.30.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.31.0...HEAD
+[0.31.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.30.0...v0.31.0
 [0.30.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.29.0...v0.30.0
 [0.29.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.28.0...v0.29.0
 [0.28.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.3...v0.28.0
