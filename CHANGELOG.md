@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.2] - 2026-11-04
+
+### Fixed
+
+- The ten-minute recount of peers over 7 days writes only the rows that change, 500 a transaction; it held the database's one writer for some 20 seconds, and every probe or fetch result arriving meanwhile was lost to its 5-second deadline.
+
 ## [0.32.1] - 2026-11-04
 
 ### Fixed
@@ -469,7 +475,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.1...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.2...HEAD
+[0.32.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.1...v0.32.2
 [0.32.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.0...v0.32.1
 [0.32.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.31.0...v0.32.0
 [0.31.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.30.0...v0.31.0
