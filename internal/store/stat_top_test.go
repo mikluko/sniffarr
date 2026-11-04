@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"testing"
 	"time"
 
@@ -170,6 +172,37 @@ func TestComputeTop(t *testing.T) {
 	ws, err = s.Works(ctx, []int64{dune})
 	require.NoError(t, err)
 	require.Zero(t, ws[dune].PeersWeek)
+}
+
+func TestPeersWeekChanges(t *testing.T) {
+	ctx := context.Background()
+	s := seeded(t)
+	conn, err := s.r.Conn(ctx)
+	require.NoError(t, err)
+	defer conn.Close()
+	held, err := counts(ctx, conn, "SELECT id, peers_week FROM torrent_releases WHERE peers_week != 0")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(held), 3)
+
+	changes, err := peersWeekChanges(ctx, conn, "torrent_releases", held)
+	require.NoError(t, err)
+	require.Empty(t, changes, "what the table holds is no change")
+
+	ids := slices.Sorted(maps.Keys(held))
+	gone, grown, fresh := ids[0], ids[1], int64(1<<40)
+	week := maps.Clone(held)
+	delete(week, gone)
+	week[grown] += 7
+	week[fresh] = 3
+	changes, err = peersWeekChanges(ctx, conn, "torrent_releases", week)
+	require.NoError(t, err)
+	require.Equal(t, map[int64]int64{gone: 0, grown: held[grown] + 7, fresh: 3}, changes, "a row counted no more goes to 0")
+
+	require.NoError(t, s.writePeersWeek(ctx, "torrent_releases", changes))
+	held, err = counts(ctx, conn, "SELECT id, peers_week FROM torrent_releases WHERE peers_week != 0")
+	require.NoError(t, err)
+	delete(week, fresh)
+	require.Equal(t, week, held, "an id with no row is skipped")
 }
 
 func TestTitlePage(t *testing.T) {

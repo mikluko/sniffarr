@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -168,7 +169,15 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 			return err
 		}
 	}
-	return s.tx(ctx, func(tx *sql.Tx) error {
+	rc, err := peersWeekChanges(ctx, conn, "torrent_releases", week)
+	if err != nil {
+		return err
+	}
+	wc, err := peersWeekChanges(ctx, conn, "tmdb_works", works)
+	if err != nil {
+		return err
+	}
+	err = s.tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM stat_top"); err != nil {
 			return err
 		}
@@ -178,11 +187,15 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 				return err
 			}
 		}
-		if err := writePeersWeek(ctx, tx, "torrent_releases", week); err != nil {
-			return err
-		}
-		return writePeersWeek(ctx, tx, "tmdb_works", works)
+		return nil
 	})
+	if err != nil {
+		return err
+	}
+	if err := s.writePeersWeek(ctx, "torrent_releases", rc); err != nil {
+		return err
+	}
+	return s.writePeersWeek(ctx, "tmdb_works", wc)
 }
 
 // counts returns the pairs of IDs and counts the query selects on conn.
@@ -203,33 +216,50 @@ func counts(ctx context.Context, conn *sql.Conn, query string, args ...any) (map
 	return out, rows.Err()
 }
 
-// writePeersWeek sets peers_week of the table's rows to the counts by id and
-// to 0 for every other row, touching only the rows that change.
-func writePeersWeek(ctx context.Context, tx *sql.Tx, table string, week map[int64]int64) error {
-	if _, err := tx.ExecContext(ctx, "CREATE TEMP TABLE pw (id INTEGER PRIMARY KEY, c INTEGER NOT NULL)"); err != nil {
-		return err
+// peersWeekChanges returns, by id, the peers_week each row of the table
+// should hold and does not: the count by id, or 0 for a row counted no more.
+func peersWeekChanges(ctx context.Context, conn *sql.Conn, table string, week map[int64]int64) (map[int64]int64, error) {
+	changes := maps.Clone(week)
+	if changes == nil {
+		changes = map[int64]int64{}
 	}
-	ids := make([]int64, 0, len(week))
-	for id := range week {
-		ids = append(ids, id)
+	rows, err := conn.QueryContext(ctx, "SELECT id, peers_week FROM "+table+" WHERE peers_week != 0")
+	if err != nil {
+		return nil, err
 	}
-	for c := range slices.Chunk(ids, 500) {
+	defer rows.Close()
+	for rows.Next() {
+		var id, c int64
+		if err := rows.Scan(&id, &c); err != nil {
+			return nil, err
+		}
+		if w, ok := week[id]; !ok {
+			changes[id] = 0
+		} else if w == c {
+			delete(changes, id)
+		}
+	}
+	return changes, rows.Err()
+}
+
+// writePeersWeek sets peers_week of the table's rows by id, 500 rows a
+// transaction: a reader meanwhile sees some rows written and some not yet.
+func (s *Store) writePeersWeek(ctx context.Context, table string, changes map[int64]int64) error {
+	for c := range slices.Chunk(slices.Sorted(maps.Keys(changes)), 500) {
 		args := make([]any, 0, 2*len(c))
 		for _, id := range c {
-			args = append(args, id, week[id])
+			args = append(args, id, changes[id])
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO pw (id, c) VALUES "+strings.TrimSuffix(strings.Repeat("(?, ?),", len(c)), ","), args...); err != nil {
+		err := s.tx(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, "WITH pw (id, c) AS (VALUES "+strings.TrimSuffix(strings.Repeat("(?, ?),", len(c)), ",")+
+				") UPDATE "+table+" SET peers_week = pw.c FROM pw WHERE "+table+".id = pw.id", args...)
+			return err
+		})
+		if err != nil {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE "+table+" SET peers_week = 0 WHERE peers_week != 0 AND id NOT IN (SELECT id FROM pw)"); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "UPDATE "+table+" SET peers_week = pw.c FROM pw WHERE "+table+".id = pw.id AND "+table+".peers_week != pw.c"); err != nil {
-		return err
-	}
-	_, err := tx.ExecContext(ctx, "DROP TABLE pw")
-	return err
+	return nil
 }
 
 // Top returns, from offset, up to limit entries of the top of the kind,
