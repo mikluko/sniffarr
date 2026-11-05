@@ -484,6 +484,10 @@ func TestData(t *testing.T) {
 	require.Contains(t, body, "New torrents per hour, 48 hours")
 	require.Equal(t, 3, strings.Count(body, `class="partial"><title>`), "the current hour, day and week are drawn lighter")
 	require.Contains(t, body, " · in progress</title>")
+	require.Contains(t, body, `hx-trigger="every 30s [document.visibilityState=='visible'], tz"`, "the script's event once the tz cookie is set")
+	body = page(t, get(t, h, "/", "", "Cookie", "tz=Asia/Tokyo"))
+	require.Contains(t, body, "<title>20.10 20:00: ", "the hour of the computation, 11:53 UTC, in the cookie's zone")
+	require.Equal(t, http.StatusOK, get(t, h, "/", "", "Cookie", "tz=Mars/Olympus").Code, "an unknown zone is the process's")
 	require.Contains(t, body, "Dub by language")
 	require.NotContains(t, body, "Grafana")
 	frag := fragment(t, get(t, h, "/", "data"), "data")
@@ -493,13 +497,12 @@ func TestData(t *testing.T) {
 
 func TestCharts(t *testing.T) {
 	// A Tuesday, 12:00 UTC, 15:00 in a zone three hours ahead.
-	s := &server{cfg: Config{Location: time.FixedZone("east", 3*3600)}}
 	hours := make([]int64, 48)
 	hours[0] = 1  // 15:00 local, today
 	hours[15] = 1 // 00:00 local, today still
 	hours[16] = 1 // 23:00 local yesterday, this week
 	hours[40] = 1 // 23:00 local on Sunday, last week
-	hourly, daily, weekly := s.charts(now, hours)
+	hourly, daily, weekly := charts(now, hours, time.FixedZone("east", 3*3600))
 
 	require.Len(t, hourly.Bars, 48)
 	last := hourly.Bars[47]

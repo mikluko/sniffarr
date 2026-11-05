@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -70,9 +71,10 @@ type Locales interface {
 }
 
 type server struct {
-	cfg  Config
-	ui   *ui.Renderer
-	tags []string
+	cfg   Config
+	ui    *ui.Renderer
+	tags  []string
+	zones sync.Map // zone name → *time.Location, the ones tz cookies named
 }
 
 // New returns the UI's handler.
@@ -124,9 +126,28 @@ func (s *server) lang(w http.ResponseWriter, req *http.Request) string {
 }
 
 func (s *server) base(req *http.Request, lang, nav string) ui.Base {
-	b := s.ui.Base(req, lang, nav, s.tags, s.cfg.Location)
+	b := s.ui.Base(req, lang, nav, s.tags, s.location(req))
 	b.Now = s.cfg.Now()
 	return b
+}
+
+// location is the zone of the page's dates: the browser's, when the tz
+// cookie the page's script sets names a zone the process knows, else
+// Config.Location.
+func (s *server) location(req *http.Request) *time.Location {
+	c, err := req.Cookie("tz")
+	if err != nil || c.Value == "" || c.Value == "Local" || len(c.Value) > 64 {
+		return s.cfg.Location
+	}
+	if loc, ok := s.zones.Load(c.Value); ok {
+		return loc.(*time.Location)
+	}
+	loc, err := time.LoadLocation(c.Value)
+	if err != nil {
+		return s.cfg.Location
+	}
+	s.zones.Store(c.Value, loc)
+	return loc
 }
 
 func (s *server) render(w http.ResponseWriter, req *http.Request, page string, data any) {
@@ -616,7 +637,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	if len(hours) < statHours {
 		hours = append(hours, make([]int64, statHours-len(hours))...)
 	}
-	hourly, daily, weekly := s.charts(computed, hours)
+	hourly, daily, weekly := charts(computed, hours, s.location(req))
 	out := ui.Stats{
 		Computed:   computed,
 		Total:      st.GetTotal(),
@@ -672,11 +693,10 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 
 // charts folds counts per clock hour, the latest first, into bars for the
 // last 48 hours, the last 30 calendar days and the last 26 calendar weeks,
-// Monday first, in Location; the last bar of each is the current, unfinished
+// Monday first, in loc; the last bar of each is the current, unfinished
 // period.
-func (s *server) charts(now time.Time, hours []int64) (hourly, daily, weekly ui.Chart) {
+func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, weekly ui.Chart) {
 	const nh, nd, nw = 48, 30, 26
-	loc := s.cfg.Location
 	first := now.Truncate(time.Hour)
 	today := dayStart(now.In(loc))
 	week := today.AddDate(0, 0, -mondayOffset(today))

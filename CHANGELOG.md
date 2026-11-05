@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The data page's daily and weekly charts count calendar days and weeks, Monday first, in the process's time zone; the current hour, day and week are drawn lighter and marked in their tooltips. "New today" and "7 days" count calendar days. They counted 24-hour periods back from the computation.
+- The data page's daily and weekly charts count calendar days and weeks, Monday first, in the browser's time zone, which the page's script puts in the `tz` cookie; the current hour, day and week are drawn lighter and marked in their tooltips. "New today" and "7 days" count calendar days. They counted 24-hour periods back from the computation.
 - **Breaking:** the `Stats` RPC takes `hours` and returns `hours`, counts per UTC clock hour, the current hour first; `days` is gone.
 
 ## [0.34.1] - 2026-11-04
