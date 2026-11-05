@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The classifier's tokens and the probes' bytes on the data page show what they come to by the end of the UTC day at their pace so far, as a dashed outline on the meter and a share of the limit, once a tenth of the day has passed.
+
 ## [0.35.2] - 2026-11-05
 
 ### Added

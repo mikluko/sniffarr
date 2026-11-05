@@ -331,6 +331,7 @@ type ClassifierStats struct {
 	Pending  int64
 	DoneDay  int64
 	LimitDay int64
+	PaceDay  int64 // what DoneDay comes to by the end of the UTC day at its pace so far, 0 for none
 }
 
 // ProbeStats is the piece data of probes on the UTC day, in bytes: RxDay
@@ -339,4 +340,5 @@ type ProbeStats struct {
 	RxDay    int64
 	TxDay    int64
 	LimitDay int64
+	PaceDay  int64 // what RxDay comes to by the end of the UTC day at its pace so far, 0 for none
 }

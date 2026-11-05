@@ -644,8 +644,8 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 		NewDay:     sumLast(daily, 1),
 		NewWeek:    sumLast(daily, 7),
 		New24h:     sumLast(hourly, 24),
-		Classifier: ui.ClassifierStats{Pending: st.GetPending(), DoneDay: st.GetTokensUsedDay(), LimitDay: st.GetTokensLimitDay()},
-		Probe:      ui.ProbeStats{RxDay: st.GetProbeBytesRxDay(), TxDay: st.GetProbeBytesTxDay(), LimitDay: st.GetProbeBytesLimitDay()},
+		Classifier: ui.ClassifierStats{Pending: st.GetPending(), DoneDay: st.GetTokensUsedDay(), LimitDay: st.GetTokensLimitDay(), PaceDay: dayPace(now, st.GetTokensUsedDay())},
+		Probe:      ui.ProbeStats{RxDay: st.GetProbeBytesRxDay(), TxDay: st.GetProbeBytesTxDay(), LimitDay: st.GetProbeBytesLimitDay(), PaceDay: dayPace(now, st.GetProbeBytesRxDay())},
 		Hourly:     hourly, Daily: daily, Weekly: weekly,
 	}
 	byKind := map[string]int64{}
@@ -757,6 +757,16 @@ func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, we
 	return ui.NewBarChart(hv, hl, 12, true, pace(hv[len(hv)-1], first, first.Add(time.Hour))),
 		ui.NewBarChart(dv, dl, 7, true, pace(dv[nd-1], today, today.AddDate(0, 0, 1))),
 		ui.NewBarChart(wv, wl, 4, true, pace(wv[nw-1], week, week.AddDate(0, 0, 7)))
+}
+
+// dayPace is what v, spent so far on the UTC day of now, comes to by its end
+// at the same pace; 0 until a tenth of the day has passed.
+func dayPace(now time.Time, v int64) int64 {
+	done := float64(now.Sub(dayStart(now.UTC()))) / float64(24*time.Hour)
+	if done < 0.1 {
+		return 0
+	}
+	return int64(math.Round(float64(v) / done))
 }
 
 // dayStart is midnight of t's day in its zone.

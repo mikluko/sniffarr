@@ -88,8 +88,9 @@ button:hover{background:var(--sf)}
 .kpis b{font-size:24px;font-weight:700;letter-spacing:-.02em}
 .kpis .at{margin-left:auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px 32px;align-items:start}
-.meter{height:6px;margin-top:8px;background:var(--sf2)}
+.meter{position:relative;height:6px;margin-top:8px;background:var(--sf2)}
 .meter div{height:100%;background:var(--ln)}
+.meter .proj{position:absolute;inset:0 auto 0 0;box-sizing:border-box;background:none;border:1px dashed var(--ln)}
 .charthead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px;margin-top:8px}
 .chart{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 8px}
 .chart .yax{display:flex;flex-direction:column;justify-content:space-between;text-align:right;color:var(--mu);font:11px var(--mono);height:160px}

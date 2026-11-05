@@ -59,8 +59,8 @@
       <tr><td>{{$.T "d.doneday"}}</td><td class="r">{{$.Num .DoneDay}}</td></tr>
       <tr><td>{{$.T "d.limitday"}}</td><td class="r">{{$.Num .LimitDay}}</td></tr>
     </table>
-    <div class="meter" role="img" aria-label="{{$.Pct .DoneDay .LimitDay}}"><div style="width: {{$.PctW .DoneDay .LimitDay | safeCSS}}"></div></div>
-    <p class="mu">{{$.Pct .DoneDay .LimitDay}} {{$.T "d.oflimit"}}</p>
+    <div class="meter" role="img" aria-label="{{$.Pct .DoneDay .LimitDay}}">{{if .PaceDay}}<div class="proj" style="width: {{$.PctW .PaceDay .LimitDay | safeCSS}}"></div>{{end}}<div style="width: {{$.PctW .DoneDay .LimitDay | safeCSS}}"></div></div>
+    <p class="mu">{{$.Pct .DoneDay .LimitDay}} {{$.T "d.oflimit"}}{{if .PaceDay}}, {{$.T "chart.pace"}} {{$.Pct .PaceDay .LimitDay}}{{end}}</p>
     {{end}}
   </section>
   <section>
@@ -71,8 +71,8 @@
       <tr><td>{{$.T "d.probetx"}}</td><td class="r">{{$.Size .TxDay}}</td></tr>
       <tr><td>{{$.T "d.probelimitday"}}</td><td class="r">{{if .LimitDay}}{{$.Size .LimitDay}}{{else}}—{{end}}</td></tr>
     </table>
-    <div class="meter" role="img" aria-label="{{$.Pct .RxDay .LimitDay}}"><div style="width: {{$.PctW .RxDay .LimitDay | safeCSS}}"></div></div>
-    <p class="mu">{{$.Pct .RxDay .LimitDay}} {{$.T "d.oflimit"}}</p>
+    <div class="meter" role="img" aria-label="{{$.Pct .RxDay .LimitDay}}">{{if .PaceDay}}<div class="proj" style="width: {{$.PctW .PaceDay .LimitDay | safeCSS}}"></div>{{end}}<div style="width: {{$.PctW .RxDay .LimitDay | safeCSS}}"></div></div>
+    <p class="mu">{{$.Pct .RxDay .LimitDay}} {{$.T "d.oflimit"}}{{if .PaceDay}}, {{$.T "chart.pace"}} {{$.Pct .PaceDay .LimitDay}}{{end}}</p>
     {{end}}
   </section>
 </div>
