@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-05
+
 ### Changed
 
 - A `hostPath` of `probe.persistence` takes any number of `probe.replicas`: each pod's `/seeds` is `<path>/<pod>` under it, and `probe.extraInitContainers` run before the prober, for a deployment to make that directory the pod's.
@@ -537,7 +539,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.36.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.37.0...HEAD
+[0.37.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.36.0...v0.37.0
 [0.36.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.2...v0.36.0
 [0.35.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.1...v0.35.2
 [0.35.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.0...v0.35.1
