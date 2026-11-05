@@ -132,6 +132,13 @@ func pageLimit(limit, offset int32) (int, int, error) {
 	return min(int(limit), MaxLimit), int(offset), nil
 }
 
+// unfiltered reports whether b selects every release but the excluded
+// kinds, so the counts snapshot has its total and Page need not count.
+func unfiltered(b store.Browse) bool {
+	return b.Text == "" && b.Kinds == nil && b.Matched == nil && b.Quality == "" && b.Source == "" && b.KindLayer == "" &&
+		b.MinSize == 0 && (b.Voice == "" || b.Voice == store.VoiceAny)
+}
+
 // voiceOf reads a voice and the language it applies to, which a narrowing
 // voice requires.
 func voiceOf(v sniffarrv1.Voice, lang *string) (store.Voice, string, error) {
@@ -189,9 +196,17 @@ func (b *Browser) Torrents(ctx context.Context, req *connect.Request[sniffarrv1.
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown sort %d", m.GetSort()))
 	}
 	q.Sort = sort
+	q.NoTotal = unfiltered(q)
 	found, total, err := b.Store.Page(ctx, q)
 	if err != nil {
 		return nil, b.internal(ctx, "torrents", err)
+	}
+	if q.NoTotal {
+		snap, err := b.counts(ctx)
+		if err != nil {
+			return nil, b.internal(ctx, "torrents", err)
+		}
+		total = snap.Stats.Total - snap.Stats.Kinds["adult"]
 	}
 	var ids []int64
 	for _, r := range found {

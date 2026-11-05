@@ -112,6 +112,13 @@ func New(c Config) (http.Handler, error) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if c.Counts != nil && !c.Counts.Ready() {
+			http.Error(w, "counting", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ok\n"))
+	})
 	return mux, nil
 }
 

@@ -32,6 +32,12 @@ type Counts struct {
 	sem    chan struct{}
 }
 
+// Ready reports whether a snapshot exists, so Latest answers without
+// computing.
+func (c *Counts) Ready() bool {
+	return c.latest.Load() != nil
+}
+
 // Latest returns the latest snapshot, computing one when there is none yet.
 // A computation under way is waited for rather than repeated.
 func (c *Counts) Latest(ctx context.Context) (*Snapshot, error) {

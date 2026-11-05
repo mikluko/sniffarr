@@ -522,6 +522,8 @@ type Browse struct {
 	// MinSize drops releases smaller than it, in bytes.
 	MinSize       int64
 	Offset, Limit int
+	// NoTotal skips counting the releases selected in all; Page returns 0.
+	NoTotal bool
 	// Sort is SortPeers, SortLastSeen, SortFirstSeen or SortSize; "" is best
 	// text match first with Text and most recently seen first without.
 	Sort string
@@ -623,8 +625,10 @@ func (s *Store) Page(ctx context.Context, b Browse) ([]Release, int64, error) {
 		cond = " WHERE " + strings.Join(where, " AND ")
 	}
 	var total int64
-	if err := s.r.QueryRowContext(ctx, "SELECT count(*) FROM "+from+cond, args...).Scan(&total); err != nil {
-		return nil, 0, err
+	if !b.NoTotal {
+		if err := s.r.QueryRowContext(ctx, "SELECT count(*) FROM "+from+cond, args...).Scan(&total); err != nil {
+			return nil, 0, err
+		}
 	}
 	rows, err := s.r.QueryContext(ctx, "SELECT "+releaseColumns+" FROM "+from+cond+" ORDER BY "+order+" LIMIT ? OFFSET ?",
 		append(args, b.Limit, b.Offset)...)
@@ -724,13 +728,15 @@ type AudioCounts struct {
 	Marker, Likely, Unlikely int64
 }
 
-// Statements of Stats that read only an index: classCounts groups in the
-// column order of torrent_releases_counts, rejectedCounts reads
-// ingest_rejected_reason, hourCounts and dayCount torrent_releases_first_seen.
+// Statements of Stats that read only an index, in its order, so none sorts:
+// classCounts groups in the column order of torrent_releases_counts,
+// rejectedCounts reads ingest_rejected_reason, hourScan and dayCount
+// torrent_releases_first_seen. hourScan is bucketed by the caller: a GROUP
+// BY on the hour would sort every row through a temp B-tree.
 const (
 	classCounts    = "SELECT coalesce(kind, ''), coalesce(kind_layer, ''), coalesce(source, ''), count(*) FROM torrent_releases GROUP BY source, kind_layer, kind"
 	rejectedCounts = "SELECT reason, count(*) FROM ingest_rejected GROUP BY reason"
-	hourCounts     = "SELECT max(0, ? - first_seen / 3600), count(*) FROM torrent_releases WHERE first_seen >= ? GROUP BY 1"
+	hourScan       = "SELECT first_seen FROM torrent_releases WHERE first_seen >= ? ORDER BY first_seen"
 	dayCount       = "SELECT count(*) FROM torrent_releases WHERE first_seen > ?"
 )
 
@@ -787,14 +793,13 @@ func (s *Store) Stats(ctx context.Context, now time.Time, hours int) (Stats, err
 	}
 	hour := now.Unix() / 3600
 	if err := s.each(ctx, func(rows *sql.Rows) error {
-		var h int
-		var n int64
-		if err := rows.Scan(&h, &n); err != nil {
+		var seen int64
+		if err := rows.Scan(&seen); err != nil {
 			return err
 		}
-		st.Hours[h] += n
+		st.Hours[max(0, hour-seen/3600)]++
 		return nil
-	}, hourCounts, hour, (hour-int64(hours)+1)*3600); err != nil {
+	}, hourScan, (hour-int64(hours)+1)*3600); err != nil {
 		return Stats{}, err
 	}
 	if err := s.r.QueryRowContext(ctx, dayCount, now.Add(-24*time.Hour).Unix()).Scan(&st.NewDay); err != nil {

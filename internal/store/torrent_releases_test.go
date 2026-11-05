@@ -373,7 +373,7 @@ func TestStatsPlans(t *testing.T) {
 	}{
 		{classCounts, "SCAN torrent_releases USING COVERING INDEX torrent_releases_counts", nil, true},
 		{rejectedCounts, "SCAN ingest_rejected USING COVERING INDEX ingest_rejected_reason", nil, true},
-		{hourCounts, "SEARCH torrent_releases USING COVERING INDEX torrent_releases_first_seen (first_seen>?)", []any{0, 0}, false},
+		{hourScan, "SEARCH torrent_releases USING COVERING INDEX torrent_releases_first_seen (first_seen>?)", []any{0}, false},
 		{dayCount, "SEARCH torrent_releases USING COVERING INDEX torrent_releases_first_seen (first_seen>?)", []any{0}, false},
 		{pendingCounts(1), "SCAN t USING INDEX torrent_releases_background", []any{"ru"}, false},
 	} {

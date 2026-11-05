@@ -23,6 +23,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rot13"
+	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -45,6 +46,9 @@ func start(t *testing.T, cfg Config, qopts ...store.QueueOptions) (*httptest.Ser
 	cfg.Store, cfg.Log = s, slog.New(slog.DiscardHandler)
 	if cfg.Arr != nil {
 		cfg.Arr.Store, cfg.Arr.Queue, cfg.Arr.Log = s, q, cfg.Log
+	}
+	if cfg.Counts != nil {
+		cfg.Counts.Store = s
 	}
 	h, err := New(cfg)
 	require.NoError(t, err)
@@ -474,6 +478,25 @@ func TestNoCredentials(t *testing.T) {
 	require.NoError(t, err)
 
 	res, err := hc.Get(srv.URL + "/healthz")
+	require.NoError(t, err)
+	res.Body.Close()
+	require.Equal(t, http.StatusOK, res.StatusCode)
+}
+
+func TestReadyAfterCounts(t *testing.T) {
+	counts := &search.Counts{}
+	srv, hc := start(t, Config{Counts: counts})
+	res, err := hc.Get(srv.URL + "/readyz")
+	require.NoError(t, err)
+	res.Body.Close()
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode, "no counts snapshot yet")
+	res, err = hc.Get(srv.URL + "/healthz")
+	require.NoError(t, err)
+	res.Body.Close()
+	require.Equal(t, http.StatusOK, res.StatusCode, "alive all the same")
+	_, err = counts.Refresh(context.Background())
+	require.NoError(t, err)
+	res, err = hc.Get(srv.URL + "/readyz")
 	require.NoError(t, err)
 	res.Body.Close()
 	require.Equal(t, http.StatusOK, res.StatusCode)

@@ -105,8 +105,13 @@ const maintenance = time.Minute
 // rollup is the interval of the peer sketches' rollup.
 const rollup = time.Hour
 
-// topInterval is how often the tops of works are recomputed.
-const topInterval = 10 * time.Minute
+// topInterval is how often the tops of works are recomputed, and topDelay
+// how long after start the first time: the counts and the page cache come
+// first, so a fresh pod answers before its minutes of sketch unions.
+const (
+	topInterval = 10 * time.Minute
+	topDelay    = 2 * time.Minute
+)
 
 // sweepBatch is the most torrents one retention transaction deletes.
 const sweepBatch = 1000
@@ -209,6 +214,11 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		return nil
 	})
 	app.Go(lc, sd, log, "top", func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(topDelay):
+		}
 		computeTop(ctx, s, log)
 		every(ctx, topInterval, func() { computeTop(ctx, s, log) })
 		return nil
