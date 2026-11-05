@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The current hour, day and week on the data page are outlined up to a projection, the mean of the count over the same length of time ending now and of the period's pace so far, the pace counted once a tenth of the period has passed; the tooltip names the figure.
+
 ## [0.35.1] - 2026-11-05
 
 ### Changed

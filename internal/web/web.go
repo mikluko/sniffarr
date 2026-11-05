@@ -694,12 +694,44 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 // charts folds counts per clock hour, the latest first, into bars for the
 // last 48 hours, the last 30 calendar days and the last 26 calendar weeks,
 // Monday first, in loc; the last bar of each is the current, unfinished
-// period.
+// period, outlined up to a projection: the mean of the count over the same
+// length of time ending now and of the period's pace so far, the latter
+// once a tenth of it has passed.
 func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, weekly ui.Chart) {
 	const nh, nd, nw = 48, 30, 26
 	first := now.Truncate(time.Hour)
 	today := dayStart(now.In(loc))
 	week := today.AddDate(0, 0, -mondayOffset(today))
+	rolling := func(period time.Duration) float64 {
+		var sum float64
+		lo := now.Add(-period)
+		for i, n := range hours {
+			start := first.Add(-time.Duration(i) * time.Hour)
+			end := start.Add(time.Hour)
+			if end.After(now) {
+				end = now
+			}
+			if !end.After(lo) {
+				break
+			}
+			from := start
+			if from.Before(lo) {
+				from = lo
+			}
+			if span := end.Sub(start); span > 0 {
+				sum += float64(n) * float64(end.Sub(from)) / float64(span)
+			}
+		}
+		return sum
+	}
+	pace := func(v int64, start, end time.Time) int64 {
+		period := end.Sub(start)
+		r := rolling(period)
+		if done := float64(now.Sub(start)) / float64(period); done >= 0.1 {
+			r = (r + float64(v)/done) / 2
+		}
+		return int64(math.Round(r))
+	}
 	dv, wv := make([]int64, nd), make([]int64, nw)
 	for i, n := range hours {
 		day := dayStart(first.Add(-time.Duration(i) * time.Hour).In(loc))
@@ -722,7 +754,9 @@ func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, we
 	for i := range wv {
 		wl = append(wl, week.AddDate(0, 0, 7*(i-nw+1)).Format("02.01"))
 	}
-	return ui.NewBarChart(hv, hl, 12, true), ui.NewBarChart(dv, dl, 7, true), ui.NewBarChart(wv, wl, 4, true)
+	return ui.NewBarChart(hv, hl, 12, true, pace(hv[len(hv)-1], first, first.Add(time.Hour))),
+		ui.NewBarChart(dv, dl, 7, true, pace(dv[nd-1], today, today.AddDate(0, 0, 1))),
+		ui.NewBarChart(wv, wl, 4, true, pace(wv[nw-1], week, week.AddDate(0, 0, 7)))
 }
 
 // dayStart is midnight of t's day in its zone.

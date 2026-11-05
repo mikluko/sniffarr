@@ -396,9 +396,9 @@ func SampleData(b Base) DataPage {
 		Dropped:    []Count{{"adult", 2114820}, {"filetype", 1507332}, {"size", 611290}, {"software", 388401}, {"course", 92115}, {"script", 41008}},
 		Classifier: ClassifierStats{Pending: 3412, DoneDay: 41280, LimitDay: 50000},
 		Probe:      ProbeStats{RxDay: 61 << 30, TxDay: 38 << 30, LimitDay: 100 << 30},
-		Hourly:     NewBarChart(hourly, hl, 12, true),
-		Daily:      NewBarChart(daily, dl, 7, true),
-		Weekly:     NewBarChart(weekly, wl, 4, true),
+		Hourly:     NewBarChart(hourly, hl, 12, true, 530),
+		Daily:      NewBarChart(daily, dl, 7, true, 14260),
+		Weekly:     NewBarChart(weekly, wl, 4, true, 92370),
 	}}
 }
 

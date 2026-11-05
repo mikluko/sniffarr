@@ -19,18 +19,23 @@ type Bar struct {
 	Label      string // shown in the native tooltip (<title>)
 	Value      int64
 	Partial    bool // the period is not over: drawn lighter, out of Max and Min
+	// Projected is what the unfinished period comes to at its pace so far,
+	// 0 for none; PY and PH outline it.
+	Projected int64
+	PY, PH    float64
 }
 
 // NewBarChart lays out one bar per value. labels[i] names values[i];
 // every labelEvery-th label (and the last one) goes to the x axis. With
-// partial the last bar is the current, unfinished period.
-func NewBarChart(values []int64, labels []string, labelEvery int, partial bool) Chart {
+// partial the last bar is the current, unfinished period, outlined up to
+// projected when that is above 0.
+func NewBarChart(values []int64, labels []string, labelEvery int, partial bool, projected int64) Chart {
 	const w, h = 1100, 160
 	c := Chart{W: w, H: h}
 	if len(values) == 0 {
 		return c
 	}
-	var top int64
+	top := projected
 	minI, maxI := -1, -1
 	for i, v := range values {
 		if v > top {
@@ -63,11 +68,16 @@ func NewBarChart(values []int64, labels []string, labelEvery int, partial bool) 
 		if i < len(labels) {
 			lbl = labels[i]
 		}
-		c.Bars = append(c.Bars, Bar{
+		b := Bar{
 			X: r1(float64(i)*slot + gap/2), Y: r1(h - bh),
 			W: r1(slot - gap), H: r1(bh),
 			Label: lbl, Value: v, Partial: partial && i == len(values)-1,
-		})
+		}
+		if b.Partial && projected > 0 {
+			ph := float64(projected) / float64(ymax) * h
+			b.Projected, b.PY, b.PH = projected, r1(h-ph), r1(ph)
+		}
+		c.Bars = append(c.Bars, b)
 	}
 	c.Max, c.Min = c.Bars[maxI], c.Bars[minI]
 	if labelEvery < 1 {
