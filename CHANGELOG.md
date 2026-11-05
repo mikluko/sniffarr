@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-05
+
 ### Added
 
 - The data page charts new torrents per hour over the last 48 hours, with the last 24 hours' total.
@@ -500,7 +502,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.1...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.0...HEAD
+[0.35.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.1...v0.35.0
 [0.34.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.0...v0.34.1
 [0.34.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.2...v0.34.0
 [0.32.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.1...v0.32.2
