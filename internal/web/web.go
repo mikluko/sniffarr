@@ -596,12 +596,13 @@ func backURL(req *http.Request) string {
 	return ""
 }
 
-// statDays is how many days of new torrents the data page counts: 26 weeks.
-const statDays = 26 * 7
+// statHours is how many clock hours of new torrents the data page asks for:
+// 26 calendar weeks, the current one included, and a day to spare.
+const statHours = (26*7 + 1) * 24
 
 func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	now := s.cfg.Now()
-	res, err := s.cfg.Browse.Stats(req.Context(), connect.NewRequest(&sniffarrv1.StatsRequest{Days: statDays}))
+	res, err := s.cfg.Browse.Stats(req.Context(), connect.NewRequest(&sniffarrv1.StatsRequest{Hours: statHours}))
 	if err != nil {
 		s.fail(w, req, "stats", err)
 		return
@@ -611,19 +612,20 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	if at := st.GetComputedAt(); at != nil {
 		computed = at.AsTime()
 	}
-	days := st.GetDays()
-	if len(days) < statDays {
-		days = append(days, make([]int64, statDays-len(days))...)
+	hours := st.GetHours()
+	if len(hours) < statHours {
+		hours = append(hours, make([]int64, statHours-len(hours))...)
 	}
+	hourly, daily, weekly := s.charts(computed, hours)
 	out := ui.Stats{
 		Computed:   computed,
 		Total:      st.GetTotal(),
-		NewDay:     days[0],
+		NewDay:     sumLast(daily, 1),
+		NewWeek:    sumLast(daily, 7),
+		New24h:     sumLast(hourly, 24),
 		Classifier: ui.ClassifierStats{Pending: st.GetPending(), DoneDay: st.GetTokensUsedDay(), LimitDay: st.GetTokensLimitDay()},
 		Probe:      ui.ProbeStats{RxDay: st.GetProbeBytesRxDay(), TxDay: st.GetProbeBytesTxDay(), LimitDay: st.GetProbeBytesLimitDay()},
-	}
-	for _, n := range days[:7] {
-		out.NewWeek += n
+		Hourly:     hourly, Daily: daily, Weekly: weekly,
 	}
 	byKind := map[string]int64{}
 	for _, c := range st.GetKinds() {
@@ -665,30 +667,65 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	slices.SortStableFunc(out.Dropped, func(a, b ui.Count) int {
 		return cmp.Or(cmp.Compare(b.N, a.N), cmp.Compare(slices.Index(ui.DropReasons, a.Key), slices.Index(ui.DropReasons, b.Key)))
 	})
-	out.Daily, out.Weekly = s.charts(computed, days)
 	s.render(w, req, "data", ui.DataPage{Base: s.base(req, s.lang(w, req), "data"), Stats: out})
 }
 
-// charts are the bar charts of the last 30 days and of the 26 weeks in days,
-// counts of the 24-hour periods before now, the latest first.
-func (s *server) charts(now time.Time, days []int64) (daily, weekly ui.Chart) {
-	label := func(ago int) string { return now.AddDate(0, 0, -ago).In(s.cfg.Location).Format("02.01") }
-	var values []int64
-	var labels []string
-	for i := 29; i >= 0; i-- {
-		values = append(values, days[i])
-		labels = append(labels, label(i))
-	}
-	daily = ui.NewBarChart(values, labels, 7)
-	values, labels = nil, nil
-	for wk := len(days)/7 - 1; wk >= 0; wk-- {
-		var n int64
-		for _, d := range days[wk*7 : wk*7+7] {
-			n += d
+// charts folds counts per clock hour, the latest first, into bars for the
+// last 48 hours, the last 30 calendar days and the last 26 calendar weeks,
+// Monday first, in Location; the last bar of each is the current, unfinished
+// period.
+func (s *server) charts(now time.Time, hours []int64) (hourly, daily, weekly ui.Chart) {
+	const nh, nd, nw = 48, 30, 26
+	loc := s.cfg.Location
+	first := now.Truncate(time.Hour)
+	today := dayStart(now.In(loc))
+	week := today.AddDate(0, 0, -mondayOffset(today))
+	dv, wv := make([]int64, nd), make([]int64, nw)
+	for i, n := range hours {
+		day := dayStart(first.Add(-time.Duration(i) * time.Hour).In(loc))
+		if d := calendarDays(day, today); d < nd {
+			dv[nd-1-d] += n
 		}
-		values = append(values, n)
-		labels = append(labels, label(wk*7))
+		if w := calendarDays(day.AddDate(0, 0, -mondayOffset(day)), week) / 7; w < nw {
+			wv[nw-1-w] += n
+		}
 	}
-	weekly = ui.NewBarChart(values, labels, 4)
-	return daily, weekly
+	var hv []int64
+	var hl, dl, wl []string
+	for i := min(nh, len(hours)) - 1; i >= 0; i-- {
+		hv = append(hv, hours[i])
+		hl = append(hl, first.Add(-time.Duration(i)*time.Hour).In(loc).Format("02.01 15:04"))
+	}
+	for i := range dv {
+		dl = append(dl, today.AddDate(0, 0, i-nd+1).Format("02.01"))
+	}
+	for i := range wv {
+		wl = append(wl, week.AddDate(0, 0, 7*(i-nw+1)).Format("02.01"))
+	}
+	return ui.NewBarChart(hv, hl, 12, true), ui.NewBarChart(dv, dl, 7, true), ui.NewBarChart(wv, wl, 4, true)
+}
+
+// dayStart is midnight of t's day in its zone.
+func dayStart(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+// mondayOffset is how many days t's day is past the Monday of its week.
+func mondayOffset(t time.Time) int {
+	return (int(t.Weekday()) + 6) % 7
+}
+
+// calendarDays counts the days from day start a to day start b in one zone;
+// a clock change between them is an hour, not a day.
+func calendarDays(a, b time.Time) int {
+	return int(math.Round(b.Sub(a).Hours() / 24))
+}
+
+// sumLast sums the values of the chart's last n bars.
+func sumLast(c ui.Chart, n int) int64 {
+	var sum int64
+	for _, b := range c.Bars[max(0, len(c.Bars)-n):] {
+		sum += b.Value
+	}
+	return sum
 }

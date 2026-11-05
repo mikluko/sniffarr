@@ -166,7 +166,7 @@ func TestBrowserCard(t *testing.T) {
 func TestBrowserStats(t *testing.T) {
 	b := browser(t)
 	ctx := context.Background()
-	res, err := b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Days: 3}))
+	res, err := b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Hours: 4}))
 	require.NoError(t, err)
 	m := res.Msg
 	require.EqualValues(t, 5, m.GetTotal())
@@ -183,14 +183,14 @@ func TestBrowserStats(t *testing.T) {
 	require.Equal(t, []*sniffarrv1.AudioCounts{{Language: "ru", Marker: 1, Likely: 1}}, m.GetAudio())
 	require.Equal(t, []*sniffarrv1.RejectionCount{{Reason: sniffarrv1.Rejection_REJECTION_SMALL, Count: 2}}, m.GetRejected())
 	require.EqualValues(t, 1, m.GetPending(), "the script-hinted torrent of unknown kind")
-	require.Equal(t, []int64{4, 1, 0}, m.GetDays())
+	require.Equal(t, []int64{1, 1, 1, 1}, m.GetHours(), "one an hour, the current hour first")
 	require.EqualValues(t, 250, m.GetTokensUsedDay())
 	require.EqualValues(t, 1000, m.GetTokensLimitDay())
 	require.EqualValues(t, 3<<30, m.GetProbeBytesRxDay())
 	require.EqualValues(t, 1<<30, m.GetProbeBytesTxDay())
 	require.EqualValues(t, 100<<30, m.GetProbeBytesLimitDay())
 
-	_, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Days: MaxStatsDays + 1}))
+	_, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Hours: MaxStatsHours + 1}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }
 

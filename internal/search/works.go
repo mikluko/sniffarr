@@ -239,7 +239,7 @@ func (b *Browser) Home(ctx context.Context, _ *connect.Request[sniffarrv1.HomeRe
 		return nil, b.internal(ctx, "home", err)
 	}
 	st := snap.Stats
-	return connect.NewResponse(&sniffarrv1.HomeResponse{Total: st.Total, NewDay: st.Days[0], Pending: st.Pending, ComputedAt: timestamppb.New(snap.At)}), nil
+	return connect.NewResponse(&sniffarrv1.HomeResponse{Total: st.Total, NewDay: st.NewDay, Pending: st.Pending, ComputedAt: timestamppb.New(snap.At)}), nil
 }
 
 func (b *Browser) Top(ctx context.Context, req *connect.Request[sniffarrv1.TopRequest]) (*connect.Response[sniffarrv1.TopResponse], error) {

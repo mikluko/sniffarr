@@ -298,8 +298,9 @@ type DataPage struct {
 type Stats struct {
 	Computed     time.Time // when the API computed the counts
 	Total        int64
-	NewDay       int64
-	NewWeek      int64
+	NewDay       int64 // first seen on the current calendar day
+	NewWeek      int64 // first seen on the last 7 calendar days, today included
+	New24h       int64 // first seen in the last 24 clock hours, the current one included
 	DroppedTotal int64
 
 	ByKind   []Count // Key from Kinds
@@ -311,8 +312,9 @@ type Stats struct {
 	Classifier ClassifierStats
 	Probe      ProbeStats
 
-	Daily  Chart // new torrents per day
-	Weekly Chart // new torrents per 7 days
+	Hourly Chart // new torrents per clock hour, 48 hours
+	Daily  Chart // new torrents per calendar day, 30 days
+	Weekly Chart // new torrents per calendar week, 26 weeks
 }
 
 type Count struct {

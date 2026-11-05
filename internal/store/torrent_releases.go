@@ -713,9 +713,10 @@ type Stats struct {
 	Rejected map[string]int64
 	// Pending counts the torrents Unclassified selects.
 	Pending int64
-	// Days counts the torrents first seen in each of the 24-hour periods
-	// before now, the latest first.
-	Days []int64
+	// Hours counts the torrents first seen in each clock hour up to now, the
+	// hour of now first; NewDay those first seen in the 24 hours before now.
+	Hours  []int64
+	NewDay int64
 }
 
 // AudioCounts are the audio counts of one language.
@@ -725,17 +726,18 @@ type AudioCounts struct {
 
 // Statements of Stats that read only an index: classCounts groups in the
 // column order of torrent_releases_counts, rejectedCounts reads
-// ingest_rejected_reason and dayCounts torrent_releases_first_seen.
+// ingest_rejected_reason, hourCounts and dayCount torrent_releases_first_seen.
 const (
 	classCounts    = "SELECT coalesce(kind, ''), coalesce(kind_layer, ''), coalesce(source, ''), count(*) FROM torrent_releases GROUP BY source, kind_layer, kind"
 	rejectedCounts = "SELECT reason, count(*) FROM ingest_rejected GROUP BY reason"
-	dayCounts      = "SELECT max(0, (? - first_seen) / ?), count(*) FROM torrent_releases WHERE first_seen > ? GROUP BY 1"
+	hourCounts     = "SELECT max(0, ? - first_seen / 3600), count(*) FROM torrent_releases WHERE first_seen >= ? GROUP BY 1"
+	dayCount       = "SELECT count(*) FROM torrent_releases WHERE first_seen > ?"
 )
 
-// Stats returns the store's counts at now, with days periods in Days.
-func (s *Store) Stats(ctx context.Context, now time.Time, days int) (Stats, error) {
+// Stats returns the store's counts at now, with hours clock hours in Hours.
+func (s *Store) Stats(ctx context.Context, now time.Time, hours int) (Stats, error) {
 	st := Stats{Kinds: map[string]int64{}, Layers: map[string]int64{}, Sources: map[string]int64{},
-		Audio: map[string]AudioCounts{}, Rejected: map[string]int64{}, Days: make([]int64, days)}
+		Audio: map[string]AudioCounts{}, Rejected: map[string]int64{}, Hours: make([]int64, hours)}
 	if err := s.each(ctx, func(rows *sql.Rows) error {
 		var kind, layer, source string
 		var n int64
@@ -783,17 +785,19 @@ func (s *Store) Stats(ctx context.Context, now time.Time, days int) (Stats, erro
 	}, rejectedCounts); err != nil {
 		return Stats{}, err
 	}
-	const day = 24 * 60 * 60
-	at := now.Unix()
+	hour := now.Unix() / 3600
 	if err := s.each(ctx, func(rows *sql.Rows) error {
-		var d int
+		var h int
 		var n int64
-		if err := rows.Scan(&d, &n); err != nil {
+		if err := rows.Scan(&h, &n); err != nil {
 			return err
 		}
-		st.Days[d] += n
+		st.Hours[h] += n
 		return nil
-	}, dayCounts, at, day, at-int64(days)*day); err != nil {
+	}, hourCounts, hour, (hour-int64(hours)+1)*3600); err != nil {
+		return Stats{}, err
+	}
+	if err := s.r.QueryRowContext(ctx, dayCount, now.Add(-24*time.Hour).Unix()).Scan(&st.NewDay); err != nil {
 		return Stats{}, err
 	}
 	return st, nil

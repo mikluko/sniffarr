@@ -381,8 +381,14 @@ func SampleData(b Base) DataPage {
 	for i := range weekly {
 		wl = append(wl, b.Now.AddDate(0, 0, 7*(i-len(weekly)+1)).Format("02.01"))
 	}
+	hourly := []int64{512, 488, 530, 601, 577, 640, 702, 655, 590, 544, 498, 470, 455, 431, 420, 462, 503, 548, 591, 622, 604, 570, 533, 508,
+		495, 471, 520, 589, 566, 630, 688, 641, 582, 537, 489, 463, 449, 426, 417, 455, 497, 541, 584, 613, 598, 561, 526, 212}
+	var hl []string
+	for i := range hourly {
+		hl = append(hl, b.Now.Truncate(time.Hour).Add(time.Duration(i-len(hourly)+1)*time.Hour).Format("02.01 15:04"))
+	}
 	return DataPage{Base: b, Stats: Stats{
-		Computed: b.Now.Add(-3 * time.Minute), Total: 1284311, NewDay: 9506, NewWeek: 86060, DroppedTotal: 4754966,
+		Computed: b.Now.Add(-3 * time.Minute), Total: 1284311, NewDay: 9506, NewWeek: 86060, New24h: 12721, DroppedTotal: 4754966,
 		ByKind:     []Count{{"movie", 312940}, {"series", 248117}, {"other", 628184}, {"unknown", 95070}},
 		ByLayer:    []Count{{"rules", 702118}, {"title_repeat", 211540}, {"classifier", 370653}},
 		BySource:   []Count{{"disc", 18204}, {"remux", 41377}, {"rip", 233510}, {"web", 251096}, {"other", 740124}},
@@ -390,8 +396,9 @@ func SampleData(b Base) DataPage {
 		Dropped:    []Count{{"adult", 2114820}, {"filetype", 1507332}, {"size", 611290}, {"software", 388401}, {"course", 92115}, {"script", 41008}},
 		Classifier: ClassifierStats{Pending: 3412, DoneDay: 41280, LimitDay: 50000},
 		Probe:      ProbeStats{RxDay: 61 << 30, TxDay: 38 << 30, LimitDay: 100 << 30},
-		Daily:      NewBarChart(daily, dl, 7),
-		Weekly:     NewBarChart(weekly, wl, 4),
+		Hourly:     NewBarChart(hourly, hl, 12, true),
+		Daily:      NewBarChart(daily, dl, 7, true),
+		Weekly:     NewBarChart(weekly, wl, 4, true),
 	}}
 }
 

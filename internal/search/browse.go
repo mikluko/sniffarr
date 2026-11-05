@@ -20,8 +20,8 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-// MaxStatsDays is the most days Browser.Stats counts.
-const MaxStatsDays = 3660
+// MaxStatsHours is the most clock hours Browser.Stats counts: 3660 days.
+const MaxStatsHours = 3660 * 24
 
 // TitleSearch searches TMDB for works and stores what it finds;
 // tmdb.Matcher is one.
@@ -57,7 +57,7 @@ func (b *Browser) counts(ctx context.Context) (*Snapshot, error) {
 		return b.Counts.Latest(ctx)
 	}
 	now := b.now()
-	st, err := b.Store.Stats(ctx, now, MaxStatsDays)
+	st, err := b.Store.Stats(ctx, now, MaxStatsHours)
 	if err != nil {
 		return nil, err
 	}
@@ -263,9 +263,9 @@ func ruleHits(name string, files []rules.File, tags []string) []*sniffarrv1.Rule
 }
 
 func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.StatsRequest]) (*connect.Response[sniffarrv1.StatsResponse], error) {
-	days := int(req.Msg.GetDays())
-	if days < 0 || days > MaxStatsDays {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("days %d, want 0 to %d", days, MaxStatsDays))
+	hours := int(req.Msg.GetHours())
+	if hours < 0 || hours > MaxStatsHours {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("hours %d, want 0 to %d", hours, MaxStatsHours))
 	}
 	snap, err := b.counts(ctx)
 	if err != nil {
@@ -281,7 +281,7 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	if err != nil {
 		return nil, b.internal(ctx, "stats", err)
 	}
-	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Days: slices.Clone(st.Days[:days]), TokensUsedDay: used,
+	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Hours: slices.Clone(st.Hours[:hours]), TokensUsedDay: used,
 		TokensLimitDay: b.DailyTokens, ProbeBytesRxDay: traffic.Rx, ProbeBytesTxDay: traffic.Tx, ProbeBytesLimitDay: b.ProbeDailyBytes,
 		ComputedAt: timestamppb.New(snap.At)}
 	byKind := map[sniffarrv1.Kind]int64{}

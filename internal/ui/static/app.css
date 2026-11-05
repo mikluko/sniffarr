@@ -94,6 +94,7 @@ button:hover{background:var(--sf)}
 .chart{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 8px}
 .chart .yax{display:flex;flex-direction:column;justify-content:space-between;text-align:right;color:var(--mu);font:11px var(--mono);height:160px}
 .chart svg{width:100%;height:160px;display:block;fill:var(--ln);border-bottom:1px solid var(--rule)}
+.chart svg rect.partial{fill-opacity:.4}
 .chart svg rect:hover{fill:var(--fg)}
 .chart .xax{display:flex;justify-content:space-between;color:var(--mu);font:11px var(--mono)}
 

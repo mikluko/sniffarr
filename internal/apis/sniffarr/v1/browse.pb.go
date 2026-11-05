@@ -1971,9 +1971,9 @@ func (x *TopEntry) GetPrevRank() int32 {
 
 type StatsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// How many 24-hour periods before now to count first sightings in, at
-	// most 3660.
-	Days          int32 `protobuf:"varint,1,opt,name=days,proto3" json:"days,omitempty"`
+	// How many clock hours up to now to count first sightings in, the
+	// current, unfinished hour included, at most 87840.
+	Hours         int32 `protobuf:"varint,2,opt,name=hours,proto3" json:"hours,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2008,9 +2008,9 @@ func (*StatsRequest) Descriptor() ([]byte, []int) {
 	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{23}
 }
 
-func (x *StatsRequest) GetDays() int32 {
+func (x *StatsRequest) GetHours() int32 {
 	if x != nil {
-		return x.Days
+		return x.Hours
 	}
 	return 0
 }
@@ -2033,15 +2033,13 @@ type StatsResponse struct {
 	Rejected []*RejectionCount `protobuf:"bytes,6,rep,name=rejected,proto3" json:"rejected,omitempty"`
 	// Releases awaiting the background classifier.
 	Pending int64 `protobuf:"varint,7,opt,name=pending,proto3" json:"pending,omitempty"`
-	// Releases first seen in each of the days asked for, the latest first.
-	Days []int64 `protobuf:"varint,8,rep,packed,name=days,proto3" json:"days,omitempty"`
 	// Classifier tokens spent on the current UTC day, and the day's limit, 0
 	// for none.
 	TokensUsedDay  int64 `protobuf:"varint,9,opt,name=tokens_used_day,json=tokensUsedDay,proto3" json:"tokens_used_day,omitempty"`
 	TokensLimitDay int64 `protobuf:"varint,10,opt,name=tokens_limit_day,json=tokensLimitDay,proto3" json:"tokens_limit_day,omitempty"`
 	// When every count but tokens_used_day, probe_bytes_rx_day and
-	// probe_bytes_tx_day was computed; days are the 24-hour periods before
-	// it. Those three are read at the request.
+	// probe_bytes_tx_day was computed; hours are the clock hours up to it.
+	// Those three are read at the request.
 	ComputedAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=computed_at,json=computedAt,proto3" json:"computed_at,omitempty"`
 	// Piece data probes downloaded on the current UTC day, in bytes, the
 	// day's limit on it, 0 for none, and the piece data the fetchers reported
@@ -2049,8 +2047,11 @@ type StatsResponse struct {
 	ProbeBytesRxDay    int64 `protobuf:"varint,12,opt,name=probe_bytes_rx_day,json=probeBytesRxDay,proto3" json:"probe_bytes_rx_day,omitempty"`
 	ProbeBytesLimitDay int64 `protobuf:"varint,13,opt,name=probe_bytes_limit_day,json=probeBytesLimitDay,proto3" json:"probe_bytes_limit_day,omitempty"`
 	ProbeBytesTxDay    int64 `protobuf:"varint,14,opt,name=probe_bytes_tx_day,json=probeBytesTxDay,proto3" json:"probe_bytes_tx_day,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Releases first seen in each of the hours asked for, the latest first.
+	// The hours are UTC clock hours, which every zone's hours align with.
+	Hours         []int64 `protobuf:"varint,15,rep,packed,name=hours,proto3" json:"hours,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StatsResponse) Reset() {
@@ -2132,13 +2133,6 @@ func (x *StatsResponse) GetPending() int64 {
 	return 0
 }
 
-func (x *StatsResponse) GetDays() []int64 {
-	if x != nil {
-		return x.Days
-	}
-	return nil
-}
-
 func (x *StatsResponse) GetTokensUsedDay() int64 {
 	if x != nil {
 		return x.TokensUsedDay
@@ -2179,6 +2173,13 @@ func (x *StatsResponse) GetProbeBytesTxDay() int64 {
 		return x.ProbeBytesTxDay
 	}
 	return 0
+}
+
+func (x *StatsResponse) GetHours() []int64 {
+	if x != nil {
+		return x.Hours
+	}
+	return nil
 }
 
 type KindCount struct {
@@ -2600,9 +2601,9 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"first_seen\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tfirstSeen\x12 \n" +
 	"\tprev_rank\x18\t \x01(\x05H\x00R\bprevRank\x88\x01\x01B\f\n" +
 	"\n" +
-	"_prev_rankJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05R\x05delta\"\"\n" +
-	"\fStatsRequest\x12\x12\n" +
-	"\x04days\x18\x01 \x01(\x05R\x04days\"\xeb\x04\n" +
+	"_prev_rankJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05R\x05delta\"0\n" +
+	"\fStatsRequest\x12\x14\n" +
+	"\x05hours\x18\x02 \x01(\x05R\x05hoursJ\x04\b\x01\x10\x02R\x04days\"\xf9\x04\n" +
 	"\rStatsResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x03R\x05total\x12,\n" +
 	"\x05kinds\x18\x02 \x03(\v2\x16.sniffarr.v1.KindCountR\x05kinds\x12/\n" +
@@ -2610,8 +2611,7 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\asources\x18\x04 \x03(\v2\x18.sniffarr.v1.SourceCountR\asources\x12.\n" +
 	"\x05audio\x18\x05 \x03(\v2\x18.sniffarr.v1.AudioCountsR\x05audio\x127\n" +
 	"\brejected\x18\x06 \x03(\v2\x1b.sniffarr.v1.RejectionCountR\brejected\x12\x18\n" +
-	"\apending\x18\a \x01(\x03R\apending\x12\x12\n" +
-	"\x04days\x18\b \x03(\x03R\x04days\x12&\n" +
+	"\apending\x18\a \x01(\x03R\apending\x12&\n" +
 	"\x0ftokens_used_day\x18\t \x01(\x03R\rtokensUsedDay\x12(\n" +
 	"\x10tokens_limit_day\x18\n" +
 	" \x01(\x03R\x0etokensLimitDay\x12;\n" +
@@ -2619,7 +2619,8 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"computedAt\x12+\n" +
 	"\x12probe_bytes_rx_day\x18\f \x01(\x03R\x0fprobeBytesRxDay\x121\n" +
 	"\x15probe_bytes_limit_day\x18\r \x01(\x03R\x12probeBytesLimitDay\x12+\n" +
-	"\x12probe_bytes_tx_day\x18\x0e \x01(\x03R\x0fprobeBytesTxDay\"H\n" +
+	"\x12probe_bytes_tx_day\x18\x0e \x01(\x03R\x0fprobeBytesTxDay\x12\x14\n" +
+	"\x05hours\x18\x0f \x03(\x03R\x05hoursJ\x04\b\b\x10\tR\x04days\"H\n" +
 	"\tKindCount\x12%\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x03R\x05count\"L\n" +

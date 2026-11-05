@@ -20,7 +20,7 @@ func TestBrowserServesSnapshot(t *testing.T) {
 	at := now.Add(-time.Minute)
 	b.Counts = &Counts{Store: b.Store, Now: func() time.Time { return at }}
 
-	res, err := b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Days: 2}))
+	res, err := b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Hours: 2}))
 	require.NoError(t, err)
 	require.EqualValues(t, 5, res.Msg.GetTotal(), "computed on demand before any snapshot")
 	require.Equal(t, at, res.Msg.GetComputedAt().AsTime())
@@ -30,10 +30,10 @@ func TestBrowserServesSnapshot(t *testing.T) {
 	require.NoError(t, b.Store.AddTokens(ctx, now.Format(time.DateOnly), 50))
 	require.NoError(t, b.Store.AddProbeTraffic(ctx, now.Format(time.DateOnly), store.ProbeTraffic{Rx: 1 << 30, Tx: 2 << 30}))
 
-	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Days: 2}))
+	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Hours: 2}))
 	require.NoError(t, err)
 	require.EqualValues(t, 5, res.Msg.GetTotal(), "the snapshot, not the store")
-	require.Equal(t, []int64{4, 1}, res.Msg.GetDays())
+	require.Equal(t, []int64{2, 1}, res.Msg.GetHours(), "the snapshot's hour, 11:00, with the sighting a minute past it")
 	require.EqualValues(t, 300, res.Msg.GetTokensUsedDay(), "read at the request")
 	require.EqualValues(t, 4<<30, res.Msg.GetProbeBytesRxDay(), "read at the request")
 	require.EqualValues(t, 3<<30, res.Msg.GetProbeBytesTxDay(), "read at the request")
@@ -47,7 +47,7 @@ func TestBrowserServesSnapshot(t *testing.T) {
 	at = now
 	_, err = b.Counts.Refresh(ctx)
 	require.NoError(t, err)
-	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Days: 2}))
+	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Hours: 2}))
 	require.NoError(t, err)
 	require.EqualValues(t, 6, res.Msg.GetTotal())
 	require.Equal(t, now, res.Msg.GetComputedAt().AsTime())

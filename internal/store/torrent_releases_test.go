@@ -344,7 +344,7 @@ func TestStats(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	fill(t, s)
-	st, err := s.Stats(ctx, t0.Add(24*time.Hour+time.Minute), 3)
+	st, err := s.Stats(ctx, t0.Add(24*time.Hour+time.Minute), 26)
 	require.NoError(t, err)
 	require.EqualValues(t, 5, st.Total)
 	require.Equal(t, map[string]int64{"movie": 1, "series": 1, "adult": 1, "": 2}, st.Kinds)
@@ -352,7 +352,11 @@ func TestStats(t *testing.T) {
 	require.Equal(t, map[string]int64{"web": 1, "": 4}, st.Sources)
 	require.Equal(t, map[string]AudioCounts{"ru": {Marker: 1, Likely: 1, Unlikely: 1}}, st.Audio)
 	require.Equal(t, map[string]int64{"small": 2, "adult": 1}, st.Rejected)
-	require.Equal(t, []int64{1, 4, 0}, st.Days, "3 in the last 24 hours, the rest in the 24 before")
+	require.Len(t, st.Hours, 26)
+	require.EqualValues(t, 1, st.Hours[0], "one in the current hour")
+	require.EqualValues(t, 4, st.Hours[24], "four at t0, 24 hours before")
+	require.EqualValues(t, 5, st.Hours[0]+st.Hours[24], "nothing in between")
+	require.EqualValues(t, 1, st.NewDay, "t0 is a minute past the 24 hours")
 
 	pending, err := s.Unclassified(ctx, 0, 100, 0)
 	require.NoError(t, err)
@@ -369,7 +373,8 @@ func TestStatsPlans(t *testing.T) {
 	}{
 		{classCounts, "SCAN torrent_releases USING COVERING INDEX torrent_releases_counts", nil, true},
 		{rejectedCounts, "SCAN ingest_rejected USING COVERING INDEX ingest_rejected_reason", nil, true},
-		{dayCounts, "SEARCH torrent_releases USING COVERING INDEX torrent_releases_first_seen (first_seen>?)", []any{0, 1, 0}, false},
+		{hourCounts, "SEARCH torrent_releases USING COVERING INDEX torrent_releases_first_seen (first_seen>?)", []any{0, 0}, false},
+		{dayCount, "SEARCH torrent_releases USING COVERING INDEX torrent_releases_first_seen (first_seen>?)", []any{0}, false},
 		{pendingCounts(1), "SCAN t USING INDEX torrent_releases_background", []any{"ru"}, false},
 	} {
 		var plan []string

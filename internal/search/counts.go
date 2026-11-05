@@ -11,8 +11,8 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-// Snapshot is the store's counts at At, with MaxStatsDays periods in
-// Stats.Days. It is never modified once made.
+// Snapshot is the store's counts at At, with MaxStatsHours clock hours in
+// Stats.Hours. It is never modified once made.
 type Snapshot struct {
 	At    time.Time
 	Stats store.Stats
@@ -82,7 +82,7 @@ func (c *Counts) compute(ctx context.Context) (*Snapshot, error) {
 	if c.Now != nil {
 		now = c.Now()
 	}
-	st, err := c.Store.Stats(ctx, now, MaxStatsDays)
+	st, err := c.Store.Stats(ctx, now, MaxStatsHours)
 	if err != nil {
 		return nil, err
 	}

@@ -18,28 +18,36 @@ type Bar struct {
 	X, Y, W, H float64
 	Label      string // shown in the native tooltip (<title>)
 	Value      int64
+	Partial    bool // the period is not over: drawn lighter, out of Max and Min
 }
 
 // NewBarChart lays out one bar per value. labels[i] names values[i];
-// every labelEvery-th label (and the last one) goes to the x axis.
-func NewBarChart(values []int64, labels []string, labelEvery int) Chart {
+// every labelEvery-th label (and the last one) goes to the x axis. With
+// partial the last bar is the current, unfinished period.
+func NewBarChart(values []int64, labels []string, labelEvery int, partial bool) Chart {
 	const w, h = 1100, 160
 	c := Chart{W: w, H: h}
 	if len(values) == 0 {
 		return c
 	}
 	var top int64
-	minI, maxI := 0, 0
+	minI, maxI := -1, -1
 	for i, v := range values {
 		if v > top {
 			top = v
 		}
-		if v > values[maxI] {
+		if partial && i == len(values)-1 {
+			break
+		}
+		if maxI < 0 || v > values[maxI] {
 			maxI = i
 		}
-		if v < values[minI] {
+		if minI < 0 || v < values[minI] {
 			minI = i
 		}
+	}
+	if maxI < 0 {
+		maxI, minI = 0, 0
 	}
 	ymax := niceCeil(top)
 	c.YTicks = []int64{ymax, ymax / 2, 0}
@@ -58,7 +66,7 @@ func NewBarChart(values []int64, labels []string, labelEvery int) Chart {
 		c.Bars = append(c.Bars, Bar{
 			X: r1(float64(i)*slot + gap/2), Y: r1(h - bh),
 			W: r1(slot - gap), H: r1(bh),
-			Label: lbl, Value: v,
+			Label: lbl, Value: v, Partial: partial && i == len(values)-1,
 		})
 	}
 	c.Max, c.Min = c.Bars[maxI], c.Bars[minI]

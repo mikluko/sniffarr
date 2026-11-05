@@ -79,6 +79,8 @@
 
 <section>
   <h2>{{$.T "d.inflow"}}</h2>
+  <div class="charthead"><h3>{{$.T "d.hourly"}}</h3><span class="mu">{{$.T "d.lastday"}} {{$.Num .New24h}}</span></div>
+  {{template "chart" (chartArgs $.Base .Hourly ($.T "d.hourly"))}}
   <div class="charthead"><h3>{{$.T "d.daily"}}</h3><span class="mu">{{$.T "d.max"}} {{$.Num .Daily.Max.Value}} ({{.Daily.Max.Label}}) · {{$.T "d.min"}} {{$.Num .Daily.Min.Value}} ({{.Daily.Min.Label}})</span></div>
   {{template "chart" (chartArgs $.Base .Daily ($.T "d.daily"))}}
   <div class="charthead"><h3>{{$.T "d.weekly"}}</h3><span class="mu">{{$.T "d.lastweek"}} {{$.Num .NewWeek}}</span></div>

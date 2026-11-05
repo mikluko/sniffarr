@@ -4,7 +4,7 @@
 <div class="chart">
   <div class="yax">{{range .YTicks}}<span>{{$b.Num .}}</span>{{end}}</div>
   <svg viewBox="0 0 {{.W}} {{.H}}" preserveAspectRatio="none" role="img" aria-label="{{$.Label}}">
-    {{range .Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Label}}: {{$b.Num .Value}}</title></rect>{{end}}
+    {{range .Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"{{if .Partial}} class="partial"{{end}}><title>{{.Label}}: {{$b.Num .Value}}{{if .Partial}} · {{$b.T "chart.partial"}}{{end}}</title></rect>{{end}}
   </svg>
   <div></div>
   <div class="xax">{{range .XLabels}}<span>{{.}}</span>{{end}}</div>

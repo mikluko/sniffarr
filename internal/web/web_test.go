@@ -481,11 +481,47 @@ func TestData(t *testing.T) {
 	require.Contains(t, body, "<td>daily download limit</td><td class=\"r\">100 GB</td>")
 	require.Contains(t, body, "61.0%", "probe bytes of the daily limit")
 	require.Contains(t, body, `title="2026-10-20 11:53">updated 7 min ago</div>`, "when the API computed the counts")
+	require.Contains(t, body, "New torrents per hour, 48 hours")
+	require.Equal(t, 3, strings.Count(body, `class="partial"><title>`), "the current hour, day and week are drawn lighter")
+	require.Contains(t, body, " · in progress</title>")
 	require.Contains(t, body, "Dub by language")
 	require.NotContains(t, body, "Grafana")
 	frag := fragment(t, get(t, h, "/", "data"), "data")
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<main id="data"`))
 	require.Equal(t, http.StatusOK, get(t, h, "/static/vendor/htmx.min.js", "").Code)
+}
+
+func TestCharts(t *testing.T) {
+	// A Tuesday, 12:00 UTC, 15:00 in a zone three hours ahead.
+	s := &server{cfg: Config{Location: time.FixedZone("east", 3*3600)}}
+	hours := make([]int64, 48)
+	hours[0] = 1  // 15:00 local, today
+	hours[15] = 1 // 00:00 local, today still
+	hours[16] = 1 // 23:00 local yesterday, this week
+	hours[40] = 1 // 23:00 local on Sunday, last week
+	hourly, daily, weekly := s.charts(now, hours)
+
+	require.Len(t, hourly.Bars, 48)
+	last := hourly.Bars[47]
+	require.Equal(t, ui.Bar{Label: "20.10 15:00", Value: 1, Partial: true}, ui.Bar{Label: last.Label, Value: last.Value, Partial: last.Partial})
+	require.Equal(t, []string{"18.10 16:00", "19.10 04:00", "19.10 16:00", "20.10 04:00", "20.10 15:00"}, hourly.XLabels)
+
+	require.Len(t, daily.Bars, 30)
+	require.Equal(t, "20.10", daily.Bars[29].Label)
+	require.True(t, daily.Bars[29].Partial)
+	require.EqualValues(t, 2, daily.Bars[29].Value, "today in the zone runs from 21:00 UTC yesterday")
+	require.EqualValues(t, 1, daily.Bars[28].Value)
+	require.EqualValues(t, 1, daily.Bars[27].Value, "Sunday")
+	require.Equal(t, "18.10", daily.Bars[27].Label)
+
+	require.Len(t, weekly.Bars, 26)
+	require.Equal(t, "19.10", weekly.Bars[25].Label, "the Monday of this week")
+	require.True(t, weekly.Bars[25].Partial)
+	require.EqualValues(t, 3, weekly.Bars[25].Value)
+	require.EqualValues(t, 1, weekly.Bars[24].Value)
+	require.Equal(t, "12.10", weekly.Bars[24].Label)
+	require.False(t, weekly.Bars[24].Partial)
+	require.Equal(t, int64(1), weekly.Max.Value, "the unfinished week is out of max and min")
 }
 
 // locales knows the token "ru-token" as a person with the locale ru.

@@ -372,9 +372,11 @@ message TopEntry {
 }
 
 message StatsRequest {
-  // How many 24-hour periods before now to count first sightings in, at
-  // most 3660.
-  int32 days = 1;
+  reserved 1;
+  reserved "days";
+  // How many clock hours up to now to count first sightings in, the
+  // current, unfinished hour included, at most 87840.
+  int32 hours = 2;
 }
 
 message StatsResponse {
@@ -394,15 +396,15 @@ message StatsResponse {
   repeated RejectionCount rejected = 6;
   // Releases awaiting the background classifier.
   int64 pending = 7;
-  // Releases first seen in each of the days asked for, the latest first.
-  repeated int64 days = 8;
+  reserved 8;
+  reserved "days";
   // Classifier tokens spent on the current UTC day, and the day's limit, 0
   // for none.
   int64 tokens_used_day = 9;
   int64 tokens_limit_day = 10;
   // When every count but tokens_used_day, probe_bytes_rx_day and
-  // probe_bytes_tx_day was computed; days are the 24-hour periods before
-  // it. Those three are read at the request.
+  // probe_bytes_tx_day was computed; hours are the clock hours up to it.
+  // Those three are read at the request.
   google.protobuf.Timestamp computed_at = 11;
   // Piece data probes downloaded on the current UTC day, in bytes, the
   // day's limit on it, 0 for none, and the piece data the fetchers reported
@@ -410,6 +412,9 @@ message StatsResponse {
   int64 probe_bytes_rx_day = 12;
   int64 probe_bytes_limit_day = 13;
   int64 probe_bytes_tx_day = 14;
+  // Releases first seen in each of the hours asked for, the latest first.
+  // The hours are UTC clock hours, which every zone's hours align with.
+  repeated int64 hours = 15;
 }
 
 message KindCount {
