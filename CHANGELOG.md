@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-11-05
+
+### Changed
+
+- The torrents page without a filter takes its total from the counts snapshot, up to the stats interval old, instead of counting the table on every view.
+- The API answers `/readyz` with 503 until its first counts snapshot exists; the chart's readiness probe asks it, liveness stays on `/healthz`. The first top recount starts two minutes after start.
+
+### Fixed
+
+- The first counts snapshot after a start took minutes: counting first sightings per hour sorted every release through a temp B-tree. It reads the index in order.
+
 ## [0.35.0] - 2026-11-05
 
 ### Added
@@ -502,7 +513,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.0...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.1...HEAD
+[0.35.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.0...v0.35.1
 [0.35.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.1...v0.35.0
 [0.34.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.0...v0.34.1
 [0.34.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.2...v0.34.0
