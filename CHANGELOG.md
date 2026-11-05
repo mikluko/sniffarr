@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-11-05
+
 ### Added
 
 - The classifier's tokens and the probes' bytes on the data page show what they come to by the end of the UTC day at their pace so far, as a dashed outline on the meter and a share of the limit, once a tenth of the day has passed.
@@ -531,7 +533,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.2...HEAD
+[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.36.0...HEAD
+[0.36.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.2...v0.36.0
 [0.35.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.1...v0.35.2
 [0.35.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.0...v0.35.1
 [0.35.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.1...v0.35.0
