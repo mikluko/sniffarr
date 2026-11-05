@@ -300,9 +300,6 @@ StatefulSet with a /seeds per replica.
 {{- $seeds := "" }}
 {{- if $probe }}
 {{- $seeds = include "sniffarr.seedsType" $probe.persistence }}
-{{- if and (eq $seeds "hostPath") (ne (int $v.replicas) 1) }}
-{{- fail (printf "probe.replicas %v with probe.persistence.type hostPath: one directory is one process's; a pvc gives each replica its own" $v.replicas) }}
-{{- end }}
 {{- end }}
 apiVersion: apps/v1
 kind: {{ if $probe }}StatefulSet{{ else }}Deployment{{ end }}
@@ -345,6 +342,12 @@ spec:
       {{- end }}
       securityContext:
         {{- include "sniffarr.podSecurityContext" $root | nindent 8 }}
+      {{- if $probe }}
+      {{- with $probe.extraInitContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
       containers:
         - name: {{ .component }}
           image: {{ include "sniffarr.image" $root }}
@@ -366,6 +369,12 @@ spec:
           env:
             - name: SNIFFARR_URL
               value: {{ .url | default (printf "http://%s-api:8080" $root.Release.Name) | quote }}
+            {{- if $probe }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- end }}
             {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
@@ -385,6 +394,9 @@ spec:
             {{- if $probe }}
             - name: seeds
               mountPath: /seeds
+              {{- if eq $seeds "hostPath" }}
+              subPathExpr: $(POD_NAME)
+              {{- end }}
             {{- end }}
       volumes:
         - name: tmp

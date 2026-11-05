@@ -796,9 +796,12 @@ fetchers that probe too, rendering `-probe-dir=/seeds` and `probe`'s
 `probers`, `timeout`, `maxSize` and `maxAge` as `-probers`, `-probe-timeout`,
 `-seed-max-size` and `-seed-max-age`; its pod settings are `fetch`'s, and its
 `url` falls back to `fetch.url`, then `sniff.url`. `/seeds` is
-`probe.persistence`: an `emptyDir`, a `hostPath`, or a claim per replica,
-`seeds-<release>-probe-<n>`. A directory is one process's, so `hostPath`
-takes one replica. A prober reaches the peers it seeds to and is reached by
+`probe.persistence`: an `emptyDir`, a claim per replica,
+`seeds-<release>-probe-<n>`, or a `hostPath` with a directory per pod under
+it, `<path>/<pod>`. The kubelet makes a missing one root's, and the pod runs as
+65532; `probe.extraInitContainers` is where a deployment makes the directory
+the pod's, with the whole `hostPath` as the volume `seeds`. A prober reaches
+the peers it seeds to and is reached by
 them on its DHT port, so it belongs in the host's network, `probe.hostNetwork`,
 or behind `probe.service`.
 

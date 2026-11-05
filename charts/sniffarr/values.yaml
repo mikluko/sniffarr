@@ -202,7 +202,7 @@ fetch:
 probe:
   # Deploys <release>-probe, a StatefulSet of sniffarr -fetch -probe-dir=/seeds: fetchers that take probe tasks too, reading the tracks of stored releases from the first pieces of their main video file and seeding those pieces, kept in /seeds.
   enabled: false
-  # Replicas of <release>-probe, each with a /seeds of its own; 1 with persistence.type hostPath.
+  # Replicas of <release>-probe, each with a /seeds of its own.
   replicas: 1
   # Runs the pods in the host's network namespace.
   hostNetwork: false
@@ -233,7 +233,7 @@ probe:
     # Volume of /seeds: emptyDir, hostPath or pvc, a claim per replica, seeds-<release>-probe-<n>; in single mode the claim is <release>-seeds.
     type: emptyDir
     hostPath:
-      # Host directory mounted at /seeds when type is hostPath.
+      # Host directory under which each pod has its /seeds, <path>/<pod>, when type is hostPath; the kubelet makes a missing one root's, see extraInitContainers.
       path: ""
     # Size of each claim.
     size: 250Gi
@@ -241,6 +241,8 @@ probe:
     storageClass: ""
   # Extra environment variables, name to value.
   env: {}
+  # Init containers of the probe pods, as written; the volume seeds is the whole hostPath, where one may make <path>/<pod> the pod's, UID 65532.
+  extraInitContainers: []
   # Resources of the probe container.
   resources: {}
   # Annotations of the probe pods.

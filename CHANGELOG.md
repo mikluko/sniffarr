@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A `hostPath` of `probe.persistence` takes any number of `probe.replicas`: each pod's `/seeds` is `<path>/<pod>` under it, and `probe.extraInitContainers` run before the prober, for a deployment to make that directory the pod's.
+
 ## [0.36.0] - 2026-11-05
 
 ### Added
