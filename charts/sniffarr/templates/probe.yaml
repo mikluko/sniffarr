@@ -1,0 +1,4 @@
+{{- if and .Values.probe.enabled (not .Values.single.enabled) }}
+{{- $v := .Values.probe }}
+{{- include "sniffarr.dht" (dict "root" . "component" "probe" "v" $v "sniff" false "fetch" true "url" ($v.url | default .Values.fetch.url | default .Values.sniff.url) "probe" $v) }}
+{{- end }}

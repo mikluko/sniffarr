@@ -791,15 +791,16 @@ replicas and the URL of `sniff` unless its own is set. A
 fetcher's DHT node is passive and the fetcher dials the peers it fetches from,
 so it needs no open port.
 
-With `fetch.probe.enabled`, `<release>-fetch` probes too, rendering
-`-probe-dir=/seeds` and `fetch.probe`'s `probers`, `timeout`, `maxSize` and
-`maxAge` as `-probers`, `-probe-timeout`, `-seed-max-size` and
-`-seed-max-age`. `/seeds` is `fetch.probe.persistence`: an `emptyDir`, a
-`hostPath`, or a claim, `<release>-fetch-seeds` when the chart creates it.
-The directory is one process's, so the chart refuses `fetch.probe.enabled`
-with `fetch.replicas` other than 1. The fetcher reaches the peers it seeds
-to and is reached by them on its DHT port, so it belongs in the host's
-network, `fetch.hostNetwork`, or behind `fetch.service`.
+With `probe.enabled`, `<release>-probe` is a StatefulSet of `probe.replicas`
+fetchers that probe too, rendering `-probe-dir=/seeds` and `probe`'s
+`probers`, `timeout`, `maxSize` and `maxAge` as `-probers`, `-probe-timeout`,
+`-seed-max-size` and `-seed-max-age`; its pod settings are `fetch`'s, and its
+`url` falls back to `fetch.url`, then `sniff.url`. `/seeds` is
+`probe.persistence`: an `emptyDir`, a `hostPath`, or a claim per replica,
+`seeds-<release>-probe-<n>`. A directory is one process's, so `hostPath`
+takes one replica. A prober reaches the peers it seeds to and is reached by
+them on its DHT port, so it belongs in the host's network, `probe.hostNetwork`,
+or behind `probe.service`.
 
 With `ui.enabled`, `<release>-ui` runs `sniffarr -ui`, with `ui.replicas`
 replicas, behind the Service `<release>-ui` on `ui.service.port` (8081).
@@ -826,7 +827,7 @@ flags. The Services `<release>-api` and, with `ui.enabled`, `<release>-ui`
 select that pod. The components keep their values and the pod takes the union
 of them: `api.persistence`, `api.litestream`, `api.existingSecret`, the `env`
 of every enabled component, `ui.addr`, the `flags` and `upnp` of `sniff` and
-`fetch`, `fetch.probe`, their `hostNetwork`, and the `extraContainers` and `extraVolumes` of
+`fetch`, `probe` with its claim `<release>-seeds`, their `hostNetwork`, and the `extraContainers` and `extraVolumes` of
 `api` and `ui`. The pod's `resources`, `podAnnotations`, `podLabels`,
 `nodeSelector`, `tolerations` and `affinity` come from the `single` block; the
 components' own are not read. With `sniff.hostNetwork`, every listener binds on

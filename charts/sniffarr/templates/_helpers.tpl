@@ -219,7 +219,7 @@ creates.
 {{- end }}
 {{- end }}
 
-{{- /* sniffarr.probeArgs renders the flags of fetch.probe, given as probe. */}}
+{{- /* sniffarr.probeArgs renders the flags of probe, given as probe. */}}
 {{- define "sniffarr.probeArgs" -}}
 - "-probe-dir=/seeds"
 - {{ printf "-probers=%v" .probers | quote }}
@@ -228,54 +228,66 @@ creates.
 - {{ printf "-seed-max-age=%v" .maxAge | quote }}
 {{- end }}
 
+{{- /* sniffarr.seedsType is probe.persistence.type, checked. */}}
+{{- define "sniffarr.seedsType" -}}
+{{- if not (has .type (list "emptyDir" "hostPath" "pvc")) }}
+{{- fail (printf "probe.persistence.type: want emptyDir, hostPath or pvc, not %q" .type) }}
+{{- end }}
+{{- .type }}
+{{- end }}
+
 {{- /*
-sniffarr.seedsVolume is the volume seeds of /seeds per fetch.probe.persistence. It takes root and
-probe.
+sniffarr.seedsVolume is the volume seeds of /seeds per probe.persistence, given as probe, with
+claim the name of the claim mounted when the type is pvc.
 */}}
 {{- define "sniffarr.seedsVolume" -}}
 {{- $p := .probe.persistence }}
-{{- if not (has $p.type (list "emptyDir" "hostPath" "pvc")) }}
-{{- fail (printf "fetch.probe.persistence.type: want emptyDir, hostPath or pvc, not %q" $p.type) }}
-{{- end }}
+{{- $type := include "sniffarr.seedsType" $p }}
 - name: seeds
-  {{- if eq $p.type "hostPath" }}
+  {{- if eq $type "hostPath" }}
   hostPath:
-    path: {{ required "fetch.probe.persistence.hostPath.path is required for type hostPath" $p.hostPath.path }}
+    path: {{ required "probe.persistence.hostPath.path is required for type hostPath" $p.hostPath.path }}
     type: DirectoryOrCreate
-  {{- else if eq $p.type "pvc" }}
+  {{- else if eq $type "pvc" }}
   persistentVolumeClaim:
-    claimName: {{ $p.existingClaim | default (printf "%s-fetch-seeds" .root.Release.Name) }}
+    claimName: {{ .claim }}
   {{- else }}
   emptyDir: {}
   {{- end }}
 {{- end }}
 
-{{- /* sniffarr.seedsClaim is the claim of /seeds the chart creates, if it creates one. */}}
+{{- /* sniffarr.seedsClaimSpec is the spec of a claim of /seeds per probe.persistence. */}}
+{{- define "sniffarr.seedsClaimSpec" -}}
+accessModes: [ReadWriteOnce]
+{{- with .storageClass }}
+storageClassName: {{ . }}
+{{- end }}
+resources:
+  requests:
+    storage: {{ .size }}
+{{- end }}
+
+{{- /* sniffarr.seedsClaim is the claim of /seeds of the single process, when it probes into one. */}}
 {{- define "sniffarr.seedsClaim" -}}
-{{- $p := .Values.fetch.probe.persistence }}
-{{- if and .Values.fetch.enabled .Values.fetch.probe.enabled (eq $p.type "pvc") (not $p.existingClaim) }}
+{{- $p := .Values.probe.persistence }}
+{{- if and .Values.single.enabled .Values.fetch.enabled .Values.probe.enabled (eq (include "sniffarr.seedsType" $p) "pvc") }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ .Release.Name }}-fetch-seeds
+  name: {{ .Release.Name }}-seeds
   labels:
     {{- include "sniffarr.labels" . | nindent 4 }}
-    app.kubernetes.io/component: fetch
+    app.kubernetes.io/component: probe
 spec:
-  accessModes: [ReadWriteOnce]
-  {{- with $p.storageClass }}
-  storageClassName: {{ . }}
-  {{- end }}
-  resources:
-    requests:
-      storage: {{ $p.size }}
+  {{- include "sniffarr.seedsClaimSpec" $p | nindent 2 }}
 {{- end }}
 {{- end }}
 
 {{- /*
 sniffarr.dht is a Deployment of sniffarr with its DHT components, and the Service of its DHT
 port when v.service.enabled. It takes root, component, v (the component's values), sniff and
-fetch (the flags), url, and probe, fetch.probe for the fetch component.
+fetch (the flags), url, and probe, the probe values for the probe component, which make it a
+StatefulSet with a /seeds per replica.
 */}}
 {{- define "sniffarr.dht" -}}
 {{- $root := .root }}
@@ -284,12 +296,16 @@ fetch (the flags), url, and probe, fetch.probe for the fetch component.
 {{- $dht := include "sniffarr.dhtPort" (dict "component" .component "flags" $v.flags "service" $svc) | fromYaml }}
 {{- $port := int $dht.port }}
 {{- $nodePort := int $dht.nodePort }}
-{{- $probe := and .probe .probe.enabled }}
-{{- if and $probe (ne (int $v.replicas) 1) }}
-{{- fail (printf "fetch.probe.enabled with fetch.replicas %v: the pieces in /seeds belong to one process" $v.replicas) }}
+{{- $probe := .probe }}
+{{- $seeds := "" }}
+{{- if $probe }}
+{{- $seeds = include "sniffarr.seedsType" $probe.persistence }}
+{{- if and (eq $seeds "hostPath") (ne (int $v.replicas) 1) }}
+{{- fail (printf "probe.replicas %v with probe.persistence.type hostPath: one directory is one process's; a pvc gives each replica its own" $v.replicas) }}
+{{- end }}
 {{- end }}
 apiVersion: apps/v1
-kind: Deployment
+kind: {{ if $probe }}StatefulSet{{ else }}Deployment{{ end }}
 metadata:
   name: {{ $root.Release.Name }}-{{ .component }}
   labels:
@@ -297,7 +313,10 @@ metadata:
     app.kubernetes.io/component: {{ .component }}
 spec:
   replicas: {{ $v.replicas }}
-  {{- if or $v.hostNetwork $probe }}
+  {{- if $probe }}
+  serviceName: {{ $root.Release.Name }}-{{ .component }}-pods
+  podManagementPolicy: Parallel
+  {{- else if $v.hostNetwork }}
   strategy:
     type: Recreate
   {{- end }}
@@ -342,7 +361,7 @@ spec:
             {{- . | nindent 12 }}
             {{- end }}
             {{- if $probe }}
-            {{- include "sniffarr.probeArgs" .probe | trim | nindent 12 }}
+            {{- include "sniffarr.probeArgs" $probe | trim | nindent 12 }}
             {{- end }}
           env:
             - name: SNIFFARR_URL
@@ -370,8 +389,8 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
-        {{- if $probe }}
-        {{- include "sniffarr.seedsVolume" (dict "root" $root "probe" .probe) | trim | nindent 8 }}
+        {{- if and $probe (ne $seeds "pvc") }}
+        {{- include "sniffarr.seedsVolume" (dict "probe" $probe) | trim | nindent 8 }}
         {{- end }}
       {{- with $v.nodeSelector }}
       nodeSelector:
@@ -385,6 +404,27 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if eq $seeds "pvc" }}
+  volumeClaimTemplates:
+    - metadata:
+        name: seeds
+      spec:
+        {{- include "sniffarr.seedsClaimSpec" $probe.persistence | nindent 8 }}
+  {{- end }}
+{{- if $probe }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $root.Release.Name }}-{{ .component }}-pods
+  labels:
+    {{- include "sniffarr.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ .component }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "sniffarr.selector" (dict "root" $root "component" .component) | nindent 4 }}
+{{- end }}
 {{- if $svc.enabled }}
 ---
 {{ include "sniffarr.dhtService" (dict "root" $root "name" (printf "%s-%s" $root.Release.Name .component) "component" .component "service" $svc "port" $port "nodePort" $nodePort) }}

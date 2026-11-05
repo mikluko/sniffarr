@@ -64,7 +64,7 @@
 {{- $port := int $dht.port }}
 {{- $nodePort := int $dht.nodePort }}
 {{- $loopback := include "sniffarr.uiLoopback" $ui.addr }}
-{{- $probe := and $fetch.enabled $fetch.probe.enabled }}
+{{- $probe := and $fetch.enabled .Values.probe.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -126,7 +126,7 @@ spec:
             {{- end }}
             {{- end }}
             {{- if $probe }}
-            {{- include "sniffarr.probeArgs" $fetch.probe | trim | nindent 12 }}
+            {{- include "sniffarr.probeArgs" .Values.probe | trim | nindent 12 }}
             {{- end }}
           env:
             - name: SNIFFARR_DB
@@ -188,7 +188,7 @@ spec:
       volumes:
         {{- include "sniffarr.dataVolumes" (dict "root" . "claim" (printf "%s-api" $name)) | trim | nindent 8 }}
         {{- if $probe }}
-        {{- include "sniffarr.seedsVolume" (dict "root" . "probe" $fetch.probe) | trim | nindent 8 }}
+        {{- include "sniffarr.seedsVolume" (dict "probe" .Values.probe "claim" (printf "%s-seeds" $name)) | trim | nindent 8 }}
         {{- end }}
         {{- with $api.extraVolumes }}
         {{- toYaml . | nindent 8 }}
@@ -213,5 +213,9 @@ spec:
 {{- if $svc.enabled }}
 ---
 {{ include "sniffarr.dhtService" (dict "root" . "name" (printf "%s-dht" $name) "component" "dht" "service" $svc "port" $port "nodePort" $nodePort) }}
+{{- end }}
+{{- with include "sniffarr.seedsClaim" . | trim }}
+---
+{{ . }}
 {{- end }}
 {{- end }}

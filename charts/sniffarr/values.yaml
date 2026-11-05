@@ -198,26 +198,58 @@ fetch:
   tolerations: []
   # Affinity of the fetch pod.
   affinity: {}
-  probe:
-    # Takes probe tasks too: reads the tracks of stored releases from the first pieces of their main video file and seeds those pieces, kept in /seeds, rendered as -probe-dir=/seeds; needs fetch.replicas 1.
+
+probe:
+  # Deploys <release>-probe, a StatefulSet of sniffarr -fetch -probe-dir=/seeds: fetchers that take probe tasks too, reading the tracks of stored releases from the first pieces of their main video file and seeding those pieces, kept in /seeds.
+  enabled: false
+  # Replicas of <release>-probe, each with a /seeds of its own; 1 with persistence.type hostPath.
+  replicas: 1
+  # Runs the pods in the host's network namespace.
+  hostNetwork: false
+  # SNIFFARR_URL; fetch.url, then sniff.url, when empty.
+  url: ""
+  # Command-line flags, name to value, rendered as -name=value after the component flags.
+  flags: {}
+  # Rendered as -upnp: the node asks the gateways on its network to forward its port, TCP and UDP.
+  upnp: false
+  service:
+    # Exposes the DHT port, TCP and UDP, as <release>-probe; needs a fixed port, not flags.port 0.
     enabled: false
-    # Probes at once, rendered as -probers.
-    probers: 4
-    # How long one probe may take, rendered as -probe-timeout.
-    timeout: 10m
-    # Piece data kept for seeding, the oldest torrents removed first beyond it, rendered as -seed-max-size; keep it below the volume's size.
-    maxSize: 200GiB
-    # How long a probed torrent is seeded at most, rendered as -seed-max-age.
-    maxAge: 168h
-    persistence:
-      # Volume of /seeds: emptyDir, hostPath or pvc.
-      type: emptyDir
-      hostPath:
-        # Host directory mounted at /seeds when type is hostPath.
-        path: ""
-      # Claim mounted at /seeds when type is pvc; the chart creates <release>-fetch-seeds when empty.
-      existingClaim: ""
-      # Size of the claim the chart creates.
-      size: 250Gi
-      # Storage class of the claim the chart creates; the cluster default when empty.
-      storageClass: ""
+    # ClusterIP, NodePort or LoadBalancer.
+    type: NodePort
+    # Node port of both entries, allocated by the cluster when 0; when set, the pod listens on it, so flags.port must be unset or equal.
+    nodePort: 0
+    # Annotations of the Service.
+    annotations: {}
+  # Probes at once, rendered as -probers.
+  probers: 4
+  # How long one probe may take, rendered as -probe-timeout.
+  timeout: 10m
+  # Piece data kept for seeding, the oldest torrents removed first beyond it, rendered as -seed-max-size; keep it below the volume's size.
+  maxSize: 200GiB
+  # How long a probed torrent is seeded at most, rendered as -seed-max-age.
+  maxAge: 168h
+  persistence:
+    # Volume of /seeds: emptyDir, hostPath or pvc, a claim per replica, seeds-<release>-probe-<n>; in single mode the claim is <release>-seeds.
+    type: emptyDir
+    hostPath:
+      # Host directory mounted at /seeds when type is hostPath.
+      path: ""
+    # Size of each claim.
+    size: 250Gi
+    # Storage class of the claims; the cluster default when empty.
+    storageClass: ""
+  # Extra environment variables, name to value.
+  env: {}
+  # Resources of the probe container.
+  resources: {}
+  # Annotations of the probe pods.
+  podAnnotations: {}
+  # Labels of the probe pods.
+  podLabels: {}
+  # Node selector of the probe pods.
+  nodeSelector: {}
+  # Tolerations of the probe pods.
+  tolerations: []
+  # Affinity of the probe pods.
+  affinity: {}

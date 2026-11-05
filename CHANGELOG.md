@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The classifier's tokens and the probes' bytes on the data page show what they come to by the end of the UTC day at their pace so far, as a dashed outline on the meter and a share of the limit, once a tenth of the day has passed.
 
+### Changed
+
+- **Breaking:** the chart probes from `<release>-probe`, a StatefulSet of `probe.replicas` fetchers that probe too, each with a `/seeds` of its own, so `fetch.replicas` is free again; `fetch.probe` is `probe`, with the pod settings of `fetch`. A claim is `seeds-<release>-probe-<n>` per replica, or `<release>-seeds` in single mode; `persistence.existingClaim` is gone.
+
 ### Fixed
 
 - The dates under the charts on the data page sit under their bars; they were spread evenly along the axis, a day or more off their bars.

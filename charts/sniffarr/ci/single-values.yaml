@@ -35,9 +35,10 @@ fetch:
   flags:
     fetchers: 500
     min-peers: 2
-  probe:
-    enabled: true
-    persistence:
-      type: hostPath
-      hostPath:
-        path: /srv/sniffarr-seeds
+
+probe:
+  enabled: true
+  persistence:
+    type: hostPath
+    hostPath:
+      path: /srv/sniffarr-seeds
