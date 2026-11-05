@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The classifier's tokens and the probes' bytes on the data page show what they come to by the end of the UTC day at their pace so far, as a dashed outline on the meter and a share of the limit, once a tenth of the day has passed.
 
+### Fixed
+
+- The dates under the charts on the data page sit under their bars; they were spread evenly along the axis, a day or more off their bars.
+
 ## [0.35.2] - 2026-11-05
 
 ### Added

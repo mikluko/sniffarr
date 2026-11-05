@@ -7,7 +7,7 @@
     {{range .Bars}}{{if .Projected}}<rect class="proj" x="{{.X}}" y="{{.PY}}" width="{{.W}}" height="{{.PH}}"/>{{end}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"{{if .Partial}} class="partial"{{end}}><title>{{.Label}}: {{$b.Num .Value}}{{if .Partial}} · {{$b.T "chart.partial"}}{{if .Projected}}, {{$b.T "chart.pace"}} {{$b.Num .Projected}}{{end}}{{end}}</title></rect>{{end}}
   </svg>
   <div></div>
-  <div class="xax">{{range .XLabels}}<span>{{.}}</span>{{end}}</div>
+  <div class="xax">{{range .XLabels}}<span style="left: {{.X}}%">{{.Text}}</span>{{end}}</div>
 </div>
 {{end}}
 {{end}}

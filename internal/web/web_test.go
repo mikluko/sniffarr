@@ -511,7 +511,9 @@ func TestCharts(t *testing.T) {
 	last := hourly.Bars[47]
 	require.Equal(t, ui.Bar{Label: "20.10 15:00", Value: 1, Partial: true}, ui.Bar{Label: last.Label, Value: last.Value, Partial: last.Partial})
 	require.Zero(t, last.Projected, "the hour has just begun and the hour before was empty")
-	require.Equal(t, []string{"18.10 16:00", "19.10 04:00", "19.10 16:00", "20.10 04:00", "20.10 15:00"}, hourly.XLabels)
+	require.Equal(t, []ui.XLabel{
+		{Text: "18.10 16:00", X: 0}, {Text: "19.10 04:00", X: 26}, {Text: "19.10 16:00", X: 51}, {Text: "20.10 04:00", X: 76}, {Text: "20.10 15:00", X: 100},
+	}, hourly.XLabels, "each label under its bar, the first and the last at the edges")
 
 	require.Len(t, daily.Bars, 30)
 	require.Equal(t, "20.10", daily.Bars[29].Label)

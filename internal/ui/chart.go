@@ -8,10 +8,18 @@ import "math"
 type Chart struct {
 	W, H    int
 	Bars    []Bar
-	YTicks  []int64  // top to bottom, last is 0
-	XLabels []string // spread evenly under the chart
+	YTicks  []int64 // top to bottom, last is 0
+	XLabels []XLabel
 	Max     Bar
 	Min     Bar
+}
+
+// XLabel names a bar under the chart, at X percent of its width: the
+// bar's centre, or 0 and 100 for the first and the last label, which the
+// stylesheet aligns to the edges.
+type XLabel struct {
+	Text string
+	X    float64
 }
 
 type Bar struct {
@@ -84,10 +92,14 @@ func NewBarChart(values []int64, labels []string, labelEvery int, partial bool, 
 		labelEvery = 1
 	}
 	for i := 0; i < len(labels); i += labelEvery {
-		c.XLabels = append(c.XLabels, labels[i])
+		c.XLabels = append(c.XLabels, XLabel{labels[i], r1((float64(i) + 0.5) * slot / w * 100)})
 	}
-	if last := labels[len(labels)-1]; len(c.XLabels) == 0 || c.XLabels[len(c.XLabels)-1] != last {
-		c.XLabels = append(c.XLabels, last)
+	if last := len(labels) - 1; last >= 0 && (len(c.XLabels) == 0 || c.XLabels[len(c.XLabels)-1].Text != labels[last]) {
+		c.XLabels = append(c.XLabels, XLabel{labels[last], 100})
+	}
+	if len(c.XLabels) > 0 {
+		c.XLabels[0].X = 0
+		c.XLabels[len(c.XLabels)-1].X = 100
 	}
 	return c
 }

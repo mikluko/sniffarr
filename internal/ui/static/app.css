@@ -98,7 +98,10 @@ button:hover{background:var(--sf)}
 .chart svg rect.partial{fill-opacity:.4}
 .chart svg rect.proj{fill:none;stroke:var(--ln);stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke;pointer-events:none}
 .chart svg rect:hover{fill:var(--fg)}
-.chart .xax{display:flex;justify-content:space-between;color:var(--mu);font:11px var(--mono)}
+.chart .xax{position:relative;height:14px;color:var(--mu);font:11px var(--mono)}
+.chart .xax span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+.chart .xax span:first-child{transform:none}
+.chart .xax span:last-child{transform:translateX(-100%)}
 
 /* top */
 .topv{display:flex;flex-direction:column;gap:12px}
