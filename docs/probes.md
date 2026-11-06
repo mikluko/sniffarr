@@ -34,7 +34,10 @@ the outcome is stored, the tracks in their own table: read, unknown
 (no file of those formats, a track list beyond `max_bytes`, or a header the
 probe cannot read), or failed (fewer than `-min-peers` peers within
 `-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
-before `-probe-timeout`). A failed probe is repeated after
+before `-probe-timeout`). The release's journal records the search that
+returned it with the query, each task handed out with its attempt and the
+piece data it may download, and each outcome with the piece data downloaded
+and, for a failure, whether the attempts have run out. A failed probe is repeated after
 `SNIFFARR_PROBE_BACKOFF`, doubled for each failure before; a requested or
 searched one stays queued as searched until then, unless it was requested
 while the failed attempt was in flight, which keeps the request. Once

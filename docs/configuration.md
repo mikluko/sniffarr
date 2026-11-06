@@ -38,6 +38,7 @@ the same to each.
 | `SNIFFARR_STORE_MAX_FILES`         | `20`             | Files stored per torrent, the largest ones                                                                             |
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
 | `SNIFFARR_RETENTION_IDLE`          | `168h`           | How long a stored torrent with no TMDB work is kept without being seen                                                 |
+| `SNIFFARR_RETENTION_JOURNAL`       | `720h`           | How long a torrent's journal entries are kept                                                                          |
 | `SNIFFARR_STATS_INTERVAL`          | `5m`             | How often the counts of `Stats` and `Home` are recomputed                                                              |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
 | `SNIFFARR_AUDIO_LANGUAGES`         |                  | Audio languages, BCP-47 tags and comma-separated; unset or empty leaves the extension off. An unknown tag fails startup |
@@ -79,7 +80,8 @@ count, but only its largest files are stored and searched. Once a minute the
 API deletes, in small batches, the torrents nobody has sighted within the
 retention period, or within the idle retention period for those matched to no
 TMDB work, with their peer sketches; a later sighting queues them again.
-Once an hour it unions the hour sketches older than 8 days into day sketches
+In the same batches it deletes the journal entries older than the journal
+retention period. Once an hour it unions the hour sketches older than 8 days into day sketches
 and deletes the day sketches older than 65 days, and every 10 minutes, and
 once at start, it recomputes the tops of works and every torrent's peers over
 the last 7 days.

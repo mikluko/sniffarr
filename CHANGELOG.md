@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- What happens to an infohash is recorded in the new table `torrent_journal`, one row per event in the transaction of the change: queued, promoted, leased, failed, dropped and evicted for one sighted by announce, a feed or Radarr and Sonarr, never for the queue's events of one only sampled; metadata stored, rejected or already stored; each classification and title match with who asked; grabs and imports; listings in feeds; probes wanted, started and done; deletion. `Card` carries the newest 200 entries as `journal`, the `Journal` RPC of `BrowseService` returns up to 1000 for any infohash, stored or not, and the release card shows them under the classification. Entries are kept for `SNIFFARR_RETENTION_JOURNAL`, `720h` by default.
+
 ### Changed
 
 - The notes under the task queue on the data page and under the top's controls open as a tooltip from a `?` next to them.
