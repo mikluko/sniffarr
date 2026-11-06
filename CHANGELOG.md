@@ -303,7 +303,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The repository moves to `https://forge.sarak.sh/mikluko/sniffarr`, the image to `sarak.sh/mikluko/sniffarr` and the chart to `oci://sarak.sh/mikluko/charts/sniffarr`; the chart's default `image.repository` follows. Releases from 0.18.0 on are published there and no longer to `ghcr.io/mikluko`.
+- The repository moves to `https://forge.sarak.sh/arr/sniffarr`, the image to `sarak.sh/arr/sniffarr` and the chart to `oci://sarak.sh/arr/charts/sniffarr`; the chart's default `image.repository` follows. Releases from 0.18.0 on are published there and no longer to `ghcr.io/mikluko`.
 
 ## [0.17.1] - 2026-10-21
 
