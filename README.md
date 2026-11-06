@@ -15,6 +15,9 @@ does so only with `-probe-dir`: it downloads the first pieces of a stored
 release's main video file to read its tracks, and seeds them back; see
 [Probes](docs/probes.md).
 
+The repository is [sarak.sh/mikluko/sniffarr](https://sarak.sh/mikluko/sniffarr),
+mirrored hourly to [github.com/mikluko/sniffarr](https://github.com/mikluko/sniffarr).
+
 ## Install
 
 One process on a Linux host, as a systemd service:

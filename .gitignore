@@ -2,6 +2,7 @@
 !.gitignore
 !.dockerignore
 !.forgejo
+!.github
 !/.beads/
 /.beads/*
 !/.beads/config.yaml

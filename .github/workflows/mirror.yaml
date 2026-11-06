@@ -1,0 +1,31 @@
+name: Mirror
+
+# github.com/mikluko/sniffarr mirrors sarak.sh/mikluko/sniffarr: every hour,
+# and on request, main and the tags are fetched from there and pushed here,
+# fast-forward only. This workflow runs on GitHub alone.
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: github.repository == 'mikluko/sniffarr'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Mirror
+        run: |
+          git remote add forge https://sarak.sh/mikluko/sniffarr.git
+          git fetch --tags forge main
+          git push origin forge/main:main --tags
