@@ -264,7 +264,10 @@ func TestNext(t *testing.T) {
 	require.Greater(t, off, time.Duration(0))
 	require.Less(t, off, time.Hour)
 	require.Equal(t, off, Offset("fake", time.Hour), "fixed by the name")
-	require.NotEqual(t, off, Offset("rutracker", time.Hour))
+	require.Equal(t, 58*time.Minute+41*time.Second, off, "a whole second, spread over the hour")
+	require.Equal(t, 17*time.Minute+38*time.Second, Offset("rutracker", time.Hour))
+	require.Equal(t, 24*time.Minute+24*time.Second, Offset("nnmclub", time.Hour))
+	require.Equal(t, 1*time.Minute+10*time.Second, Offset("rutor", time.Hour))
 
 	at := time.Date(2026, 11, 6, 14, 0, 0, 0, time.UTC)
 	require.Equal(t, at.Add(off), p.Next(at), "the first round of the hour is still ahead")

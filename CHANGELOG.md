@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A feed's rounds fell within seconds of the hour, every feed's together; the moment a feed's name fixes is now spread over the whole `SNIFFARR_FEED_INTERVAL`.
+
 ## [0.40.0] - 2026-11-06
 
 ### Added

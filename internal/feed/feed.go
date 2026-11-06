@@ -365,12 +365,13 @@ func (p *Poller) Next(now time.Time) time.Time {
 // fixed by the name, never zero for an interval over a second, so no source
 // reads on the hour and two sources read at different moments.
 func Offset(name string, interval time.Duration) time.Duration {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(name))
 	if interval <= time.Second {
 		return 0
 	}
-	return time.Second + time.Duration(h.Sum32())%(interval-time.Second)
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(name))
+	seconds := uint32((interval - time.Second) / time.Second)
+	return time.Second + time.Duration(h.Sum32()%seconds)*time.Second
 }
 
 func (p *Poller) interval() time.Duration {
