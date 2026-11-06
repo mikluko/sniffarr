@@ -59,6 +59,8 @@ type Config struct {
 	Retention time.Duration
 	// RetentionIdle is Retention for a torrent with no TMDB work.
 	RetentionIdle time.Duration
+	// RetentionJournal is how long a torrent's journal entries are kept.
+	RetentionJournal time.Duration
 	// LazyMax, LazyWait and LazyTMDB are those of search.Lazy.
 	LazyMax  int
 	LazyWait time.Duration
@@ -224,7 +226,7 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		return nil
 	})
 	app.Go(lc, sd, log, "maintenance", func(ctx context.Context) error {
-		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, cfg.RetentionIdle, log) })
+		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, cfg.RetentionIdle, cfg.RetentionJournal, log) })
 		return nil
 	})
 	app.Go(lc, sd, log, "wal", func(ctx context.Context) error {
@@ -290,9 +292,10 @@ func feedSources(f Feeds) []feed.Source {
 	return out
 }
 
-// maintain trims the queue and deletes the torrents not seen within
-// retention, or within idle for those with no TMDB work.
-func maintain(ctx context.Context, q *store.Tasks, s *store.Store, retention, idle time.Duration, log *slog.Logger) {
+// maintain trims the queue, deletes the torrents not seen within
+// retention, or within idle for those with no TMDB work, and the journal
+// entries older than journal.
+func maintain(ctx context.Context, q *store.Tasks, s *store.Store, retention, idle, journal time.Duration, log *slog.Logger) {
 	now := time.Now()
 	t, err := q.Trim(ctx, now)
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -306,6 +309,13 @@ func maintain(ctx context.Context, q *store.Tasks, s *store.Store, retention, id
 	}
 	if sw != (store.Swept{}) {
 		log.Info("swept store", "idle", sw.Idle, "expired", sw.Expired)
+	}
+	n, err := s.SweepJournal(ctx, now.Add(-journal), sweepBatch)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "sweep journal", "err", err)
+	}
+	if n > 0 {
+		log.Debug("swept journal", "entries", n)
 	}
 }
 
