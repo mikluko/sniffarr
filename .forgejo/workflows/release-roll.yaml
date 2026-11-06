@@ -6,9 +6,6 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 concurrency:
   group: release-roll
   cancel-in-progress: false
@@ -79,9 +76,6 @@ jobs:
     needs: plan
     if: needs.plan.outputs.due == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: https://github.com/actions/checkout@v7
         with:
@@ -112,9 +106,6 @@ jobs:
     needs: [plan, image]
     if: needs.plan.outputs.due == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: https://github.com/actions/checkout@v7
         with:
@@ -147,9 +138,6 @@ jobs:
     needs: plan
     if: needs.plan.outputs.due == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: https://github.com/actions/checkout@v7
         with:
@@ -195,8 +183,6 @@ jobs:
     needs: [plan, image, chart, packages]
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.due == 'true' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: https://code.forgejo.org/forgejo/download-artifact@v4
         with:
