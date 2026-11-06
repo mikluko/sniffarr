@@ -2,7 +2,7 @@
 
 sniffarr is a private classification database of BitTorrent torrents
 discovered on the DHT, with an API to search it. Its web UI is a catalogue
-of movies and series as TMDB knows them, each with the releases of it the
+of movies and series as [TMDB](https://www.themoviedb.org) knows them, each with the releases of it the
 DHT carries; a search looks in the database and on TMDB together, so it
 also finds what has no release yet.
 
@@ -39,7 +39,7 @@ component.
 - [Components](docs/components.md): the `-api`, `-ui`, `-sniff` and `-fetch` components, what each does and how they fit together
 - [Probes](docs/probes.md): reading the audio tracks of releases from their first pieces, and seeding them back
 - [API](docs/api.md): the ingest, browse and search services, and calling them from a shell
-- [Torznab](docs/torznab.md): the indexer Prowlarr, Radarr and Sonarr search
+- [Torznab](docs/torznab.md): the indexer [Prowlarr](https://prowlarr.com), [Radarr](https://radarr.video) and [Sonarr](https://sonarr.tv) search
 - [Radarr and Sonarr](docs/radarr-sonarr.md): their webhook and grab history as demand and as matches
 - [Feeds](docs/feeds.md): tracker feeds as a source of releases
 - [Web UI](docs/web-ui.md): the pages, their parameters and the language
