@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-06
+
 ### Added
 
 - `SNIFFARR_FEEDS` takes `nnmclub`, the RSS of the forums of `SNIFFARR_NNMCLUB_FORUMS` at `SNIFFARR_NNMCLUB_URL` with each topic's page read once for its magnet link, and `rutor`, the listing pages of the categories of `SNIFFARR_RUTOR_CATEGORIES` at `SNIFFARR_RUTOR_URL`, `SNIFFARR_RUTOR_DEPTH` pages deep on the first pass.
@@ -572,7 +574,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.39.0...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.40.0...HEAD
+[0.40.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.39.0...v0.40.0
 [0.39.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.38.0...v0.39.0
 [0.38.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.37.0...v0.38.0
 [0.37.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.36.0...v0.37.0
