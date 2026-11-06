@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- With `SNIFFARR_SEERR_URL` set, the title page and the release card link a matched title in that Seerr.
+
 ## [0.37.0] - 2026-11-05
 
 ### Changed

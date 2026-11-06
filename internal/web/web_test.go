@@ -87,12 +87,18 @@ func (f titleSearch) SearchWorks(ctx context.Context, typ, query, lang string) (
 // with peers and the tops computed at now.
 func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
-	return handlerLangs(t, l, "ru")
+	return handlerWith(t, "ru", Config{Locales: l})
 }
 
 // handlerLangs is handler with the audio languages langs, a comma-separated
 // list, in the store and the UI alike; "" leaves the extension off.
 func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
+	t.Helper()
+	return handlerWith(t, langs, Config{Locales: l})
+}
+
+// handlerWith is handlerLangs taking Locales and SeerrURL from cfg.
+func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
@@ -163,7 +169,7 @@ func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
 	})
 	require.NoError(t, err)
 	require.NoError(t, st.ComputeTop(ctx, now))
-	h, err := New(Config{Browse: browse(t, st, audio.Tags(languages)), Languages: languages, Locales: l, Location: time.UTC, Now: func() time.Time { return now }})
+	h, err := New(Config{Browse: browse(t, st, audio.Tags(languages)), Languages: languages, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
 }
@@ -356,6 +362,7 @@ func TestWork(t *testing.T) {
 	require.Contains(t, body, "Horror, Science Fiction")
 	require.Contains(t, body, `TMDB 8.2 <span class="mu">· 16,995 votes</span>`)
 	require.Contains(t, body, `<a href="https://www.themoviedb.org/movie/348" rel="noreferrer" target="_blank">TMDB</a> · <a href="https://www.imdb.com/title/tt0078748/"`)
+	require.NotContains(t, body, "Seerr", "no Seerr configured")
 	require.Contains(t, body, `24 h <b>№1</b> · 7 days <b>№1</b> · 30 days <b>№1</b>`, "its places in the three tops")
 	require.Regexp(t, `2 releases · 1\d\d peers in 7 days`, body, "the peers of both title keys")
 	require.Contains(t, body, `<section id="releases" class="rels">`)
@@ -399,6 +406,12 @@ func TestWork(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, get(t, h, "/w/m1", "").Code)
 	require.Equal(t, http.StatusNotFound, get(t, h, "/w/348", "").Code, "not an id")
 	require.Equal(t, http.StatusNotFound, get(t, h, "/w/tv348", "").Code, "a series is not the movie of its number")
+
+	seerr := handlerWith(t, "ru", Config{SeerrURL: "https://seerr.example.com/"})
+	require.Contains(t, page(t, get(t, seerr, "/w/m348", "")), `<a href="https://www.imdb.com/title/tt0078748/" rel="noreferrer" target="_blank">IMDb</a> · <a href="https://seerr.example.com/movie/348" rel="noreferrer" target="_blank">Seerr</a>`,
+		"a Seerr link after the others")
+	require.Contains(t, page(t, get(t, seerr, "/w/tv95396", "")), `<a href="https://seerr.example.com/tv/95396" rel="noreferrer" target="_blank">Seerr</a>`, "a series under /tv")
+	require.Contains(t, page(t, get(t, seerr, "/t/"+hexOf(1), "")), `<a href="https://seerr.example.com/movie/348" rel="noreferrer" target="_blank">Seerr</a>`, "the release card too")
 }
 
 func TestTorrent(t *testing.T) {

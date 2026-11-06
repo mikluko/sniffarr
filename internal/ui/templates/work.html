@@ -20,7 +20,7 @@
     {{if $m.Votes}}<div class="tm-facts">TMDB {{.Rating $m.Rating}} <span class="mu">· {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span></div>{{end}}
     {{if $m.Overview}}<p class="tm-over tm-over-long">{{$m.Overview}}</p>{{end}}
     <div class="tm-links">
-      <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}
+      <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}{{with $.SeerrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Seerr</a>{{end}}
     </div>
     <div class="ours">
       {{if $w.Releases}}

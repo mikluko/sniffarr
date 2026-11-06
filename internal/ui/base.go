@@ -17,6 +17,7 @@ type Base struct {
 	Nav        string   // "data" | "torrents" | "top" | "" (card, title page)
 	VoiceLangs []string // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
 	Path       string   // current path+query, for the language switcher
+	Seerr      string   // base URL of a Seerr the cards link titles to; "" links none
 	Loc        *time.Location
 	Now        time.Time
 

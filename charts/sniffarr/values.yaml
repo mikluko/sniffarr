@@ -84,7 +84,7 @@ ui:
     targetPort: ui
     # Annotations of the Service.
     annotations: {}
-  # Extra environment variables, name to value: SNIFFARR_OIDC_ISSUER.
+  # Extra environment variables, name to value: SNIFFARR_OIDC_ISSUER, SNIFFARR_SEERR_URL.
   env: {}
   # Containers added to the ui pod, rendered as given.
   extraContainers: []

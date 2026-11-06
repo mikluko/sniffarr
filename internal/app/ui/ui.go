@@ -25,6 +25,9 @@ type Config struct {
 	// OIDCIssuer is the OpenID Connect issuer whose userinfo gives a
 	// person's locale; empty asks none.
 	OIDCIssuer string
+	// SeerrURL is the base URL of a Seerr the cards link titles to; empty
+	// links none.
+	SeerrURL string
 }
 
 // Module serves the UI on Config.Addr from start to stop. It listens only
@@ -43,7 +46,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, brow
 		if err != nil {
 			return err
 		}
-		wc := web.Config{Browse: browse, Languages: langs, Log: log}
+		wc := web.Config{Browse: browse, Languages: langs, SeerrURL: cfg.SeerrURL, Log: log}
 		if cfg.OIDCIssuer != "" {
 			wc.Locales = userinfo.New(cfg.OIDCIssuer, &http.Client{Timeout: 10 * time.Second}, localeTTL)
 		}

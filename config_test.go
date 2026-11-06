@@ -75,10 +75,10 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, ui.Config{Addr: defaultUIAddr}, c.ui)
 		}},
 		{name: "api with a URL", args: []string{"-api", "-ui"}, env: append(apiEnv, "SNIFFARR_URL", "http://api:8080"), err: "SNIFFARR_URL is set, but -api serves the API in this process: unset it"},
-		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},
+		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_SEERR_URL", "https://seerr.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},
 			want: func(t *testing.T, c config) {
 				require.Equal(t, client.Config{URL: &url.URL{Scheme: "http", Host: "api:8080"}}, c.client)
-				require.Equal(t, ui.Config{Addr: ":9001", OIDCIssuer: "https://id.example.com"}, c.ui)
+				require.Equal(t, ui.Config{Addr: ":9001", OIDCIssuer: "https://id.example.com", SeerrURL: "https://seerr.example.com"}, c.ui)
 				require.Equal(t, api.Config{}, c.api, "the API's variables are not read, the unknown audio language among them")
 				require.Equal(t, db.Config{}, c.db)
 			}},

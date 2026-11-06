@@ -57,6 +57,9 @@ type Config struct {
 	// Locales tells the locale of the person an access token was issued to;
 	// when nil, the language is only the one picked on the page.
 	Locales Locales
+	// SeerrURL is the base URL of a Seerr the title and release cards link
+	// a matched title to; "" links none.
+	SeerrURL string
 	// Location is the time zone of dates; time.Local when nil.
 	Location *time.Location
 	// Log discards everything when nil.
@@ -128,6 +131,7 @@ func (s *server) lang(w http.ResponseWriter, req *http.Request) string {
 func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	b := s.ui.Base(req, lang, nav, s.tags, s.location(req))
 	b.Now = s.cfg.Now()
+	b.Seerr = s.cfg.SeerrURL
 	return b
 }
 

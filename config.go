@@ -144,7 +144,7 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 		return c, err
 	}
 	if c.on.ui {
-		c.ui = ui.Config{Addr: or(getenv("SNIFFARR_UI_ADDR"), defaultUIAddr), OIDCIssuer: getenv("SNIFFARR_OIDC_ISSUER")}
+		c.ui = ui.Config{Addr: or(getenv("SNIFFARR_UI_ADDR"), defaultUIAddr), OIDCIssuer: getenv("SNIFFARR_OIDC_ISSUER"), SeerrURL: getenv("SNIFFARR_SEERR_URL")}
 	}
 	if c.on.api {
 		if c.api, c.db, err = loadAPI(lookup); err != nil {

@@ -55,6 +55,19 @@ func (t *TMDBWork) IMDbURL() string {
 	return "https://www.imdb.com/title/" + url.PathEscape(t.IMDbID) + "/"
 }
 
+// SeerrURL is the page of the match in the Seerr at b.Seerr, "" without
+// one or a match.
+func (b Base) SeerrURL(t *TMDBWork) string {
+	if b.Seerr == "" || !t.Matched() {
+		return ""
+	}
+	typ := t.Type
+	if typ != "tv" {
+		typ = "movie"
+	}
+	return strings.TrimSuffix(b.Seerr, "/") + "/" + typ + "/" + strconv.FormatInt(t.ID, 10)
+}
+
 // TMDBImg builds an image URL; "" when there is no path.
 func TMDBImg(size, path string) string {
 	if path == "" {

@@ -496,7 +496,9 @@ goes in front of it. Its language is the one picked with `?lang=ru` or
 `SNIFFARR_OIDC_ISSUER` set, the `locale` claim of the provider's userinfo for
 the access token in the `X-Forwarded-Access-Token` header, which oauth2-proxy
 can pass on; a locale is kept for 10 minutes per token. Adult releases do not
-show in it.
+show in it. With `SNIFFARR_SEERR_URL` set, a matched title's card and release
+cards link it in that Seerr, at `/movie/<tmdb id>` or `/tv/<tmdb id>` under
+it.
 
 The chart serves the UI with `ui.enabled`, behind the Service `<release>-ui`;
 see [Helm](#helm).
@@ -582,6 +584,7 @@ the last 7 days.
 | -------------------------- | ------- | ------------------------------------------------------------------------------------ |
 | `SNIFFARR_UI_ADDR`         | `:8081` | Listen address                                                                       |
 | `SNIFFARR_OIDC_ISSUER`     |         | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none |
+| `SNIFFARR_SEERR_URL`       |         | Base URL of a Seerr the title and release cards link a matched title to; empty links none |
 
 ### `-sniff` and `-fetch`
 
@@ -808,7 +811,7 @@ or behind `probe.service`.
 With `ui.enabled`, `<release>-ui` runs `sniffarr -ui`, with `ui.replicas`
 replicas, behind the Service `<release>-ui` on `ui.service.port` (8081).
 `ui.addr` is `SNIFFARR_UI_ADDR`, and `ui.env` carries the rest of the UI's
-variables, `SNIFFARR_OIDC_ISSUER`. `ui.extraContainers` and `ui.extraVolumes` add an
+variables, `SNIFFARR_OIDC_ISSUER` and `SNIFFARR_SEERR_URL`. `ui.extraContainers` and `ui.extraVolumes` add an
 authenticating proxy to the pod, and `ui.service.targetPort` names its port.
 With `ui.addr` on a loopback address, such as `127.0.0.1:8081`, the UI is
 reachable only through that proxy, and `ui.service.targetPort` must name it.
