@@ -2,7 +2,8 @@
 
 This guide installs one sniffarr process on a Linux host and runs it as a
 systemd service. On Debian or Ubuntu, [install the package](debian-ubuntu.md)
-instead: it carries the same service.
+instead: it carries the same service. For a service per component, see the
+[systemd examples](../../examples/systemd.md).
 
 ## Before you begin
 

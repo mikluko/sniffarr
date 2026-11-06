@@ -1,7 +1,8 @@
 # Run with Docker Compose
 
 This guide runs one sniffarr process from the published image with the
-[`compose.yaml`](../../compose.yaml) of the repository.
+one-process `compose.yaml` of the [Compose examples](../../examples/compose.md),
+which also give a container per component.
 
 ## Before you begin
 
@@ -14,10 +15,11 @@ This guide runs one sniffarr process from the published image with the
 
 ## Run
 
-1. Get the file and make the data directory the image's user's:
+1. Save the one-process example of the
+   [Compose examples](../../examples/compose.md#one-process) as
+   `compose.yaml`, and make the data directory the image's user's:
 
    ```shell
-   curl -fsSLO https://sarak.sh/arr/sniffarr/raw/branch/main/compose.yaml
    mkdir -p data && sudo chown 65532:65532 data
    ```
 

@@ -31,6 +31,9 @@ registry; elsewhere, the release archive. Each way has its guide:
 - [Docker Compose](docs/install/compose.md), the image in one container
 - [Kubernetes](docs/install/kubernetes.md), the Helm chart
 
+[`examples`](examples) holds complete Compose files and systemd units, one
+process or a container or service per component.
+
 ## Components
 
 sniffarr is one binary whose components are switched on by flags, any number
