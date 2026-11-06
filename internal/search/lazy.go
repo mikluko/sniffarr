@@ -25,15 +25,16 @@ const (
 	DefaultLazyTimeout     = time.Minute
 )
 
-// Classifier examines one stored torrent and records what it finds.
+// Classifier examines one stored torrent and records what it finds, with
+// the trigger, store.TriggerSearch or store.TriggerTorznab, that asked.
 type Classifier interface {
-	Classify(ctx context.Context, p store.Pending) error
+	Classify(ctx context.Context, p store.Pending, trigger string) error
 }
 
-// TMDB matches title keys to works.
+// TMDB matches title keys to works, recording the trigger that asked.
 type TMDB interface {
 	Unmatched(ctx context.Context, keys []string, limit int) ([]store.TitleKey, error)
-	Match(ctx context.Context, k store.TitleKey) error
+	Match(ctx context.Context, k store.TitleKey, trigger string) error
 }
 
 // Lazy has Search classify the candidates the classifier has not examined,
@@ -168,10 +169,10 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 		classified = map[int64]bool{}
 		matched    = map[string]bool{}
 	)
-	late := result("late")
+	late, trigger := result("late"), store.TriggerSearch
 	if !wait {
 		close(expired)
-		late = result("background")
+		late, trigger = result("background"), store.TriggerTorznab
 	}
 	var ids []int64
 	var keys []string
@@ -189,7 +190,7 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 			l.Log.ErrorContext(ctx, "pending", "err", err)
 		}
 		for _, p := range pending {
-			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.classify(ctx, s, p) },
+			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.classify(ctx, s, p, trigger) },
 				l.outcomes, late, &mu, expired, func() { classified[p.ID] = true }))
 		}
 	}
@@ -199,7 +200,7 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 			l.Log.ErrorContext(ctx, "unmatched titles", "err", err)
 		}
 		for _, k := range due {
-			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.TMDB.Match(ctx, k) },
+			jobs = append(jobs, l.job(func(ctx context.Context) error { return l.TMDB.Match(ctx, k, trigger) },
 				l.titleOutcomes, late, &mu, expired, func() { matched[k.Key] = true }))
 		}
 	}
@@ -221,7 +222,7 @@ func (l *Lazy) examine(ctx context.Context, s *store.Store, found []store.Releas
 // classify classifies p, joining a classification of p already running for
 // another search. A classification recorded since p was read, by a job that
 // ran to the end before this one started, is not repeated.
-func (l *Lazy) classify(ctx context.Context, s *store.Store, p store.Pending) error {
+func (l *Lazy) classify(ctx context.Context, s *store.Store, p store.Pending, trigger string) error {
 	_, err, _ := l.classifying.Do(strconv.FormatInt(p.ID, 10), func() (any, error) {
 		pending, err := s.Pending(ctx, []int64{p.ID}, l.MaxFiles)
 		if err != nil {
@@ -230,7 +231,7 @@ func (l *Lazy) classify(ctx context.Context, s *store.Store, p store.Pending) er
 		if len(pending) == 0 {
 			return nil, nil
 		}
-		return nil, l.Classifier.Classify(ctx, pending[0])
+		return nil, l.Classifier.Classify(ctx, pending[0], trigger)
 	})
 	return err
 }

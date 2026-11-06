@@ -58,7 +58,7 @@ func TestMergePeers(t *testing.T) {
 	_, err = s.Peers(ctx, 404, t0)
 	require.ErrorIs(t, err, ErrNotFound)
 
-	_, err = s.Sweep(ctx, t0.Add(time.Hour), t0.Add(time.Hour), 10)
+	_, err = s.Sweep(ctx, t0.Add(time.Hour), t0.Add(time.Hour), t0.Add(time.Hour), 10)
 	require.NoError(t, err)
 	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM stat_peers_by_hour").Scan(&n))
 	require.Zero(t, n, "sketches go with their torrent")

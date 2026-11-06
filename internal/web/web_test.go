@@ -153,7 +153,7 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 	require.NoError(t, err)
 	_, err = st.Classify(ctx, r.ID, store.Classification{Source: "web", SourceConfidence: 0.8, Audio: map[string]float64{"ru": 0.7}}, now)
 	require.NoError(t, err)
-	_, err = st.Reject(ctx, hash(20), rules.Small, now)
+	_, err = st.Reject(ctx, hash(20), rules.Small, "small", 1<<20, now)
 	require.NoError(t, err)
 	require.NoError(t, st.AddTokens(ctx, now.Format(time.DateOnly), 250))
 	require.NoError(t, st.AddProbeTraffic(ctx, now.Format(time.DateOnly), store.ProbeTraffic{Rx: 61 << 30, Tx: 38 << 30}))

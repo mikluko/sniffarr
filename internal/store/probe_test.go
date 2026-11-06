@@ -70,7 +70,7 @@ func TestNextProbeOrder(t *testing.T) {
 	require.Equal(t, many, c.Hash, "most peers first")
 	require.False(t, c.Wanted)
 
-	require.NoError(t, s.WantProbe(ctx, []Hash{few, hash(99)}, t0))
+	require.NoError(t, s.WantProbe(ctx, []Hash{few, hash(99)}, ProbeWant{T: "movie", Query: "few"}, t0))
 	c, ok = leaseNext(t, s, t0, true)
 	require.True(t, ok)
 	require.Equal(t, few, c.Hash, "a searched release before the rest")
@@ -86,7 +86,7 @@ func TestNextProbeOrder(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, many, c.Hash)
 
-	_, err = s.ProbeFailed(ctx, many, t0, 3, time.Hour)
+	_, err = s.ProbeFailed(ctx, many, ProbeTimeout, 0, t0, 3, time.Hour)
 	require.NoError(t, err)
 	setPeersWeek(t, s, hash(3), 1)
 	c, ok = nextProbe(t, s, t0.Add(2*time.Hour), true)
@@ -99,7 +99,7 @@ func TestProbeFailedRetries(t *testing.T) {
 	s := open(t)
 	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
 
-	final, err := s.ProbeFailed(ctx, h, t0, 2, time.Hour)
+	final, err := s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0, 2, time.Hour)
 	require.NoError(t, err)
 	require.False(t, final)
 	_, ok := nextProbe(t, s, t0.Add(59*time.Minute), true)
@@ -107,7 +107,7 @@ func TestProbeFailedRetries(t *testing.T) {
 	_, ok = nextProbe(t, s, t0.Add(time.Hour), true)
 	require.True(t, ok)
 
-	final, err = s.ProbeFailed(ctx, h, t0.Add(time.Hour), 2, time.Hour)
+	final, err = s.ProbeFailed(ctx, h, ProbeNoPeers, 0, t0.Add(time.Hour), 2, time.Hour)
 	require.NoError(t, err)
 	require.True(t, final, "the attempts ran out")
 	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
@@ -122,7 +122,7 @@ func TestProbeFailedRetries(t *testing.T) {
 	_, ok = nextProbe(t, s, t0.Add(3*time.Hour), true)
 	require.True(t, ok, "twice the peers once the backoff is out")
 
-	final, err = s.ProbeFailed(ctx, h, t0.Add(3*time.Hour), 2, time.Hour)
+	final, err = s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(3*time.Hour), 2, time.Hour)
 	require.NoError(t, err)
 	require.True(t, final)
 	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
@@ -134,7 +134,7 @@ func TestProbeFailedRetries(t *testing.T) {
 	require.True(t, ok)
 
 	one := insertProbeable(t, s, 2, "Brazil.1985.1080p", 1, "Brazil.1985.1080p.mkv")
-	_, err = s.ProbeFailed(ctx, one, t0, 1, time.Hour)
+	_, err = s.ProbeFailed(ctx, one, ProbeTimeout, 0, t0, 1, time.Hour)
 	require.NoError(t, err)
 	setPeersWeek(t, s, one, 2)
 	c, ok := leaseNext(t, s, t0.Add(1000*time.Hour), true)
@@ -155,7 +155,7 @@ func TestProbeDoneOnce(t *testing.T) {
 	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0))
 	_, ok := nextProbe(t, s, t0.Add(1000*time.Hour), true)
 	require.False(t, ok)
-	require.NoError(t, s.WantProbe(ctx, []Hash{h}, t0))
+	require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "search", Query: "alien"}, t0))
 	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
 	require.False(t, ok, "a search does not repeat a probe")
 }
@@ -309,10 +309,10 @@ func TestRequestProbe(t *testing.T) {
 	failed := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
 	wanted := insertProbeable(t, s, 4, "Brazil.1985.1080p", 5, "Brazil.1985.1080p.mkv")
 	require.NoError(t, s.ProbeDone(ctx, done, Probe{Outcome: ProbeUnknown}, t0))
-	final, err := s.ProbeFailed(ctx, failed, t0, 1, time.Hour)
+	final, err := s.ProbeFailed(ctx, failed, ProbeTimeout, 0, t0, 1, time.Hour)
 	require.NoError(t, err)
 	require.True(t, final)
-	require.NoError(t, s.WantProbe(ctx, []Hash{wanted, done, failed}, t0.Add(2*time.Minute)))
+	require.NoError(t, s.WantProbe(ctx, []Hash{wanted, done, failed}, ProbeWant{T: "movie", Query: "brazil"}, t0.Add(2*time.Minute)))
 	c, ok := nextProbe(t, s, t0.Add(time.Minute), false)
 	require.True(t, ok)
 	require.Equal(t, wanted, c.Hash, "a search queues neither a done probe nor one whose attempts ran out")
@@ -330,7 +330,7 @@ func TestRequestProbe(t *testing.T) {
 	require.Equal(t, done, c2.Hash)
 
 	require.NoError(t, s.ProbeDone(ctx, c2.Hash, Probe{Outcome: ProbeUnknown}, t0.Add(time.Minute)))
-	final, err = s.ProbeFailed(ctx, c.Hash, t0.Add(time.Minute), 3, time.Hour)
+	final, err = s.ProbeFailed(ctx, c.Hash, ProbeTimeout, 0, t0.Add(time.Minute), 3, time.Hour)
 	require.NoError(t, err)
 	require.False(t, final)
 	c, ok = leaseNext(t, s, t0.Add(time.Minute), false)
@@ -370,7 +370,7 @@ func TestWantProbeReadableOnly(t *testing.T) {
 	require.NoError(t, err)
 	setPeersWeek(t, s, music.Hash, 5)
 
-	require.NoError(t, s.WantProbe(ctx, []Hash{readable, avi, disc, music.Hash}, t0))
+	require.NoError(t, s.WantProbe(ctx, []Hash{readable, avi, disc, music.Hash}, ProbeWant{T: "movie"}, t0))
 	require.Equal(t, []Hash{readable}, queuedProbes(t, s), "a release without peers waits; a file or kind a probe cannot read is not queued")
 }
 
@@ -379,16 +379,16 @@ func TestRequestProbeInFlight(t *testing.T) {
 	s := open(t)
 	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
 	final := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
-	require.NoError(t, s.WantProbe(ctx, []Hash{h, final}, t0))
+	require.NoError(t, s.WantProbe(ctx, []Hash{h, final}, ProbeWant{T: "movie"}, t0))
 	for range 2 {
 		_, ok := leaseNext(t, s, t0, false)
 		require.True(t, ok)
 	}
 	_, err := s.RequestProbe(ctx, []Hash{h, final}, t0.Add(time.Minute))
 	require.NoError(t, err)
-	_, err = s.ProbeFailed(ctx, h, t0.Add(2*time.Minute), 3, time.Hour)
+	_, err = s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(2*time.Minute), 3, time.Hour)
 	require.NoError(t, err)
-	last, err := s.ProbeFailed(ctx, final, t0.Add(2*time.Minute), 1, time.Hour)
+	last, err := s.ProbeFailed(ctx, final, ProbeTimeout, 0, t0.Add(2*time.Minute), 1, time.Hour)
 	require.NoError(t, err)
 	require.True(t, last)
 
@@ -407,8 +407,8 @@ func TestRequestProbeInFlight(t *testing.T) {
 	c, ok := leaseNext(t, s, t0.Add(4*time.Minute), false)
 	require.True(t, ok)
 	require.Equal(t, searched, c.Hash)
-	require.NoError(t, s.WantProbe(ctx, []Hash{searched}, t0.Add(5*time.Minute)))
-	_, err = s.ProbeFailed(ctx, searched, t0.Add(6*time.Minute), 3, time.Hour)
+	require.NoError(t, s.WantProbe(ctx, []Hash{searched}, ProbeWant{T: "movie"}, t0.Add(5*time.Minute)))
+	_, err = s.ProbeFailed(ctx, searched, ProbeTimeout, 0, t0.Add(6*time.Minute), 3, time.Hour)
 	require.NoError(t, err)
 	_, ok = nextProbe(t, s, t0.Add(7*time.Minute), false)
 	require.False(t, ok, "a search while in flight is no new request")
@@ -419,12 +419,12 @@ func TestProbeDoneResetsFailures(t *testing.T) {
 	s := open(t)
 	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
 	for i := range 2 {
-		final, err := s.ProbeFailed(ctx, h, t0.Add(time.Duration(i)*time.Hour), 3, time.Hour)
+		final, err := s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(time.Duration(i)*time.Hour), 3, time.Hour)
 		require.NoError(t, err)
 		require.False(t, final)
 	}
 	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0.Add(2*time.Hour)))
-	final, err := s.ProbeFailed(ctx, h, t0.Add(3*time.Hour), 3, time.Hour)
+	final, err := s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(3*time.Hour), 3, time.Hour)
 	require.NoError(t, err)
 	require.False(t, final, "the failures before a read do not count")
 }

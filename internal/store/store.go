@@ -119,23 +119,24 @@ const (
 
 // Sweep deletes, with their files and search entries, the torrents with no
 // TMDB work last seen before idleBefore, then every torrent last seen before
-// before, in transactions of at most batch torrents each. A torrent is never
-// first seen after it is last seen, so none is deleted as idle before it has
-// been stored for as long as idleBefore leaves it.
-func (s *Store) Sweep(ctx context.Context, before, idleBefore time.Time, batch int) (Swept, error) {
+// before, in transactions of at most batch torrents each, and journals each
+// as deleted at now. A torrent is never first seen after it is last seen,
+// so none is deleted as idle before it has been stored for as long as
+// idleBefore leaves it.
+func (s *Store) Sweep(ctx context.Context, before, idleBefore, now time.Time, batch int) (Swept, error) {
 	var sw Swept
 	var err error
-	sw.Idle, err = s.sweep(ctx, idleIDs, idleBefore, batch, "idle")
+	sw.Idle, err = s.sweep(ctx, idleIDs, idleBefore, now, batch, "idle")
 	if err != nil {
 		return sw, err
 	}
-	sw.Expired, err = s.sweep(ctx, expiredIDs, before, batch, "expired")
+	sw.Expired, err = s.sweep(ctx, expiredIDs, before, now, batch, "expired")
 	return sw, err
 }
 
 // sweep deletes the torrents ids selects, given before and batch, until it
 // selects fewer than batch, and returns how many it deleted.
-func (s *Store) sweep(ctx context.Context, ids string, before time.Time, batch int, class string) (int, error) {
+func (s *Store) sweep(ctx context.Context, ids string, before, now time.Time, batch int, class string) (int, error) {
 	attr := metric.WithAttributes(attribute.String("sniffarr.store.retention.class", class))
 	total := 0
 	for {
@@ -144,13 +145,37 @@ func (s *Store) sweep(ctx context.Context, ids string, before time.Time, batch i
 			if _, err := tx.ExecContext(ctx, "DELETE FROM torrent_releases_fts WHERE rowid IN ("+ids+")", before.Unix(), batch); err != nil {
 				return err
 			}
-			res, err := tx.ExecContext(ctx, "DELETE FROM torrent_releases WHERE id IN ("+ids+")", before.Unix(), batch)
+			rows, err := tx.QueryContext(ctx, "DELETE FROM torrent_releases WHERE id IN ("+ids+") RETURNING infohash, name, last_seen, work", before.Unix(), batch)
 			if err != nil {
 				return err
 			}
-			d, err := res.RowsAffected()
-			n = int(d)
-			return err
+			defer rows.Close()
+			type gone struct {
+				hash     Hash
+				name     string
+				lastSeen int64
+				work     sql.NullInt64
+			}
+			var deleted []gone
+			for rows.Next() {
+				var g gone
+				var b []byte
+				if err := rows.Scan(&b, &g.name, &g.lastSeen, &g.work); err != nil {
+					return err
+				}
+				g.hash = Hash(b)
+				deleted = append(deleted, g)
+			}
+			if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+				return err
+			}
+			n = len(deleted)
+			for _, g := range deleted {
+				if err := journal(ctx, tx, g.hash, now, JournalDeleted, class, Detail("name", g.name, "last_seen", time.Unix(g.lastSeen, 0), "work", g.work.Int64)); err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 		if err != nil {
 			return total, err

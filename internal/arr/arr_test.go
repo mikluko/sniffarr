@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -169,6 +170,12 @@ func TestWebhookGrabStored(t *testing.T) {
 	require.Equal(t, http.StatusOK, code)
 	require.Equal(t, Duplicate, answer)
 
+	journal, err := s.Journal(ctx, hash(1), 10)
+	require.NoError(t, err)
+	require.Len(t, journal, 3, "stored, grabbed, matched; the duplicate adds nothing")
+	require.Equal(t, store.JournalArr, journal[1].Kind)
+	require.JSONEq(t, `{"app":"radarr","source":"webhook","indexer":"Tracker (Prowlarr)","title":"Alien.1979.1080p.BluRay.x264-GRP","size":8589934592,"work":`+strconv.FormatInt(r.Work, 10)+`}`, journal[1].Detail)
+
 	var rm metricdata.ResourceMetrics
 	require.NoError(t, f.reader.Collect(ctx, &rm))
 	sums := map[string]int64{}
@@ -209,7 +216,7 @@ func TestWebhookGrabUnknown(t *testing.T) {
 	require.Equal(t, store.LayerArr, r.Match.Layer, "the release is matched as it is stored")
 	require.Equal(t, 348, r.Match.Work.TMDBID)
 
-	_, err = s.Reject(ctx, hash(3), "script", time.Now())
+	_, err = s.Reject(ctx, hash(3), "script", "script", 1<<20, time.Now())
 	require.NoError(t, err)
 	_, answer = f.post(t, "", "secret", radarrGrab(hexOf(3)))
 	require.Equal(t, Unknown, answer, "a rejected torrent is not queued")

@@ -22,7 +22,7 @@ type blockingClassifier struct {
 	release       chan struct{}
 }
 
-func (c *blockingClassifier) Classify(ctx context.Context, p store.Pending) error {
+func (c *blockingClassifier) Classify(ctx context.Context, p store.Pending, _ string) error {
 	c.started <- p.ID
 	select {
 	case <-c.release:

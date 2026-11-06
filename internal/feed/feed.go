@@ -250,14 +250,19 @@ func (r *Recorder) now() time.Time {
 // queued under store.Feed.
 func (r *Recorder) Record(ctx context.Context, source string, it Item) (string, error) {
 	r.init()
+	now := r.now()
 	rec, err := r.Store.RecordFeedItem(ctx, store.FeedItem{Source: source, Hash: it.Hash, Title: it.Title, URL: it.URL,
-		Category: it.Category, Size: it.Size, PublishedAt: it.At}, r.now())
+		Category: it.Category, Size: it.Size, PublishedAt: it.At}, now)
 	if err != nil {
 		return "", fmt.Errorf("record feed item: %w", err)
 	}
 	outcome, err := r.effect(ctx, rec, it.Hash)
 	if err != nil {
 		return "", err
+	}
+	if err := r.Store.JournalFeed(ctx, it.Hash, now, outcome, store.Detail("source", source, "title", it.Title, "url", it.URL,
+		"category", it.Category, "size", it.Size, "published_at", it.At)); err != nil {
+		return "", fmt.Errorf("journal feed item: %w", err)
 	}
 	r.items.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.feed.source", source), attribute.String("sniffarr.feed.outcome", outcome)))
 	return outcome, nil

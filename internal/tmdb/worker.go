@@ -89,7 +89,8 @@ func (w *Worker) batch() int {
 
 // matchAll matches the keys and reports whether any match failed.
 func (w *Worker) matchAll(ctx context.Context, keys []store.TitleKey) bool {
-	return run(ctx, w.Concurrency, keys, w.Matcher.Match, func(k store.TitleKey, err error) {
+	match := func(ctx context.Context, k store.TitleKey) error { return w.Matcher.Match(ctx, k, store.TriggerWorker) }
+	return run(ctx, w.Concurrency, keys, match, func(k store.TitleKey, err error) {
 		if !errors.Is(err, classify.ErrBudget) {
 			w.Log.Warn("match title", "key", k.Key, "err", err)
 		}

@@ -251,7 +251,7 @@ func TestMatchOneCandidate(t *testing.T) {
 	keys, err := m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, keys, 1)
-	require.NoError(t, m.Match(ctx, keys[0]))
+	require.NoError(t, m.Match(ctx, keys[0], store.TriggerWorker))
 	require.Equal(t, outcome{TMDBID: 348, IDs: []store.ExternalID{{Provider: "imdb", ID: "tt0078748"}, {Provider: "tmdb", ID: "348"}, {Provider: "wikidata", ID: "Q103569"}},
 		Details: *alienDetails, Confidence: 1, Layer: store.LayerTMDB}, outcomeOf(t, s, 1), "the match, its IDs from the details, and the details in both languages")
 	require.EqualValues(t, 5, f.requests.Load(), "two 429 answers are retried; one search, two details")
@@ -279,7 +279,7 @@ func TestMatchSharedWork(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, keys, 2)
 	for _, k := range keys {
-		require.NoError(t, m.Match(ctx, k))
+		require.NoError(t, m.Match(ctx, k, store.TriggerWorker))
 	}
 	require.Equal(t, match(t, s, 1).Work.ID, match(t, s, 2).Work.ID, "two title keys, one work")
 	require.EqualValues(t, 1+2+2, f.requests.Load(), "the second key's searches, then one search and the details once")
@@ -297,7 +297,7 @@ func TestMatchBothTitles(t *testing.T) {
 
 	keys, err := m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
-	require.NoError(t, m.Match(ctx, keys[0]))
+	require.NoError(t, m.Match(ctx, keys[0], store.TriggerWorker))
 	got := outcomeOf(t, s, 1)
 	require.Equal(t, []store.ExternalID{
 		{Provider: "imdb", ID: "tt12637874"}, {Provider: "tmdb", ID: "106379"}, {Provider: "tvdb", ID: "416744"}, {Provider: "wikidata", ID: "Q113127312"},
@@ -343,7 +343,7 @@ func TestMatchSeveral(t *testing.T) {
 			}
 			keys, err := m.Unmatched(ctx, nil, 10)
 			require.NoError(t, err)
-			require.NoError(t, m.Match(ctx, keys[0]))
+			require.NoError(t, m.Match(ctx, keys[0], store.TriggerWorker))
 			if tt.picked {
 				require.Equal(t, outcome{TMDBID: 438631, IDs: []store.ExternalID{{Provider: "imdb", ID: "tt1160419"}, {Provider: "tmdb", ID: "438631"}},
 					Details:    store.Details{Type: "movie", OriginalTitle: "Dune", Year: 2021, Texts: map[string]store.Text{"en": {Title: "Dune"}, "ru": {Title: "Dune"}}},
@@ -381,7 +381,7 @@ func TestMatchDominant(t *testing.T) {
 	m := matcher(f, s)
 	keys, err := m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
-	require.NoError(t, m.Match(ctx, keys[0]))
+	require.NoError(t, m.Match(ctx, keys[0], store.TriggerWorker))
 	require.Equal(t, outcome{TMDBID: 1377237, IDs: []store.ExternalID{{Provider: "imdb", ID: "tt31349844"}, {Provider: "tmdb", ID: "1377237"}},
 		Details:    store.Details{Type: "movie", OriginalTitle: "Runner", Year: 2026, Texts: map[string]store.Text{"en": {Title: "Runner"}, "ru": {Title: "Runner"}}},
 		Confidence: 0.8, Layer: store.LayerTMDB}, outcomeOf(t, s, 1), "the far more popular fit is taken without a Chooser")
@@ -398,7 +398,7 @@ func TestMatchDominant(t *testing.T) {
 	m.Chooser = chooser
 	keys, err = m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
-	require.NoError(t, m.Match(ctx, keys[0]))
+	require.NoError(t, m.Match(ctx, keys[0], store.TriggerWorker))
 	require.Equal(t, store.Match{MatchedAt: now}, match(t, s, 1), "ten times the next is the bar")
 	require.Equal(t, "Runner, 2026 [language en; popularity 30.0; 61 votes]: A run", chooser.options["2"])
 	require.Equal(t, "Runner (Corredora), 2026 [language es; popularity 3.2; 4 votes]", chooser.options["1"])
@@ -421,7 +421,7 @@ func TestMatchNone(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, keys, 2)
 	for _, k := range keys {
-		require.NoError(t, m.Match(ctx, k))
+		require.NoError(t, m.Match(ctx, k, store.TriggerWorker))
 	}
 	require.Equal(t, store.Match{MatchedAt: now}, match(t, s, 1), "no title fits")
 	require.Equal(t, outcome{TMDBID: 8195, IDs: []store.ExternalID{{Provider: "tmdb", ID: "8195"}},
@@ -451,7 +451,7 @@ func TestMatchDetailsLater(t *testing.T) {
 	require.NoError(t, err)
 	f.fixture(t, "/3/movie/348", "en-US", "movie_en.json")
 	f.details["/3/movie/348|ru-RU"] = http.StatusServiceUnavailable
-	require.NoError(t, m.Match(ctx, keys[0]), "the match is recorded though its details failed")
+	require.NoError(t, m.Match(ctx, keys[0], store.TriggerWorker), "the match is recorded though its details failed")
 	got := match(t, s, 1)
 	require.Equal(t, 348, got.Work.TMDBID)
 	require.True(t, got.Work.DetailsAt.IsZero())
@@ -587,7 +587,7 @@ func TestMetrics(t *testing.T) {
 	keys, err := m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
 	for _, k := range keys {
-		require.NoError(t, m.Match(ctx, k))
+		require.NoError(t, m.Match(ctx, k, store.TriggerWorker))
 	}
 
 	var rm metricdata.ResourceMetrics

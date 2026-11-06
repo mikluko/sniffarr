@@ -96,7 +96,7 @@ func TestProbeTaskBudget(t *testing.T) {
 	require.Equal(t, b[:], second.GetInfohash(), "a leased release is not handed out twice")
 	require.Nil(t, f.task(t), "background probes stop at half the budget, counting what the leases may download")
 
-	require.NoError(t, f.st.WantProbe(ctx, []store.Hash{c}, f.now))
+	require.NoError(t, f.st.WantProbe(ctx, []store.Hash{c}, store.ProbeWant{T: "movie", Query: "coraline"}, f.now))
 	wanted := f.task(t)
 	require.Equal(t, c[:], wanted.GetInfohash(), "a searched release uses the reserve")
 	require.Nil(t, f.task(t), "the whole budget is held by leases")
@@ -121,6 +121,16 @@ func TestProbeTaskBudget(t *testing.T) {
 
 	f.now = f.now.Add(DefaultProbeBackoff)
 	require.Equal(t, b[:], f.task(t).GetInfohash())
+	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: b[:], Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_NO_PEERS}})
+
+	require.Equal(t, []string{"fetched/stored", "probe_leased/background", "probed/tracks"}, journal(t, f.st, a))
+	require.Equal(t, []string{"fetched/stored", "probe_wanted/search", "probe_leased/search", "probed/unknown"}, journal(t, f.st, c))
+	require.Equal(t, []string{"fetched/stored", "probe_leased/background", "probed/timeout", "probe_leased/retry", "probed/no_peers"}, journal(t, f.st, b),
+		"no peers and a timeout are told apart")
+	got, err := f.st.Journal(ctx, b, 10)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"attempt":1,"max_bytes":41943040,"reserved":41943040}`, got[1].Detail, "a's lease is held while b is handed out")
+	require.JSONEq(t, `{"attempt":2,"max_bytes":41943040,"used":17825792}`, got[3].Detail, "a's and c's probes downloaded 17 MiB today")
 }
 
 func TestProbeLeaseExpires(t *testing.T) {

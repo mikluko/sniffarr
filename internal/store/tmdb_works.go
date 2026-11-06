@@ -183,6 +183,9 @@ type Found struct {
 	Confidence float64
 	Layer      string
 	Error      string
+	// Trigger names who asked for the match: TriggerWorker, TriggerSearch
+	// or TriggerTorznab; the journal records it.
+	Trigger string
 }
 
 // Match is the recorded match of a title key. A nil Work is no match: the
@@ -299,10 +302,71 @@ func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Ti
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE title_key = ? AND work IS NOT ?", ref, key, ref)
-		return err
+		releases, err := matchedReleases(ctx, tx, key, f.Hit != nil, ref)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE title_key = ? AND work IS NOT ?", ref, key, ref); err != nil {
+			return err
+		}
+		outcome, d := "none", Detail("trigger", f.Trigger)
+		switch {
+		case f.Hit != nil:
+			outcome = f.Layer
+			d = Detail("work", work, "tmdb_id", f.Hit.TMDBID, "type", f.Hit.Type, "confidence", f.Confidence, "trigger", f.Trigger)
+		case f.Error != "":
+			outcome = "error"
+			d["error"] = f.Error
+		}
+		for _, r := range releases {
+			delete(d, "previous")
+			if r.work.Valid {
+				d["previous"] = r.work.Int64
+			}
+			if err := journal(ctx, tx, r.hash, at, JournalMatched, outcome, d); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	return work, detailed, err
+}
+
+// matchedRelease is a release of a title key a match concerns, with the
+// work it had before.
+type matchedRelease struct {
+	hash Hash
+	work sql.NullInt64
+}
+
+// matchedReleases returns the releases of the key a match is journaled on:
+// with a hit, those not pointed at work already, up to journalFanOut of
+// them; without, every release, up to journalReuse; more of either are
+// none.
+func matchedReleases(ctx context.Context, tx *sql.Tx, key string, hit bool, work any) ([]matchedRelease, error) {
+	stmt, limit, args := "SELECT infohash, work FROM torrent_releases WHERE title_key = ?", journalReuse, []any{key}
+	if hit {
+		stmt, limit, args = stmt+" AND work IS NOT ?", journalFanOut, append(args, work)
+	}
+	rows, err := tx.QueryContext(ctx, stmt+" LIMIT ?", append(args, limit+1)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []matchedRelease
+	for rows.Next() {
+		var r matchedRelease
+		var b []byte
+		if err := rows.Scan(&b, &r.work); err != nil {
+			return nil, err
+		}
+		r.hash = Hash(b)
+		out = append(out, r)
+	}
+	if len(out) > limit {
+		return nil, rows.Err()
+	}
+	return out, rows.Err()
 }
 
 // upsertHit stores the work of the hit, taking the hit's title, original

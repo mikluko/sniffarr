@@ -92,9 +92,25 @@ func (s *Service) ProbeTask(ctx context.Context, _ *connect.Request[sniffarrv1.P
 	if !ok {
 		return res, nil
 	}
+	if err := s.Store.JournalProbeLease(ctx, c.Hash, now, probeLeaseOutcome(c), store.Detail("attempt", c.Attempts+1, "max_bytes", cfg.maxBytes(), "used", traffic.Rx, "reserved", reserved)); err != nil {
+		return nil, s.internal(ctx, "journal probe lease", err)
+	}
 	s.metrics().probeTasks.Add(ctx, 1, priorityAttr(c.Wanted))
 	res.Msg.Task = &sniffarrv1.ProbeTask{Infohash: c.Hash[:], MaxBytes: cfg.maxBytes()}
 	return res, nil
+}
+
+// probeLeaseOutcome is the journal outcome of a probe task of the
+// candidate: search for a release a search returned, retry for one probed
+// before, background for the rest.
+func probeLeaseOutcome(c store.ProbeCandidate) string {
+	switch {
+	case c.Wanted:
+		return "search"
+	case c.Attempts > 0:
+		return "retry"
+	}
+	return "background"
 }
 
 func (s *Service) ProbeResult(ctx context.Context, req *connect.Request[sniffarrv1.ProbeResultRequest]) (*connect.Response[sniffarrv1.ProbeResultResponse], error) {
@@ -127,13 +143,13 @@ func (s *Service) ProbeResult(ctx context.Context, req *connect.Request[sniffarr
 				return s.Store.ProbeDone(ctx, h, store.Probe{Outcome: store.ProbeUnknown, Downloaded: m.GetDownloaded()}, now)
 			}
 		case sniffarrv1.ProbeFailure_PROBE_FAILURE_NO_PEERS, sniffarrv1.ProbeFailure_PROBE_FAILURE_TIMEOUT:
-			name = "timeout"
+			name = store.ProbeTimeout
 			if o.Failure == sniffarrv1.ProbeFailure_PROBE_FAILURE_NO_PEERS {
-				name = "no_peers"
+				name = store.ProbeNoPeers
 			}
 			cfg := s.Probe
 			record = func() error {
-				_, err := s.Store.ProbeFailed(ctx, h, now, or(cfg.Attempts, DefaultProbeAttempts), or(cfg.Backoff, DefaultProbeBackoff))
+				_, err := s.Store.ProbeFailed(ctx, h, name, m.GetDownloaded(), now, or(cfg.Attempts, DefaultProbeAttempts), or(cfg.Backoff, DefaultProbeBackoff))
 				return err
 			}
 		default:

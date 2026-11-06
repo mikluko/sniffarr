@@ -22,16 +22,18 @@ import (
 // fakeJev classifies by name: answers maps a name to its classification,
 // and a name it lacks fails. It holds each answer for delay.
 type fakeJev struct {
-	store   *store.Store
-	delay   time.Duration
-	answers map[string]store.Classification
-	mu      sync.Mutex
-	calls   map[int64]int
+	store    *store.Store
+	delay    time.Duration
+	answers  map[string]store.Classification
+	mu       sync.Mutex
+	calls    map[int64]int
+	triggers []string
 }
 
-func (f *fakeJev) Classify(ctx context.Context, p store.Pending) error {
+func (f *fakeJev) Classify(ctx context.Context, p store.Pending, trigger string) error {
 	f.mu.Lock()
 	f.calls[p.ID]++
+	f.triggers = append(f.triggers, trigger)
 	f.mu.Unlock()
 	select {
 	case <-time.After(f.delay):
@@ -45,6 +47,7 @@ func (f *fakeJev) Classify(ctx context.Context, p store.Pending) error {
 	if p.KindKnown {
 		c.Kind = ""
 	}
+	c.Trigger = trigger
 	_, err := f.store.Classify(ctx, p.ID, c, time.Now())
 	return err
 }
@@ -112,6 +115,7 @@ func TestLazyClassifiesAndCaches(t *testing.T) {
 
 	search(t, svc, &sniffarrv1.SearchRequest{})
 	require.Equal(t, 2, jev.total(), "the second search uses the recorded answers")
+	require.Equal(t, []string{store.TriggerSearch, store.TriggerSearch}, jev.triggers, "a search that waits is the trigger")
 }
 
 func TestLazyFiltersOnWhatIsKnown(t *testing.T) {
@@ -152,7 +156,7 @@ func (f *fakeTMDB) Unmatched(ctx context.Context, keys []string, limit int) ([]s
 	return f.store.UnmatchedTitles(ctx, keys, time.Now().Add(-time.Hour), limit)
 }
 
-func (f *fakeTMDB) Match(ctx context.Context, k store.TitleKey) error {
+func (f *fakeTMDB) Match(ctx context.Context, k store.TitleKey, trigger string) error {
 	f.mu.Lock()
 	f.asked = append(f.asked, k.Key)
 	f.mu.Unlock()
@@ -282,6 +286,7 @@ func TestLazyNoWait(t *testing.T) {
 		return len(search(t, svc, movies)) == 2
 	}, 5*time.Second, 20*time.Millisecond, "the classifications run past the request and serve later searches")
 	require.Equal(t, 2, jev.total())
+	require.Equal(t, []string{store.TriggerTorznab, store.TriggerTorznab}, jev.triggers, "a search that does not wait is Torznab's")
 }
 
 func TestLazyClassifyRecordedMeanwhile(t *testing.T) {
@@ -297,7 +302,7 @@ func TestLazyClassifyRecordedMeanwhile(t *testing.T) {
 
 	_, err = s.Classify(ctx, r.ID, store.Classification{Source: "remux"}, time.Now())
 	require.NoError(t, err)
-	require.NoError(t, l.classify(ctx, s, pending[0]))
+	require.NoError(t, l.classify(ctx, s, pending[0], store.TriggerSearch))
 	require.Zero(t, jev.total(), "recorded since it was read")
 }
 

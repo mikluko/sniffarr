@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -78,7 +79,7 @@ func TestRecord(t *testing.T) {
 	_, _, err := f.store.Insert(ctx, store.Torrent{Hash: hash(1), Name: "Alien.1979.mkv", Size: 1 << 30, Discovery: store.Announce, SeenAt: f.now,
 		Files: []rules.File{{Path: "Alien.1979.mkv", Size: 1 << 30}}})
 	require.NoError(t, err)
-	_, err = f.store.Reject(ctx, hash(2), rules.Small, f.now)
+	_, err = f.store.Reject(ctx, hash(2), rules.Small, "small", 1<<20, f.now)
 	require.NoError(t, err)
 
 	item := func(b byte) Item {
@@ -112,6 +113,15 @@ func TestRecord(t *testing.T) {
 		{Source: "rutracker", Hash: hash(3), Title: "Title 3", URL: "https://example.com/t/3", Category: "f-1457", Size: 1 << 30, PublishedAt: f.now.Add(-time.Hour)},
 	}, got)
 	require.Equal(t, map[string]int64{Stored: 1, Rejected: 1, Queued: 2, Duplicate: 1}, f.items(t))
+
+	journal, err := f.store.Journal(ctx, hash(3), 10)
+	require.NoError(t, err)
+	require.Len(t, journal, 4)
+	require.Equal(t, []string{"sighted/queued", "feed/queued", "feed/duplicate", "feed/queued"},
+		[]string{journal[0].Kind + "/" + journal[0].Outcome, journal[1].Kind + "/" + journal[1].Outcome, journal[2].Kind + "/" + journal[2].Outcome, journal[3].Kind + "/" + journal[3].Outcome})
+	published := strconv.FormatInt(f.now.Add(-time.Hour).Unix(), 10)
+	require.JSONEq(t, `{"source":"rutracker","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[1].Detail)
+	require.JSONEq(t, `{"source":"other","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[3].Detail)
 }
 
 // fakeSource lists what it is given, or fails.

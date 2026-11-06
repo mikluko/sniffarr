@@ -49,7 +49,7 @@ func browser(t *testing.T) *Browser {
 	_, err = s.Classify(ctx, r.ID, store.Classification{Kind: "series", KindConfidence: 0.9, Source: "web", SourceConfidence: 0.8, Audio: map[string]float64{"ru": 0.7}}, now)
 	require.NoError(t, err)
 	for _, h := range []store.Hash{hash(10), hash(11)} {
-		_, err := s.Reject(ctx, h, rules.Small, now)
+		_, err := s.Reject(ctx, h, rules.Small, "small", 1<<20, now)
 		require.NoError(t, err)
 	}
 	require.NoError(t, s.AddTokens(ctx, now.Format(time.DateOnly), 250))

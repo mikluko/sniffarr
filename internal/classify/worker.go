@@ -78,7 +78,7 @@ func (w *Worker) classifyAll(ctx context.Context, batch []store.Pending) bool {
 		}
 		wg.Go(func() {
 			defer func() { <-sem }()
-			err := w.Jev.Classify(ctx, p)
+			err := w.Jev.Classify(ctx, p, store.TriggerWorker)
 			var apiErr *APIError
 			if err == nil || ctx.Err() != nil || errors.Is(err, ErrBudget) || errors.As(err, &apiErr) && apiErr.Permanent() {
 				return

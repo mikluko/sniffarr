@@ -183,17 +183,43 @@ func enqueueFetch(ctx context.Context, tx *sql.Tx, g Sighting, now time.Time) (b
 		if _, err := tx.ExecContext(ctx, "DELETE FROM task_dead WHERE key = ?", deadKey(g.Hash[:])); err != nil {
 			return false, err
 		}
+		if err := journal(ctx, tx, g.Hash, now, JournalSighted, "revived", Detail("discovery", g.Discovery)); err != nil {
+			return false, err
+		}
 	}
+	p := priority(g.Discovery)
 	res, err := tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at) VALUES ('fetch', ?1, ?2, ?3) ON CONFLICT (kind, infohash) DO NOTHING",
-		g.Hash[:], priority(g.Discovery), now.UnixMilli())
+		g.Hash[:], p, now.UnixMilli())
 	if err != nil {
 		return false, err
 	}
-	if n, err := res.RowsAffected(); err != nil || n > 0 {
-		return n > 0, err
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE task_queue SET priority = min(priority, ?) WHERE kind = 'fetch' AND infohash = ?", priority(g.Discovery), g.Hash[:])
-	return false, err
+	if n > 0 {
+		if !journaled(p) {
+			return true, nil
+		}
+		return true, journal(ctx, tx, g.Hash, now, JournalSighted, "queued", Detail("discovery", g.Discovery))
+	}
+	var old int
+	if err := tx.QueryRowContext(ctx, "SELECT priority FROM task_queue WHERE kind = 'fetch' AND infohash = ?", g.Hash[:]).Scan(&old); err != nil {
+		return false, err
+	}
+	if p >= old {
+		return false, nil
+	}
+	return false, promote(ctx, tx, g, old, now)
+}
+
+// promote moves the queued fetch of the sighting, at priority old, to its
+// discovery's priority.
+func promote(ctx context.Context, tx *sql.Tx, g Sighting, old int, now time.Time) error {
+	if _, err := tx.ExecContext(ctx, "UPDATE task_queue SET priority = ? WHERE kind = 'fetch' AND infohash = ?", priority(g.Discovery), g.Hash[:]); err != nil {
+		return err
+	}
+	return journal(ctx, tx, g.Hash, now, JournalSighted, "promoted", Detail("discovery", g.Discovery, "from", discovery(old), "to", g.Discovery))
 }
 
 // Trimmed is what one Trim removed.
@@ -215,21 +241,30 @@ func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 	var t Trimmed
 	until := now.Add(q.opts.DeadFor).UnixMilli()
 	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
-		n, err := evict(ctx, tx, agedIDs, until, now.Add(-q.opts.MaxAge).UnixMilli())
+		detail := func(e evicted) map[string]any {
+			return Detail("queued_at", time.UnixMilli(e.queuedAt), "discovery", discovery(e.priority), "dead_until", time.UnixMilli(until))
+		}
+		aged, err := evict(ctx, tx, agedIDs, until, now.Add(-q.opts.MaxAge).UnixMilli())
 		if err != nil {
 			return err
 		}
-		t.Aged = n
+		t.Aged = len(aged)
+		if err := journalEvicted(ctx, tx, aged, now, JournalEvicted, "aged", detail); err != nil {
+			return err
+		}
 		var size int
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM task_queue WHERE kind = 'fetch'").Scan(&size); err != nil {
 			return err
 		}
 		if over := size - q.opts.MaxSize; over > 0 {
-			n, err := evict(ctx, tx, oversizeIDs, until, over)
+			oversize, err := evict(ctx, tx, oversizeIDs, until, over)
 			if err != nil {
 				return err
 			}
-			t.Oversize = n
+			t.Oversize = len(oversize)
+			if err := journalEvicted(ctx, tx, oversize, now, JournalEvicted, "oversize", detail); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM task_queue WHERE kind = 'peers'
 			AND NOT EXISTS (SELECT 1 FROM torrent_releases t WHERE t.infohash = task_queue.infohash)`); err != nil {
@@ -263,14 +298,16 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 	type leased struct {
 		task         Task
 		priority, id int64
+		attempts     int
 	}
 	var out []leased
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
 		if expired, err = freeExpired(ctx, tx, "kind IN ('fetch', 'peers')", now); err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ? WHERE id IN ("+leaseIDs+") RETURNING kind, infohash, priority, id",
-			owner, now.Add(d).UnixMilli(), now.UnixMilli(), now.UnixMilli(), n)
+		until := now.Add(d)
+		rows, err := tx.QueryContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ? WHERE id IN ("+leaseIDs+") RETURNING kind, infohash, priority, id, attempts",
+			owner, until.UnixMilli(), now.UnixMilli(), now.UnixMilli(), n)
 		if err != nil {
 			return err
 		}
@@ -278,13 +315,24 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 		for rows.Next() {
 			var l leased
 			var b []byte
-			if err := rows.Scan(&l.task.Kind, &b, &l.priority, &l.id); err != nil {
+			if err := rows.Scan(&l.task.Kind, &b, &l.priority, &l.id, &l.attempts); err != nil {
 				return err
 			}
 			l.task.Hash = Hash(b)
 			out = append(out, l)
 		}
-		return rows.Err()
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return err
+		}
+		for _, l := range out {
+			if l.task.Kind != TaskFetch || !journaled(int(l.priority)) {
+				continue
+			}
+			if err := journal(ctx, tx, l.task.Hash, now, JournalLeased, "fetch", Detail("owner", owner, "attempt", l.attempts+1, "lease_until", until)); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, 0, err
@@ -368,8 +416,8 @@ func (q *Tasks) Complete(ctx context.Context, kind string, h Hash) error {
 func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, maxAttempts int, backoff time.Duration) (bool, error) {
 	var dropped bool
 	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
-		var attempts int
-		err := tx.QueryRowContext(ctx, "SELECT attempts FROM task_queue WHERE kind = 'fetch' AND infohash = ? AND lease_owner = ?", h[:], owner).Scan(&attempts)
+		var attempts, p int
+		err := tx.QueryRowContext(ctx, "SELECT attempts, priority FROM task_queue WHERE kind = 'fetch' AND infohash = ? AND lease_owner = ?", h[:], owner).Scan(&attempts, &p)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -379,13 +427,24 @@ func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 		attempts++
 		if attempts >= maxAttempts {
 			dropped = true
-			_, err := evict(ctx, tx, "SELECT id FROM task_queue WHERE kind = 'fetch' AND infohash = ?", now.Add(q.opts.DeadFor).UnixMilli(), h[:])
-			return err
+			until := now.Add(q.opts.DeadFor).UnixMilli()
+			rows, err := evict(ctx, tx, "SELECT id FROM task_queue WHERE kind = 'fetch' AND infohash = ?", until, h[:])
+			if err != nil {
+				return err
+			}
+			return journalEvicted(ctx, tx, rows, now, JournalFetchFailed, "dropped", func(evicted) map[string]any {
+				return Detail("owner", owner, "attempt", attempts, "dead_until", time.UnixMilli(until))
+			})
 		}
 		retry := now.Add(backoff << (attempts - 1))
-		_, err = tx.ExecContext(ctx, "UPDATE task_queue SET attempts = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE kind = 'fetch' AND infohash = ?",
-			attempts, retry.UnixMilli(), h[:])
-		return err
+		if _, err := tx.ExecContext(ctx, "UPDATE task_queue SET attempts = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE kind = 'fetch' AND infohash = ?",
+			attempts, retry.UnixMilli(), h[:]); err != nil {
+			return err
+		}
+		if !journaled(p) {
+			return nil
+		}
+		return journal(ctx, tx, h, now, JournalFetchFailed, "timeout", Detail("owner", owner, "attempt", attempts, "retry_at", retry))
 	})
 	return dropped, err
 }
@@ -396,9 +455,15 @@ func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 func (q *Tasks) NoPeers(ctx context.Context, h Hash, owner int64, now time.Time) error {
 	var n int
 	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
-		var err error
-		n, err = evict(ctx, tx, "SELECT id FROM task_queue WHERE kind = 'fetch' AND infohash = ? AND lease_owner = ?", now.Add(q.opts.NoPeersFor).UnixMilli(), h[:], owner)
-		return err
+		until := now.Add(q.opts.NoPeersFor).UnixMilli()
+		rows, err := evict(ctx, tx, "SELECT id FROM task_queue WHERE kind = 'fetch' AND infohash = ? AND lease_owner = ?", until, h[:], owner)
+		if err != nil {
+			return err
+		}
+		n = len(rows)
+		return journalEvicted(ctx, tx, rows, now, JournalFetchFailed, "no_peers", func(evicted) map[string]any {
+			return Detail("owner", owner, "dead_until", time.UnixMilli(until))
+		})
 	})
 	if err != nil {
 		return err

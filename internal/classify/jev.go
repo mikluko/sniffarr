@@ -102,17 +102,19 @@ func errorKind(k string) metric.AddOption {
 }
 
 // Classify asks the classifier about the torrent, for its kind too when the
-// kind is unknown, and records the answer. It returns ErrBudget, without a
-// request, once the day's budget is spent. A torrent the classifier refuses
-// as malformed is marked failed and never asked about again.
-func (j *Jev) Classify(ctx context.Context, p store.Pending) error {
+// kind is unknown, and records the answer with the trigger, who asked:
+// store.TriggerWorker, store.TriggerSearch or store.TriggerTorznab. It
+// returns ErrBudget, without a request, once the day's budget is spent. A
+// torrent the classifier refuses as malformed is marked failed and never
+// asked about again.
+func (j *Jev) Classify(ctx context.Context, p store.Pending, trigger string) error {
 	_, err, _ := j.group.Do(strconv.FormatInt(p.ID, 10), func() (any, error) {
-		return nil, j.classify(ctx, p)
+		return nil, j.classify(ctx, p, trigger)
 	})
 	return err
 }
 
-func (j *Jev) classify(ctx context.Context, p store.Pending) error {
+func (j *Jev) classify(ctx context.Context, p store.Pending, trigger string) error {
 	if ok, err := j.UnderBudget(ctx); err != nil || !ok {
 		return errors.Join(err, ErrBudget)
 	}
@@ -142,6 +144,7 @@ func (j *Jev) classify(ctx context.Context, p store.Pending) error {
 		Source:           r.Source,
 		SourceConfidence: r.SourceConfidence,
 		Audio:            r.Audio,
+		Trigger:          trigger,
 	}, j.now())
 	if err != nil {
 		return fmt.Errorf("store classification: %w", err)

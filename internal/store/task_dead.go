@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -48,17 +49,55 @@ func evictionAttr(why string) metric.AddOption {
 	return metric.WithAttributes(attribute.String("sniffarr.queue.eviction", why))
 }
 
+// evicted is a queued hash evict moved into the dead set, with its queue
+// row's priority and queued_at.
+type evicted struct {
+	hash     Hash
+	priority int
+	queuedAt int64
+}
+
 // evict moves the queued hashes whose ids selectIDs returns into the dead set
-// until until, and returns how many it moved.
-func evict(ctx context.Context, tx *sql.Tx, selectIDs string, until int64, args ...any) (int, error) {
+// until until, and returns them.
+func evict(ctx context.Context, tx *sql.Tx, selectIDs string, until int64, args ...any) ([]evicted, error) {
 	if _, err := tx.ExecContext(ctx, "INSERT INTO task_dead (key, until) SELECT task_dead_key(infohash), ? FROM task_queue WHERE id IN ("+selectIDs+") ON CONFLICT (key) DO UPDATE SET until = excluded.until",
 		append([]any{until}, args...)...); err != nil {
-		return 0, err
+		return nil, err
 	}
-	res, err := tx.ExecContext(ctx, "DELETE FROM task_queue WHERE id IN ("+selectIDs+")", args...)
+	rows, err := tx.QueryContext(ctx, "DELETE FROM task_queue WHERE id IN ("+selectIDs+") RETURNING infohash, priority, queued_at", args...)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	n, err := res.RowsAffected()
-	return int(n), err
+	defer rows.Close()
+	var out []evicted
+	for rows.Next() {
+		var e evicted
+		var b []byte
+		if err := rows.Scan(&b, &e.priority, &e.queuedAt); err != nil {
+			return nil, err
+		}
+		e.hash = Hash(b)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// journaled reports whether the queue journals a hash of the priority:
+// those sighted by a discovery served before samples.
+func journaled(priority int) bool {
+	return priority < PrioritySample
+}
+
+// journalEvicted writes the entry, with the detail of each, for every
+// evicted hash the queue journals.
+func journalEvicted(ctx context.Context, tx *sql.Tx, rows []evicted, at time.Time, kind, outcome string, detail func(evicted) map[string]any) error {
+	for _, e := range rows {
+		if !journaled(e.priority) {
+			continue
+		}
+		if err := journal(ctx, tx, e.hash, at, kind, outcome, detail(e)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -93,21 +93,23 @@ func (m *Matcher) Unmatched(ctx context.Context, keys []string, limit int) ([]st
 	return m.Store.UnmatchedTitles(ctx, keys, m.now().Add(-retry), limit)
 }
 
-// Match looks the key up on TMDB and records what it finds: the one
-// plausible candidate, under layer tmdb; the Chooser's pick among several,
-// under layer jev; or no match. It records nothing when it fails, except
-// for a request TMDB refuses for good, which is recorded as a failed match.
-// It returns classify.ErrBudget when the Chooser's budget is spent. A match
-// to a work whose details are not fetched yet fetches them as Details does;
-// when that fails the work stays without them for Worker's backfill.
-func (m *Matcher) Match(ctx context.Context, k store.TitleKey) error {
+// Match looks the key up on TMDB and records what it finds, with the
+// trigger that asked, store.TriggerWorker, store.TriggerSearch or
+// store.TriggerTorznab: the one plausible candidate, under layer tmdb; the
+// Chooser's pick among several, under layer jev; or no match. It records
+// nothing when it fails, except for a request TMDB refuses for good, which
+// is recorded as a failed match. It returns classify.ErrBudget when the
+// Chooser's budget is spent. A match to a work whose details are not
+// fetched yet fetches them as Details does; when that fails the work stays
+// without them for Worker's backfill.
+func (m *Matcher) Match(ctx context.Context, k store.TitleKey, trigger string) error {
 	_, err, _ := m.group.Do(k.Key, func() (any, error) {
-		return nil, m.match(ctx, k)
+		return nil, m.match(ctx, k, trigger)
 	})
 	return err
 }
 
-func (m *Matcher) match(ctx context.Context, k store.TitleKey) error {
+func (m *Matcher) match(ctx context.Context, k store.TitleKey, trigger string) error {
 	f, err := m.find(ctx, k)
 	var tErr *Error
 	switch {
@@ -116,6 +118,7 @@ func (m *Matcher) match(ctx context.Context, k store.TitleKey) error {
 	case err != nil:
 		return err
 	}
+	f.Trigger = trigger
 	work, detailed, err := m.Store.RecordMatch(ctx, k.Key, f, m.now())
 	if err != nil {
 		return fmt.Errorf("record match: %w", err)

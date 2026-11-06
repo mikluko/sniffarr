@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -85,6 +86,52 @@ func TestResultFailures(t *testing.T) {
 	require.Equal(t, []store.Task{{Kind: store.TaskFetch, Hash: store.Hash{2}}}, again)
 }
 
+// journal returns the journal of the hash as kind/outcome, oldest first.
+func journal(t *testing.T, st *store.Store, h store.Hash) []string {
+	t.Helper()
+	got, err := st.Journal(context.Background(), h, 100)
+	require.NoError(t, err)
+	out := make([]string, len(got))
+	for i, e := range got {
+		out[i] = e.Kind + "/" + e.Outcome
+	}
+	return out
+}
+
+func TestResultJournals(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	st, err := store.New(ctx, db, store.Options{})
+	require.NoError(t, err)
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
+	require.NoError(t, err)
+	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	s := &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	_, _, err = q.Enqueue(ctx, []store.Sighting{{Hash: store.Hash{1}, Discovery: store.Announce}, {Hash: store.Hash{2}, Discovery: store.Sample},
+		{Hash: store.Hash{3}, Discovery: store.Announce}, {Hash: store.Hash{4}, Discovery: store.Sample}}, now)
+	require.NoError(t, err)
+	_, _, err = q.Lease(ctx, 1, 4, now, time.Minute)
+	require.NoError(t, err)
+
+	for _, b := range []byte{1, 2} {
+		require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(b), Outcome: &sniffarrv1.Result_Failure{Failure: sniffarrv1.Failure_FAILURE_TIMEOUT}}))
+	}
+	require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(3), Outcome: &sniffarrv1.Result_Failure{Failure: sniffarrv1.Failure_FAILURE_NO_PEERS}}))
+	require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(4),
+		Outcome: &sniffarrv1.Result_Torrent{Torrent: &sniffarrv1.Torrent{Name: "Heat.1995.1080p.BluRay", Size: 8 << 30,
+			Files: []*sniffarrv1.File{{Path: "Heat.1995.mkv", Size: 8 << 30}}}}}))
+
+	require.Equal(t, []string{"sighted/queued", "leased/fetch", "fetch_failed/timeout"}, journal(t, st, store.Hash{1}))
+	require.Empty(t, journal(t, st, store.Hash{2}), "a sample's failure is not journaled")
+	require.Equal(t, []string{"sighted/queued", "leased/fetch", "fetch_failed/no_peers"}, journal(t, st, store.Hash{3}))
+	require.Equal(t, []string{"fetched/stored"}, journal(t, st, store.Hash{4}), "a sample's torrent is")
+	got, err := st.Journal(ctx, store.Hash{4}, 1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"name":"Heat.1995.1080p.BluRay","size":8589934592,"files":1,"discovery":"sample","queued_at":`+strconv.FormatInt(now.Unix(), 10)+`,"kind":"movie","kind_layer":"rules"}`, got[0].Detail)
+}
+
 func TestSightStoredFlags(t *testing.T) {
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
@@ -97,7 +144,7 @@ func TestSightStoredFlags(t *testing.T) {
 	now := time.Now()
 	_, _, err = st.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Heat.1995.1080p", Size: 8 << 30, Discovery: store.Sample, SeenAt: now})
 	require.NoError(t, err)
-	_, err = st.Reject(ctx, store.Hash{2}, rules.Adult, now)
+	_, err = st.Reject(ctx, store.Hash{2}, rules.Adult, "xxx", 1<<30, now)
 	require.NoError(t, err)
 	s := &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
 

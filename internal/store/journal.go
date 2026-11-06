@@ -78,32 +78,47 @@ type JournalEntry struct {
 	Detail string
 }
 
-// detail builds an entry's particulars from key-value pairs, leaving out a
-// value that is "", 0 or nil.
-func detail(kv ...any) map[string]any {
+// Detail builds an entry's particulars from key-value pairs, leaving out a
+// value that is "", 0, nil, empty or the zero time; a time is written in
+// Unix seconds.
+func Detail(kv ...any) map[string]any {
 	d := make(map[string]any, len(kv)/2)
 	for i := 0; i+1 < len(kv); i += 2 {
-		switch v := kv[i+1].(type) {
+		v := kv[i+1]
+		switch x := v.(type) {
 		case nil:
 			continue
 		case string:
-			if v == "" {
+			if x == "" {
 				continue
 			}
 		case int:
-			if v == 0 {
+			if x == 0 {
 				continue
 			}
 		case int64:
-			if v == 0 {
+			if x == 0 {
 				continue
 			}
 		case float64:
-			if v == 0 {
+			if x == 0 {
+				continue
+			}
+		case time.Time:
+			if x.IsZero() {
+				continue
+			}
+			v = x.Unix()
+		case map[string]float64:
+			if len(x) == 0 {
+				continue
+			}
+		case []string:
+			if len(x) == 0 {
 				continue
 			}
 		}
-		d[kv[i].(string)] = kv[i+1]
+		d[kv[i].(string)] = v
 	}
 	return d
 }

@@ -62,7 +62,7 @@ type Searcher interface {
 // ProbeWanter takes the releases a search with a query or an ID returned;
 // *store.Store is one.
 type ProbeWanter interface {
-	WantProbe(ctx context.Context, hashes []store.Hash, at time.Time) error
+	WantProbe(ctx context.Context, hashes []store.Hash, w store.ProbeWant, at time.Time) error
 }
 
 // Handler serves the Torznab API at any path. Every request must carry
@@ -152,20 +152,25 @@ func (h *Handler) search(ctx context.Context, t string, q map[string][]string) (
 		f.Channel.Items = append(f.Channel.Items, itemOf(r))
 	}
 	if h.Probes != nil && (req.GetQuery() != "" || req.GetId() != nil) {
-		h.want(ctx, releases)
+		h.want(ctx, t, req, releases)
 	}
 	return f, 0, nil
 }
 
-// want records the releases with Probes.
-func (h *Handler) want(ctx context.Context, releases []*sniffarrv1.Release) {
+// want records the releases with Probes as returned by the search req of
+// the function t.
+func (h *Handler) want(ctx context.Context, t string, req *sniffarrv1.SearchRequest, releases []*sniffarrv1.Release) {
 	hashes := make([]store.Hash, 0, len(releases))
 	for _, r := range releases {
 		if len(r.GetInfohash()) == len(store.Hash{}) {
 			hashes = append(hashes, store.Hash(r.GetInfohash()))
 		}
 	}
-	if err := h.Probes.WantProbe(ctx, hashes, time.Now()); err != nil {
+	w := store.ProbeWant{T: t, Query: req.GetQuery(), Season: int(req.GetSeason()), Episode: int(req.GetEpisode())}
+	if id := req.GetId(); id != nil {
+		w.ID = id.GetProvider() + "id:" + id.GetId()
+	}
+	if err := h.Probes.WantProbe(ctx, hashes, w, time.Now()); err != nil {
 		h.Log.ErrorContext(ctx, "torznab want probes", "err", err)
 	}
 }

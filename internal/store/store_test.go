@@ -76,7 +76,7 @@ func TestSweep(t *testing.T) {
 	_, _, err := s.Known(ctx, []Hash{hash(1)}, t0.Add(10*time.Hour))
 	require.NoError(t, err)
 
-	sw, err := s.Sweep(ctx, t0.Add(4*time.Hour+time.Minute), t0, 2)
+	sw, err := s.Sweep(ctx, t0.Add(4*time.Hour+time.Minute), t0, t0.Add(5*time.Hour), 2)
 	require.NoError(t, err)
 	require.Equal(t, Swept{Expired: 3}, sw, "2, 3 and 4, in two batches; 1 was seen again")
 	for b, stored := range map[byte]bool{1: true, 2: false, 3: false, 4: false, 5: true} {
@@ -114,7 +114,7 @@ func TestSweepIdle(t *testing.T) {
 	require.NoError(t, err)
 
 	now := t0.Add(9 * 24 * time.Hour)
-	sw, err := s.Sweep(ctx, now.Add(-90*24*time.Hour), now.Add(-7*24*time.Hour), 1)
+	sw, err := s.Sweep(ctx, now.Add(-90*24*time.Hour), now.Add(-7*24*time.Hour), now, 1)
 	require.NoError(t, err)
 	require.Equal(t, Swept{Idle: 1}, sw, "2 alone: 1 has a work, 4 and 5 were seen within the week")
 	for b, stored := range map[byte]bool{1: true, 2: false, 3: true, 4: true, 5: true} {
@@ -126,7 +126,7 @@ func TestSweepIdle(t *testing.T) {
 		}
 	}
 
-	sw, err = s.Sweep(ctx, t0.Add(time.Minute), t0.Add(time.Minute), 10)
+	sw, err = s.Sweep(ctx, t0.Add(time.Minute), t0.Add(time.Minute), t0.Add(time.Minute), 10)
 	require.NoError(t, err)
 	require.Equal(t, Swept{Expired: 1}, sw, "1 outlives the idle retention for its work, not the full one")
 }

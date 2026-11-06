@@ -471,10 +471,14 @@ func TestTitleProbedTracks(t *testing.T) {
 	}
 }
 
-type wanted struct{ hashes []store.Hash }
+type wanted struct {
+	hashes []store.Hash
+	wants  []store.ProbeWant
+}
 
-func (w *wanted) WantProbe(_ context.Context, hashes []store.Hash, _ time.Time) error {
+func (w *wanted) WantProbe(_ context.Context, hashes []store.Hash, pw store.ProbeWant, _ time.Time) error {
 	w.hashes = append(w.hashes, hashes...)
+	w.wants = append(w.wants, pw)
 	return nil
 }
 
@@ -487,6 +491,9 @@ func TestSearchWantsProbes(t *testing.T) {
 	require.Empty(t, w.hashes, "a feed without a query or an ID wants nothing")
 	require.Len(t, items(t, get(t, srv, "t", "movie", "q", "alien")), 1)
 	require.Equal(t, []store.Hash{{1}}, w.hashes, "a search wants what it returns")
+	require.Equal(t, []store.ProbeWant{{T: "movie", Query: "alien"}}, w.wants)
+	require.Len(t, items(t, get(t, srv, "t", "movie", "tmdbid", "348")), 0)
+	require.Equal(t, store.ProbeWant{T: "movie", ID: "tmdbid:348"}, w.wants[1], "the ID searched by, as its parameter")
 }
 
 func TestSearchProbedTitle(t *testing.T) {

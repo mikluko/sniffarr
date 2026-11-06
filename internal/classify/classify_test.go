@@ -281,8 +281,8 @@ func TestWorkerReserve(t *testing.T) {
 
 	p, err := s.Unclassified(context.Background(), 0, 10, 1)
 	require.NoError(t, err)
-	require.NoError(t, w.Jev.Classify(context.Background(), p[0]), "Search spends the reserve")
-	require.ErrorIs(t, w.Jev.Classify(context.Background(), p[1]), ErrBudget)
+	require.NoError(t, w.Jev.Classify(context.Background(), p[0], store.TriggerSearch), "Search spends the reserve")
+	require.ErrorIs(t, w.Jev.Classify(context.Background(), p[1], store.TriggerSearch), ErrBudget)
 	require.EqualValues(t, 3, f.requests.Load())
 }
 
@@ -298,7 +298,7 @@ func TestJevAsksKindOnlyWhenUnknown(t *testing.T) {
 	p, err := s.Pending(ctx, []int64{1, 2}, MaxFiles)
 	require.NoError(t, err)
 	for _, p := range p {
-		require.NoError(t, jev.Classify(ctx, p))
+		require.NoError(t, jev.Classify(ctx, p, store.TriggerWorker))
 	}
 	require.EqualValues(t, 2, f.requests.Load())
 	require.EqualValues(t, 1, f.kindAsked.Load(), "only Heat's kind was unknown")
@@ -315,7 +315,7 @@ func TestJevAsksKindOnlyWhenUnknown(t *testing.T) {
 	require.Equal(t, store.LayerJev, r.KindLayer)
 
 	jev.DailyTokens = 1
-	require.ErrorIs(t, jev.Classify(ctx, store.Pending{ID: 1, Name: "Heat.1995"}), ErrBudget)
+	require.ErrorIs(t, jev.Classify(ctx, store.Pending{ID: 1, Name: "Heat.1995"}, store.TriggerWorker), ErrBudget)
 	require.EqualValues(t, 2, f.requests.Load(), "no request once the budget is spent")
 }
 

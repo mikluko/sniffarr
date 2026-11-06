@@ -16,7 +16,7 @@ func TestKnown(t *testing.T) {
 	s := open(t)
 	_, _, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
 	require.NoError(t, err)
-	_, err = s.Reject(ctx, hash(2), rules.Book, t0)
+	_, err = s.Reject(ctx, hash(2), rules.Book, "book", 1<<20, t0)
 	require.NoError(t, err)
 
 	stored, rejected, err := s.Known(ctx, []Hash{hash(1), hash(2), hash(3)}, t0.Add(2*time.Hour))
@@ -275,10 +275,10 @@ func fill(t *testing.T, s *Store) {
 	_, err = s.Classify(ctx, r.ID, Classification{Audio: map[string]float64{"ru": 0.2}}, t0)
 	require.NoError(t, err)
 	for _, h := range []Hash{hash(10), hash(11)} {
-		_, err := s.Reject(ctx, h, rules.Small, t0)
+		_, err := s.Reject(ctx, h, rules.Small, "small", 1<<20, t0)
 		require.NoError(t, err)
 	}
-	_, err = s.Reject(ctx, hash(12), rules.Adult, t0)
+	_, err = s.Reject(ctx, hash(12), rules.Adult, "xxx", 1<<30, t0)
 	require.NoError(t, err)
 }
 

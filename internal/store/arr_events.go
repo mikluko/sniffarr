@@ -23,6 +23,9 @@ const (
 type ArrEvent struct {
 	App   string
 	Event string
+	// Source names how the event came: "webhook" or "history"; the journal
+	// records it.
+	Source string
 	// Key tells the app's downloads apart: events of one app, event and key
 	// are one event.
 	Key string
@@ -88,11 +91,17 @@ func (s *Store) RecordArr(ctx context.Context, e ArrEvent) (ArrRecorded, error) 
 		if e.Hash == nil {
 			return nil
 		}
+		if r.New {
+			if err := journal(ctx, tx, *e.Hash, e.At, JournalArr, e.Event, Detail("app", e.App, "source", e.Source, "indexer", e.Indexer, "title", e.Title,
+				"size", e.Size, "season", e.Season, "episode", e.Episode, "work", r.Work)); err != nil {
+				return err
+			}
+		}
 		if r.Work == 0 {
 			return tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM torrent_releases WHERE infohash = ?)", e.Hash[:]).Scan(&r.Stored)
 		}
 		var err error
-		r.Stored, err = applyArr(ctx, tx, *e.Hash, r.Work, e.At)
+		r.Stored, err = applyArr(ctx, tx, *e.Hash, r.Work, e.At, false)
 		return err
 	})
 	return r, err
@@ -120,22 +129,50 @@ func ensureWork(ctx context.Context, tx *sql.Tx, typ string, tmdbID int, ids []E
 // applyArr points the stored torrent of the hash at the work and matches
 // its title key, if it has one, to the work under LayerArr, which points
 // every torrent of the key at it; it reports whether the torrent is stored.
-func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at time.Time) (bool, error) {
+// Every torrent it points elsewhere is journaled, and the torrent of the
+// hash as pending when the work comes from an event recorded before it.
+func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at time.Time, pending bool) (bool, error) {
 	var key sql.NullString
-	err := tx.QueryRowContext(ctx, "UPDATE torrent_releases SET work = ? WHERE infohash = ? RETURNING title_key", work, h[:]).Scan(&key)
+	var before sql.NullInt64
+	err := tx.QueryRowContext(ctx, "SELECT title_key, work FROM torrent_releases WHERE infohash = ?", h[:]).Scan(&key, &before)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
-	if err != nil || !key.Valid {
-		return err == nil, err
+	if err != nil {
+		return false, err
+	}
+	var typ string
+	var tmdbID int
+	if err := tx.QueryRowContext(ctx, "SELECT type, tmdb_id FROM tmdb_works WHERE id = ?", work).Scan(&typ, &tmdbID); err != nil {
+		return false, err
+	}
+	d := Detail("work", work, "tmdb_id", tmdbID, "type", typ)
+	if pending {
+		d["pending"] = true
+	}
+	if before.Int64 != work {
+		if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE infohash = ?", work, h[:]); err != nil {
+			return false, err
+		}
+	}
+	if pending || before.Int64 != work {
+		if err := journal(ctx, tx, h, at, JournalMatched, LayerArr, d); err != nil {
+			return false, err
+		}
+	}
+	if !key.Valid {
+		return true, nil
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO tmdb_matches (title_key, work, layer, confidence, matched_at, error) VALUES (?, ?, ?, 1, ?, NULL)
 		ON CONFLICT (title_key) DO UPDATE SET work = excluded.work, layer = excluded.layer, confidence = excluded.confidence,
 		matched_at = excluded.matched_at, error = NULL`, key.String, work, LayerArr, at.Unix()); err != nil {
 		return false, err
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE title_key = ? AND work IS NOT ?", work, key.String, work)
-	return true, err
+	siblings, err := hashesOf(tx.QueryContext(ctx, "UPDATE torrent_releases SET work = ? WHERE title_key = ? AND work IS NOT ? RETURNING infohash", work, key.String, work))
+	if err != nil {
+		return false, err
+	}
+	return true, journalEach(ctx, tx, siblings, journalFanOut, at, JournalMatched, LayerArr, d)
 }
 
 // applyPendingArr applies, as RecordArr does, the work of the latest event
@@ -149,7 +186,7 @@ func applyPendingArr(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) erro
 	if err != nil {
 		return err
 	}
-	_, err = applyArr(ctx, tx, h, work, at)
+	_, err = applyArr(ctx, tx, h, work, at, true)
 	return err
 }
 

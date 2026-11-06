@@ -203,7 +203,7 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 	}
 	now := s.now()
 	if reason := rules.Check(t.GetName(), t.GetSize(), files, s.Scripts); reason != rules.Accept {
-		rejected, err := s.Store.Reject(ctx, h, reason, now)
+		rejected, err := s.Store.Reject(ctx, h, reason, t.GetName(), t.GetSize(), now)
 		if err != nil {
 			return s.internal(ctx, "reject", err)
 		}

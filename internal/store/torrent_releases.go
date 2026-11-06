@@ -101,6 +101,9 @@ type Classification struct {
 	// Audio maps languages to the probability of an audio track in each; a
 	// probability decided by rules or a probe stays.
 	Audio map[string]float64
+	// Trigger names who asked for the classification: TriggerWorker,
+	// TriggerSearch or TriggerTorznab; the journal records it.
+	Trigger string
 }
 
 // largest returns the at most n largest files, largest first.
@@ -172,7 +175,7 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 			t.Hash[:], t.Name, t.Size, len(t.Files), t.Discovery, t.SeenAt.Unix(), t.SeenAt.Unix(),
 			null(t.Kind), null(t.KindLayer), null(t.TitleKey), nullInt(t.Year), nullInt(t.Season), nullInt(t.Episode), null(t.Quality)).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+			return journal(ctx, tx, t.Hash, t.SeenAt, JournalFetched, "duplicate", nil)
 		}
 		if err != nil {
 			return err
@@ -199,21 +202,37 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 				return err
 			}
 		}
+		var siblings []Hash
+		if t.Kind != "" && t.TitleKey != "" {
+			if siblings, err = reuseKind(ctx, tx, t.Kind, t.TitleKey); err != nil {
+				return err
+			}
+			copied = len(siblings)
+		}
+		var queuedAt sql.NullInt64
+		if err := ignoreNoRows(tx.QueryRowContext(ctx, "SELECT queued_at FROM task_queue WHERE kind = 'fetch' AND infohash = ?", t.Hash[:]).Scan(&queuedAt)); err != nil {
+			return err
+		}
+		var queued time.Time
+		if queuedAt.Valid {
+			queued = time.UnixMilli(queuedAt.Int64)
+		}
+		if err := journal(ctx, tx, t.Hash, t.SeenAt, JournalFetched, "stored", Detail("name", t.Name, "size", t.Size, "files", len(t.Files),
+			"discovery", t.Discovery, "queued_at", queued, "kind", t.Kind, "kind_layer", t.KindLayer, "copied", copied)); err != nil {
+			return err
+		}
 		if err := applyPendingArr(ctx, tx, t.Hash, t.SeenAt); err != nil {
 			return err
 		}
-		if t.Kind == "" || t.TitleKey == "" {
-			return nil
-		}
-		res, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET kind = ?, kind_layer = ? WHERE title_key = ? AND kind IS NULL", t.Kind, LayerReuse, t.TitleKey)
-		if err != nil {
-			return err
-		}
-		n, err := res.RowsAffected()
-		copied = int(n)
-		return err
+		return journalEach(ctx, tx, siblings, journalReuse, t.SeenAt, JournalClassified, LayerReuse, Detail("kind", t.Kind, "from", id))
 	})
 	return inserted, copied, err
+}
+
+// reuseKind copies the kind to the stored torrents of the title key whose
+// kind is unknown, and returns their hashes.
+func reuseKind(ctx context.Context, tx *sql.Tx, kind, key string) ([]Hash, error) {
+	return hashesOf(tx.QueryContext(ctx, "UPDATE torrent_releases SET kind = ?, kind_layer = ? WHERE title_key = ? AND kind IS NULL RETURNING infohash", kind, LayerReuse, key))
 }
 
 // Query selects releases for Search.
@@ -446,6 +465,15 @@ func (s *Store) KindByKey(ctx context.Context, key string) (string, error) {
 func (s *Store) Classify(ctx context.Context, id int64, c Classification, at time.Time) (int, error) {
 	var copied int
 	err := s.tx(ctx, func(tx *sql.Tx) error {
+		var b []byte
+		err := tx.QueryRowContext(ctx, "SELECT infohash FROM torrent_releases WHERE id = ?", id).Scan(&b)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		h := Hash(b)
 		if _, err := tx.ExecContext(ctx, `UPDATE torrent_releases SET classified_at = ?, classify_error = NULL,
 			source = ?, source_confidence = ? WHERE id = ?`,
 			at.Unix(), c.Source, c.SourceConfidence, id); err != nil {
@@ -459,25 +487,26 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 				return err
 			}
 		}
-		if c.Kind == "" {
-			return nil
+		var siblings []Hash
+		if c.Kind != "" {
+			var key sql.NullString
+			err := tx.QueryRowContext(ctx, `UPDATE torrent_releases SET kind = ?, kind_layer = ?, kind_confidence = ? WHERE id = ? AND kind IS NULL
+				RETURNING title_key`, c.Kind, LayerJev, c.KindConfidence, id).Scan(&key)
+			if err = ignoreNoRows(err); err != nil {
+				return err
+			}
+			if key.Valid {
+				if siblings, err = reuseKind(ctx, tx, c.Kind, key.String); err != nil {
+					return err
+				}
+				copied = len(siblings)
+			}
 		}
-		var key sql.NullString
-		err := tx.QueryRowContext(ctx, `UPDATE torrent_releases SET kind = ?, kind_layer = ?, kind_confidence = ? WHERE id = ? AND kind IS NULL
-			RETURNING title_key`, c.Kind, LayerJev, c.KindConfidence, id).Scan(&key)
-		if errors.Is(err, sql.ErrNoRows) || err == nil && !key.Valid {
-			return nil
-		}
-		if err != nil {
+		if err := journal(ctx, tx, h, at, JournalClassified, LayerJev, Detail("kind", c.Kind, "kind_confidence", c.KindConfidence, "source", c.Source,
+			"source_confidence", c.SourceConfidence, "audio", c.Audio, "copied", copied, "trigger", c.Trigger)); err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET kind = ?, kind_layer = ? WHERE title_key = ? AND kind IS NULL", c.Kind, LayerReuse, key.String)
-		if err != nil {
-			return err
-		}
-		n, err := res.RowsAffected()
-		copied = int(n)
-		return err
+		return journalEach(ctx, tx, siblings, journalReuse, at, JournalClassified, LayerReuse, Detail("kind", c.Kind, "from", id))
 	})
 	return copied, err
 }
@@ -485,8 +514,17 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 // ClassifyFailed marks the torrent with the ID as one the classifier cannot
 // handle, so Unclassified skips it.
 func (s *Store) ClassifyFailed(ctx context.Context, id int64, reason string, at time.Time) error {
-	_, err := s.w.ExecContext(ctx, "UPDATE torrent_releases SET classified_at = ?, classify_error = ? WHERE id = ?", at.Unix(), reason, id)
-	return err
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		var b []byte
+		err := tx.QueryRowContext(ctx, "UPDATE torrent_releases SET classified_at = ?, classify_error = ? WHERE id = ? RETURNING infohash", at.Unix(), reason, id).Scan(&b)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return journal(ctx, tx, Hash(b), at, JournalClassified, "failed", Detail("error", reason))
+	})
 }
 
 // matchExpr turns free text into an FTS5 query matching all its words, or ""

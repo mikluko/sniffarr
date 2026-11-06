@@ -133,7 +133,7 @@ func (r *Recorder) Record(ctx context.Context, source string, e Event) (string, 
 	if !ok {
 		h, ok = infohash(e.InfoHash)
 	}
-	se := store.ArrEvent{App: e.App, Event: e.Kind, Key: key(e), Type: typ, TMDBID: tmdbID, IDs: ids,
+	se := store.ArrEvent{App: e.App, Event: e.Kind, Source: source, Key: key(e), Type: typ, TMDBID: tmdbID, IDs: ids,
 		Title: e.Title, Indexer: e.Indexer, Size: e.Size, Season: e.Season, Episode: e.Episode, At: e.At}
 	if ok {
 		se.Hash = &h

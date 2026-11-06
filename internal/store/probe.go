@@ -102,6 +102,21 @@ type ProbeCandidate struct {
 	// Wanted reports whether its probe was asked for or a search of Radarr
 	// or Sonarr returned it: queued at PriorityArr or ahead.
 	Wanted bool
+	// Attempts is how many probes of it failed since one last read it.
+	Attempts int
+}
+
+// ProbeWant is the search that returned the releases WantProbe records.
+type ProbeWant struct {
+	// T is the Torznab function: "search", "movie" or "tvsearch".
+	T     string
+	Query string
+	// ID is the ID searched by, as its parameter and value: "tmdbid:348",
+	// "imdbid:tt0078748", "tvdbid:371980"; "" for none.
+	ID string
+	// Season and Episode are a TV search's, 0 when it names none.
+	Season  int
+	Episode int
 }
 
 // probeGrown selects a release whose failed probes have not run out, or
@@ -114,12 +129,12 @@ const probeGrown = `(p.peers_week IS NULL OR t.peers_week >= 2 * p.peers_week AN
 const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND ` + probeGrown
 
 // WantProbe queues a probe at PriorityArr, at the time, for each stored
-// release of the hashes a search returned that a probe can read, unless its
-// probe is done or its failures ran out without its peers growing; a failed
-// one waits out its backoff. A release already queued at PriorityArr or
-// behind moves to PriorityArr and to the time; a requested one stays as it
-// is.
-func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) error {
+// release of the hashes the search returned that a probe can read, unless
+// its probe is done or its failures ran out without its peers growing; a
+// failed one waits out its backoff. A release already queued at PriorityArr
+// or behind moves to PriorityArr and to the time; a requested one stays as
+// it is. Every stored release is journaled as wanted.
+func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at time.Time) error {
 	if len(hashes) == 0 {
 		return nil
 	}
@@ -129,12 +144,20 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) erro
 		args = append(args, h[:])
 	}
 	args = append(args, probeArgs()...)
-	_, err := s.w.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
-		SELECT 'probe', t.infohash, ?1, ?2, coalesce(p.retry_at * 1000, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
-		WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND (p.outcome IS NULL OR p.outcome = '`+ProbeFailed+`' AND `+probeGrown+`) AND `+probeReadable+`
-		ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at
-		WHERE task_queue.priority >= excluded.priority`, args...)
-	return err
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		stored, err := hashesOf(tx.QueryContext(ctx, "SELECT infohash FROM torrent_releases WHERE infohash IN ("+placeholders(len(hashes))+")", args[2:2+len(hashes)]...))
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
+			SELECT 'probe', t.infohash, ?1, ?2, coalesce(p.retry_at * 1000, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
+			WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND (p.outcome IS NULL OR p.outcome = '`+ProbeFailed+`' AND `+probeGrown+`) AND `+probeReadable+`
+			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at
+			WHERE task_queue.priority >= excluded.priority`, args...); err != nil {
+			return err
+		}
+		return journalEach(ctx, tx, stored, len(stored), at, JournalProbeWanted, "search", Detail("t", w.T, "query", w.Query, "id", w.ID, "season", w.Season, "episode", w.Episode))
+	})
 }
 
 // RequestProbe queues a probe at PriorityRequest, at the time, for each
@@ -195,19 +218,21 @@ func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d t
 	if !errors.Is(err, sql.ErrNoRows) || !background {
 		return ProbeCandidate{}, false, ignoreNoRows(err)
 	}
-	h, err := unqueuedProbe(ctx, tx, now)
+	h, attempts, err := unqueuedProbe(ctx, tx, now)
 	if err != nil || h == nil {
 		return ProbeCandidate{}, false, err
 	}
 	_, err = tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at, lease_owner, lease_until, leased_at) VALUES ('probe', ?1, ?2, ?3, ?4, ?5, ?3)",
 		h, PrioritySample, now.UnixMilli(), owner, until)
-	return ProbeCandidate{Hash: Hash(h)}, err == nil, err
+	return ProbeCandidate{Hash: Hash(h), Attempts: attempts}, err == nil, err
 }
 
 // queuedProbeQuery selects the free queued probe due at its first argument,
-// at the priority of its second or ahead unless its third. CROSS JOIN keeps
-// SQLite walking the queued probes rather than every release.
-var queuedProbeQuery = `SELECT q.id, q.infohash, q.priority FROM task_queue q CROSS JOIN torrent_releases t ON t.infohash = q.infohash
+// at the priority of its second or ahead unless its third, with its failed
+// attempts. CROSS JOIN keeps SQLite walking the queued probes rather than
+// every release.
+var queuedProbeQuery = `SELECT q.id, q.infohash, q.priority, coalesce(p.attempts, 0) FROM task_queue q CROSS JOIN torrent_releases t ON t.infohash = q.infohash
+	LEFT JOIN probe_releases p ON p.torrent_id = t.id
 	WHERE q.kind = 'probe' AND q.lease_owner IS NULL AND q.not_before <= ? AND (q.priority <= ? OR ?) AND ` + probeCond("1") + `
 	ORDER BY q.priority, q.queued_at DESC, q.id DESC LIMIT 1`
 
@@ -216,30 +241,31 @@ const unqueued = ` AND NOT EXISTS (SELECT 1 FROM task_queue q WHERE q.kind = 'pr
 
 // backgroundProbeQuery selects the release not queued for a probe never
 // probed with the most peers over 7 days.
-var backgroundProbeQuery = `SELECT t.infohash FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
+var backgroundProbeQuery = `SELECT t.infohash, 0 FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
 	WHERE ` + probeCond("p.outcome IS NULL") + unqueued + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
 
 // retryProbeQuery selects the release not queued for a probe due a probe
-// again at its first argument with the most peers over 7 days.
-var retryProbeQuery = `SELECT t.infohash FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
+// again at its first argument with the most peers over 7 days, with its
+// failed attempts.
+var retryProbeQuery = `SELECT t.infohash, p.attempts FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
 	WHERE ` + probeCond(probeDue) + unqueued + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
 
 // queuedProbe returns the free queued probe due at now that LeaseProbe takes
 // first, and the ID of its task, or sql.ErrNoRows.
 func queuedProbe(ctx context.Context, tx *sql.Tx, now time.Time, background bool) (ProbeCandidate, int64, error) {
 	var id int64
-	var prio int
+	var prio, attempts int
 	var h []byte
-	if err := tx.QueryRowContext(ctx, queuedProbeQuery, append([]any{now.UnixMilli(), PriorityArr, background}, probeArgs()...)...).Scan(&id, &h, &prio); err != nil {
+	if err := tx.QueryRowContext(ctx, queuedProbeQuery, append([]any{now.UnixMilli(), PriorityArr, background}, probeArgs()...)...).Scan(&id, &h, &prio, &attempts); err != nil {
 		return ProbeCandidate{}, 0, err
 	}
-	return ProbeCandidate{Hash: Hash(h), Wanted: prio <= PriorityArr}, id, nil
+	return ProbeCandidate{Hash: Hash(h), Wanted: prio <= PriorityArr, Attempts: attempts}, id, nil
 }
 
 // unqueuedProbe returns the infohash of the release not queued for a probe
 // never probed with the most peers over 7 days, else of the one due a probe
-// again at now with the most, or nil.
-func unqueuedProbe(ctx context.Context, tx *sql.Tx, now time.Time) ([]byte, error) {
+// again at now with the most, with its failed attempts; or nil.
+func unqueuedProbe(ctx context.Context, tx *sql.Tx, now time.Time) ([]byte, int, error) {
 	for _, q := range []struct {
 		query string
 		args  []any
@@ -248,15 +274,16 @@ func unqueuedProbe(ctx context.Context, tx *sql.Tx, now time.Time) ([]byte, erro
 		{retryProbeQuery, append([]any{now.Unix()}, probeArgs()...)},
 	} {
 		var h []byte
-		err := tx.QueryRowContext(ctx, q.query, q.args...).Scan(&h)
+		var attempts int
+		err := tx.QueryRowContext(ctx, q.query, q.args...).Scan(&h, &attempts)
 		if err == nil {
-			return h, nil
+			return h, attempts, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			return nil, err
+			return nil, 0, err
 		}
 	}
-	return nil, nil
+	return nil, 0, nil
 }
 
 // probeCond selects releases t with peers a probe can read whose probe row
@@ -287,7 +314,8 @@ func ignoreNoRows(err error) error {
 	return err
 }
 
-// ProbeFailed records a failed probe of the stored release at the time. The
+// ProbeFailed records a failed probe of the stored release at the time, for
+// reason ProbeNoPeers or ProbeTimeout, having downloaded the bytes. The
 // release is due again after backoff, doubled for each failure before up to
 // attempts; once attempts probes have failed it is due again only with more
 // peers over 7 days than it had at the last, and ProbeFailed reports whether
@@ -295,7 +323,7 @@ func ignoreNoRows(err error) error {
 // flight stays requested and due at once; else one queued at PriorityArr or
 // ahead stays queued at PriorityArr until the backoff is out, while attempts
 // remain, and any other leaves the queue.
-func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts int, backoff time.Duration) (final bool, err error) {
+func (s *Store) ProbeFailed(ctx context.Context, h Hash, reason string, downloaded int64, at time.Time, attempts int, backoff time.Duration) (final bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var id, peers int64
 		var failed int
@@ -309,14 +337,18 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts 
 		}
 		failed++
 		final = failed >= attempts
-		retry := at.Add(backoff << min(failed-1, attempts-1)).Unix()
-		_, err = tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, peers_week) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+		retry := at.Add(backoff << min(failed-1, attempts-1))
+		if _, err := tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, peers_week) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 			ON CONFLICT (torrent_id) DO UPDATE SET outcome = ?2, attempts = ?3, retry_at = ?4, probed_at = ?5, peers_week = ?6`,
-			id, ProbeFailed, failed, retry, at.Unix(), sql.NullInt64{Int64: peers, Valid: final})
-		if err != nil {
+			id, ProbeFailed, failed, retry.Unix(), at.Unix(), sql.NullInt64{Int64: peers, Valid: final}); err != nil {
 			return err
 		}
-		return requeueProbe(ctx, tx, h, final, retry)
+		if err := requeueProbe(ctx, tx, h, final, retry.Unix()); err != nil {
+			return err
+		}
+		d := Detail("attempt", failed, "retry_at", retry, "downloaded", downloaded, "peers_week", peers)
+		d["final"] = final
+		return journal(ctx, tx, h, at, JournalProbed, reason, d)
 	})
 	return final, err
 }
@@ -383,16 +415,49 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 				return err
 			}
 		}
+		d := Detail("path", p.Path, "format", p.Format, "downloaded", p.Downloaded)
 		if p.Outcome != ProbeTracks {
-			return nil
+			return journal(ctx, tx, h, at, JournalProbed, p.Outcome, d)
 		}
 		for _, lang := range s.opts.Languages {
 			if err := probeAudio(ctx, tx, id, lang, p.Tracks); err != nil {
 				return err
 			}
 		}
-		return nil
+		tracks := make([]string, len(p.Tracks))
+		for i, t := range p.Tracks {
+			tracks[i] = t.Kind + ":" + t.Language + ":" + t.Codec
+		}
+		audio, err := audioProbabilities(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		d["tracks"] = tracks
+		if len(audio) > 0 {
+			d["audio"] = audio
+		}
+		return journal(ctx, tx, h, at, JournalProbed, p.Outcome, d)
 	})
+}
+
+// audioProbabilities returns the release's audio probabilities by language,
+// those decided.
+func audioProbabilities(ctx context.Context, tx *sql.Tx, id int64) (map[string]float64, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT language, probability FROM torrent_audio WHERE torrent_id = ? AND probability IS NOT NULL", id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]float64{}
+	for rows.Next() {
+		var lang string
+		var p float64
+		if err := rows.Scan(&lang, &p); err != nil {
+			return nil, err
+		}
+		out[lang] = p
+	}
+	return out, rows.Err()
 }
 
 // probeAudio sets the probability of an audio track in lang that the

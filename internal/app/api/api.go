@@ -300,7 +300,7 @@ func maintain(ctx context.Context, q *store.Tasks, s *store.Store, retention, id
 	} else if t != (store.Trimmed{}) {
 		log.Info("trimmed queue", "aged", t.Aged, "oversize", t.Oversize, "dead_expired", t.Expired)
 	}
-	sw, err := s.Sweep(ctx, now.Add(-retention), now.Add(-idle), sweepBatch)
+	sw, err := s.Sweep(ctx, now.Add(-retention), now.Add(-idle), now, sweepBatch)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		log.ErrorContext(ctx, "sweep store", "err", err)
 	}
