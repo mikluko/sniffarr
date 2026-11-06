@@ -45,6 +45,8 @@ const (
 	BrowseServiceTorrentsProcedure = "/sniffarr.v1.BrowseService/Torrents"
 	// BrowseServiceCardProcedure is the fully-qualified name of the BrowseService's Card RPC.
 	BrowseServiceCardProcedure = "/sniffarr.v1.BrowseService/Card"
+	// BrowseServiceJournalProcedure is the fully-qualified name of the BrowseService's Journal RPC.
+	BrowseServiceJournalProcedure = "/sniffarr.v1.BrowseService/Journal"
 	// BrowseServiceStatsProcedure is the fully-qualified name of the BrowseService's Stats RPC.
 	BrowseServiceStatsProcedure = "/sniffarr.v1.BrowseService/Stats"
 	// BrowseServiceHomeProcedure is the fully-qualified name of the BrowseService's Home RPC.
@@ -79,9 +81,14 @@ type BrowseServiceClient interface {
 	// to a work or not, in the order sort asks for, and how many they select
 	// in all. Adult releases are left out.
 	Torrents(context.Context, *connect.Request[v1.TorrentsRequest]) (*connect.Response[v1.TorrentsResponse], error)
-	// Card returns one release with every stored file, its peers and its
-	// work, or NOT_FOUND.
+	// Card returns one release with every stored file, its peers, its work
+	// and the newest 200 entries of its journal, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
+	// Journal returns the newest entries of an infohash's journal, oldest
+	// first: what happened to it, when, and how it ended. An infohash never
+	// seen has an empty journal; the absence of events is the answer, not
+	// NOT_FOUND.
+	Journal(context.Context, *connect.Request[v1.JournalRequest]) (*connect.Response[v1.JournalResponse], error)
 	// Stats returns the store's counts as last computed, which the server
 	// recomputes periodically.
 	Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error)
@@ -148,6 +155,12 @@ func NewBrowseServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(browseServiceMethods.ByName("Card")),
 			connect.WithClientOptions(opts...),
 		),
+		journal: connect.NewClient[v1.JournalRequest, v1.JournalResponse](
+			httpClient,
+			baseURL+BrowseServiceJournalProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("Journal")),
+			connect.WithClientOptions(opts...),
+		),
 		stats: connect.NewClient[v1.StatsRequest, v1.StatsResponse](
 			httpClient,
 			baseURL+BrowseServiceStatsProcedure,
@@ -194,6 +207,7 @@ type browseServiceClient struct {
 	titleReleases *connect.Client[v1.TitleReleasesRequest, v1.TitleReleasesResponse]
 	torrents      *connect.Client[v1.TorrentsRequest, v1.TorrentsResponse]
 	card          *connect.Client[v1.CardRequest, v1.CardResponse]
+	journal       *connect.Client[v1.JournalRequest, v1.JournalResponse]
 	stats         *connect.Client[v1.StatsRequest, v1.StatsResponse]
 	home          *connect.Client[v1.HomeRequest, v1.HomeResponse]
 	top           *connect.Client[v1.TopRequest, v1.TopResponse]
@@ -225,6 +239,11 @@ func (c *browseServiceClient) Torrents(ctx context.Context, req *connect.Request
 // Card calls sniffarr.v1.BrowseService.Card.
 func (c *browseServiceClient) Card(ctx context.Context, req *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error) {
 	return c.card.CallUnary(ctx, req)
+}
+
+// Journal calls sniffarr.v1.BrowseService.Journal.
+func (c *browseServiceClient) Journal(ctx context.Context, req *connect.Request[v1.JournalRequest]) (*connect.Response[v1.JournalResponse], error) {
+	return c.journal.CallUnary(ctx, req)
 }
 
 // Stats calls sniffarr.v1.BrowseService.Stats.
@@ -275,9 +294,14 @@ type BrowseServiceHandler interface {
 	// to a work or not, in the order sort asks for, and how many they select
 	// in all. Adult releases are left out.
 	Torrents(context.Context, *connect.Request[v1.TorrentsRequest]) (*connect.Response[v1.TorrentsResponse], error)
-	// Card returns one release with every stored file, its peers and its
-	// work, or NOT_FOUND.
+	// Card returns one release with every stored file, its peers, its work
+	// and the newest 200 entries of its journal, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
+	// Journal returns the newest entries of an infohash's journal, oldest
+	// first: what happened to it, when, and how it ended. An infohash never
+	// seen has an empty journal; the absence of events is the answer, not
+	// NOT_FOUND.
+	Journal(context.Context, *connect.Request[v1.JournalRequest]) (*connect.Response[v1.JournalResponse], error)
 	// Stats returns the store's counts as last computed, which the server
 	// recomputes periodically.
 	Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error)
@@ -340,6 +364,12 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(browseServiceMethods.ByName("Card")),
 		connect.WithHandlerOptions(opts...),
 	)
+	browseServiceJournalHandler := connect.NewUnaryHandler(
+		BrowseServiceJournalProcedure,
+		svc.Journal,
+		connect.WithSchema(browseServiceMethods.ByName("Journal")),
+		connect.WithHandlerOptions(opts...),
+	)
 	browseServiceStatsHandler := connect.NewUnaryHandler(
 		BrowseServiceStatsProcedure,
 		svc.Stats,
@@ -388,6 +418,8 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 			browseServiceTorrentsHandler.ServeHTTP(w, r)
 		case BrowseServiceCardProcedure:
 			browseServiceCardHandler.ServeHTTP(w, r)
+		case BrowseServiceJournalProcedure:
+			browseServiceJournalHandler.ServeHTTP(w, r)
 		case BrowseServiceStatsProcedure:
 			browseServiceStatsHandler.ServeHTTP(w, r)
 		case BrowseServiceHomeProcedure:
@@ -427,6 +459,10 @@ func (UnimplementedBrowseServiceHandler) Torrents(context.Context, *connect.Requ
 
 func (UnimplementedBrowseServiceHandler) Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Card is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) Journal(context.Context, *connect.Request[v1.JournalRequest]) (*connect.Response[v1.JournalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Journal is not implemented"))
 }
 
 func (UnimplementedBrowseServiceHandler) Stats(context.Context, *connect.Request[v1.StatsRequest]) (*connect.Response[v1.StatsResponse], error) {

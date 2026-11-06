@@ -24,6 +24,14 @@ import (
 // MaxStatsHours is the most clock hours Browser.Stats counts: 3660 days.
 const MaxStatsHours = 3660 * 24
 
+// DefaultJournalLimit is how many journal entries Card carries and Journal
+// returns asked for none in particular; MaxJournalLimit the most Journal
+// returns.
+const (
+	DefaultJournalLimit = 200
+	MaxJournalLimit     = 1000
+)
+
 // TitleSearch searches TMDB for works and stores what it finds;
 // tmdb.Matcher is one.
 type TitleSearch interface {
@@ -255,6 +263,9 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 		res.Files = append(res.Files, &sniffarrv1.File{Path: f.Path, Size: f.Size})
 	}
 	res.Rules = ruleHits(c.Name, c.Files, b.Languages)
+	if res.Journal, err = b.journal(ctx, store.Hash(h), DefaultJournalLimit); err != nil {
+		return nil, err
+	}
 	if c.Work != nil {
 		res.Work, res.RankInWork = summary(*c.Work, lang), int32(c.RankInWork)
 		if t := res.GetRelease().GetTmdb(); t != nil {
@@ -262,6 +273,36 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 		}
 	}
 	return connect.NewResponse(res), nil
+}
+
+func (b *Browser) Journal(ctx context.Context, req *connect.Request[sniffarrv1.JournalRequest]) (*connect.Response[sniffarrv1.JournalResponse], error) {
+	h := req.Msg.GetInfohash()
+	if len(h) != len(store.Hash{}) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("infohash of %d bytes, want 20", len(h)))
+	}
+	limit := int(req.Msg.GetLimit())
+	if limit <= 0 {
+		limit = DefaultJournalLimit
+	}
+	entries, err := b.journal(ctx, store.Hash(h), min(limit, MaxJournalLimit))
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&sniffarrv1.JournalResponse{Entries: entries}), nil
+}
+
+// journal returns the newest entries of the hash, up to limit, oldest
+// first.
+func (b *Browser) journal(ctx context.Context, h store.Hash, limit int) ([]*sniffarrv1.JournalEntry, error) {
+	entries, err := b.Store.Journal(ctx, h, limit)
+	if err != nil {
+		return nil, b.internal(ctx, "journal", err)
+	}
+	out := make([]*sniffarrv1.JournalEntry, len(entries))
+	for i, e := range entries {
+		out[i] = &sniffarrv1.JournalEntry{At: timestamppb.New(e.At), Kind: e.Kind, Outcome: e.Outcome, Detail: e.Detail}
+	}
+	return out, nil
 }
 
 // ruleHits are the features names.Explain finds in name, then the audio

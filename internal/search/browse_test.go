@@ -150,6 +150,11 @@ func TestBrowserCard(t *testing.T) {
 	require.Equal(t, []*sniffarrv1.RuleHit{
 		{Rule: "year", Match: "1979"}, {Rule: "kind.movie", Match: "1080p"}, {Rule: "quality.1080p", Match: "1080p"}, {Rule: "audio.ru", Match: "Rus"},
 	}, res.Msg.GetRules())
+	require.Len(t, res.Msg.GetJournal(), 1)
+	require.Equal(t, store.JournalFetched, res.Msg.GetJournal()[0].GetKind())
+	require.Equal(t, "stored", res.Msg.GetJournal()[0].GetOutcome())
+	require.Equal(t, now.Add(-time.Hour), res.Msg.GetJournal()[0].GetAt().AsTime())
+	require.Contains(t, res.Msg.GetJournal()[0].GetDetail(), `"name":"Alien.1979.Rus.1080p"`)
 
 	h = hash(3)
 	res, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: h[:]}))
@@ -160,6 +165,32 @@ func TestBrowserCard(t *testing.T) {
 	_, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: h[:]}))
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 	_, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: []byte{1}}))
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+}
+
+func TestBrowserJournal(t *testing.T) {
+	b := browser(t)
+	ctx := context.Background()
+	h := hash(2)
+	res, err := b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:]}))
+	require.NoError(t, err)
+	require.Len(t, res.Msg.GetEntries(), 2)
+	require.Equal(t, []string{"fetched/stored", "classified/jev"}, []string{
+		res.Msg.GetEntries()[0].GetKind() + "/" + res.Msg.GetEntries()[0].GetOutcome(), res.Msg.GetEntries()[1].GetKind() + "/" + res.Msg.GetEntries()[1].GetOutcome()}, "oldest first")
+	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Limit: 1}))
+	require.NoError(t, err)
+	require.Len(t, res.Msg.GetEntries(), 1)
+	require.Equal(t, store.JournalClassified, res.Msg.GetEntries()[0].GetKind(), "the newest within the limit")
+
+	h = hash(10)
+	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:]}))
+	require.NoError(t, err)
+	require.Equal(t, []string{store.JournalFetched}, []string{res.Msg.GetEntries()[0].GetKind()}, "a rejected hash has a journal though no card")
+	h = hash(9)
+	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:]}))
+	require.NoError(t, err, "a hash never seen is no error")
+	require.Empty(t, res.Msg.GetEntries())
+	_, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: []byte{1}}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }
 
