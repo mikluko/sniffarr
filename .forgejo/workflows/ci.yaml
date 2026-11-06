@@ -1,6 +1,6 @@
 name: CI
 
-# On main, ci runs only as the first job of release-cut.yaml.
+# On main, ci runs only as the first job of release.yaml.
 on:
   pull_request:
   workflow_call:

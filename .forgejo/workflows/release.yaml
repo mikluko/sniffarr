@@ -1,38 +1,46 @@
-name: Roll release
-run-name: ${{ github.event_name == 'push' && format('Releasing {0}', github.ref_name) || format('Dry run of a release from {0}', github.ref_name) }}
+name: Release
+run-name: ${{ github.event_name == 'push' && 'Checking changelog for a due release' || format('Dry run of a release from {0}', github.ref_name) }}
+
+# A push to main whose newest CHANGELOG.md entry names a version no tag
+# carries releases it: the image, the chart, the archives and the .deb
+# packages, then the Forgejo release, whose tag is born with it. Run by
+# hand, the workflow builds the newest version and publishes nothing.
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: release-roll
+  group: release
   cancel-in-progress: false
 
 # The automatic token cannot write packages owned by a user, so registry access
 # trades an OIDC token for an Authorized Integration of the owner's, selected
-# by REGISTRY_AUDIENCE and scoped write:package.
+# by vars.REGISTRY_AUDIENCE and scoped write:package.
 enable-openid-connect: true
 
 env:
   REGISTRY: sarak.sh
-  REGISTRY_AUDIENCE: u:1:62e83a47-a7dc-4f1e-9075-57e5a37b8449
   IMAGE: sarak.sh/mikluko/sniffarr
   CHART_REPOSITORY: oci://sarak.sh/mikluko/charts
   DEBIAN_DISTRIBUTION: trixie
   DEBIAN_COMPONENT: main
 
 jobs:
+  ci:
+    uses: ./.forgejo/workflows/ci.yaml
+
   plan:
+    needs: ci
     runs-on: ubuntu-latest
     outputs:
-      due: ${{ steps.version.outputs.due }}
-      version: ${{ steps.version.outputs.version }}
-      tag: v${{ steps.version.outputs.version }}
+      due: ${{ steps.changelog.outputs.due }}
+      version: ${{ steps.changelog.outputs.version }}
+      tag: v${{ steps.changelog.outputs.version }}
       prerelease: ${{ steps.changelog.outputs.prerelease }}
       notes: ${{ steps.changelog.outputs.notes }}
-      publish: ${{ steps.version.outputs.publish }}
+      publish: ${{ github.event_name == 'push' && steps.changelog.outputs.due == 'true' }}
     steps:
       - uses: https://github.com/actions/checkout@v7
         with:
@@ -42,39 +50,24 @@ jobs:
         uses: https://forge.sarak.sh/actions/changelog@v1
         with:
           due-prerelease: true
-      - id: version
-        name: Version
+      - name: Plan
         env:
           EVENT: ${{ github.event_name }}
-          REF_NAME: ${{ github.ref_name }}
-          NEWEST: ${{ steps.changelog.outputs.version }}
+          VERSION: ${{ steps.changelog.outputs.version }}
           DUE: ${{ steps.changelog.outputs.due }}
           DUE_REASON: ${{ steps.changelog.outputs['due-reason'] }}
         run: |
-          due=$DUE
-          reason=$DUE_REASON
-          version=$NEWEST
-          publish=false
-          if [ "$EVENT" = push ]; then
-            version=${REF_NAME#v}
-            if [ -z "$NEWEST" ] || [ "$REF_NAME" != "v$NEWEST" ]; then
-              echo "::error::tag $REF_NAME is not the newest version CHANGELOG.md names, ${NEWEST:-which is none}"
-              exit 1
-            fi
-            due=true
-            publish=true
-            reason="$REF_NAME is the newest version CHANGELOG.md names"
+          if [ "$EVENT" != push ]; then
+            echo "::notice::dry run of ${VERSION:-no version}: nothing is published"
+          elif [ "$DUE" = true ]; then
+            echo "::notice::$VERSION is due"
+          else
+            echo "::notice::${DUE_REASON:-nothing is due}"
           fi
-          echo "::notice::${reason:-$version is due}"
-          {
-            echo "due=$due"
-            echo "version=$version"
-            echo "publish=$publish"
-          } >>"$GITHUB_OUTPUT"
 
   image:
     needs: plan
-    if: needs.plan.outputs.due == 'true'
+    if: needs.plan.outputs.due == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: https://github.com/actions/checkout@v7
@@ -82,9 +75,11 @@ jobs:
           persist-credentials: false
       - name: Log in
         if: needs.plan.outputs.publish == 'true'
+        env:
+          AUDIENCE: ${{ vars.REGISTRY_AUDIENCE }}
         run: |
           jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$REGISTRY_AUDIENCE" | jq -r .value)
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
           echo "::add-mask::$jwt"
           printf '%s' "$jwt" | docker login "$REGISTRY" --username oidc --password-stdin
       - name: Build
@@ -104,7 +99,7 @@ jobs:
 
   chart:
     needs: [plan, image]
-    if: needs.plan.outputs.due == 'true'
+    if: needs.plan.outputs.due == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: https://github.com/actions/checkout@v7
@@ -124,9 +119,10 @@ jobs:
         if: needs.plan.outputs.publish == 'true'
         env:
           VERSION: ${{ needs.plan.outputs.version }}
+          AUDIENCE: ${{ vars.REGISTRY_AUDIENCE }}
         run: |
           jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$REGISTRY_AUDIENCE" | jq -r .value)
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
           echo "::add-mask::$jwt"
           printf '%s' "$jwt" | helm registry login "$REGISTRY" --username oidc --password-stdin
           helm push "$RUNNER_TEMP/chart/sniffarr-$VERSION.tgz" "$CHART_REPOSITORY"
@@ -136,7 +132,7 @@ jobs:
   # Debian registry.
   packages:
     needs: plan
-    if: needs.plan.outputs.due == 'true'
+    if: needs.plan.outputs.due == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: https://github.com/actions/checkout@v7
@@ -168,9 +164,11 @@ jobs:
             dist/checksums.txt
       - name: Upload to the Debian registry
         if: needs.plan.outputs.publish == 'true'
+        env:
+          AUDIENCE: ${{ vars.REGISTRY_AUDIENCE }}
         run: |
           jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$REGISTRY_AUDIENCE" | jq -r .value)
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
           echo "::add-mask::$jwt"
           owner=${GITHUB_REPOSITORY%%/*}
           for deb in dist/*.deb; do
@@ -178,34 +176,27 @@ jobs:
               "$GITHUB_SERVER_URL/api/packages/$owner/debian/pool/$DEBIAN_DISTRIBUTION/$DEBIAN_COMPONENT/upload"
           done
 
-  # Last, so a release exists only once every artifact it names does.
+  # Last, so the tag and the release exist only once every artifact they
+  # name does. The release API makes the tag; nothing is pushed.
   release:
     needs: [plan, image, chart, packages]
-    if: ${{ !cancelled() && !failure() && needs.plan.outputs.due == 'true' }}
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: https://code.forgejo.org/forgejo/download-artifact@v4
         with:
           name: packages
           path: dist
-      - name: Notes
-        env:
-          TAG: ${{ needs.plan.outputs.tag }}
-          NOTES: ${{ needs.plan.outputs.notes }}
-        run: |
-          printf '%s\n' "$NOTES" >"$RUNNER_TEMP/notes.md"
-          echo "release $TAG from $GITHUB_SHA:"
-          cat "$RUNNER_TEMP/notes.md"
       - name: Release
-        if: needs.plan.outputs.publish == 'true'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.plan.outputs.tag }}
+          NOTES: ${{ needs.plan.outputs.notes }}
           PRERELEASE: ${{ needs.plan.outputs.prerelease }}
         run: |
           api="$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY"
-          id=$(jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes.md" --argjson pre "$PRERELEASE" \
-            '{tag_name: $tag, name: $tag, body: $body, prerelease: $pre}' |
+          id=$(jq -n --arg tag "$TAG" --arg sha "$GITHUB_SHA" --arg body "$NOTES" --argjson pre "$PRERELEASE" \
+            '{tag_name: $tag, target_commitish: $sha, name: $tag, body: $body, prerelease: $pre}' |
             curl --fail-with-body -sS -X POST \
               -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
               -d @- "$api/releases" | jq -r .id)
@@ -213,3 +204,4 @@ jobs:
             curl --fail-with-body -sS -X POST -H "Authorization: token $TOKEN" \
               -F "attachment=@$asset" "$api/releases/$id/assets?name=$(basename "$asset")" >/dev/null
           done
+          echo "Released **$TAG** from $GITHUB_SHA." >>"$GITHUB_STEP_SUMMARY"
