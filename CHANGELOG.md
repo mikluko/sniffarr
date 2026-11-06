@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-06
+
 ### Changed
 
 - **Breaking:** the repository is `sarak.sh/mikluko/sniffarr`, the image `sarak.sh/mikluko/sniffarr:X.Y.Z` and the chart `oci://sarak.sh/mikluko/charts/sniffarr`; the `arr` paths serve the versions before this one.
@@ -558,7 +560,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.38.0...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.39.0...HEAD
+[0.39.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.38.0...v0.39.0
 [0.38.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.37.0...v0.38.0
 [0.37.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.36.0...v0.37.0
 [0.36.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.35.2...v0.36.0
