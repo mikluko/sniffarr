@@ -38,7 +38,7 @@ main() {
 	fi
 	echo
 	echo "sniffarr runs; its settings are in /etc/default/sniffarr, its database under /var/lib/sniffarr."
-	echo "The web UI is on :8081 and authenticates nobody: see $FORGE/$REPO#web-ui."
+	echo "The web UI is on :8081 and authenticates nobody: see $FORGE/$REPO/src/branch/main/docs/web-ui.md."
 }
 
 # debian_like reports whether the host takes .deb packages from apt.

@@ -3,7 +3,7 @@
 This guide installs sniffarr with its Helm chart, one Deployment per
 component. Every value is described in the chart's
 [`values.yaml`](../../charts/sniffarr/values.yaml), and the chart's behaviour
-under [Helm](../../README.md#helm) in the README.
+under [Helm](../helm.md) in the README.
 
 ## Before you begin
 
@@ -16,7 +16,7 @@ under [Helm](../../README.md#helm) in the README.
 ## Install
 
 1. Create a Secret with the keys; each is a variable of
-   [Configuration](../../README.md#configuration):
+   [Configuration](../configuration.md):
 
    ```shell
    kubectl create secret generic sniffarr \

@@ -39,7 +39,7 @@ container, or [a container per component](#a-container-per-component).
    ```
 
 1. Put the keys in `.env` beside it; each line is a variable of
-   [Configuration](../../README.md#configuration):
+   [Configuration](../configuration.md):
 
    ```shell
    TYPESAFE_API_KEY=...

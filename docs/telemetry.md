@@ -1,0 +1,88 @@
+# Telemetry
+
+sniffarr exports traces and metrics with the OpenTelemetry SDK over OTLP,
+configured only by the standard variables: `OTEL_EXPORTER_OTLP_ENDPOINT` and
+the rest of `OTEL_EXPORTER_OTLP_*`, `OTEL_TRACES_EXPORTER`,
+`OTEL_METRICS_EXPORTER`, `OTEL_SERVICE_NAME` (`sniffarr` when unset),
+`OTEL_RESOURCE_ATTRIBUTES`, `OTEL_TRACES_SAMPLER` and
+`OTEL_TRACES_SAMPLER_ARG`. Without an endpoint the exporters go to the
+specification's default on localhost. `OTEL_SDK_DISABLED=true` turns
+telemetry off: no exporter is created and nothing connects anywhere.
+
+Every RPC is traced and measured on both ends by
+[otelconnect](https://github.com/connectrpc/otelconnect-go). Logs stay JSON on
+stderr and carry `trace_id` and `span_id` when written inside a span. No
+BitTorrent peer address appears in spans, attributes or logs.
+
+The API's SQLite statements are instrumented by
+[otelsql](https://github.com/XSAM/otelsql): inside a traced request each
+statement is a child span carrying its text with placeholders, never its
+arguments, and every statement is measured in `db.client.operation.duration`
+(`s`), by `db.pool` (`write` or `read`), `db.operation.name` and
+`code.function.name`, the Go function that issued it. The pools' connection
+counts are the `db.sql.connection.*` metrics.
+
+| Component  | Metric                                 | Unit         | Attributes                                 |
+| ---------- | -------------------------------------- | ------------ | ------------------------------------------ |
+| `-api`     | `sniffarr.db.wal.size`                 | `By`         |                                            |
+| `-api`     | `sniffarr.ingest.sightings`            | `{sighting}` | `sniffarr.sighting.result`                 |
+| `-api`     | `sniffarr.queue.depth`                 | `{infohash}` | `sniffarr.discovery`                       |
+| `-api`     | `sniffarr.queue.leases`                | `{lease}`    |                                            |
+| `-api`     | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
+| `-api`     | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
+| `-api`     | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
+| `-api`     | `sniffarr.feed.items`                  | `{item}`     | `sniffarr.feed.source`, `sniffarr.feed.outcome` |
+| `-api`     | `sniffarr.store.retention.deletions`   | `{torrent}`  | `sniffarr.store.retention.class`           |
+| `-api`     | `sniffarr.ingest.results`              | `{result}`   | `sniffarr.fetch.outcome`                   |
+| `-api`     | `sniffarr.ingest.rejections`           | `{torrent}`  | `sniffarr.rules.reason`                    |
+| `-api`     | `sniffarr.ingest.stored`               | `{torrent}`  |                                            |
+| `-api`     | `sniffarr.classify.classifications`    | `{torrent}`  | `sniffarr.kind`, `sniffarr.classify.layer` |
+| `-api`     | `sniffarr.search.lazy.duration`        | `s`          |                                            |
+| `-api`     | `sniffarr.search.lazy.classifications` | `{torrent}`  | `sniffarr.search.lazy.result`              |
+| `-api`     | `sniffarr.classify.tokens`             | `{token}`    |                                            |
+| `-api`     | `sniffarr.classify.errors`             | `{error}`    | `sniffarr.classify.error`                  |
+| `-api`     | `sniffarr.tmdb.matches`                | `{title}`    | `sniffarr.tmdb.layer`                      |
+| `-api`     | `sniffarr.tmdb.requests`               | `{request}`  | `sniffarr.tmdb.status`                     |
+| `-api`     | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
+| `-api`     | `sniffarr.arr.events`                  | `{event}`    | `sniffarr.arr.app`, `sniffarr.arr.event`, `sniffarr.arr.source` |
+| `-api`     | `sniffarr.arr.outcomes`                | `{event}`    | `sniffarr.arr.app`, `sniffarr.arr.outcome` |
+| `-api`     | `sniffarr.probe.tasks`                 | `{task}`     | `sniffarr.probe.priority`                  |
+| `-api`     | `sniffarr.probe.results`               | `{result}`   | `sniffarr.probe.outcome`                   |
+| `-api`     | `sniffarr.probe.downloaded`            | `By`         |                                            |
+| `-api`     | `sniffarr.probe.uploaded`              | `By`         |                                            |
+| `-sniff`, `-fetch` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
+| `-sniff`, `-fetch` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
+| `-sniff`   | `sniffarr.dht.replies`                 | `{reply}`    | `sniffarr.dht.query`                       |
+| `-sniff`   | `sniffarr.dht.infohashes`              | `{infohash}` |                                            |
+| `-sniff`   | `sniffarr.dht.peers`                   | `{peer}`     |                                            |
+| `-sniff`   | `sniffarr.sniff.sightings`             | `{infohash}` | `sniffarr.discovery`                       |
+| `-fetch`   | `sniffarr.sniff.fetch.in_flight`       | `{task}`     |                                            |
+| `-fetch`   | `sniffarr.sniff.fetch.outcomes`        | `{task}`     | `sniffarr.fetch.outcome`                   |
+| `-fetch`   | `sniffarr.sniff.fetch.duration`        | `s`          | `sniffarr.fetch.outcome`                   |
+| `-fetch`   | `sniffarr.sniff.probe.outcomes`        | `{task}`     | `sniffarr.probe.outcome`                   |
+| `-fetch`   | `sniffarr.seed.downloaded`             | `By`         |                                            |
+| `-fetch`   | `sniffarr.seed.uploaded`               | `By`         |                                            |
+| `-fetch`   | `sniffarr.seed.torrents`               | `{torrent}`  |                                            |
+| `-fetch`   | `sniffarr.seed.stored`                 | `By`         |                                            |
+| `-fetch`   | `sniffarr.seed.removals`               | `{torrent}`  | `sniffarr.seed.reason`                     |
+
+`sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
+`sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` and `feed` too;
+`sniffarr.feed.outcome` is `stored`, `queued`, `rejected` or `duplicate`; `sniffarr.dht.query` is
+`sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
+`new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
+`sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
+`sniffarr.store.retention.class` is `idle` or `expired`;
+`sniffarr.classify.layer` is `rules`, `reuse` or `jev`;
+`sniffarr.search.lazy.result` is `in_time`, `late` or `failed`;
+`sniffarr.tmdb.layer` is `tmdb`, `jev` or `none`; `sniffarr.tmdb.status` is
+the HTTP status of TMDB's answer, or `error` without one;
+`sniffarr.arr.app` is `radarr` or `sonarr`; `sniffarr.arr.event` is `grab`
+or `import`; `sniffarr.arr.source` is `webhook` or `history`;
+`sniffarr.arr.outcome` is `matched` (the stored release got the work),
+`queued` (the infohash was queued), `unknown` (no infohash, no work, or a
+rejected torrent) or `duplicate` (recorded before);
+`sniffarr.probe.priority` is `search` or `background`;
+`sniffarr.probe.outcome` is `tracks`, `unknown`, `no_peers` or `timeout`;
+`sniffarr.seed.reason` is `ratio` (uploaded as much as downloaded), `age`
+or `size`, the last two removals before the ratio.

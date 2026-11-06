@@ -1,0 +1,39 @@
+# Web UI
+
+With `-ui`, sniffarr serves a web UI on `SNIFFARR_UI_ADDR`, in English or
+Russian. The UI touches no database: it reads `BrowseService`, in-process
+when `-api` is on and over the network at
+`SNIFFARR_URL` otherwise. At start it asks `Settings` for the API's audio
+languages, retrying every 5 seconds until the API answers, and listens only
+then; the languages are kept for the life of the process, so a change of the
+API's needs the UI restarted.
+
+| Route               | Page                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /`             | The store's counts: kinds, layers, sources, audio per language, rejections by reason, the classifier's pending torrents and tokens used, the piece data probes downloaded against the day's limit and what the fetchers uploaded back, both with what they come to by the end of the UTC day at their pace so far, and new torrents per hour over 48 hours, per calendar day over 30 and per calendar week over 26 in the browser's time zone, which the page's script puts in the `tz` cookie, the process's (`TZ`) until then, the current hour, day and week unfinished, drawn lighter and outlined up to their pace so far, with how many minutes ago the API computed them                                                                                                                                           |
+| `GET /movie/{id}`, `GET /tv/{id}` | A movie or series by its TMDB id, the paths Seerr gives the same titles: what TMDB knows of it, its places in the tops over 24 h, 7 days and 30 days, its releases and peers, the audio of its releases, and its releases under `quality` (`2160p`, `1080p`, `720p`, `sd`), `source` (`web`, `rip`, `remux`, `disc`), `min` and `max` in GB, `vl` and `voice`, a series' `season` and `episode`, sorted by `sort` (`peers`, `first_seen`, `size`), 50 a page from `o` |
+| `GET /torrents`     | Every release, matched or not, by name or infohash in `q`, under `kind` (`movie`, `series`, `other`, `unknown`), `matched` (`yes`, `no`), `quality`, `vl` and `voice`, `source`, `layer`, `min` in GB, sorted by `sort` (`peers`, `last_seen`, `size`), 50 a page from `o`; a matched release links to its movie or series                                                                                                             |
+| `GET /top`          | The 100 movies or series with the most peers over a window: `kind` is `movie` or `series`, `win` is `24h`, `7d` or `30d`, `voice` is `any`, `p50` or `explicit` in the audio language `vl`, narrowing each to its releases with a marker or a probability of at least 0.5, or to those with a marker; the first 25 until `all=1`. A row leads to its movie's or series' page                                                       |
+| `GET /w/{id}`, `GET /top/w/{id}` | A permanent redirect of the title pages of earlier versions, `id` `m348` or `tv1399`, to `/movie/348` or `/tv/1399`                                                                                                                                                                                                                                                                                                       |
+| `GET /t/{infohash}` | A release: its magnet link, peers over the last day, 7 days and 30 days, its movie or series with its place in the top and the release's place among its releases, or the state of its title's lookup with TMDB and IMDb searches while it is unmatched, classification, audio signs per language with their marks, and the first 8 stored files, every one with `files=all`                                                          |
+| `GET /static/…`     | Stylesheet, scripts and the TMDB logo. The pages link each with a version in `v`, a hash of its content, at which it is cached for a year; at any other URL the browser revalidates it by ETag                                                                                                                                                                                                                                     |
+
+A parameter value outside those listed is the default: every kind, quality,
+source and layer, the audio language of the page's language when it is
+configured and else the first, `voice=any`, `sort=peers`, `kind=movie` for
+the top, `win=7d`. A fragment of a page is served alone when htmx asks for it
+with `HX-Request: true` and `HX-Target` naming it: `results`, `releases`,
+`torrents`, `top`, `files` or `data`.
+
+The UI authenticates nobody: an authenticating proxy, such as oauth2-proxy,
+goes in front of it. Its language is the one picked with `?lang=ru` or
+`?lang=en`, on any page, remembered in a cookie for a year, else, with
+`SNIFFARR_OIDC_ISSUER` set, the `locale` claim of the provider's userinfo for
+the access token in the `X-Forwarded-Access-Token` header, which oauth2-proxy
+can pass on; a locale is kept for 10 minutes per token. Adult releases do not
+show in it. With `SNIFFARR_SEERR_URL` set, a matched title's card and release
+cards link it in that Seerr, at `/movie/<tmdb id>` or `/tv/<tmdb id>` under
+it.
+
+The chart serves the UI with `ui.enabled`, behind the Service `<release>-ui`;
+see [Helm](helm.md).

@@ -1,4 +1,4 @@
-# Environment of the sniffarr service; see https://sarak.sh/mikluko/sniffarr#configuration.
+# Environment of the sniffarr service; see https://sarak.sh/mikluko/sniffarr/src/branch/main/docs/configuration.md.
 
 # The components of the one process: the API with the database, the web UI,
 # the DHT sniffer and the metadata fetcher, with the DHT port forwarded by
