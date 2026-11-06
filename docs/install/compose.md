@@ -1,8 +1,7 @@
 # Run with Docker Compose
 
-This guide runs one sniffarr process from the published image with the
-one-process `compose.yaml` of the [Compose examples](../../examples/compose.md),
-which also give a container per component.
+This guide runs sniffarr from the published image: one process in one
+container, or [a container per component](#a-container-per-component).
 
 ## Before you begin
 
@@ -15,9 +14,25 @@ which also give a container per component.
 
 ## Run
 
-1. Save the one-process example of the
-   [Compose examples](../../examples/compose.md#one-process) as
-   `compose.yaml`, and make the data directory the image's user's:
+1. Save this as `compose.yaml`:
+
+   ```yaml
+   services:
+     sniffarr:
+       image: sarak.sh/arr/sniffarr:${SNIFFARR_VERSION:?a release, such as 0.38.0}
+       command: ["-api", "-ui", "-sniff", "-fetch", "-upnp"]
+       network_mode: host
+       environment:
+         SNIFFARR_DB: /data/sniffarr.db
+       env_file:
+         - path: .env
+           required: false
+       volumes:
+         - ./data:/data
+       restart: unless-stopped
+   ```
+
+1. Make the data directory the image's user's:
 
    ```shell
    mkdir -p data && sudo chown 65532:65532 data
@@ -57,3 +72,59 @@ docker compose down
 ```
 
 `data` stays; remove it to drop the database.
+
+## A container per component
+
+The same steps with this `compose.yaml`. The API and the UI sit on the
+compose network, the UI published on loopback for an authenticating proxy.
+The sniffer and the fetcher need the DHT port and the UPnP discovery, so
+they use the host's network and reach the API through the port it publishes
+on loopback. The fetcher's DHT node picks a free port, since the sniffer
+holds `42069`.
+
+```yaml
+x-image: &image sarak.sh/arr/sniffarr:${SNIFFARR_VERSION:?a release, such as 0.38.0}
+
+services:
+  api:
+    image: *image
+    command: ["-api"]
+    environment:
+      SNIFFARR_DB: /data/sniffarr.db
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+
+  ui:
+    image: *image
+    command: ["-ui"]
+    environment:
+      SNIFFARR_URL: http://api:8080
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on: [api]
+    restart: unless-stopped
+
+  sniff:
+    image: *image
+    command: ["-sniff", "-upnp"]
+    network_mode: host
+    environment:
+      SNIFFARR_URL: http://127.0.0.1:8080
+    depends_on: [api]
+    restart: unless-stopped
+
+  fetch:
+    image: *image
+    command: ["-fetch", "-port", "0"]
+    network_mode: host
+    environment:
+      SNIFFARR_URL: http://127.0.0.1:8080
+    depends_on: [api]
+    restart: unless-stopped
+```

@@ -31,8 +31,8 @@ registry; elsewhere, the release archive. Each way has its guide:
 - [Docker Compose](docs/install/compose.md), the image in one container
 - [Kubernetes](docs/install/kubernetes.md), the Helm chart
 
-[`examples`](examples) holds complete Compose files and systemd units, one
-process or a container or service per component.
+The Compose and systemd guides also give a container or a service per
+component.
 
 ## Components
 
