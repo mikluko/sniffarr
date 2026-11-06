@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-11-06
+
 ### Changed
 
 - The moment of a feed's rounds within `SNIFFARR_FEED_INTERVAL` is fixed by the feed's name and the database's own key, so two instances read one feed at different moments; it may fall on the hour.
@@ -582,7 +584,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.40.0...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.41.0...HEAD
+[0.41.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.40.0...v0.41.0
 [0.40.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.39.0...v0.40.0
 [0.39.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.38.0...v0.39.0
 [0.38.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.37.0...v0.38.0
