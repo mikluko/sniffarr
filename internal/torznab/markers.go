@@ -8,6 +8,7 @@ import (
 	"golang.org/x/text/language"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/audio"
 )
 
 // voice is a kind of Russian audio a track's name can say, labelled as the
@@ -120,6 +121,29 @@ func russianLabels(tracks []*sniffarrv1.Track) ([]voice, bool) {
 		}
 	}
 	return out, found
+}
+
+// russianCodes reads the Russian translation codes in release names.
+var russianCodes, _ = audio.Lookup("ru")
+
+// codeVoices are the voices the Russian translation codes say; a code
+// missing here, Pm, says no kind of voice.
+var codeVoices = map[string]string{"D": "Dub", "P": "MVO", "L": "MVO", "P2": "DVO", "L2": "DVO", "A": "AVO", "P1": "VO", "L1": "VO"}
+
+// codeLabels returns the voices the Russian translation codes in name say,
+// in voices order.
+func codeLabels(name string) []voice {
+	said := map[string]bool{}
+	for _, c := range russianCodes.CodesIn(name) {
+		said[codeVoices[c]] = true
+	}
+	var out []voice
+	for _, v := range voices {
+		if said[v.label] {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // noRussian opens the marker of a release whose probed audio tracks are all

@@ -30,11 +30,17 @@ type Language struct {
 	// StudioNames are the display names of the Studios, by studio as
 	// written in Studios; spellings of one studio share a name.
 	StudioNames map[string]string
+	// Codes are the translation codes of the language, matched in their
+	// case: one or more after the year and before the source, as in
+	// Movie.2026.D.P2.WEB-DL, or a comma-separated list between bars, as in
+	// "Movie (2026) WEB-DL | D, P2 |". A code alone, Plan.B, is no marker.
+	Codes []string
 	// Signs tells the classifier how a release names or implies an audio
 	// track of the language.
 	Signs string
 
 	marker  *regexp.Regexp
+	codes   []*regexp.Regexp
 	studio  *regexp.Regexp
 	studios []*regexp.Regexp
 	scripts []*unicode.RangeTable
@@ -59,8 +65,12 @@ var known = []Language{
 			"anidub": "AniDub", "shiza": "SHIZA", "anistar": "AniStar", "dream cast": "Dream Cast", "selezen": "seleZen",
 			"exkinoray": "ExKinoRay", "scarabey": "Scarabey", "hellywood": "Hellywood", "generalfilm": "GeneralFilm",
 		},
-		Signs: "Russian audio is named or clearly implied: Rus, RUS, rus in a file or folder name, Дубляж, Dub, MVO, DVO, AVO, ПМ, " +
-			"a separate Rus*.ac3/.mka/.aac track, a Russian-language title of a video release",
+		// https://habr.com/ru/articles/80721/ gives D, P, P1, P2, L, L1 and
+		// L2; rutor.info lists A for an author's voice-over, as in
+		// https://www.rutor.info/torrent/743964. Pm has no source and says
+		// a Russian voice of no known kind.
+		Codes: []string{"D", "P", "P1", "P2", "Pm", "L", "L1", "L2", "A"},
+		Signs: "Russian audio is named or clearly implied: Rus, RUS, rus in a file or folder name, Дубляж, Dub, MVO, DVO, AVO, ПМ, " +			"a separate Rus*.ac3/.mka/.aac track, a Russian-language title of a video release",
 	}),
 }
 
@@ -77,9 +87,35 @@ func wholeWords(words []string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(` + strings.Join(alts, "|") + `)(?:$|[^\p{L}\p{N}])`)
 }
 
+// Where translation codes stand in a release name: after a year, its zeros
+// perhaps written as the letter O, and before a source; or between bars.
+const (
+	codeYear   = `(?:^|[^\p{L}\p{N}])(?:19|2[0oOоО])[\doOоО]{2}[.\s_]+`
+	codeSource = `[.\s_]+(?i:web-?dl(?:rip)?|web-?rip|web|bd-?rip|bd-?remux|blu-?ray|hd-?rip|hdtv(?:rip)?|dvd-?rip|dvd(?:5|9|scr)?|` +
+		`hdts|ts|tc|telecine|telesync|hdcam|cam(?:rip)?|satrip|tvrip|remux|uhd|d-theaterrip)(?:$|[^\p{L}\p{N}])`
+)
+
+// codeLists matches translation codes where release names put them; group 1
+// is the codes and their separators.
+func codeLists(codes []string) []*regexp.Regexp {
+	if len(codes) == 0 {
+		return nil
+	}
+	alts := make([]string, len(codes))
+	for i, c := range codes {
+		alts[i] = regexp.QuoteMeta(c)
+	}
+	code := `(?:` + strings.Join(alts, "|") + `)`
+	return []*regexp.Regexp{
+		regexp.MustCompile(codeYear + `(` + code + `(?:[.\s_]+` + code + `)*)` + codeSource),
+		regexp.MustCompile(`\|\s*(` + code + `(?:\s*,\s*` + code + `)*)\s*(?:\||$)`),
+	}
+}
+
 // compile prepares l's matchers; it panics on a script name unicode.Scripts
 // does not have, or on a studio without a display name.
 func compile(l Language) Language {
+	l.codes = codeLists(l.Codes)
 	l.marker = wholeWords(append(append([]string{}, l.Words...), l.Studios...))
 	l.studio = wholeWords(l.Studios)
 	for _, st := range l.Studios {
@@ -148,15 +184,17 @@ func Tags(langs []Language) []string {
 }
 
 // Marker reports whether the name or a file path has one of the language's
-// Words or Studios.
+// Words, Studios or Codes.
 func (l Language) Marker(name string, files []rules.File) bool {
-	return l.marker != nil && anyName(name, files, l.marker.MatchString)
+	return anyName(name, files, func(s string) bool {
+		return l.marker != nil && l.marker.MatchString(s) || l.CodesIn(s) != nil
+	})
 }
 
 // Mark returns the first of the language's Studios in the name, or else in a
 // file path, as written there; without a studio, the first of its Words the
-// same way; "" when there is neither. A studio names the track more
-// precisely than a word that only names the language.
+// same way, then the first of its Codes; "" when there is none. A studio
+// names the track more precisely than a word that only names the language.
 func (l Language) Mark(name string, files []rules.File) string {
 	texts := append([]string{name}, paths(files)...)
 	for _, re := range []*regexp.Regexp{l.studio, l.marker} {
@@ -169,7 +207,28 @@ func (l Language) Mark(name string, files []rules.File) string {
 			}
 		}
 	}
+	for _, s := range texts {
+		if codes := l.CodesIn(s); codes != nil {
+			return codes[0]
+		}
+	}
 	return ""
+}
+
+// CodesIn returns the language's Codes in s where release names put them,
+// in the order they read, each once; nil when there is none.
+func (l Language) CodesIn(s string) []string {
+	var out []string
+	for _, re := range l.codes {
+		for _, m := range re.FindAllStringSubmatch(s, -1) {
+			for _, c := range strings.FieldsFunc(m[1], func(r rune) bool { return r == '.' || r == ',' || r == '_' || unicode.IsSpace(r) }) {
+				if !slices.Contains(out, c) {
+					out = append(out, c)
+				}
+			}
+		}
+	}
+	return out
 }
 
 // StudiosIn returns the display names of the language's Studios found in the

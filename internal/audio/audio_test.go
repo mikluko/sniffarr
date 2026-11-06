@@ -33,6 +33,17 @@ func TestMarker(t *testing.T) {
 		{"Russian.Doll.S01.1080p.NF.WEB-DL", nil, false},
 		{"Brusnika.2020.WEB-DL", nil, false},
 		{"Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX", []rules.File{{Path: "Dune.mkv"}}, false},
+		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", nil, true},
+		{"Bad Apples", []rules.File{{Path: "Bad.Apples.2025.Pm.WEB-DL.1O8Op.mkv"}}, true},
+		{"Marshall.2O17.P.BDRip.1O8Op.mkv", nil, true},
+		{"Bad.Apples.2025.D.TS.avi", nil, true},
+		{"Movie.2001.D.P2.A.BDRip.1080p", nil, true},
+		{"Охотники за привидениями / Ghostbusters (1984) BDRip-HEVC 1080p от RIPS CLUB | D, P, P2, A, L1 | Mastered in 4K", nil, true},
+		{"Космические дальнобойщики / Space Truckers (1996) HDRip-AVC | P", nil, true},
+		{"Plan.B.2001.WEB-DL", nil, false},
+		{"L.A.Confidential.1997.BDRip", nil, false},
+		{"Movie.2001.p.WEB-DL", nil, false},
+		{"Movie.2001.P.Movie.WEB-DL", nil, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,6 +92,18 @@ func TestMark(t *testing.T) {
 	require.Equal(t, "LostFilm", ru.Mark("Silo.S03E10.1080p.rus.LostFilm.TV.mkv", nil), "a studio over a word before it")
 	require.Equal(t, "HDRezka", ru.Mark("Silo.S02.rus.1080p", []rules.File{{Path: "Silo.S02E01.HDRezka.mkv"}}), "a studio in a file over a word in the name")
 	require.Equal(t, "rus", ru.Mark("Silo.S03E06.720p.rus.mkv", nil), "a word when there is no studio")
+	require.Equal(t, "P", ru.Mark("Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", nil), "a code when there is no word")
+	require.Equal(t, "rus", ru.Mark("Movie.2001.P.WEB-DL.rus", nil), "a word over a code")
+}
+
+func TestCodes(t *testing.T) {
+	ru := russian(t)
+	require.Equal(t, []string{"P"}, ru.CodesIn("Bad.Apples.2026.P.WEB-DL.1O8Op.mkv"))
+	require.Equal(t, []string{"Pm"}, ru.CodesIn("Bad.Apples.2025.Pm.WEB-DLRip.avi"))
+	require.Equal(t, []string{"D", "P2", "A"}, ru.CodesIn("Movie 2001 D P2 A BDRip 1080p"))
+	require.Equal(t, []string{"D", "P", "P2", "A", "L1"}, ru.CodesIn("Ghostbusters (1984) BDRip-HEVC 1080p | D, P, P2, A, L1 | Mastered in 4K"))
+	require.Nil(t, ru.CodesIn("Plan.B.2001.WEB-DL"))
+	require.Nil(t, compile(Language{Tag: "xx"}).CodesIn("Movie.2001.P.WEB-DL"), "no codes")
 }
 
 func TestStudiosIn(t *testing.T) {

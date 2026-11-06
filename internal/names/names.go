@@ -53,14 +53,53 @@ func words(alternatives string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(` + alternatives + `)(?:$|[^\p{L}\p{N}])`)
 }
 
+// Years and resolutions as names write them: a zero as the digit or as the
+// letter O, Latin or Cyrillic, and p as the Latin or the Cyrillic letter.
+const (
+	letterO     = `oOоО`
+	zero        = `[0` + letterO + `]`
+	years       = `(?:19[2-9]|2` + zero + `[0-4` + letterO + `])[\d` + letterO + `]`
+	r2160       = `216` + zero + `[pр]`
+	r1080       = `1` + zero + `8` + zero + `[pрi]`
+	r720        = `72` + zero + `[pр]`
+	r576        = `576[pр]`
+	r480        = `48` + zero + `[pр]`
+	resolutions = r2160 + `|` + r1080 + `|` + r720 + `|` + r576 + `|` + r480
+)
+
+var yearOrResolution = words(years + `|` + resolutions)
+
+// inDigits spells the lookalike letters of a year or a resolution as the
+// digits and the Latin letters they stand for.
+var inDigits = strings.NewReplacer("o", "0", "O", "0", "о", "0", "О", "0", "р", "p", "Р", "P")
+
+// InDigits returns name with every year and resolution in it spelled in
+// digits and Latin letters, as parsers of release names elsewhere read
+// them: 2O13 as 2013, 1O8Op as 1080p, 72Ор as 720p.
+func InDigits(name string) string {
+	var b strings.Builder
+	at := 0
+	for {
+		m := yearOrResolution.FindStringSubmatchIndex(name[at:])
+		if m == nil {
+			break
+		}
+		b.WriteString(name[at : at+m[2]])
+		b.WriteString(inDigits.Replace(name[at+m[2] : at+m[3]]))
+		at += m[3]
+	}
+	b.WriteString(name[at:])
+	return b.String()
+}
+
 var (
 	seriesMarker = words(`s\d{1,2}\s?e\d{1,3}|s\d{1,2}|\d{1,2}x\d{2,3}|e\d{1,3}\s?of\s?\d{1,3}|seasons?\s?\d{1,2}|complete series|` +
 		`temporada\s?\d{1,2}|temporadas|staffel\s?\d{1,2}|cap\s?\d{3,4}|` +
 		`сезоны?|\d{1,2}\s?сезон|серии|серия|выпуски?`)
 	// anime group 1 is the title, group 2 the episode part, "- 12".
 	anime   = regexp.MustCompile(`^\[[^\]]+\]\s*(.+?)\s+(-\s+\d{2,4}(?:v\d)?)(?:\s|$|[\[(])`)
-	year    = regexp.MustCompile(`(?:^|[^\p{L}\p{N}])((?:19[2-9]|20[0-4])\d)(?:$|[^\p{L}\p{N}])`)
-	quality = words(`2160p|1080p|1080i|720p|576p|480p|4k|uhd|bdrip|brrip|bluray|blu-ray|bdremux|remux|bd25|bd50|` +
+	year    = regexp.MustCompile(`(?:^|[^\p{L}\p{N}])(` + years + `)(?:$|[^\p{L}\p{N}])`)
+	quality = words(resolutions + `|4k|uhd|bdrip|brrip|bluray|blu-ray|bdremux|remux|bd25|bd50|` +
 		`web-?dl|webrip|hdrip|dvdrip|dvd5|dvd9|hdtv|hdtvrip|x264|x265|h\.?264|h\.?265|hevc|xvid|camrip|telesync|hdcam`)
 	music  = words(`flac|mp3|lossless|discography|дискография|альбом|album|ost`)
 	groups = regexp.MustCompile(`^(?:\s*\[[^\]]*\])+`)
@@ -79,10 +118,10 @@ var (
 		re      *regexp.Regexp
 		quality string
 	}{
-		{words(`2160[pр]|4k|uhd`), Quality2160p},
-		{words(`1080[pрi]`), Quality1080p},
-		{words(`720[pр]`), Quality720p},
-		{words(`576[pр]|480[pр]|sd|dvdrip|dvd-rip|dvd5|dvd9|dvdscr|vhsrip|tvrip|satrip|camrip|telesync`), QualitySD},
+		{words(r2160 + `|4k|uhd`), Quality2160p},
+		{words(r1080), Quality1080p},
+		{words(r720), Quality720p},
+		{words(r576 + `|` + r480 + `|sd|dvdrip|dvd-rip|dvd5|dvd9|dvdscr|vhsrip|tvrip|satrip|camrip|telesync`), QualitySD},
 	}
 )
 
@@ -151,7 +190,7 @@ func movie(title, clean string, c *collector) Parsed {
 	if m == nil {
 		return Parsed{}
 	}
-	y := clean[m[2]:m[3]]
+	y := inDigits.Replace(clean[m[2]:m[3]])
 	p := Parsed{Key: key("y:", cut(cut(title, year), quality)+" "+y)}
 	if p.Key == "y:"+y {
 		return Parsed{}
@@ -181,7 +220,7 @@ func series(k, clean string, c *collector) Parsed {
 	}
 	p.Episode = episodeOf(clean, c)
 	if m := year.FindStringSubmatchIndex(clean); m != nil {
-		p.Year, _ = strconv.Atoi(clean[m[2]:m[3]])
+		p.Year, _ = strconv.Atoi(inDigits.Replace(clean[m[2]:m[3]]))
 		c.add("year", m[2], m[3])
 	}
 	return p

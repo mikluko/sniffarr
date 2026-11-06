@@ -67,3 +67,49 @@ func TestBackfillResumes(t *testing.T) {
 	require.NoError(t, s.Backfill(ctx, func(b Backfilled) { again = append(again, b) }))
 	require.Empty(t, again, "done backfills do not run again")
 }
+
+func TestBackfillLetterO(t *testing.T) {
+	ctx := context.Background()
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	defer db.Close()
+	episode := torrent(1, "Show.S01E02.1O8Op.WEB-DL", "Show.S01E02.1O8Op.WEB-DL.mkv")
+	episode.Season, episode.Episode = 1, 2
+	movie := torrent(2, "Marshall.2O17.P.BDRip.1080p", "Marshall.2O17.P.BDRip.1080p.mkv")
+	movie.Quality = "1080p"
+	for _, tr := range []Torrent{episode, movie} {
+		_, _, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	require.NoError(t, s.Backfill(ctx, nil))
+	r, err := s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.Equal(t, "1080p", r.Quality, "a release stored with an episode and no quality")
+	r, err = s.Get(ctx, hash(2))
+	require.NoError(t, err)
+	require.Equal(t, 2017, r.Year, "a release stored with a quality and no year")
+}
+
+func TestBackfillAudioCodes(t *testing.T) {
+	ctx := context.Background()
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	defer db.Close()
+	coded := torrent(1, "Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", "Bad.Apples.2026.P.WEB-DL.1O8Op.mkv")
+	coded.Audio = []Audio{{Language: "ru", Probability: new(0.03), Layer: LayerJev}}
+	plain := torrent(2, "Plan.B.2001.WEB-DL", "Plan.B.2001.WEB-DL.mkv")
+	plain.Audio = []Audio{{Language: "ru", Probability: new(0.03), Layer: LayerJev}}
+	for _, tr := range []Torrent{coded, plain} {
+		_, _, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	got := map[string]Backfilled{}
+	require.NoError(t, s.Backfill(ctx, func(b Backfilled) { got[b.Name] = b }))
+	require.True(t, got["audio codes ru"].Done)
+	a := mustGet(t, s, hash(1)).Audio[0]
+	require.True(t, a.Marker)
+	require.Equal(t, "P", a.Mark)
+	require.Equal(t, 1.0, *a.Probability)
+	require.Equal(t, LayerRules, a.Layer)
+	a = mustGet(t, s, hash(2)).Audio[0]
+	require.False(t, a.Marker, "a code alone is no marker")
+	require.Equal(t, 0.03, *a.Probability)
+}

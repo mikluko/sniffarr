@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `SNIFFARR_FEEDS` takes `nnmclub`, the RSS of the forums of `SNIFFARR_NNMCLUB_FORUMS` at `SNIFFARR_NNMCLUB_URL` with each topic's page read once for its magnet link, and `rutor`, the listing pages of the categories of `SNIFFARR_RUTOR_CATEGORIES` at `SNIFFARR_RUTOR_URL`, `SNIFFARR_RUTOR_DEPTH` pages deep on the first pass.
+- The Russian translation codes of release names, `D`, `P`, `P1`, `P2`, `L`, `L1`, `L2`, `A` and `Pm`, after the year and before the source or listed between bars, are markers of Russian audio, and the Torznab title labels them as `Dub`, `MVO`, `DVO`, `AVO` or `VO`: `Movie.2026.P.WEB-DL.1080p [MVO, RUS]`. Stored releases with a code in the name get the marker once at start.
 
 ### Changed
 
 - A feed is read at start and then at every `SNIFFARR_FEED_INTERVAL` of wall-clock time plus a moment fixed by the feed's name, the same across restarts and never on the hour.
 - The `rutracker` feed reads, once per database, the feed of every forum the forums of `SNIFFARR_RUTRACKER_FORUMS` name in their categories, a month of each.
 - Every page a feed fetches is recorded in the database by URL, with its `ETag` and `Last-Modified`: a page read every round is skipped when unchanged, a page read once is not read again, and requests of one feed are a second apart.
+- A year or a resolution with a zero written as the letter O, `2O17`, `1O8Op` or `72Ор`, gives the release its year and quality, and the Torznab title and category give them in digits, `2017`, `1080p`, for Radarr and Sonarr. Stored releases without a year or a quality are read again once at start.
 
 ## [0.39.0] - 2026-11-06
 

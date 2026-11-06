@@ -20,6 +20,7 @@ import (
 	"connectrpc.com/connect"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -275,16 +276,17 @@ var (
 )
 
 // category is the subcategory of a release: its kind's, by the resolution
-// its name gives.
+// its name gives in digits.
 func category(r *sniffarrv1.Release) int {
 	sd, hdCat, uhdCat := catMoviesSD, catMoviesHD, catMoviesUHD
 	if r.GetKind() == sniffarrv1.Kind_KIND_SERIES {
 		sd, hdCat, uhdCat = catTVSD, catTVHD, catTVUHD
 	}
+	name := names.InDigits(r.GetName())
 	switch {
-	case uhd.MatchString(r.GetName()):
+	case uhd.MatchString(name):
 		return uhdCat
-	case hd.MatchString(r.GetName()):
+	case hd.MatchString(name):
 		return hdCat
 	}
 	return sd
@@ -294,15 +296,17 @@ func category(r *sniffarrv1.Release) int {
 // title to name it.
 const russian = 0.9
 
-// title is the release's name, followed by markers in brackets for the
-// release-title custom formats of Radarr and Sonarr. With a Russian audio
-// track probed, they are the labels of the Russian tracks' names the name
-// lacks and RUS, as in " [Dub, MVO, RUS]"; with probed audio tracks all of
-// other languages and no Russian marker, NORUS and the tracks' languages,
-// as in " [NORUS ENG, UKR]"; else " [RUS]" for a Russian marker or a probability of at
-// least russian. RUS carries the Russian audio's studios.
+// title is the release's name with its year and resolution in digits,
+// followed by markers in brackets for the release-title custom formats of
+// Radarr and Sonarr. With a Russian audio track probed, they are the labels
+// of the Russian tracks' names the name lacks and RUS, as in
+// " [Dub, MVO, RUS]"; with probed audio tracks all of other languages and no
+// Russian marker, NORUS and the tracks' languages, as in " [NORUS ENG, UKR]";
+// else, for a Russian marker or a probability of at least russian, the
+// labels of the name's translation codes it lacks and RUS, as in
+// " [MVO, RUS]" for P. RUS carries the Russian audio's studios.
 func title(r *sniffarrv1.Release) string {
-	name := r.GetName()
+	name := names.InDigits(r.GetName())
 	var ru *sniffarrv1.Audio
 	for _, a := range r.GetAudio() {
 		if a.GetLanguage() == "ru" {
@@ -312,21 +316,26 @@ func title(r *sniffarrv1.Release) string {
 	rus := strings.Join(append([]string{"RUS"}, ru.GetStudios()...), " ")
 	tracks := audioTracks(r.GetTracks())
 	if labels, ok := russianLabels(tracks); ok {
-		var add []string
-		for _, l := range labels {
-			if !l.inName(name) {
-				add = append(add, l.label)
-			}
-		}
-		return name + " [" + strings.Join(append(add, rus), ", ") + "]"
+		return name + bracket(name, labels, rus)
 	}
 	if langs := otherLanguages(tracks); langs != "" && !ru.GetMarker() {
 		return name + " [" + langs + "]"
 	}
 	if ru != nil && (ru.GetMarker() || ru.Probability != nil && ru.GetProbability() >= russian) {
-		return name + " [" + rus + "]"
+		return name + bracket(name, codeLabels(name), rus)
 	}
 	return name
+}
+
+// bracket is " [", the labels of voices name lacks, rus, and "]".
+func bracket(name string, voices []voice, rus string) string {
+	var add []string
+	for _, v := range voices {
+		if !v.inName(name) {
+			add = append(add, v.label)
+		}
+	}
+	return " [" + strings.Join(append(add, rus), ", ") + "]"
 }
 
 // itemOf is the item of a release. Its seeders and peers are both the

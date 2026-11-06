@@ -78,21 +78,35 @@ season, the episode (`S02E05`, `1x05`, `E05`, `Серия 5`, `5 серия`; no
 a whole season or a range such as `S1E1-8` or `1-8 серии`) and the quality, by the
 resolution the name gives: `2160p` for `2160p`, `4K` or `UHD`, `1080p` for
 `1080p` or `1080i`, `720p`, and `sd` for `576p`, `480p`, `SD` or an SD
-source such as `DVDRip`; none when the name gives no resolution. A release
-stored before episodes and qualities were read gets them once, at the first
-start that has them.
+source such as `DVDRip`; none when the name gives no resolution. A zero in
+a year or a resolution may be written as the letter O, Latin or Cyrillic, in
+either case, and `p` as the Cyrillic `р`: `2O17` reads as `2017`, and
+`1O8Op`, `108Op` and `72Ор` as `1080p`, `1080p` and `720p`. A release
+stored without a year or a quality gets its features read again once, at
+the first start that reads them this way.
 
 Audio is an extension over the layers, off until `SNIFFARR_AUDIO_LANGUAGES`
 names languages; `ru` is the only language built in. For each configured
 language every stored torrent records a marker, a word or studio of the
-language in its name or file paths (`Rus`, `Дубляж`, `LostFilm` for `ru`), and
-a script hint, letters of the language's script there (Cyrillic for `ru`). A
+language in its name or file paths (`Rus`, `Дубляж`, `LostFilm` for `ru`) or
+a translation code of the language, and a script hint, letters of the
+language's script there (Cyrillic for `ru`). The codes of `ru` are those of
+Russian release names: `D` dub, `P` professional many-voice, `P2`
+two-voice, `P1` one-voice, `L`, `L2` and `L1` the same amateur, `A` an
+author's voice-over, and `Pm`, a Russian voice of no known kind. A code
+counts only in its case and where release names put codes: after the year,
+its zeros perhaps written as O, and before the source
+(`Bad.Apples.2026.P.WEB-DL`, `Movie.2O17.D.P2.BDRip`), or in a
+comma-separated list between bars (`Movie (1984) BDRip | D, P2, A |`); a
+lone `P` or `A` elsewhere, as in `Plan.B`, is none. A
 marker sets the probability of an audio track in the language to 1; otherwise
 Jev answers it, one question per language. A marker records its mark as
 written in the name, or else in a stored file path: a studio when there is
-one, wherever it stands, else a word, so `Silo.S03E10.rus.LostFilm` marks
-`LostFilm`; stored markers get their marks recomputed once, at the first start
-of a version whose marking changed. While the extension is off, nothing
+one, wherever it stands, else a word, else a code, so
+`Silo.S03E10.rus.LostFilm` marks `LostFilm`; stored markers get their marks
+recomputed once, at the first start of a version whose marking changed, and
+torrents stored before codes were read get a marker from a code in their
+name once, at the first start that reads them. While the extension is off, nothing
 about audio is recorded or returned, Jev is asked about kind and source only,
 the background classifier has nothing to select, `BrowseService.Settings`
 returns no languages, and the web UI shows no voice filter, no per-language

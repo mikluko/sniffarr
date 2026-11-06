@@ -362,6 +362,35 @@ func TestTitleRussianAudio(t *testing.T) {
 	}
 }
 
+func TestTitleRussianCodes(t *testing.T) {
+	marked := func(name string) *sniffarrv1.Release {
+		return &sniffarrv1.Release{Name: name, Audio: []*sniffarrv1.Audio{{Language: "ru", Marker: true}}}
+	}
+	for _, c := range []struct{ name, want string }{
+		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", "Bad.Apples.2026.P.WEB-DL.1080p.mkv [MVO, RUS]"},
+		{"Bad.Apples.2025.Pm.WEB-DL.1O8Op.mkv", "Bad.Apples.2025.Pm.WEB-DL.1080p.mkv [RUS]"},
+		{"Movie.2001.A.P2.D.BDRip.1080p", "Movie.2001.A.P2.D.BDRip.1080p [Dub, DVO, AVO, RUS]"},
+		{"Movie (2001) BDRip 1080p | L1 | MVO", "Movie (2001) BDRip 1080p | L1 | MVO [VO, RUS]"},
+	} {
+		require.Equal(t, c.want, itemOf(marked(c.name)).Title, c.name)
+	}
+}
+
+func TestResolutionInLetters(t *testing.T) {
+	for _, c := range []struct {
+		name, title string
+		cat         int
+	}{
+		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", "Bad.Apples.2026.P.WEB-DL.1080p.mkv", catMoviesHD},
+		{"Movie.2001.216Op.WEB-DL", "Movie.2001.2160p.WEB-DL", catMoviesUHD},
+		{"Movie.2001.72Ор.WEB-DL", "Movie.2001.720p.WEB-DL", catMoviesHD},
+	} {
+		it := itemOf(&sniffarrv1.Release{Name: c.name, Kind: sniffarrv1.Kind_KIND_MOVIE})
+		require.Equal(t, c.title, it.Title, c.name)
+		require.Equal(t, strconv.Itoa(c.cat), it.Category, c.name)
+	}
+}
+
 func TestSearchRussianAudio(t *testing.T) {
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})

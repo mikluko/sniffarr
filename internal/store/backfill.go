@@ -15,14 +15,21 @@ import (
 const backfillBatch = 200
 
 // featuresFilled is the settings key that records that the features
-// backfill has run.
-const featuresFilled = "release_features_filled"
+// backfill has run. A new key makes every database recompute the features
+// of releases without a year or a quality once more, which a change to
+// names.Parse needs.
+const featuresFilled = "release_features_letter_o"
 
 // marksFilled is the prefix of the settings key that records, per language,
 // that the marks backfill has run. A new prefix makes every database
 // recompute its marks and studios once more, which a change to
 // audio.Language.Mark or audio.Language.StudiosIn needs.
 const marksFilled = "audio_marks_studios_all:"
+
+// codesFilled is the prefix of the settings key that records, per language,
+// that the torrents stored before audio.Language.Codes were read got their
+// markers from the codes in their names.
+const codesFilled = "audio_codes:"
 
 // probeStudiosFilled is the prefix of the settings key that records, per
 // language, that the studios named in probed tracks were added to the
@@ -40,8 +47,9 @@ type Backfilled struct {
 
 // Backfill runs, in transactions of a few hundred rows, the one-time
 // backfills of stored torrents not yet done: the year, season, episode and
-// quality of those with neither an episode nor a quality, from their names,
-// and, per language of Options.Languages, the mark and studios of every
+// quality of those without a year or a quality, from their names,
+// and, per language of Options.Languages, a marker for every torrent whose
+// name has the language's audio.Language.Codes, the mark and studios of every
 // stored marker, as audio.Language.Mark and audio.Language.StudiosIn give
 // them from the torrent's name and stored files. Each transaction saves how
 // far its backfill got, so a call after a cancelled one resumes there.
@@ -58,7 +66,13 @@ func (s *Store) Backfill(ctx context.Context, progress func(Backfilled)) error {
 		if !ok {
 			continue
 		}
-		name := "audio marks " + l.Tag
+		name := "audio codes " + l.Tag
+		if err := s.backfill(ctx, name, codesFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
+			return s.codesBatch(ctx, l, after)
+		}); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		name = "audio marks " + l.Tag
 		if err := s.backfill(ctx, name, marksFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
 			return s.marksBatch(ctx, l, after)
 		}); err != nil {
@@ -164,7 +178,7 @@ func (s *Store) featuresBatch(ctx context.Context, after int64) (int, int64, fun
 		r.p = names.Parse(name)
 		batch = append(batch, r)
 		return nil
-	}, "SELECT id, name FROM torrent_releases WHERE id > ? AND quality IS NULL AND episode IS NULL ORDER BY id LIMIT ?", after, s.backfillBatch); err != nil {
+	}, "SELECT id, name FROM torrent_releases WHERE id > ? AND (quality IS NULL OR year IS NULL) ORDER BY id LIMIT ?", after, s.backfillBatch); err != nil {
 		return 0, 0, nil, err
 	}
 	if len(batch) == 0 {
@@ -174,6 +188,59 @@ func (s *Store) featuresBatch(ctx context.Context, after int64) (int, int64, fun
 		for _, r := range batch {
 			if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET year = ?, season = ?, episode = ?, quality = ? WHERE id = ?",
 				nullInt(r.p.Year), nullInt(r.p.Season), nullInt(r.p.Episode), null(r.p.Quality), r.id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, nil
+}
+
+// codesBatch reads the torrents after the row ID after and writes a marker in
+// l, as a marker found at ingest is, for each whose name has l's codes. A
+// probe that read a track in l keeps its layer.
+func (s *Store) codesBatch(ctx context.Context, l audio.Language, after int64) (int, int64, func(*sql.Tx) error, error) {
+	type row struct {
+		id         int64
+		name       string
+		mark       string
+		studios    sql.NullString
+		scriptHint bool
+	}
+	var batch, coded []row
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var r row
+		if err := rows.Scan(&r.id, &r.name); err != nil {
+			return err
+		}
+		batch = append(batch, r)
+		return nil
+	}, "SELECT id, name FROM torrent_releases WHERE id > ? ORDER BY id LIMIT ?", after, s.backfillBatch); err != nil {
+		return 0, 0, nil, err
+	}
+	if len(batch) == 0 {
+		return 0, 0, nil, nil
+	}
+	for _, r := range batch {
+		if l.CodesIn(r.name) == nil {
+			continue
+		}
+		files, err := s.files(ctx, r.id, s.opts.MaxFiles)
+		if err != nil {
+			return 0, 0, nil, err
+		}
+		r.mark, r.scriptHint = l.Mark(r.name, files), l.ScriptHint(r.name, files)
+		if r.studios, err = studiosColumn(l.StudiosIn(r.name, files)); err != nil {
+			return 0, 0, nil, err
+		}
+		coded = append(coded, r)
+	}
+	return len(batch), batch[len(batch)-1].id, func(tx *sql.Tx) error {
+		for _, r := range coded {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO torrent_audio (torrent_id, language, marker, mark, studios, script_hint, probability, layer)
+				VALUES (?1, ?2, 1, ?3, ?4, ?5, 1, ?6) ON CONFLICT (torrent_id, language) DO UPDATE SET marker = 1, mark = ?3,
+				studios = coalesce(torrent_audio.studios, ?4), probability = 1,
+				layer = CASE WHEN torrent_audio.layer = ?7 AND torrent_audio.probability = 1 THEN ?7 ELSE ?6 END`,
+				r.id, l.Tag, r.mark, r.studios, r.scriptHint, LayerRules, LayerProbe); err != nil {
 				return err
 			}
 		}

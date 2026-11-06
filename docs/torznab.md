@@ -30,8 +30,11 @@ first sighting as `pubDate`, and the attributes `category`, `size`,
 `720p`, `/SD` otherwise. `seeders` and `peers` are both the release's distinct
 peers over the last 7 days, since the DHT does not tell seeders apart.
 
-The title is the release's name with markers in brackets after it, for the
-release-title custom formats of Radarr and Sonarr:
+The title is the release's name with its year and resolution spelled in
+digits and Latin letters, `2O17` as `2017`, `1O8Op` or `1080р` as `1080p`,
+since Radarr and Sonarr read no other spelling; the category reads it so
+too. Markers in brackets follow it, for the release-title custom formats of
+Radarr and Sonarr:
 
 - A probed Russian audio track: the labels the Russian tracks' names say,
   `Dub` for a dub (`Дубляж`), `MVO`, `DVO`, `AVO` and `VO` for
@@ -44,7 +47,11 @@ release-title custom formats of Radarr and Sonarr:
   the tracks, `[NORUS FRA, ENG]`. No release name has `NORUS`, and it does
   not read as Russian.
 - Otherwise a Russian marker, or a probability of at least 0.9 of a Russian
-  track: `[RUS]`.
+  track: the labels the name's Russian translation codes say, `Dub` for
+  `D`, `MVO` for `P` and `L`, `DVO` for `P2` and `L2`, `AVO` for `A`, `VO`
+  for `P1` and `L1`, none for `Pm`, each left out as above, then `RUS`:
+  `Bad.Apples.2026.P.WEB-DL.1080p.mkv [MVO, RUS]`. The codes are listed
+  under [Components](components.md).
 
 `RUS` is followed by the Russian studios in the name or stored file paths,
 `[RUS LostFilm]`. A release that has none of these keeps its name.

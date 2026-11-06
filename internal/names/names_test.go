@@ -29,6 +29,8 @@ func TestParse(t *testing.T) {
 		{"Дюна: Часть вторая / Dune: Part Two (Дени Вильнёв) [2024, фантастика, BDRip 1080p] Dub", Parsed{Movie, "y:дюна часть вторая 2024", 2024, 0, 0, Quality1080p}},
 		{"Брат 2 (Алексей Балабанов) [2000, драма, DVDRip]", Parsed{Movie, "y:брат 2 2000", 2000, 0, 0, QualitySD}},
 		{"Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv", Parsed{Movie, "y:игра на понижение 2015", 2015, 0, 0, Quality1080p}},
+		{"Marshall.2O17.P.BDRip.1O8Op.mkv", Parsed{Movie, "y:marshall 2017", 2017, 0, 0, Quality1080p}},
+		{"Movie.2OO1.WEB-DL", Parsed{Movie, "y:movie 2001", 2001, 0, 0, ""}},
 		{"Oppenheimer (2023)", Parsed{"", "y:oppenheimer 2023", 2023, 0, 0, ""}},
 		{"Pink Floyd - The Dark Side Of The Moon (1973) [FLAC 24-96]", Parsed{"", "y:pink floyd the dark side of the moon 1973", 1973, 0, 0, ""}},
 		{"Bruce Springsteen - 1973-2021 FLAC (Jamal The Moroccan)", Parsed{"", "y:bruce springsteen 1973", 1973, 0, 0, ""}},
@@ -68,6 +70,16 @@ func TestEpisodeAndQuality(t *testing.T) {
 		{"Movie (2001) BDRemux", 0, ""},
 		{"Movie.2001.1080p.Upscale.DVDRip", 0, Quality1080p},
 		{"Keynote E3 2001 1080p", 0, Quality1080p},
+		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", 0, Quality1080p},
+		{"Movie.2001.108Op.WEB-DL", 0, Quality1080p},
+		{"Movie.2001.1o80p.WEB-DL", 0, Quality1080p},
+		{"Movie.2001.1О8Ор.WEB-DL", 0, Quality1080p},
+		{"Movie.2001.1O8Oi.HDTV", 0, Quality1080p},
+		{"Movie.2001.216Op.WEB-DL", 0, Quality2160p},
+		{"Movie.2001.72Op.WEB-DL", 0, Quality720p},
+		{"Movie.2001.48Op.WEB-DL", 0, QualitySD},
+		{"Movie.2001.1OO8p.WEB-DL", 0, ""},
+		{"Movie.2001.IO8Op.WEB-DL", 0, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -115,6 +127,8 @@ func TestExplain(t *testing.T) {
 		{"Fallout.S02E05.1080p.WEB.h264-ETHEL[EZTVx.to].mkv", []string{"kind.series S02E05", "season S02E05", "episode S02E05", "quality.1080p 1080p"}},
 		{"Law.and.Order.SVU.S28E02.720p.x264-FENiX", []string{"kind.series S28E02", "season S28E02", "episode S28E02", "quality.720p 720p"}},
 		{"Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv", []string{"year 2015", "kind.movie WEB-DL", "quality.1080p 1080р"}},
+		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", []string{"year 2026", "kind.movie WEB-DL", "quality.1080p 1O8Op"}},
+		{"Movie 2001 1О8Ор", []string{"year 2001", "kind.movie 1О8Ор", "quality.1080p 1О8Ор"}},
 		{"The.Wire.Complete.Series.DVDRip", []string{"kind.series Complete.Series", "quality.sd DVDRip"}},
 		{"Сериал (2 сезон, 7 серия) 2019 WEB-DL 1080p", []string{"kind.series 2 сезон", "season 2 сезон", "episode 7 серия", "year 2019", "quality.1080p 1080p"}},
 		{"Show S01 E05 WEB-DL 720p", []string{"kind.series S01 E05", "season S01 E05", "episode S01 E05", "quality.720p 720p"}},
@@ -161,6 +175,25 @@ func TestExplainAgreesWithParse(t *testing.T) {
 			require.Equal(t, p.Season != 0, got["season"])
 			require.Equal(t, p.Episode != 0, got["episode"])
 			require.Equal(t, p.Quality != "", got["quality."+p.Quality])
+		})
+	}
+}
+
+func TestInDigits(t *testing.T) {
+	tests := []struct{ name, want string }{
+		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", "Bad.Apples.2026.P.WEB-DL.1080p.mkv"},
+		{"ROG1.2O13.P.BDRip.1O8Op.mkv", "ROG1.2013.P.BDRip.1080p.mkv"},
+		{"Movie.2OO1.Oscar.1OO1", "Movie.2001.Oscar.1OO1"},
+		{"Movie 1o8OP x264", "Movie 1080P x264"},
+		{"Movie.1О8Ор.mkv", "Movie.1080p.mkv"},
+		{"Movie.1080р.mkv", "Movie.1080p.mkv"},
+		{"Movie.216Op.72Op.48Op.1O8Oi", "Movie.2160p.720p.480p.1080i"},
+		{"Movie.1080p.WEB-DL", "Movie.1080p.WEB-DL"},
+		{"Movie.1OO8p.IO8Op.Oscar", "Movie.1OO8p.IO8Op.Oscar"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, InDigits(tt.name))
 		})
 	}
 }
