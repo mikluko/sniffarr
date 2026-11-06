@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Release cards and movie and series pages have a button that asks a fetcher to look up the peers of the release, or of every release of the title, on the DHT now: `BrowseService.RefreshPeers`.
+- Release cards and movie and series pages have a button that asks for a probe of the release, or of every release of the title, ahead of the others and whatever its last probe: `BrowseService.RequestProbe`. The button is disabled without peers over 7 days.
+
 ## [0.41.0] - 2026-11-06
 
 ### Changed

@@ -27,13 +27,18 @@ others out, as the chart's `api.networkPolicy` does.
 | `sniffarr.v1.BrowseService` | `Home`          |
 | `sniffarr.v1.BrowseService` | `Top`           |
 | `sniffarr.v1.BrowseService` | `Settings`      |
+| `sniffarr.v1.BrowseService` | `RefreshPeers`  |
+| `sniffarr.v1.BrowseService` | `RequestProbe`  |
 
 - `Sight` is client-streaming: it queues every infohash the server has neither
   stored, rejected nor queued, and returns how many were new and how many
   known, and, per infohash sent, whether it is a stored torrent.
 - `Fetch` is bidirectional: the client grants credit, one unit per task it can
   take, the server answers with a task per unit, and the client returns each
-  task's result, metadata or a failure, on the same stream.
+  task's result, metadata or a failure, on the same stream. A task with
+  `peers` set asks only for the infohash's peers, which the client counts in
+  its sketches for `Peers`, and has no result; the lookups `RefreshPeers`
+  asked for go out before queued infohashes, each to one stream once.
 - `HashKey` returns the 16-byte SipHash-2-4 key peers are hashed with.
 - `Peers` is client-streaming: each message is an infohash, the start of a
   UTC hour and a sketch in the Aggregate Knowledge storage specification
@@ -80,6 +85,8 @@ others out, as the chart's `api.networkPolicy` does.
 | `Stats`         | `hours`                                                                                                                                                                          | counts by kind (movie, series, other, unknown; music, books and software are other), layer, source and audio language, rejections by reason, pending, tokens spent today and the day's limit, piece data probes downloaded today, the day's limit on it, and what the fetchers uploaded back today, new torrents per clock hour over the `hours` asked for, the current hour first, `computed_at` |
 | `Home`          |                                                                                                                                                                                  | stored, new in 24 hours and pending, `computed_at`                                                                                         |
 | `Settings`      |                                                                                                                                                                                  | the API's audio languages, BCP-47 tags in its order, empty while the audio extension is off; the web UI asks it at start                  |
+| `RefreshPeers`  | `releases`: an `infohash`, or a `work` for every release of it                                                                                                                  | `releases` to be looked up: a fetcher looks for their peers on the DHT, and the peers found count from its next send of sketches            |
+| `RequestProbe`  | `releases`, as for `RefreshPeers`                                                                                                                                                | `releases` to be probed, ahead of searched ones and whatever their last probe; see [Probes](probes.md)                                      |
 
 `Stats` and `Home` serve the counts the API computed last, at start and then
 every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
@@ -87,7 +94,9 @@ every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
 
 `lang` is `ru` or `en`, `en` when empty: the language of `tmdb` texts, and
 of TMDB's search for `SearchTitles`. A work's `id` that is not one fails
-with `INVALID_ARGUMENT`, one of no stored work with `NOT_FOUND`.
+with `INVALID_ARGUMENT`, one of no stored work with `NOT_FOUND`;
+`RefreshPeers` and `RequestProbe` fail with `NOT_FOUND` when they name no
+stored release.
 
 ## Calling the API from a shell
 

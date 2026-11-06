@@ -119,9 +119,37 @@ func (r *receiver) stop() {
 	<-r.exited
 }
 
-// lease leases up to credit tasks to owner, sends them, and returns how many
-// it sent. A failure to lease is logged and leases nothing.
+// lease sends up to credit tasks, the peer lookups waiting first and then
+// hashes leased to owner, and returns how many it sent. A failure to take
+// or lease is logged and sends nothing more.
 func (s *Service) lease(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse], owner int64, credit int) (int, error) {
+	sent, err := s.lookups(ctx, stream, credit)
+	if err != nil || sent == credit {
+		return sent, err
+	}
+	n, err := s.leaseQueued(ctx, stream, owner, credit-sent)
+	return sent + n, err
+}
+
+// lookups takes up to n peer lookups, sends them, and returns how many it
+// sent.
+func (s *Service) lookups(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse], n int) (int, error) {
+	hashes, err := s.Store.TakePeerLookups(ctx, n)
+	if err != nil {
+		s.Log.ErrorContext(ctx, "peer lookups", "err", err)
+		return 0, nil
+	}
+	for i, h := range hashes {
+		if err := stream.Send(&sniffarrv1.FetchResponse{Task: &sniffarrv1.Task{Infohash: h[:], Peers: true}}); err != nil {
+			return i, err
+		}
+	}
+	return len(hashes), nil
+}
+
+// leaseQueued leases up to credit queued hashes to owner, sends them, and
+// returns how many it sent.
+func (s *Service) leaseQueued(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse], owner int64, credit int) (int, error) {
 	hashes, expired, err := s.Queue.Lease(ctx, owner, credit, s.now(), or(s.Lease, DefaultLease))
 	if err != nil {
 		s.Log.ErrorContext(ctx, "lease", "err", err)

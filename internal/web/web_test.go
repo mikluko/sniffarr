@@ -207,7 +207,7 @@ func get(t *testing.T, h http.Handler, path, target string, header ...string) *h
 	return w
 }
 
-var untranslated = regexp.MustCompile(`\b(?:(?:kind|layer|source|drop|voiceband|voicemode|relvoice|relsort|quality|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results|unit|attr|work|rel|search|matched|audio|dub|langname)\.[a-z_]+` +
+var untranslated = regexp.MustCompile(`\b(?:(?:act|kind|layer|source|drop|voiceband|voicemode|relvoice|relsort|quality|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results|unit|attr|work|rel|search|matched|audio|dub|langname)\.[a-z_]+` +
 	`|tmdb\.(?:votes|noposter|unmatched|unchecked|search|checked|tv|seasons|episode|method|low|key|conf)|tvstatus\.[A-Z][a-zA-Z ]*)\b`)
 
 // ruleLine is a card's fired rule: its id is not a translation key.
@@ -467,6 +467,49 @@ func TestTorrent(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/"+hexOf(99), "").Code)
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz", "").Code)
+}
+
+// post serves a POST of the path, as htmx asking for target when it is not
+// "".
+func post(t *testing.T, h http.Handler, path, target string, header ...string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	if target != "" {
+		req.Header.Set("HX-Request", "true")
+		req.Header.Set("HX-Target", target)
+	}
+	for i := 0; i+1 < len(header); i += 2 {
+		req.Header.Set(header[i], header[i+1])
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	return w
+}
+
+func TestRequests(t *testing.T) {
+	h := handler(t, nil)
+	body := page(t, get(t, h, "/t/"+hexOf(1), ""))
+	require.Contains(t, body, `<form id="act-peers" method="post" action="/t/`+hexOf(1)+`/peers"`)
+	require.Contains(t, body, `<button type="submit" title="download the file headers and read the tracks">probe tracks</button>`)
+	body = page(t, get(t, h, "/t/"+hexOf(7), ""))
+	require.Contains(t, body, `<button type="submit" disabled title="no peers over 7 days">probe tracks</button>`, "no probe without peers")
+	body = page(t, get(t, h, "/movie/348", ""))
+	require.Contains(t, body, `<form id="act-probe" method="post" action="/movie/348/probe"`)
+
+	frag := fragment(t, post(t, h, "/t/"+hexOf(1)+"/peers", "act-peers"), "act-peers")
+	require.Equal(t, `<span id="act-peers" class="mu" role="status">peer lookup requested</span>`, strings.TrimSpace(frag))
+	frag = fragment(t, post(t, h, "/movie/348/probe", "act-probe"), "act-probe")
+	require.Contains(t, frag, "probe requested: 2 releases", "every release of the title")
+	frag = fragment(t, post(t, h, "/tv/95396/peers", "act-peers"), "act-peers")
+	require.Contains(t, frag, "peer lookup requested")
+
+	w := post(t, h, "/t/"+hexOf(1)+"/probe", "")
+	require.Equal(t, http.StatusSeeOther, w.Code, "without htmx, back to the card")
+	require.Equal(t, "/t/"+hexOf(1), w.Header().Get("Location"))
+	require.Equal(t, http.StatusForbidden, post(t, h, "/t/"+hexOf(1)+"/probe", "act-probe", "Sec-Fetch-Site", "cross-site").Code)
+	require.Equal(t, http.StatusNotFound, post(t, h, "/t/"+hexOf(99)+"/peers", "act-peers").Code)
+	require.Equal(t, http.StatusNotFound, post(t, h, "/t/"+hexOf(1)+"/seed", "act-seed").Code)
+	require.Equal(t, http.StatusNotFound, post(t, h, "/movie/1/peers", "act-peers").Code)
 }
 
 func TestTMDBWork(t *testing.T) {

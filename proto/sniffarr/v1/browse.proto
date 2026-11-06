@@ -53,6 +53,44 @@ service BrowseService {
   // Settings returns what the server is configured with that a client
   // showing its answers needs to know.
   rpc Settings(SettingsRequest) returns (SettingsResponse);
+  // RefreshPeers asks a fetcher to look up the peers of a release, or of
+  // every release of a work, on the DHT; the peers found are counted from
+  // the fetcher's next send of its sketches. NOT_FOUND without a stored
+  // release.
+  rpc RefreshPeers(RefreshPeersRequest) returns (RefreshPeersResponse);
+  // RequestProbe asks the prober to probe a release, or every release of a
+  // work, ahead of the releases searches return, whatever its last probe.
+  // A release without peers over the last 7 days is not probed until it has
+  // some. NOT_FOUND without a stored release.
+  rpc RequestProbe(RequestProbeRequest) returns (RequestProbeResponse);
+}
+
+// Releases names a stored release by its infohash, or a work's releases by
+// the work.
+message Releases {
+  oneof of {
+    bytes infohash = 1;
+    // WorkSummary.id.
+    string work = 2;
+  }
+}
+
+message RefreshPeersRequest {
+  Releases releases = 1;
+}
+
+message RefreshPeersResponse {
+  // How many stored releases are to be looked up.
+  int32 releases = 1;
+}
+
+message RequestProbeRequest {
+  Releases releases = 1;
+}
+
+message RequestProbeResponse {
+  // How many stored releases are to be probed.
+  int32 releases = 1;
 }
 
 message SettingsRequest {}

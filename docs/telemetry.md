@@ -66,7 +66,8 @@ counts are the `db.sql.connection.*` metrics.
 | `-fetch`   | `sniffarr.seed.stored`                 | `By`         |                                            |
 | `-fetch`   | `sniffarr.seed.removals`               | `{torrent}`  | `sniffarr.seed.reason`                     |
 
-`sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
+`sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`, and for a peer lookup
+`lookup` or `lookup_no_peers`;
 `sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` and `feed` too;
 `sniffarr.feed.outcome` is `stored`, `queued`, `rejected` or `duplicate`; `sniffarr.dht.query` is
 `sample_infohashes` or `scrape`; `sniffarr.sighting.result` is

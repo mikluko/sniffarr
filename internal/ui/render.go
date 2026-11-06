@@ -22,8 +22,8 @@ var files embed.FS
 var pages = map[string][]string{
 	"torrents": {"torrents"},
 	"top":      {"top"},
-	"work":     {"releases"},
-	"torrent":  {"files"},
+	"work":     {"releases", "act"},
+	"torrent":  {"files", "act"},
 	"data":     {"data"},
 }
 
@@ -42,6 +42,14 @@ type workAudioArgs struct {
 type audioArgs struct {
 	B Base
 	A []Audio
+}
+
+// actsArgs are the buttons of the card at Path, whose releases have Peers
+// over 7 days.
+type actsArgs struct {
+	B     Base
+	Path  string
+	Peers int64
 }
 
 // baseOf accepts a Base or any page model that embeds one.
@@ -99,6 +107,9 @@ func New() (*Renderer, error) {
 		"workAudio": WorkAudioOf,
 		"workAudioArgs": func(b Base, a []WorkAudio, n int) workAudioArgs {
 			return workAudioArgs{B: b, A: a, N: n}
+		},
+		"actsArgs": func(b Base, path string, peers int64) actsArgs {
+			return actsArgs{B: b, Path: path, Peers: peers}
 		},
 		"audioArgs": func(b any, a []Audio) audioArgs {
 			return audioArgs{B: baseOf(b), A: a}

@@ -511,7 +511,7 @@ func (n *Network) Metadata(ctx context.Context, h Hash) (Metadata, error) {
 	if err := n.wait(ctx); err != nil {
 		return Metadata{}, err
 	}
-	peers := n.findPeers(ctx, h)
+	peers := n.findPeers(ctx, h, max(n.cfg.MinPeers, enoughPeers))
 	if len(peers) < n.cfg.MinPeers {
 		return Metadata{}, ErrNoPeers
 	}
@@ -537,18 +537,51 @@ func (n *Network) Metadata(ctx context.Context, h Hash) (Metadata, error) {
 	return m, nil
 }
 
-// enoughPeers is how many peers findPeers looks for when MinPeers is fewer.
+// Peers looks for the torrent's peers on the DHT for PeerWait, or until the
+// search ends, and returns the distinct ones found.
+func (n *Network) Peers(ctx context.Context, h Hash) ([]netip.AddrPort, error) {
+	if err := n.wait(ctx); err != nil {
+		return nil, err
+	}
+	found := n.findPeers(ctx, h, 0)
+	peers := make([]netip.AddrPort, 0, len(found))
+	for _, p := range found {
+		if a, ok := p.Addr.(netip.AddrPort); ok {
+			peers = append(peers, a)
+		}
+	}
+	return peers, nil
+}
+
+// appendNew appends to peers each of found with an address not in seen,
+// and adds the address to seen.
+func appendNew(peers []torrent.PeerInfo, seen map[netip.AddrPort]bool, found []dht.Peer) []torrent.PeerInfo {
+	for _, p := range found {
+		ip, ok := netip.AddrFromSlice(p.IP)
+		if !ok {
+			continue
+		}
+		addr := netip.AddrPortFrom(ip.Unmap(), uint16(p.Port))
+		if seen[addr] {
+			continue
+		}
+		seen[addr] = true
+		peers = append(peers, torrent.PeerInfo{Addr: addr, Source: torrent.PeerSourceDhtGetPeers})
+	}
+	return peers
+}
+
+// enoughPeers is how many peers a fetch looks for when MinPeers is fewer.
 const enoughPeers = 20
 
 // findPeers looks for distinct peers of the torrent for at most PeerWait,
-// and until it has max(MinPeers, enoughPeers).
-func (n *Network) findPeers(ctx context.Context, h Hash) []torrent.PeerInfo {
+// and until it has want of them unless want is 0.
+func (n *Network) findPeers(ctx context.Context, h Hash, want int) []torrent.PeerInfo {
 	batches, stop, err := n.swarm.lookup(h)
 	if err != nil {
 		return nil
 	}
 	defer stop()
-	want := max(n.cfg.MinPeers, enoughPeers)
 	var peers []torrent.PeerInfo
 	seen := map[netip.AddrPort]bool{}
 	timer := time.NewTimer(n.cfg.PeerWait)
@@ -559,19 +592,8 @@ func (n *Network) findPeers(ctx context.Context, h Hash) []torrent.PeerInfo {
 			if !ok {
 				return peers
 			}
-			for _, p := range v.Peers {
-				ip, ok := netip.AddrFromSlice(p.IP)
-				if !ok {
-					continue
-				}
-				addr := netip.AddrPortFrom(ip.Unmap(), uint16(p.Port))
-				if seen[addr] {
-					continue
-				}
-				seen[addr] = true
-				peers = append(peers, torrent.PeerInfo{Addr: addr, Source: torrent.PeerSourceDhtGetPeers})
-			}
-			if len(peers) >= want {
+			peers = appendNew(peers, seen, v.Peers)
+			if want > 0 && len(peers) >= want {
 				return peers
 			}
 		case <-timer.C:

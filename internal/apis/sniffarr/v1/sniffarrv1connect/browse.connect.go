@@ -53,6 +53,12 @@ const (
 	BrowseServiceTopProcedure = "/sniffarr.v1.BrowseService/Top"
 	// BrowseServiceSettingsProcedure is the fully-qualified name of the BrowseService's Settings RPC.
 	BrowseServiceSettingsProcedure = "/sniffarr.v1.BrowseService/Settings"
+	// BrowseServiceRefreshPeersProcedure is the fully-qualified name of the BrowseService's
+	// RefreshPeers RPC.
+	BrowseServiceRefreshPeersProcedure = "/sniffarr.v1.BrowseService/RefreshPeers"
+	// BrowseServiceRequestProbeProcedure is the fully-qualified name of the BrowseService's
+	// RequestProbe RPC.
+	BrowseServiceRequestProbeProcedure = "/sniffarr.v1.BrowseService/RequestProbe"
 )
 
 // BrowseServiceClient is a client for the sniffarr.v1.BrowseService service.
@@ -89,6 +95,16 @@ type BrowseServiceClient interface {
 	// Settings returns what the server is configured with that a client
 	// showing its answers needs to know.
 	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
+	// RefreshPeers asks a fetcher to look up the peers of a release, or of
+	// every release of a work, on the DHT; the peers found are counted from
+	// the fetcher's next send of its sketches. NOT_FOUND without a stored
+	// release.
+	RefreshPeers(context.Context, *connect.Request[v1.RefreshPeersRequest]) (*connect.Response[v1.RefreshPeersResponse], error)
+	// RequestProbe asks the prober to probe a release, or every release of a
+	// work, ahead of the releases searches return, whatever its last probe.
+	// A release without peers over the last 7 days is not probed until it has
+	// some. NOT_FOUND without a stored release.
+	RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error)
 }
 
 // NewBrowseServiceClient constructs a client for the sniffarr.v1.BrowseService service. By default,
@@ -156,6 +172,18 @@ func NewBrowseServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(browseServiceMethods.ByName("Settings")),
 			connect.WithClientOptions(opts...),
 		),
+		refreshPeers: connect.NewClient[v1.RefreshPeersRequest, v1.RefreshPeersResponse](
+			httpClient,
+			baseURL+BrowseServiceRefreshPeersProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("RefreshPeers")),
+			connect.WithClientOptions(opts...),
+		),
+		requestProbe: connect.NewClient[v1.RequestProbeRequest, v1.RequestProbeResponse](
+			httpClient,
+			baseURL+BrowseServiceRequestProbeProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("RequestProbe")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -170,6 +198,8 @@ type browseServiceClient struct {
 	home          *connect.Client[v1.HomeRequest, v1.HomeResponse]
 	top           *connect.Client[v1.TopRequest, v1.TopResponse]
 	settings      *connect.Client[v1.SettingsRequest, v1.SettingsResponse]
+	refreshPeers  *connect.Client[v1.RefreshPeersRequest, v1.RefreshPeersResponse]
+	requestProbe  *connect.Client[v1.RequestProbeRequest, v1.RequestProbeResponse]
 }
 
 // SearchTitles calls sniffarr.v1.BrowseService.SearchTitles.
@@ -217,6 +247,16 @@ func (c *browseServiceClient) Settings(ctx context.Context, req *connect.Request
 	return c.settings.CallUnary(ctx, req)
 }
 
+// RefreshPeers calls sniffarr.v1.BrowseService.RefreshPeers.
+func (c *browseServiceClient) RefreshPeers(ctx context.Context, req *connect.Request[v1.RefreshPeersRequest]) (*connect.Response[v1.RefreshPeersResponse], error) {
+	return c.refreshPeers.CallUnary(ctx, req)
+}
+
+// RequestProbe calls sniffarr.v1.BrowseService.RequestProbe.
+func (c *browseServiceClient) RequestProbe(ctx context.Context, req *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error) {
+	return c.requestProbe.CallUnary(ctx, req)
+}
+
 // BrowseServiceHandler is an implementation of the sniffarr.v1.BrowseService service.
 type BrowseServiceHandler interface {
 	// SearchTitles returns the works whose titles, or whose releases' names
@@ -251,6 +291,16 @@ type BrowseServiceHandler interface {
 	// Settings returns what the server is configured with that a client
 	// showing its answers needs to know.
 	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
+	// RefreshPeers asks a fetcher to look up the peers of a release, or of
+	// every release of a work, on the DHT; the peers found are counted from
+	// the fetcher's next send of its sketches. NOT_FOUND without a stored
+	// release.
+	RefreshPeers(context.Context, *connect.Request[v1.RefreshPeersRequest]) (*connect.Response[v1.RefreshPeersResponse], error)
+	// RequestProbe asks the prober to probe a release, or every release of a
+	// work, ahead of the releases searches return, whatever its last probe.
+	// A release without peers over the last 7 days is not probed until it has
+	// some. NOT_FOUND without a stored release.
+	RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error)
 }
 
 // NewBrowseServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -314,6 +364,18 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(browseServiceMethods.ByName("Settings")),
 		connect.WithHandlerOptions(opts...),
 	)
+	browseServiceRefreshPeersHandler := connect.NewUnaryHandler(
+		BrowseServiceRefreshPeersProcedure,
+		svc.RefreshPeers,
+		connect.WithSchema(browseServiceMethods.ByName("RefreshPeers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	browseServiceRequestProbeHandler := connect.NewUnaryHandler(
+		BrowseServiceRequestProbeProcedure,
+		svc.RequestProbe,
+		connect.WithSchema(browseServiceMethods.ByName("RequestProbe")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sniffarr.v1.BrowseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BrowseServiceSearchTitlesProcedure:
@@ -334,6 +396,10 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 			browseServiceTopHandler.ServeHTTP(w, r)
 		case BrowseServiceSettingsProcedure:
 			browseServiceSettingsHandler.ServeHTTP(w, r)
+		case BrowseServiceRefreshPeersProcedure:
+			browseServiceRefreshPeersHandler.ServeHTTP(w, r)
+		case BrowseServiceRequestProbeProcedure:
+			browseServiceRequestProbeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -377,4 +443,12 @@ func (UnimplementedBrowseServiceHandler) Top(context.Context, *connect.Request[v
 
 func (UnimplementedBrowseServiceHandler) Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.Settings is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) RefreshPeers(context.Context, *connect.Request[v1.RefreshPeersRequest]) (*connect.Response[v1.RefreshPeersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.RefreshPeers is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.RequestProbe is not implemented"))
 }

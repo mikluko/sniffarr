@@ -51,7 +51,7 @@ func newFetchMetrics(mp metric.MeterProvider) fetchMetrics {
 		otel.Handle(err)
 	}
 	duration, err := m.Float64Histogram("sniffarr.sniff.fetch.duration", metric.WithUnit("s"),
-		metric.WithDescription("Time to fetch a torrent's metadata, from looking for peers to the outcome."),
+		metric.WithDescription("Time to finish a fetch task, from looking for peers to the outcome."),
 		metric.WithExplicitBucketBoundaries(0.5, 1, 2, 4, 8, 12, 16, 20, 25, 30, 60))
 	if err != nil {
 		otel.Handle(err)
@@ -64,12 +64,14 @@ func newFetchMetrics(mp metric.MeterProvider) fetchMetrics {
 }
 
 // Fetcher takes tasks from the server's Fetch, gets their metadata from a
-// MetadataSource, and returns the results on the same stream. It grants the
-// server one unit of credit per idle worker.
+// MetadataSource, and returns the results on the same stream; a task asking
+// for peers only gets them from the MetadataSource too, counts them in Peers
+// and returns nothing. It grants the server one unit of credit per idle
+// worker.
 type Fetcher struct {
 	cfg     FetcherConfig
 	source  MetadataSource
-	tasks   chan Hash
+	tasks   chan task
 	results chan *sniffarrv1.Result
 	kick    chan struct{}
 
@@ -92,7 +94,7 @@ func NewFetcher(cfg FetcherConfig, source MetadataSource) *Fetcher {
 	return &Fetcher{
 		cfg:     cfg,
 		source:  source,
-		tasks:   make(chan Hash, cfg.Workers),
+		tasks:   make(chan task, cfg.Workers),
 		results: make(chan *sniffarrv1.Result, cfg.Workers),
 		kick:    make(chan struct{}, 1),
 		metrics: newFetchMetrics(cfg.Meter),
@@ -205,36 +207,34 @@ func (f *Fetcher) receive(ctx context.Context, stream *connect.BidiStreamForClie
 		f.busy++
 		f.mu.Unlock()
 		select {
-		case f.tasks <- Hash(b):
+		case f.tasks <- task{hash: Hash(b), peers: m.GetTask().GetPeers()}:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
 }
 
+// task is one task of the server's: the metadata of hash, or its peers only.
+type task struct {
+	hash  Hash
+	peers bool
+}
+
 func (f *Fetcher) work(ctx context.Context) {
 	for {
-		var h Hash
+		var t task
 		select {
 		case <-ctx.Done():
 			return
-		case h = <-f.tasks:
+		case t = <-f.tasks:
 		}
-		start := time.Now()
-		m, err := f.source.Metadata(ctx, h)
-		if ctx.Err() != nil {
-			return
+		var ok bool
+		if t.peers {
+			ok = f.lookup(ctx, t.hash)
+		} else {
+			ok = f.fetch(ctx, t.hash)
 		}
-		if err == nil && f.cfg.Peers != nil {
-			f.cfg.Peers.Add(h, m.Peers)
-		}
-		r, outcome := f.result(ctx, h, m, err)
-		f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))
-		f.metrics.duration.Record(ctx, time.Since(start).Seconds(), outcomeAttr(outcome))
-		f.metrics.inFlight.Add(ctx, -1)
-		select {
-		case f.results <- r:
-		case <-ctx.Done():
+		if !ok {
 			return
 		}
 		f.mu.Lock()
@@ -243,6 +243,51 @@ func (f *Fetcher) work(ctx context.Context) {
 		f.mu.Unlock()
 		f.signal()
 	}
+}
+
+// fetch gets the metadata of h and queues its result, and reports false
+// when ctx is done first.
+func (f *Fetcher) fetch(ctx context.Context, h Hash) bool {
+	start := time.Now()
+	m, err := f.source.Metadata(ctx, h)
+	if ctx.Err() != nil {
+		return false
+	}
+	if err == nil && f.cfg.Peers != nil {
+		f.cfg.Peers.Add(h, m.Peers)
+	}
+	r, outcome := f.result(ctx, h, m, err)
+	f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))
+	f.metrics.duration.Record(ctx, time.Since(start).Seconds(), outcomeAttr(outcome))
+	f.metrics.inFlight.Add(ctx, -1)
+	select {
+	case f.results <- r:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// lookup gets the peers of h and counts them, and reports false when ctx
+// is done first.
+func (f *Fetcher) lookup(ctx context.Context, h Hash) bool {
+	start := time.Now()
+	peers, err := f.source.Peers(ctx, h)
+	if ctx.Err() != nil {
+		return false
+	}
+	outcome := "lookup"
+	if err != nil || len(peers) == 0 {
+		outcome = "lookup_no_peers"
+	}
+	if f.cfg.Peers != nil {
+		f.cfg.Peers.Add(h, peers)
+	}
+	f.cfg.Log.DebugContext(ctx, "looked up", slog.String("infohash", hex.EncodeToString(h[:])), "peers", len(peers))
+	f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))
+	f.metrics.duration.Record(ctx, time.Since(start).Seconds(), outcomeAttr(outcome))
+	f.metrics.inFlight.Add(ctx, -1)
+	return true
 }
 
 func (f *Fetcher) signal() {

@@ -47,9 +47,11 @@ var (
 	ErrNoMetadata = errors.New("no metadata")
 )
 
-// MetadataSource gets a torrent's metadata.
+// MetadataSource gets a torrent's metadata, or only its peers.
 type MetadataSource interface {
 	Metadata(ctx context.Context, h Hash) (Metadata, error)
+	// Peers returns the distinct peers found sharing the torrent.
+	Peers(ctx context.Context, h Hash) ([]netip.AddrPort, error)
 }
 
 const (

@@ -81,6 +81,9 @@ button:hover{background:var(--sf)}
 .col{flex:1 1 420px;min-width:0}
 .col.wide{flex-basis:520px}
 .rules{margin-top:8px;display:flex;flex-direction:column;gap:2px}
+.acts{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.acts form{margin:0}
+button:disabled{cursor:default;color:var(--mu);background:var(--bg)}
 
 /* data */
 #data{display:flex;flex-direction:column;gap:24px}

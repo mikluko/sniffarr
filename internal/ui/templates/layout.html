@@ -48,3 +48,14 @@
     {{- if not (or $a.Marked $a.Likely)}} <span class="mu">{{$b.T "audio.none"}}</span>{{end}}</div>
   {{- end}}
 {{- end}}
+
+{{/* Buttons of a card: look up the peers of its releases, probe them; a probe needs peers.
+     The answer to each replaces its form, as the fragment "act". */}}
+{{define "acts"}}{{$b := .B}}
+<div class="acts">
+  <form id="act-peers" method="post" action="{{.Path}}/peers" hx-post="{{.Path}}/peers" hx-target="this" hx-swap="outerHTML"><button type="submit">{{$b.T "act.peers"}}</button></form>
+  <form id="act-probe" method="post" action="{{.Path}}/probe" hx-post="{{.Path}}/probe" hx-target="this" hx-swap="outerHTML"><button type="submit"{{if .Peers}} title="{{$b.T "act.probe_hint"}}"{{else}} disabled title="{{$b.T "act.probe_nopeers"}}"{{end}}>{{$b.T "act.probe"}}</button></form>
+</div>
+{{end}}
+
+{{define "act"}}<span id="act-{{.Action}}" class="mu" role="status">{{.T (concat "act.done." .Action)}}{{if gt .Releases 1}}: {{.Releases}} {{.T "top.releases_lc"}}{{end}}</span>{{end}}

@@ -60,7 +60,9 @@ type IngestServiceClient interface {
 	Sight(context.Context) *connect.ClientStreamForClient[v1.SightRequest, v1.SightResponse]
 	// Fetch leases one queued infohash per unit of credit to the stream, and
 	// takes the results back on it. A lease returns to the queue when the
-	// stream ends without its result or when the lease expires.
+	// stream ends without its result or when the lease expires. A peer lookup
+	// BrowseService.RefreshPeers asked for goes ahead of the queue, to one
+	// stream once, and is not repeated when that stream ends.
 	Fetch(context.Context) *connect.BidiStreamForClient[v1.FetchRequest, v1.FetchResponse]
 	// HashKey returns the key every client hashes peers with before adding
 	// them to a sketch, and the ID of the sniffing DHT node. The server
@@ -195,7 +197,9 @@ type IngestServiceHandler interface {
 	Sight(context.Context, *connect.ClientStream[v1.SightRequest]) (*connect.Response[v1.SightResponse], error)
 	// Fetch leases one queued infohash per unit of credit to the stream, and
 	// takes the results back on it. A lease returns to the queue when the
-	// stream ends without its result or when the lease expires.
+	// stream ends without its result or when the lease expires. A peer lookup
+	// BrowseService.RefreshPeers asked for goes ahead of the queue, to one
+	// stream once, and is not repeated when that stream ends.
 	Fetch(context.Context, *connect.BidiStream[v1.FetchRequest, v1.FetchResponse]) error
 	// HashKey returns the key every client hashes peers with before adding
 	// them to a sketch, and the ID of the sniffing DHT node. The server

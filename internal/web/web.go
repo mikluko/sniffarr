@@ -106,6 +106,10 @@ func New(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("GET /w/{id}", redirectWork)
 	mux.HandleFunc("GET /top/w/{id}", redirectWork)
 	mux.HandleFunc("GET /t/{infohash}", s.torrent)
+	cop := http.NewCrossOriginProtection()
+	mux.Handle("POST /t/{infohash}/{action}", cop.Handler(http.HandlerFunc(s.requestTorrent)))
+	mux.Handle("POST /movie/{id}/{action}", cop.Handler(s.requestWork("movie")))
+	mux.Handle("POST /tv/{id}/{action}", cop.Handler(s.requestWork("series")))
 	return mux, nil
 }
 
@@ -815,4 +819,65 @@ func sumLast(c ui.Chart, n int) int64 {
 		sum += b.Value
 	}
 	return sum
+}
+
+// requestTorrent serves POST /t/{infohash}/peers and /probe for the release.
+func (s *server) requestTorrent(w http.ResponseWriter, req *http.Request) {
+	raw, err := hex.DecodeString(req.PathValue("infohash"))
+	if err != nil || len(raw) != infohashLen {
+		http.NotFound(w, req)
+		return
+	}
+	s.request(w, req, "torrent", "/t/"+hex.EncodeToString(raw), &sniffarrv1.Releases{Of: &sniffarrv1.Releases_Infohash{Infohash: raw}})
+}
+
+// requestWork serves POST /movie/{id}/peers and /probe, and the same under
+// /tv, for every release of the title.
+func (s *server) requestWork(kind string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		tmdbID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+		if err != nil || tmdbID <= 0 {
+			http.NotFound(w, req)
+			return
+		}
+		s.request(w, req, "work", ui.WorkPath(kind, tmdbID), &sniffarrv1.Releases{Of: &sniffarrv1.Releases_Work{Work: ui.WorkID(kind, tmdbID)}})
+	}
+}
+
+// request asks the API for the action of the path, peers or probe, of the
+// releases r names on the page of the card at path. It answers an htmx
+// request for an "act-" target with the fragment "act", and sends any other
+// back to the card.
+func (s *server) request(w http.ResponseWriter, req *http.Request, page, path string, r *sniffarrv1.Releases) {
+	action := req.PathValue("action")
+	var n int32
+	var err error
+	switch action {
+	case "peers":
+		var res *connect.Response[sniffarrv1.RefreshPeersResponse]
+		if res, err = s.cfg.Browse.RefreshPeers(req.Context(), connect.NewRequest(&sniffarrv1.RefreshPeersRequest{Releases: r})); err == nil {
+			n = res.Msg.GetReleases()
+		}
+	case "probe":
+		var res *connect.Response[sniffarrv1.RequestProbeResponse]
+		if res, err = s.cfg.Browse.RequestProbe(req.Context(), connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: r})); err == nil {
+			n = res.Msg.GetReleases()
+		}
+	default:
+		http.NotFound(w, req)
+		return
+	}
+	if c := connect.CodeOf(err); c == connect.CodeNotFound || c == connect.CodeInvalidArgument {
+		http.NotFound(w, req)
+		return
+	}
+	if err != nil {
+		s.fail(w, req, "request "+action, err)
+		return
+	}
+	if req.Header.Get("HX-Request") != "true" || !strings.HasPrefix(req.Header.Get("HX-Target"), "act-") {
+		http.Redirect(w, req, path, http.StatusSeeOther)
+		return
+	}
+	s.render(w, req, page, ui.Requested{Base: s.base(req, s.lang(w, req), ""), Action: action, Releases: int(n)})
 }

@@ -28,6 +28,7 @@
         {{range $i, $win := windows}}{{if $i}} · {{end}}{{$.T (concat "win." $win)}} {{with index $.Ranks $i}}<b>№{{.}}</b>{{else}}<span class="mu">—</span>{{end}}{{end}}</div>
       <div><span class="mu">{{.T "work.ours"}}:</span> {{$w.Releases}} {{.T "top.releases_lc"}} · {{.Num .Peers.Week}} {{.T "top.peers_lc"}} {{.T "win.7d_lc"}} <span class="mu">· {{.Num .Peers.Day}} {{.T "win.24h_lc"}} · {{.Num .Peers.Month}} {{.T "win.30d_lc"}}</span></div>
       {{if .VoiceLangs}}<div class="au">{{template "workaudio" (workAudioArgs .Base .Audio $w.Releases)}}</div>{{end}}
+      {{template "acts" (actsArgs .Base $w.Path .Peers.Week)}}
       {{else}}
       <div class="tm-state">{{.T "work.noreleases"}}</div>
       {{end}}

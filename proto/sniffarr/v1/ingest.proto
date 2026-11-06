@@ -17,7 +17,9 @@ service IngestService {
   rpc Sight(stream SightRequest) returns (SightResponse);
   // Fetch leases one queued infohash per unit of credit to the stream, and
   // takes the results back on it. A lease returns to the queue when the
-  // stream ends without its result or when the lease expires.
+  // stream ends without its result or when the lease expires. A peer lookup
+  // BrowseService.RefreshPeers asked for goes ahead of the queue, to one
+  // stream once, and is not repeated when that stream ends.
   rpc Fetch(stream FetchRequest) returns (stream FetchResponse);
   // HashKey returns the key every client hashes peers with before adding
   // them to a sketch, and the ID of the sniffing DHT node. The server
@@ -123,6 +125,9 @@ message FetchResponse {
 // Task asks for the metadata of one infohash.
 message Task {
   bytes infohash = 1;
+  // Peers asks only for the infohash's peers on the DHT: the fetcher counts
+  // those it finds through Peers and sends no Result for the task.
+  bool peers = 2;
 }
 
 message HashKeyRequest {}

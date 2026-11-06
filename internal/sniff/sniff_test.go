@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"sync"
 	"testing"
 	"time"
@@ -41,7 +42,9 @@ type fakeIngest struct {
 	// failSight is how many Sight streams fail before one succeeds.
 	failSight int
 
-	todo    []Hash
+	todo []Hash
+	// lookups are the hashes of todo whose tasks ask for peers only.
+	lookups map[Hash]bool
 	results map[Hash]*sniffarrv1.Result
 	// credits holds the credit messages of each Fetch stream, in order.
 	credits [][]int32
@@ -219,16 +222,26 @@ func (f *fakeIngest) Fetch(ctx context.Context, stream *connect.BidiStream[sniff
 			}
 			return nil
 		}
-		h := f.todo[0]
-		f.todo = f.todo[1:]
 		credit--
-		leased[h] = true
-		f.outstanding = max(f.outstanding, len(leased))
+		task := f.next(leased)
 		f.mu.Unlock()
-		if err := stream.Send(&sniffarrv1.FetchResponse{Task: &sniffarrv1.Task{Infohash: h[:]}}); err != nil {
+		if err := stream.Send(&sniffarrv1.FetchResponse{Task: task}); err != nil {
 			return err
 		}
 	}
+}
+
+// next takes the first hash of todo as a task, leased unless it is a
+// lookup. The caller holds mu.
+func (f *fakeIngest) next(leased map[Hash]bool) *sniffarrv1.Task {
+	h := f.todo[0]
+	f.todo = f.todo[1:]
+	lookup := f.lookups[h]
+	if !lookup {
+		leased[h] = true
+	}
+	f.outstanding = max(f.outstanding, len(leased))
+	return &sniffarrv1.Task{Infohash: h[:], Peers: lookup}
 }
 
 func (f *fakeIngest) client(t *testing.T) sniffarrv1connect.IngestServiceClient {
@@ -268,6 +281,18 @@ func (s fakeSource) Metadata(ctx context.Context, h Hash) (Metadata, error) {
 		return Metadata{}, ErrNoMetadata
 	}
 	return Metadata{Name: "torrent", Size: 1 << 30, Files: []File{{Path: "a/b.mkv", Size: 1 << 30}}}, nil
+}
+
+// Peers names h[0] peers on one address.
+func (s fakeSource) Peers(ctx context.Context, h Hash) ([]netip.AddrPort, error) {
+	if sleep(ctx, s.delay) != nil {
+		return nil, ctx.Err()
+	}
+	out := make([]netip.AddrPort, h[0])
+	for i := range out {
+		out[i] = netip.AddrPortFrom(netip.AddrFrom4([4]byte{192, 0, 2, 1}), uint16(1000+i))
+	}
+	return out, nil
 }
 
 func run(t *testing.T, f func(context.Context) error) context.CancelFunc {
@@ -390,16 +415,20 @@ func TestFetcherDebugLog(t *testing.T) {
 }
 
 // fixedSource gives every hash the same metadata.
-type fixedSource Metadata
+type fixedSource struct{ m Metadata }
 
 func (s fixedSource) Metadata(context.Context, Hash) (Metadata, error) {
-	return Metadata(s), nil
+	return s.m, nil
+}
+
+func (s fixedSource) Peers(context.Context, Hash) ([]netip.AddrPort, error) {
+	return s.m.Peers, nil
 }
 
 func TestFetcherInvalidUTF8(t *testing.T) {
 	ingest := newFake()
 	ingest.todo = []Hash{hash(1)}
-	src := fixedSource{Name: "Movie.\xff2020", Size: 1 << 30, Files: []File{{Path: "a/\xfe\xfeb.mkv", Size: 1 << 30}}}
+	src := fixedSource{Metadata{Name: "Movie.\xff2020", Size: 1 << 30, Files: []File{{Path: "a/\xfe\xfeb.mkv", Size: 1 << 30}}}}
 	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 1}, src)
 	run(t, f.Run)
 
@@ -591,4 +620,52 @@ func TestRecent(t *testing.T) {
 	}
 	require.False(t, r.add(hash(4)), "the newer half is remembered")
 	require.True(t, r.add(hash(1)), "the oldest are forgotten")
+}
+
+// sink records the peers Add counts, by hash.
+type sink struct {
+	mu    sync.Mutex
+	added map[Hash]int
+}
+
+func (s *sink) Add(h Hash, peers []netip.AddrPort) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.added[h] += len(peers)
+}
+
+func (s *sink) Announced(Hash, netip.AddrPort) {}
+
+func (s *sink) count(h Hash) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.added[h]
+}
+
+func TestFetcherLookup(t *testing.T) {
+	ingest := newFake()
+	ingest.todo = []Hash{hash(5), hash(1)}
+	ingest.lookups = map[Hash]bool{hash(5): true}
+	peers := &sink{added: map[Hash]int{}}
+	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 1, Peers: peers}, fakeSource{})
+	run(t, f.Run)
+
+	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 1 }, 5*time.Second, 5*time.Millisecond)
+	require.Equal(t, 5, peers.count(hash(5)), "a lookup counts the peers found")
+	ingest.mu.Lock()
+	defer ingest.mu.Unlock()
+	require.NotContains(t, ingest.results, hash(5), "a lookup sends no result")
+	require.NotNil(t, ingest.results[hash(1)].GetTorrent(), "the worker is free again")
+}
+
+func TestNetworkPeers(t *testing.T) {
+	ports := make([]int, enoughPeers+5)
+	for i := range ports {
+		ports[i] = 1000 + i
+	}
+	s := &fakeSwarm{batches: map[Hash][]dht.PeersValues{hash(1): {batch(ports[:enoughPeers]...), batch(ports[enoughPeers-1:]...)}}}
+	n := fakeNetwork(NetworkConfig{PeerWait: 200 * time.Millisecond}, s)
+	got, err := n.Peers(context.Background(), hash(1))
+	require.NoError(t, err)
+	require.Len(t, got, enoughPeers+5, "a lookup runs past what a fetch needs, each peer once")
 }

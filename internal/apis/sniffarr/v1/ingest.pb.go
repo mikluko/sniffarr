@@ -689,8 +689,11 @@ func (x *FetchResponse) GetTask() *Task {
 
 // Task asks for the metadata of one infohash.
 type Task struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Infohash      []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	// Peers asks only for the infohash's peers on the DHT: the fetcher counts
+	// those it finds through Peers and sends no Result for the task.
+	Peers         bool `protobuf:"varint,2,opt,name=peers,proto3" json:"peers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -730,6 +733,13 @@ func (x *Task) GetInfohash() []byte {
 		return x.Infohash
 	}
 	return nil
+}
+
+func (x *Task) GetPeers() bool {
+	if x != nil {
+		return x.Peers
+	}
+	return false
 }
 
 type HashKeyRequest struct {
@@ -1389,9 +1399,10 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\"6\n" +
 	"\rFetchResponse\x12%\n" +
-	"\x04task\x18\x01 \x01(\v2\x11.sniffarr.v1.TaskR\x04task\"\"\n" +
+	"\x04task\x18\x01 \x01(\v2\x11.sniffarr.v1.TaskR\x04task\"8\n" +
 	"\x04Task\x12\x1a\n" +
-	"\binfohash\x18\x01 \x01(\fR\binfohash\"\x10\n" +
+	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x14\n" +
+	"\x05peers\x18\x02 \x01(\bR\x05peers\"\x10\n" +
 	"\x0eHashKeyRequest\"<\n" +
 	"\x0fHashKeyResponse\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\fR\x03key\x12\x17\n" +

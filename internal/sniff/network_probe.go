@@ -82,7 +82,7 @@ func (n *Network) Probe(ctx context.Context, h Hash, maxBytes int64) (Probed, er
 		return Probed{}, err
 	}
 	seeded := n.seeder.Has(h)
-	peers := n.findPeers(ctx, h)
+	peers := n.findPeers(ctx, h, max(n.cfg.MinPeers, enoughPeers))
 	if len(peers) < n.cfg.MinPeers && !seeded {
 		return Probed{}, ErrNoPeers
 	}

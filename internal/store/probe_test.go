@@ -272,3 +272,39 @@ func TestProbeDoneStudios(t *testing.T) {
 	require.NoError(t, s.ProbeDone(ctx, bare, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "audio", Language: "rus", Name: "Кубик в Кубе"}}}, t0))
 	require.Equal(t, []string{"Кубик в Кубе"}, mustGet(t, s, bare).Audio[0].Studios, "a studio with no mark in the name")
 }
+
+func TestRequestProbe(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	done := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	failed := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	wanted := insertProbeable(t, s, 4, "Brazil.1985.1080p", 5, "Brazil.1985.1080p.mkv")
+	require.NoError(t, s.ProbeDone(ctx, done, Probe{Outcome: ProbeUnknown}, t0))
+	final, err := s.ProbeFailed(ctx, failed, t0, 1, time.Hour)
+	require.NoError(t, err)
+	require.True(t, final)
+	require.NoError(t, s.WantProbe(ctx, []Hash{wanted}, t0.Add(2*time.Minute)))
+
+	n, err := s.RequestProbe(ctx, []Hash{done, failed, hash(99)}, t0.Add(time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, 2, n, "only stored releases")
+
+	c, ok := nextProbe(t, s, t0.Add(time.Minute), false)
+	require.True(t, ok)
+	require.True(t, c.Wanted)
+	require.Contains(t, []Hash{done, failed}, c.Hash, "a requested release before a wanted one wanted later, whatever its last probe")
+	other := done
+	if c.Hash == done {
+		other = failed
+	}
+	c2, ok := nextProbe(t, s, t0.Add(time.Minute), false, c.ID)
+	require.True(t, ok)
+	require.Equal(t, other, c2.Hash, "a failed release past its attempts too")
+
+	require.NoError(t, s.ProbeDone(ctx, c.Hash, Probe{Outcome: ProbeUnknown}, t0.Add(time.Minute)))
+	_, err = s.ProbeFailed(ctx, c2.Hash, t0.Add(time.Minute), 1, time.Hour)
+	require.NoError(t, err)
+	c, ok = nextProbe(t, s, t0.Add(time.Minute), false)
+	require.True(t, ok)
+	require.Equal(t, wanted, c.Hash, "a recorded probe ends the request")
+}

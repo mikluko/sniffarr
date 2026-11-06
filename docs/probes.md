@@ -21,9 +21,12 @@ BlockAdditionMapping, MP4's `dvcC`, `dvvC` or `dvwC`), else `HLG` or
 `HDR10` by the transfer characteristics, or `HDR10` for mastering metadata.
 
 Candidates are stored movies and series with a stored file of those
-formats and at least one distinct peer over the last 7 days. Releases a
-Torznab search with a query or an ID returned go first, the most recently
-returned first; then the rest, the most peers over 7 days first. A release
+formats and at least one distinct peer over the last 7 days. Releases
+asked for with `RequestProbe`, the web UI's probe button, go first, the
+most recently asked for first, whatever their last probe, until their next
+one is recorded. Releases a Torznab search with a query or an ID returned
+go next, the most recently returned first; then the rest, the most peers
+over 7 days first. A release
 without peers waits until it has some. Each release is probed once, and
 the outcome is stored, the tracks in their own table: read, unknown
 (no file of those formats, a track list beyond `max_bytes`, or a header the

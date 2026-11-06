@@ -233,6 +233,14 @@ type Release struct {
 
 // ---------- torrent card ----------
 
+// Requested answers a card's button: Action, "peers" or "probe", was asked
+// for Releases releases. It is the htmx fragment "act".
+type Requested struct {
+	Base
+	Action   string
+	Releases int
+}
+
 type TorrentPage struct {
 	Base
 	BackURL string // URL to return to, "" = the title page or the top

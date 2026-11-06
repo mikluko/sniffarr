@@ -3,6 +3,8 @@ package ingest
 import (
 	"context"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
@@ -149,4 +152,44 @@ func TestResultStoresFeatures(t *testing.T) {
 	require.Equal(t, 3, series.Season)
 	require.Equal(t, 5, series.Episode)
 	require.Equal(t, "720p", series.Quality)
+}
+
+func TestFetchSendsLookupsFirst(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	st, err := store.New(ctx, db, store.Options{})
+	require.NoError(t, err)
+	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	require.NoError(t, err)
+	now := time.Now()
+	_, _, err = st.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Heat.1995.1080p", Size: 8 << 30, Discovery: store.Sample, SeenAt: now})
+	require.NoError(t, err)
+	_, err = st.WantPeers(ctx, []store.Hash{{1}}, now)
+	require.NoError(t, err)
+	_, _, err = q.Enqueue(ctx, []store.Sighting{{Hash: store.Hash{2}, Discovery: store.Arr}}, now)
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(&Service{Store: st, Queue: q, Log: slog.New(slog.DiscardHandler)}))
+	srv := httptest.NewUnstartedServer(mux)
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	stream := sniffarrv1connect.NewIngestServiceClient(srv.Client(), srv.URL).Fetch(ctx)
+	t.Cleanup(func() { _ = stream.CloseRequest(); _ = stream.CloseResponse() })
+	require.NoError(t, stream.Send(&sniffarrv1.FetchRequest{Kind: &sniffarrv1.FetchRequest_Credit{Credit: &sniffarrv1.Credit{N: 3}}}))
+
+	first, err := stream.Receive()
+	require.NoError(t, err)
+	require.Equal(t, infohash(1), first.GetTask().GetInfohash())
+	require.True(t, first.GetTask().GetPeers(), "a lookup asks for peers only")
+	second, err := stream.Receive()
+	require.NoError(t, err)
+	require.Equal(t, infohash(2), second.GetTask().GetInfohash())
+	require.False(t, second.GetTask().GetPeers())
+	left, err := st.TakePeerLookups(ctx, 10)
+	require.NoError(t, err)
+	require.Empty(t, left, "a lookup is sent once")
 }

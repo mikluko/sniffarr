@@ -120,10 +120,33 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) erro
 	return err
 }
 
+// RequestProbe records that the releases of the hashes were asked to be
+// probed at the time, and returns how many of them are stored. A requested
+// release is due a probe whatever its last one, ahead of those only wanted,
+// until its next probe is recorded.
+func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (int, error) {
+	if len(hashes) == 0 {
+		return 0, nil
+	}
+	args := make([]any, 0, len(hashes)+1)
+	args = append(args, at.Unix())
+	for _, h := range hashes {
+		args = append(args, h[:])
+	}
+	res, err := s.w.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, wanted_at, requested_at)
+		SELECT id, ?1, ?1 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
+		ON CONFLICT (torrent_id) DO UPDATE SET wanted_at = excluded.wanted_at, requested_at = excluded.requested_at`, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
+}
+
 // NextProbe returns the release to probe next at now, other than those of
-// exclude: the most recently wanted one, else, with background, the one
-// never probed with the most peers over 7 days, else the one due a probe
-// again with the most. Each is a movie or a series with peers and a stored
+// exclude: the most recently requested one, else the most recently wanted
+// one, else, with background, the one never probed with the most peers over
+// 7 days, else the one due a probe again with the most. Each is a movie or a series with peers and a stored
 // file of a format a probe reads. It returns false when there is none.
 func (s *Store) NextProbe(ctx context.Context, now time.Time, background bool, exclude []int64) (ProbeCandidate, bool, error) {
 	var base []any
@@ -162,12 +185,13 @@ func probeCond(state string, excluded int) string {
 	return cond
 }
 
-// wantedProbe is the query of the most recently wanted release due a probe.
-// CROSS JOIN keeps SQLite walking the wanted releases rather than every
-// release.
+// wantedProbe is the query of the most recently requested release, else the
+// most recently wanted one due a probe. CROSS JOIN keeps SQLite walking the
+// wanted releases rather than every release.
 func wantedProbe(excluded int) string {
 	return `SELECT t.id, t.infohash, 1 FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
-		WHERE p.wanted_at IS NOT NULL AND ` + probeCond("p.outcome IS NULL OR "+probeDue, excluded) + ` ORDER BY p.wanted_at DESC, t.peers_week DESC LIMIT 1`
+		WHERE p.wanted_at IS NOT NULL AND ` + probeCond("p.requested_at IS NOT NULL OR p.outcome IS NULL OR "+probeDue, excluded) +
+		` ORDER BY p.requested_at IS NULL, p.wanted_at DESC, t.peers_week DESC LIMIT 1`
 }
 
 // backgroundProbe is the query of the release never probed with the most
@@ -222,7 +246,7 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts 
 		final = failed >= attempts
 		retry := at.Add(backoff << min(failed-1, attempts-1)).Unix()
 		_, err = tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, peers_week) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-			ON CONFLICT (torrent_id) DO UPDATE SET outcome = ?2, attempts = ?3, retry_at = ?4, probed_at = ?5, peers_week = ?6`,
+			ON CONFLICT (torrent_id) DO UPDATE SET outcome = ?2, attempts = ?3, retry_at = ?4, probed_at = ?5, peers_week = ?6, requested_at = NULL`,
 			id, ProbeFailed, failed, retry, at.Unix(), sql.NullInt64{Int64: peers, Valid: final})
 		return err
 	})
@@ -245,7 +269,7 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, path, format, downloaded)
 			VALUES (?1, ?2, 0, NULL, ?3, ?4, ?5, ?6) ON CONFLICT (torrent_id) DO UPDATE SET
-			outcome = ?2, retry_at = NULL, probed_at = ?3, path = ?4, format = ?5, downloaded = downloaded + ?6`,
+			outcome = ?2, retry_at = NULL, probed_at = ?3, path = ?4, format = ?5, downloaded = downloaded + ?6, requested_at = NULL`,
 			id, p.Outcome, at.Unix(), nullString(p.Path), nullString(p.Format), p.Downloaded); err != nil {
 			return err
 		}
