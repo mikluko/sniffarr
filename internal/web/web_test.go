@@ -215,7 +215,7 @@ func get(t *testing.T, h http.Handler, path, target string, header ...string) *h
 	return w
 }
 
-var untranslated = regexp.MustCompile(`\b(?:(?:act|kind|layer|source|drop|voiceband|voicemode|relvoice|relsort|quality|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results|unit|attr|work|rel|search|matched|audio|dub|langname|q)\.[a-z_][a-z0-9_]*` +
+var untranslated = regexp.MustCompile(`\b(?:(?:act|kind|layer|source|drop|voiceband|voicemode|relvoice|relsort|quality|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results|unit|attr|work|rel|search|matched|audio|dub|langname|q|journal)\.[a-z_][a-z0-9_]*` +
 	`|tmdb\.(?:votes|noposter|unmatched|unchecked|search|checked|tv|seasons|episode|method|low|key|conf)|tvstatus\.[A-Z][a-zA-Z ]*)\b`)
 
 // ruleLine is a card's fired rule: its id is not a translation key.
@@ -447,6 +447,10 @@ func TestTorrent(t *testing.T) {
 	for _, hit := range []string{"year ← «1979»", "kind.movie ← «1080p»", "quality.1080p ← «1080p»", "audio.ru ← «Rus»"} {
 		require.Contains(t, body, hit)
 	}
+	require.Contains(t, body, `<td>2026-10-20 11:00</td><td>metadata fetched</td><td>stored</td>`, "the journal, its kind and outcome translated")
+	require.Contains(t, body, `discovery: announce · files: 10 · kind: movie · kind_layer: rules · name: `+alien+` · size: 59055800320`, "the detail by key")
+	require.Contains(t, body, `<td>title matched</td><td>by Jev</td>`)
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1)+"?lang=ru", "")), `<td>метаданные получены</td><td>сохранена</td>`, "in Russian")
 
 	body = page(t, get(t, h, "/t/"+hexOf(2), ""))
 	require.Contains(t, body, `this one by peers #2`)

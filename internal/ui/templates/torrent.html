@@ -62,6 +62,24 @@
 </div>
 
 <section>
+  <h2>{{$.T "card.journal"}}</h2>
+  {{if .Journal}}
+  <div class="scroll">
+  <table class="t">
+    <thead><tr><th>{{$.T "journal.when"}}</th><th>{{$.T "journal.event"}}</th><th>{{$.T "journal.outcome"}}</th><th>{{$.T "journal.detail"}}</th></tr></thead>
+    <tbody>
+    {{range .Journal}}<tr><td>{{$.TimeFull .At}}</td><td>{{$.T (concat "journal.kind." .Kind)}}</td><td>{{$.T (concat "journal.outcome." .Kind "." .Outcome)}}</td>
+      <td class="wrapc"><span class="mono">{{range $i, $p := .Pairs}}{{if $i}} · {{end}}{{$p.Key}}: {{if $p.Time.IsZero}}{{$p.Value}}{{else}}{{$.TimeFull $p.Time}}{{end}}{{end}}</span></td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p class="mu">{{$.T "journal.empty"}}</p>
+  {{end}}
+</section>
+
+<section>
   <h2>{{$.T "card.filelist"}}</h2>
   {{template "files" $}}
 </section>

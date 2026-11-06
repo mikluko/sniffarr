@@ -8,6 +8,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 	"math"
 	"net/http"
@@ -609,6 +610,9 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	for _, h := range c.GetRules() {
 		t.Rules = append(t.Rules, ui.RuleHit{Rule: h.GetRule(), Match: h.GetMatch()})
 	}
+	for _, e := range c.GetJournal() {
+		t.Journal = append(t.Journal, journalEntry(e))
+	}
 	all := req.URL.Query().Get("files") == "all"
 	files := c.GetFiles()
 	t.Files = ui.FileList{InfoHash: h, Stored: len(files), All: all}
@@ -619,6 +623,18 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		t.Files.Files = append(t.Files.Files, ui.File{Path: f.GetPath(), Size: f.GetSize()})
 	}
 	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, ""), BackURL: backURL(req), Torrent: t})
+}
+
+// journalEntry is the UI's view of an entry, its detail decoded; a detail
+// that is not a JSON object is kept whole under "detail".
+func journalEntry(e *sniffarrv1.JournalEntry) ui.JournalEntry {
+	out := ui.JournalEntry{At: e.GetAt().AsTime(), Kind: e.GetKind(), Outcome: e.GetOutcome()}
+	if d := e.GetDetail(); d != "" {
+		if err := json.Unmarshal([]byte(d), &out.Detail); err != nil {
+			out.Detail = map[string]any{"detail": d}
+		}
+	}
+	return out
 }
 
 // title is the release's title key without its prefix, or "": what the

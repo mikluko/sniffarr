@@ -1,6 +1,14 @@
 package ui
 
-import "time"
+import (
+	"fmt"
+	"maps"
+	"math"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+)
 
 // Enumerations as the UI knows them. Values are stable keys; labels come from i18n
 // ("kind.<v>", "source.<v>", "layer.<v>", "voicemode.<v>", "drop.<v>", "voiceband.<v>",
@@ -270,6 +278,9 @@ type Torrent struct {
 	Audio  []Audio // card shows every configured language; missing ones render as "—"
 	Rules  []RuleHit
 
+	// Journal is the newest events of the torrent's life, oldest first.
+	Journal []JournalEntry
+
 	Files FileList
 }
 
@@ -282,6 +293,76 @@ type Answer struct {
 type RuleHit struct {
 	Rule  string // rule id, e.g. "source.web"
 	Match string // matched fragment of the name
+}
+
+// JournalEntry is one event of a torrent's life; labels come from i18n
+// ("journal.kind.<kind>", "journal.outcome.<kind>.<outcome>").
+type JournalEntry struct {
+	At      time.Time
+	Kind    string
+	Outcome string
+	// Detail is the event's particulars as the API's JSON object decodes:
+	// numbers are float64, a time is its Unix seconds.
+	Detail map[string]any
+}
+
+// DetailPair is one particular of an entry: Time is set for a key that
+// names a moment, else Value is its text.
+type DetailPair struct {
+	Key   string
+	Value string
+	Time  time.Time
+}
+
+// Pairs returns the entry's particulars by key.
+func (e JournalEntry) Pairs() []DetailPair {
+	out := make([]DetailPair, 0, len(e.Detail))
+	for _, k := range slices.Sorted(maps.Keys(e.Detail)) {
+		p := DetailPair{Key: k}
+		if sec, ok := e.Detail[k].(float64); ok && detailTime(k) {
+			p.Time = time.Unix(int64(sec), 0)
+		} else {
+			p.Value = detailString(e.Detail[k])
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// detailTime reports whether the store writes the key as a moment.
+func detailTime(key string) bool {
+	return strings.HasSuffix(key, "_at") || strings.HasSuffix(key, "_until") || key == "last_seen"
+}
+
+// detailString formats a decoded JSON value: a whole number without a
+// fraction, a list by commas, an object as "key value" by commas.
+func detailString(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case float64:
+		if x == math.Trunc(x) && math.Abs(x) < 1<<53 {
+			return strconv.FormatInt(int64(x), 10)
+		}
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(x)
+	case []any:
+		parts := make([]string, len(x))
+		for i, e := range x {
+			parts[i] = detailString(e)
+		}
+		return strings.Join(parts, ", ")
+	case map[string]any:
+		parts := make([]string, 0, len(x))
+		for _, k := range slices.Sorted(maps.Keys(x)) {
+			parts = append(parts, k+" "+detailString(x[k]))
+		}
+		return strings.Join(parts, ", ")
+	case nil:
+		return ""
+	}
+	return fmt.Sprint(v)
 }
 
 type FileList struct {

@@ -362,12 +362,31 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 		TMDB:  tmdb,
 		Peers: PeerCounts{Day: 1960, Week: 12480, Month: 41300},
 		Work:  work, RankInWork: 1,
-		Kind:   Answer{Value: "movie", Layer: "classifier", Confidence: fp(.93)},
-		Source: Answer{Value: "web", Layer: "rules"},
-		Audio:  []Audio{{Lang: "ru", Script: "cyrillic", Probability: fp(.88)}},
-		Rules:  []RuleHit{{"source.web", "WEB-DL"}, {"quality.1080p", "1080р"}},
-		Files:  FileList{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Files: shown, Stored: len(files), All: all},
+		Kind:    Answer{Value: "movie", Layer: "classifier", Confidence: fp(.93)},
+		Source:  Answer{Value: "web", Layer: "rules"},
+		Audio:   []Audio{{Lang: "ru", Script: "cyrillic", Probability: fp(.88)}},
+		Rules:   []RuleHit{{"source.web", "WEB-DL"}, {"quality.1080p", "1080р"}},
+		Journal: sampleJournal(b.Now.Add(-41*time.Hour), name),
+		Files:   FileList{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Files: shown, Stored: len(files), All: all},
 	}}
+}
+
+// sampleJournal is a torrent's life from its sighting at the time: numbers
+// are float64 and moments Unix seconds, as the API's JSON decodes.
+func sampleJournal(at time.Time, name string) []JournalEntry {
+	sec := func(t time.Time) float64 { return float64(t.Unix()) }
+	return []JournalEntry{
+		{At: at.Add(-2 * time.Minute), Kind: "sighted", Outcome: "queued", Detail: map[string]any{"discovery": "announce"}},
+		{At: at.Add(-time.Minute), Kind: "leased", Outcome: "fetch", Detail: map[string]any{"owner": 3.0, "attempt": 1.0, "lease_until": sec(at)}},
+		{At: at, Kind: "fetched", Outcome: "stored", Detail: map[string]any{"name": name, "size": 26629001216.0, "files": 14.0, "discovery": "announce",
+			"queued_at": sec(at.Add(-2 * time.Minute)), "kind": "movie", "kind_layer": "rules"}},
+		{At: at.Add(time.Minute), Kind: "classified", Outcome: "jev", Detail: map[string]any{"kind": "movie", "kind_confidence": 0.93, "source": "web",
+			"source_confidence": 0.8, "audio": map[string]any{"ru": 0.88}, "trigger": "worker"}},
+		{At: at.Add(2 * time.Minute), Kind: "matched", Outcome: "tmdb", Detail: map[string]any{"work": 42.0, "tmdb_id": 318846.0, "type": "movie", "confidence": 0.8, "trigger": "worker"}},
+		{At: at.Add(3 * time.Hour), Kind: "probe_leased", Outcome: "background", Detail: map[string]any{"attempt": 1.0, "max_bytes": 67108864.0, "used": 65498251264.0}},
+		{At: at.Add(3*time.Hour + 2*time.Minute), Kind: "probed", Outcome: "tracks", Detail: map[string]any{"path": "Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv", "format": "mkv",
+			"downloaded": 4194304.0, "tracks": []any{"video::hevc", "audio:rus:eac3", "audio:eng:eac3", "subtitles:rus:subrip"}, "audio": map[string]any{"ru": 1.0}}},
+	}
 }
 
 func SampleData(b Base) DataPage {

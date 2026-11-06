@@ -240,3 +240,26 @@ func TestStatic(t *testing.T) {
 		t.Errorf("missing: %d %q", w.Code, w.Header().Get("Cache-Control"))
 	}
 }
+
+func TestJournalPairs(t *testing.T) {
+	e := JournalEntry{Detail: map[string]any{"retry_at": 1762500000.0, "attempt": 2.0, "confidence": 0.93, "final": true,
+		"tracks": []any{"video::hevc", "audio:rus:eac3"}, "audio": map[string]any{"ru": 0.88, "en": 0.0}, "name": "x"}}
+	got := e.Pairs()
+	want := []DetailPair{
+		{Key: "attempt", Value: "2"},
+		{Key: "audio", Value: "en 0, ru 0.88"},
+		{Key: "confidence", Value: "0.93"},
+		{Key: "final", Value: "true"},
+		{Key: "name", Value: "x"},
+		{Key: "retry_at", Time: time.Unix(1762500000, 0)},
+		{Key: "tracks", Value: "video::hevc, audio:rus:eac3"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("pairs = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i].Key != want[i].Key || got[i].Value != want[i].Value || !got[i].Time.Equal(want[i].Time) {
+			t.Errorf("pair %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
