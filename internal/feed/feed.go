@@ -6,9 +6,13 @@ package feed
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +21,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 const scope = "github.com/mikluko/sniffarr/internal/feed"
@@ -44,7 +49,89 @@ type Source interface {
 	Name() string
 	// Fetch returns the releases the feed lists at the moment. A feed is a
 	// window, so Fetch returns the same release again until it leaves it.
-	Fetch(ctx context.Context) ([]Item, error)
+	// What the source did once and need not do again, a page read or a
+	// pass made, it marks in state.
+	Fetch(ctx context.Context, state State) ([]Item, error)
+}
+
+// State keeps, per source and across restarts, the keys a source marked
+// done.
+type State interface {
+	Done(ctx context.Context, key string) (bool, error)
+	Mark(ctx context.Context, key string) error
+}
+
+// storeState is the State of one source in the store.
+type storeState struct {
+	store  *store.Store
+	source string
+	now    func() time.Time
+}
+
+func (s storeState) Done(ctx context.Context, key string) (bool, error) {
+	return s.store.FeedDone(ctx, s.source, key)
+}
+
+func (s storeState) Mark(ctx context.Context, key string) error {
+	return s.store.MarkFeedDone(ctx, s.source, key, s.now())
+}
+
+// Client returns c, or http.DefaultClient for nil, with each request traced
+// as a client span.
+func Client(c *http.Client) *http.Client {
+	if c == nil {
+		c = http.DefaultClient
+	}
+	return telemetry.HTTPClient(c)
+}
+
+// Sleep waits d, or until ctx is done.
+func Sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// Infohash reads the v1 infohash of a magnet link, in either case.
+func Infohash(magnet string) (store.Hash, bool) {
+	var h store.Hash
+	u, err := url.Parse(magnet)
+	if err != nil || u.Scheme != "magnet" {
+		return h, false
+	}
+	for _, xt := range u.Query()["xt"] {
+		hexed, ok := strings.CutPrefix(xt, "urn:btih:")
+		if !ok || len(hexed) != 2*len(h) {
+			continue
+		}
+		if _, err := hex.Decode(h[:], []byte(hexed)); err == nil {
+			return h, true
+		}
+	}
+	return h, false
+}
+
+// Bytes is n of the binary unit, "GB" or "ГБ"; 0 for a unit it does not
+// know.
+func Bytes(n float64, unit string) int64 {
+	switch strings.ToUpper(unit) {
+	case "B", "Б":
+		return int64(n)
+	case "KB", "КБ":
+		return int64(n * (1 << 10))
+	case "MB", "МБ":
+		return int64(n * (1 << 20))
+	case "GB", "ГБ":
+		return int64(n * (1 << 30))
+	case "TB", "ТБ":
+		return int64(n * (1 << 40))
+	}
+	return 0
 }
 
 // Outcomes of Recorder.Record.
@@ -227,7 +314,7 @@ func (p *Poller) now() time.Time {
 // Round reads the feed once and records every item, logging how many were
 // new.
 func (p *Poller) Round(ctx context.Context) error {
-	items, err := p.Source.Fetch(ctx)
+	items, err := p.Source.Fetch(ctx, storeState{store: p.Recorder.Store, source: p.Source.Name(), now: p.Recorder.now})
 	if err != nil {
 		return err
 	}

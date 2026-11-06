@@ -56,6 +56,11 @@ the same to each.
 | `SNIFFARR_FEED_INTERVAL`           | `1h`             | How often each feed is read                                                                                            |
 | `SNIFFARR_RUTRACKER_FEED_URL`      | `https://feed.rutracker.cc` | Where rutracker's feeds are served                                                                          |
 | `SNIFFARR_RUTRACKER_FORUMS`        | `0`              | Comma-separated rutracker forums whose feeds are read; `0` is the whole tracker                                        |
+| `SNIFFARR_NNMCLUB_URL`             | `https://nnmclub.to/forum` | The NNM-Club forum whose RSS and topics are read                                                             |
+| `SNIFFARR_NNMCLUB_FORUMS`          |                  | Comma-separated NNM-Club forums whose RSS is read; empty reads the RSS of every public forum                           |
+| `SNIFFARR_RUTOR_URL`               | `https://rutor.info` | The rutor site whose listing pages are read                                                                        |
+| `SNIFFARR_RUTOR_CATEGORIES`        | `0`              | Comma-separated rutor categories whose listings are read; `0` is every one                                             |
+| `SNIFFARR_RUTOR_DEPTH`             | `10`             | Listing pages of each rutor category the first pass reads                                                              |
 | `SNIFFARR_PROBE_DAILY_BYTES`       | `100GiB`         | Piece data probes download per UTC day at most, in bytes or with a unit of `B`, `KiB`, `MiB`, `GiB` or `TiB`; `0` is no limit |
 | `SNIFFARR_PROBE_SEARCH_RESERVE`    | `25`             | Percentage of the daily bytes left to releases a Torznab search returned, `0` to `100`                                 |
 | `SNIFFARR_PROBE_MAX_BYTES`         | `64MiB`          | Piece data one probe downloads at most, units as above                                                                 |

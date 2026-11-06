@@ -4,13 +4,11 @@ package rutracker
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,7 +16,6 @@ import (
 
 	"github.com/mikluko/sniffarr/internal/feed"
 	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/telemetry"
 )
 
 // Name is the source's name.
@@ -37,10 +34,11 @@ type Config struct {
 	Forums []int
 }
 
-// Source reads the feeds of Config.Forums, and once per Source the feed of
-// every other forum those name in their categories: a forum's feed holds
-// about a month, the whole tracker's a few hours, so the first Fetch of a
-// process fills a store from each forum the tracker is active in.
+// Source reads the feeds of Config.Forums, and once the feed of every other
+// forum those name in their categories: a forum's feed holds about a
+// month, the whole tracker's a few hours, so the first Fetch fills a store
+// from each forum the tracker is active in. The forums read are marked in
+// the feed.State, so a restart does not read them again.
 type Source struct {
 	Config
 	// HTTP sends the requests, each traced as a client span;
@@ -51,8 +49,6 @@ type Source struct {
 
 	once   sync.Once
 	traced *http.Client
-	mu     sync.Mutex
-	read   map[int]bool // forums read once for their categories
 }
 
 // pause is the wait between the feeds of forums read for their categories.
@@ -66,7 +62,7 @@ func (s *Source) Name() string { return Name }
 // one naming no v1 infohash, is left out. A forum of a category that is
 // not among Forums is read too, the first time it is named; its feed
 // failing is logged and not retried.
-func (s *Source) Fetch(ctx context.Context) ([]feed.Item, error) {
+func (s *Source) Fetch(ctx context.Context, state feed.State) ([]feed.Item, error) {
 	forums := s.Forums
 	if len(forums) == 0 {
 		forums = []int{0}
@@ -88,41 +84,53 @@ func (s *Source) Fetch(ctx context.Context) ([]feed.Item, error) {
 		}
 		add(got)
 	}
-	for _, f := range s.unread(forums, items) {
-		if err := sleep(ctx, pause); err != nil {
+	unread, err := s.unread(ctx, state, forums, items)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range unread {
+		if err := feed.Sleep(ctx, pause); err != nil {
 			return nil, err
 		}
 		got, err := s.fetch(ctx, f)
 		if err != nil {
 			s.log().WarnContext(ctx, "read forum feed", "forum", f, "err", err)
-			continue
+		} else {
+			add(got)
 		}
-		add(got)
+		if err := state.Mark(ctx, forumKey(f)); err != nil {
+			return nil, err
+		}
 	}
 	return items, nil
 }
 
 // unread returns the forums the items' categories name that are neither
-// among forums nor read before, marking them read.
-func (s *Source) unread(forums []int, items []feed.Item) []int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.read == nil {
-		s.read = map[int]bool{}
-	}
+// among forums nor marked read in state, each once.
+func (s *Source) unread(ctx context.Context, state feed.State, forums []int, items []feed.Item) ([]int, error) {
+	skip := map[int]bool{}
 	for _, f := range forums {
-		s.read[f] = true
+		skip[f] = true
 	}
 	var out []int
 	for _, it := range items {
 		f, ok := forum(it.Category)
-		if ok && !s.read[f] {
-			s.read[f] = true
+		if !ok || skip[f] {
+			continue
+		}
+		skip[f] = true
+		done, err := state.Done(ctx, forumKey(f))
+		if err != nil {
+			return nil, err
+		}
+		if !done {
 			out = append(out, f)
 		}
 	}
-	return out
+	return out, nil
 }
+
+func forumKey(f int) string { return "forum:" + strconv.Itoa(f) }
 
 // forum reads the forum number of a category term, "f-1457".
 func forum(category string) (int, bool) {
@@ -132,24 +140,6 @@ func forum(category string) (int, bool) {
 	}
 	n, err := strconv.Atoi(num)
 	return n, err == nil && n > 0
-}
-
-func (s *Source) log() *slog.Logger {
-	if s.Log != nil {
-		return s.Log
-	}
-	return slog.New(slog.DiscardHandler)
-}
-
-func sleep(ctx context.Context, d time.Duration) error {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }
 
 func (s *Source) fetch(ctx context.Context, forum int) ([]feed.Item, error) {
@@ -174,14 +164,15 @@ func (s *Source) fetch(ctx context.Context, forum int) ([]feed.Item, error) {
 }
 
 func (s *Source) client() *http.Client {
-	s.once.Do(func() {
-		c := s.HTTP
-		if c == nil {
-			c = http.DefaultClient
-		}
-		s.traced = telemetry.HTTPClient(c)
-	})
+	s.once.Do(func() { s.traced = feed.Client(s.HTTP) })
 	return s.traced
+}
+
+func (s *Source) log() *slog.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return slog.New(slog.DiscardHandler)
 }
 
 // atomFeed is what of the feed Parse reads.
@@ -222,7 +213,7 @@ func Parse(r io.Reader) ([]feed.Item, error) {
 			case "":
 				it.URL = l.Href
 			case "enclosure":
-				it.Hash, ok = infohash(l.Href)
+				it.Hash, ok = feed.Infohash(l.Href)
 			}
 		}
 		if !ok {
@@ -234,25 +225,6 @@ func Parse(r io.Reader) ([]feed.Item, error) {
 		items = append(items, it)
 	}
 	return items, nil
-}
-
-// infohash reads the v1 infohash of a magnet link.
-func infohash(magnet string) (store.Hash, bool) {
-	var h store.Hash
-	u, err := url.Parse(magnet)
-	if err != nil || u.Scheme != "magnet" {
-		return h, false
-	}
-	for _, xt := range u.Query()["xt"] {
-		hexed, ok := strings.CutPrefix(xt, "urn:btih:")
-		if !ok || len(hexed) != 2*len(h) {
-			continue
-		}
-		if _, err := hex.Decode(h[:], []byte(hexed)); err == nil {
-			return h, true
-		}
-	}
-	return h, false
 }
 
 // size reads the size in the title's last brackets, "[10.58 GB]", in bytes;
@@ -270,17 +242,5 @@ func size(title string) int64 {
 	if err != nil {
 		return 0
 	}
-	switch strings.ToUpper(unit) {
-	case "B":
-		return int64(n)
-	case "KB":
-		return int64(n * (1 << 10))
-	case "MB":
-		return int64(n * (1 << 20))
-	case "GB":
-		return int64(n * (1 << 30))
-	case "TB":
-		return int64(n * (1 << 40))
-	}
-	return 0
+	return feed.Bytes(n, unit)
 }

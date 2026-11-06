@@ -22,6 +22,8 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/feed"
+	"github.com/mikluko/sniffarr/internal/feed/nnmclub"
+	"github.com/mikluko/sniffarr/internal/feed/rutor"
 	"github.com/mikluko/sniffarr/internal/feed/rutracker"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/rules"
@@ -332,10 +334,10 @@ func loadFeeds(getenv func(string) string) (api.Feeds, error) {
 		name = strings.TrimSpace(name)
 		switch name {
 		case "":
-		case rutracker.Name:
+		case rutracker.Name, nnmclub.Name, rutor.Name:
 			f.Sources = append(f.Sources, name)
 		default:
-			return f, fmt.Errorf("SNIFFARR_FEEDS: %q is not a feed; %s is", name, rutracker.Name)
+			return f, fmt.Errorf("SNIFFARR_FEEDS: %q is not a feed; %s, %s and %s are", name, rutracker.Name, nnmclub.Name, rutor.Name)
 		}
 	}
 	if len(f.Sources) == 0 {
@@ -346,14 +348,40 @@ func loadFeeds(getenv func(string) string) (api.Feeds, error) {
 		return f, err
 	}
 	f.Rutracker.URL = or(getenv("SNIFFARR_RUTRACKER_FEED_URL"), rutracker.DefaultURL)
-	for _, s := range strings.Split(or(getenv("SNIFFARR_RUTRACKER_FORUMS"), "0"), ",") {
-		n, err := strconv.Atoi(strings.TrimSpace(s))
-		if err != nil || n < 0 {
-			return f, errors.New("SNIFFARR_RUTRACKER_FORUMS: want comma-separated forum numbers, 0 for the whole tracker")
-		}
-		f.Rutracker.Forums = append(f.Rutracker.Forums, n)
+	if f.Rutracker.Forums, err = numbers(getenv, "SNIFFARR_RUTRACKER_FORUMS", "0", "forum numbers, 0 for the whole tracker"); err != nil {
+		return f, err
+	}
+	f.Nnmclub.URL = or(getenv("SNIFFARR_NNMCLUB_URL"), nnmclub.DefaultURL)
+	if f.Nnmclub.Forums, err = numbers(getenv, "SNIFFARR_NNMCLUB_FORUMS", "", "forum numbers, none for every public forum"); err != nil {
+		return f, err
+	}
+	f.Rutor.URL = or(getenv("SNIFFARR_RUTOR_URL"), rutor.DefaultURL)
+	if f.Rutor.Categories, err = numbers(getenv, "SNIFFARR_RUTOR_CATEGORIES", "0", "category numbers, 0 for every one"); err != nil {
+		return f, err
+	}
+	if f.Rutor.Depth, err = positive(getenv, "SNIFFARR_RUTOR_DEPTH", rutor.DefaultDepth); err != nil {
+		return f, err
 	}
 	return f, nil
+}
+
+// numbers reads a comma-separated list of non-negative integers from the
+// variable, def when it is unset; empty is none. want names the list in
+// the error.
+func numbers(getenv func(string) string, name, def, want string) ([]int, error) {
+	var out []int
+	for _, s := range strings.Split(or(getenv(name), def), ",") {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("%s: want comma-separated %s", name, want)
+		}
+		out = append(out, n)
+	}
+	return out, nil
 }
 
 // arrHistory reads SNIFFARR_<app>_URL and SNIFFARR_<app>_API_KEY, which

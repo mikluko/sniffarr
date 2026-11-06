@@ -19,6 +19,8 @@ import (
 	"github.com/mikluko/sniffarr/internal/app/ui"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
+	"github.com/mikluko/sniffarr/internal/feed/nnmclub"
+	"github.com/mikluko/sniffarr/internal/feed/rutor"
 	"github.com/mikluko/sniffarr/internal/feed/rutracker"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/rules"
@@ -79,12 +81,19 @@ func TestLoadComponents(t *testing.T) {
 		{name: "no feeds", args: []string{"-api"}, env: apiEnv, want: func(t *testing.T, c config) {
 			require.Equal(t, api.Feeds{}, c.api.Feeds, "feeds are off unless named")
 		}},
-		{name: "feeds", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "rutracker", "SNIFFARR_RUTRACKER_FORUMS", "0, 1457", "SNIFFARR_FEED_INTERVAL", "30m"),
+		{name: "feeds", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "rutracker, nnmclub,rutor", "SNIFFARR_RUTRACKER_FORUMS", "0, 1457", "SNIFFARR_FEED_INTERVAL", "30m",
+			"SNIFFARR_NNMCLUB_FORUMS", "218", "SNIFFARR_RUTOR_DEPTH", "3"),
 			want: func(t *testing.T, c config) {
-				require.Equal(t, api.Feeds{Sources: []string{"rutracker"}, Interval: 30 * time.Minute,
-					Rutracker: rutracker.Config{URL: "https://feed.rutracker.cc", Forums: []int{0, 1457}}}, c.api.Feeds)
+				require.Equal(t, api.Feeds{Sources: []string{"rutracker", "nnmclub", "rutor"}, Interval: 30 * time.Minute,
+					Rutracker: rutracker.Config{URL: "https://feed.rutracker.cc", Forums: []int{0, 1457}},
+					Nnmclub:   nnmclub.Config{URL: "https://nnmclub.to/forum", Forums: []int{218}},
+					Rutor:     rutor.Config{URL: "https://rutor.info", Categories: []int{0}, Depth: 3}}, c.api.Feeds)
 			}},
-		{name: "a feed that is not one", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "nnmclub"), err: `SNIFFARR_FEEDS: "nnmclub" is not a feed; rutracker is`},
+		{name: "feed defaults", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "nnmclub"), want: func(t *testing.T, c config) {
+			require.Nil(t, c.api.Feeds.Nnmclub.Forums, "every public forum")
+			require.Equal(t, 10, c.api.Feeds.Rutor.Depth)
+		}},
+		{name: "a feed that is not one", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "kinozal"), err: `SNIFFARR_FEEDS: "kinozal" is not a feed; rutracker, nnmclub and rutor are`},
 		{name: "a forum that is not a number", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "rutracker", "SNIFFARR_RUTRACKER_FORUMS", "uhd"),
 			err: "SNIFFARR_RUTRACKER_FORUMS: want comma-separated forum numbers, 0 for the whole tracker"},
 		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_SEERR_URL", "https://seerr.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},

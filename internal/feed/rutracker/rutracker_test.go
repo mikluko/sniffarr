@@ -55,6 +55,12 @@ const atom = `<?xml version="1.0" encoding="utf-8"?>
 </feed>
 `
 
+// memState is a feed.State in memory.
+type memState map[string]bool
+
+func (m memState) Done(_ context.Context, key string) (bool, error) { return m[key], nil }
+func (m memState) Mark(_ context.Context, key string) error         { m[key] = true; return nil }
+
 func hashOf(t *testing.T, s string) store.Hash {
 	t.Helper()
 	var h store.Hash
@@ -109,18 +115,19 @@ func TestFetch(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
+	state := memState{}
 	src := &Source{Config: Config{URL: srv.URL + "/", Forums: []int{0, 1457}}}
 	require.Equal(t, "rutracker", src.Name())
-	items, err := src.Fetch(context.Background())
+	items, err := src.Fetch(context.Background(), state)
 	require.NoError(t, err)
 	require.Len(t, items, 2, "a release listed by both forums once")
 	require.Equal(t, int32(2), forums.Load())
 
-	_, err = (&Source{Config: Config{URL: srv.URL, Forums: []int{9}}}).Fetch(context.Background())
+	_, err = (&Source{Config: Config{URL: srv.URL, Forums: []int{9}}}).Fetch(context.Background(), state)
 	require.ErrorContains(t, err, "forum 9: ")
 	require.ErrorContains(t, err, "404")
 
-	items, err = (&Source{Config: Config{URL: srv.URL}}).Fetch(context.Background())
+	items, err = (&Source{Config: Config{URL: srv.URL}}).Fetch(context.Background(), state)
 	require.NoError(t, err)
 	require.Len(t, items, 2, "no forums reads forum 0")
 }
@@ -147,14 +154,19 @@ func TestFetchDiscovers(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
+	state := memState{}
 	src := &Source{Config: Config{URL: srv.URL}}
-	items, err := src.Fetch(context.Background())
+	items, err := src.Fetch(context.Background(), state)
 	require.NoError(t, err)
 	require.Len(t, items, 3, "forum 0's two and the one more forum 1457 holds; forum 77's 404 is skipped")
-	items, err = src.Fetch(context.Background())
+	items, err = src.Fetch(context.Background(), state)
 	require.NoError(t, err)
 	require.Len(t, items, 2, "the second round reads forum 0 alone")
+	items, err = (&Source{Config: Config{URL: srv.URL}}).Fetch(context.Background(), state)
+	require.NoError(t, err)
+	require.Len(t, items, 2, "a new Source with the same state, as after a restart, reads forum 0 alone too")
+	require.Equal(t, memState{"forum:77": true, "forum:1457": true}, state)
 	mu.Lock()
 	defer mu.Unlock()
-	require.Equal(t, []string{"/atom/f/0.atom", "/atom/f/77.atom", "/atom/f/1457.atom", "/atom/f/0.atom"}, paths)
+	require.Equal(t, []string{"/atom/f/0.atom", "/atom/f/77.atom", "/atom/f/1457.atom", "/atom/f/0.atom", "/atom/f/0.atom"}, paths)
 }

@@ -21,6 +21,8 @@ import (
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/feed"
+	"github.com/mikluko/sniffarr/internal/feed/nnmclub"
+	"github.com/mikluko/sniffarr/internal/feed/rutor"
 	"github.com/mikluko/sniffarr/internal/feed/rutracker"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/memconn"
@@ -91,8 +93,11 @@ type Feeds struct {
 	Sources []string
 	// Interval is how often each is read; feed.DefaultInterval when zero.
 	Interval time.Duration
-	// Rutracker is the rutracker source, read when Sources names it.
+	// Rutracker, Nnmclub and Rutor are the sources of those names, each
+	// read when Sources names it.
 	Rutracker rutracker.Config
+	Nnmclub   nnmclub.Config
+	Rutor     rutor.Config
 }
 
 // feedTimeout bounds one request to a feed.
@@ -273,8 +278,13 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 func feedSources(f Feeds, log *slog.Logger) []feed.Source {
 	var out []feed.Source
 	for _, name := range f.Sources {
-		if name == rutracker.Name {
+		switch name {
+		case rutracker.Name:
 			out = append(out, &rutracker.Source{Config: f.Rutracker, HTTP: &http.Client{Timeout: feedTimeout}, Log: log})
+		case nnmclub.Name:
+			out = append(out, &nnmclub.Source{Config: f.Nnmclub, HTTP: &http.Client{Timeout: feedTimeout}, Log: log})
+		case rutor.Name:
+			out = append(out, &rutor.Source{Config: f.Rutor, HTTP: &http.Client{Timeout: feedTimeout}, Log: log})
 		}
 	}
 	return out

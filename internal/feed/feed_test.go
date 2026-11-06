@@ -116,14 +116,39 @@ type fakeSource struct {
 	items []Item
 	err   error
 	calls int
+	state State // the last one Fetch was handed
 }
 
 func (s *fakeSource) Name() string { return "fake" }
-func (s *fakeSource) Fetch(context.Context) ([]Item, error) {
+func (s *fakeSource) Fetch(_ context.Context, state State) ([]Item, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls++
+	s.state = state
 	return s.items, s.err
+}
+
+// The state a source is handed is its own, kept in the store across
+// pollers and so across restarts.
+func TestState(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	src := &fakeSource{}
+	require.NoError(t, (&Poller{Source: src, Recorder: f.rec, Log: slog.New(slog.DiscardHandler)}).Round(ctx))
+	done, err := src.state.Done(ctx, "forum:1457")
+	require.NoError(t, err)
+	require.False(t, done)
+	require.NoError(t, src.state.Mark(ctx, "forum:1457"))
+	require.NoError(t, src.state.Mark(ctx, "forum:1457"), "marking twice is fine")
+
+	again := &fakeSource{}
+	require.NoError(t, (&Poller{Source: again, Recorder: f.rec, Log: slog.New(slog.DiscardHandler)}).Round(ctx))
+	done, err = again.state.Done(ctx, "forum:1457")
+	require.NoError(t, err)
+	require.True(t, done, "another poller of the same source sees the mark")
+	done, err = storeState{store: f.store, source: "other", now: f.rec.now}.Done(ctx, "forum:1457")
+	require.NoError(t, err)
+	require.False(t, done, "another source does not")
 }
 
 func (s *fakeSource) fail(err error) {
