@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A feed is read at start and then at every `SNIFFARR_FEED_INTERVAL` of wall-clock time plus a moment fixed by the feed's name, the same across restarts and never on the hour.
+- The `rutracker` feed reads, once per process, the feed of every forum the forums of `SNIFFARR_RUTRACKER_FORUMS` name in their categories, a month of each.
+
 ## [0.39.0] - 2026-11-06
 
 ### Changed

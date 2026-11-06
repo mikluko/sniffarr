@@ -7,6 +7,7 @@ package feed
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"sync"
 	"time"
@@ -138,42 +139,89 @@ const (
 	DefaultRetry    = 10 * time.Minute
 )
 
-// Poller records what Source lists, at start and every Interval. Zero
-// fields take the default named in their doc.
+// Poller records what Source lists, at start and then once an Interval, at
+// the moment of the interval Offset names. Zero fields take the default
+// named in their doc.
 type Poller struct {
 	Source   Source
 	Recorder *Recorder
 	// Interval is how often Run reads the feed; DefaultInterval. Retry is
-	// how long it waits after a read that failed; DefaultRetry.
+	// how long it waits after a read that failed, at most until the next
+	// round; DefaultRetry.
 	Interval time.Duration
 	Retry    time.Duration
 	Log      *slog.Logger
+	// Now is time.Now when nil.
+	Now func() time.Time
 }
 
-// Run reads the feed and records its items until ctx is done.
+// Run reads the feed at once, then at every Interval of wall-clock time
+// plus the source's Offset, until ctx is done. The rounds fall at the same
+// moments across restarts, and sources with different names at different
+// ones.
 func (p *Poller) Run(ctx context.Context) error {
-	interval, retry := p.Interval, p.Retry
-	if interval <= 0 {
-		interval = DefaultInterval
-	}
-	if retry <= 0 {
-		retry = DefaultRetry
-	}
 	for {
-		wait := interval
+		now := p.now()
+		next := p.Next(now)
 		if err := p.Round(ctx); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 			p.Log.ErrorContext(ctx, "read feed", "source", p.Source.Name(), "err", err)
-			wait = retry
+			if retry := p.now().Add(p.retry()); retry.Before(next) {
+				next = retry
+			}
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(wait):
+		case <-time.After(time.Until(next)):
 		}
 	}
+}
+
+// Next is the first moment after now that falls on an Interval of
+// wall-clock time plus Offset(Source.Name()).
+func (p *Poller) Next(now time.Time) time.Time {
+	interval := p.interval()
+	next := now.Truncate(interval).Add(Offset(p.Source.Name(), interval))
+	for !next.After(now) {
+		next = next.Add(interval)
+	}
+	return next
+}
+
+// Offset is the share of interval the rounds of the source name fall at:
+// fixed by the name, never zero for an interval over a second, so no source
+// reads on the hour and two sources read at different moments.
+func Offset(name string, interval time.Duration) time.Duration {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(name))
+	if interval <= time.Second {
+		return 0
+	}
+	return time.Second + time.Duration(h.Sum32())%(interval-time.Second)
+}
+
+func (p *Poller) interval() time.Duration {
+	if p.Interval > 0 {
+		return p.Interval
+	}
+	return DefaultInterval
+}
+
+func (p *Poller) retry() time.Duration {
+	if p.Retry > 0 {
+		return p.Retry
+	}
+	return DefaultRetry
+}
+
+func (p *Poller) now() time.Time {
+	if p.Now != nil {
+		return p.Now()
+	}
+	return time.Now()
 }
 
 // Round reads the feed once and records every item, logging how many were

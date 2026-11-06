@@ -261,7 +261,7 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 	}
 	if len(cfg.Feeds.Sources) > 0 {
 		frec := &feed.Recorder{Store: s, Queue: q, Log: log}
-		for _, src := range feedSources(cfg.Feeds) {
+		for _, src := range feedSources(cfg.Feeds, log) {
 			p := &feed.Poller{Source: src, Recorder: frec, Interval: cfg.Feeds.Interval, Log: log}
 			app.Go(lc, sd, log, src.Name()+" feed", p.Run)
 		}
@@ -270,11 +270,11 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 
 // feedSources are the sources Feeds names, each with its HTTP client; a
 // name it does not know was refused by the configuration.
-func feedSources(f Feeds) []feed.Source {
+func feedSources(f Feeds, log *slog.Logger) []feed.Source {
 	var out []feed.Source
 	for _, name := range f.Sources {
 		if name == rutracker.Name {
-			out = append(out, &rutracker.Source{Config: f.Rutracker, HTTP: &http.Client{Timeout: feedTimeout}})
+			out = append(out, &rutracker.Source{Config: f.Rutracker, HTTP: &http.Client{Timeout: feedTimeout}, Log: log})
 		}
 	}
 	return out

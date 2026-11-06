@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -122,4 +123,38 @@ func TestFetch(t *testing.T) {
 	items, err = (&Source{Config: Config{URL: srv.URL}}).Fetch(context.Background())
 	require.NoError(t, err)
 	require.Len(t, items, 2, "no forums reads forum 0")
+}
+
+// A forum the whole-tracker feed names in a category is read once per
+// Source for its month of releases; one whose feed fails is logged and not
+// tried again.
+func TestFetchDiscovers(t *testing.T) {
+	deep := strings.Replace(atom, "t=6932892", "t=1", 1)
+	deep = strings.Replace(deep, "925E3FCDD454CC67A734826D17C3DAED5E22FE3C", "0000000000000000000000000000000000000001", 1)
+	var paths []string
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		switch r.URL.Path {
+		case "/atom/f/0.atom":
+			_, _ = w.Write([]byte(strings.Replace(atom, `term="f-1457"`, `term="f-77"`, 1)))
+		case "/atom/f/1457.atom":
+			_, _ = w.Write([]byte(deep))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	src := &Source{Config: Config{URL: srv.URL}}
+	items, err := src.Fetch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 3, "forum 0's two and the one more forum 1457 holds; forum 77's 404 is skipped")
+	items, err = src.Fetch(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 2, "the second round reads forum 0 alone")
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []string{"/atom/f/0.atom", "/atom/f/77.atom", "/atom/f/1457.atom", "/atom/f/0.atom"}, paths)
 }

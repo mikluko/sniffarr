@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -36,23 +37,35 @@ type Config struct {
 	Forums []int
 }
 
-// Source reads the feeds of Config.Forums.
+// Source reads the feeds of Config.Forums, and once per Source the feed of
+// every other forum those name in their categories: a forum's feed holds
+// about a month, the whole tracker's a few hours, so the first Fetch of a
+// process fills a store from each forum the tracker is active in.
 type Source struct {
 	Config
 	// HTTP sends the requests, each traced as a client span;
 	// http.DefaultClient. It is read on the first request.
 	HTTP *http.Client
+	// Log discards everything when nil.
+	Log *slog.Logger
 
 	once   sync.Once
 	traced *http.Client
+	mu     sync.Mutex
+	read   map[int]bool // forums read once for their categories
 }
+
+// pause is the wait between the feeds of forums read for their categories.
+const pause = time.Second
 
 // Name returns Name.
 func (s *Source) Name() string { return Name }
 
 // Fetch reads every forum's feed and returns their releases, a release
 // listed by several forums once. An entry without a magnet link, or with
-// one naming no v1 infohash, is left out.
+// one naming no v1 infohash, is left out. A forum of a category that is
+// not among Forums is read too, the first time it is named; its feed
+// failing is logged and not retried.
 func (s *Source) Fetch(ctx context.Context) ([]feed.Item, error) {
 	forums := s.Forums
 	if len(forums) == 0 {
@@ -60,11 +73,7 @@ func (s *Source) Fetch(ctx context.Context) ([]feed.Item, error) {
 	}
 	var items []feed.Item
 	seen := map[store.Hash]bool{}
-	for _, f := range forums {
-		got, err := s.fetch(ctx, f)
-		if err != nil {
-			return nil, fmt.Errorf("forum %d: %w", f, err)
-		}
+	add := func(got []feed.Item) {
 		for _, it := range got {
 			if !seen[it.Hash] {
 				seen[it.Hash] = true
@@ -72,7 +81,75 @@ func (s *Source) Fetch(ctx context.Context) ([]feed.Item, error) {
 			}
 		}
 	}
+	for _, f := range forums {
+		got, err := s.fetch(ctx, f)
+		if err != nil {
+			return nil, fmt.Errorf("forum %d: %w", f, err)
+		}
+		add(got)
+	}
+	for _, f := range s.unread(forums, items) {
+		if err := sleep(ctx, pause); err != nil {
+			return nil, err
+		}
+		got, err := s.fetch(ctx, f)
+		if err != nil {
+			s.log().WarnContext(ctx, "read forum feed", "forum", f, "err", err)
+			continue
+		}
+		add(got)
+	}
 	return items, nil
+}
+
+// unread returns the forums the items' categories name that are neither
+// among forums nor read before, marking them read.
+func (s *Source) unread(forums []int, items []feed.Item) []int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.read == nil {
+		s.read = map[int]bool{}
+	}
+	for _, f := range forums {
+		s.read[f] = true
+	}
+	var out []int
+	for _, it := range items {
+		f, ok := forum(it.Category)
+		if ok && !s.read[f] {
+			s.read[f] = true
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// forum reads the forum number of a category term, "f-1457".
+func forum(category string) (int, bool) {
+	num, ok := strings.CutPrefix(category, "f-")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(num)
+	return n, err == nil && n > 0
+}
+
+func (s *Source) log() *slog.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return slog.New(slog.DiscardHandler)
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (s *Source) fetch(ctx context.Context, forum int) ([]feed.Item, error) {

@@ -160,3 +160,20 @@ func TestPoller(t *testing.T) {
 	cancel()
 	require.ErrorIs(t, <-done, context.Canceled)
 }
+
+// Rounds fall on wall-clock intervals plus an offset the source's name
+// fixes, so a restart does not move them and no source reads on the hour.
+func TestNext(t *testing.T) {
+	p := &Poller{Source: &fakeSource{}, Interval: time.Hour}
+	off := Offset("fake", time.Hour)
+	require.Greater(t, off, time.Duration(0))
+	require.Less(t, off, time.Hour)
+	require.Equal(t, off, Offset("fake", time.Hour), "fixed by the name")
+	require.NotEqual(t, off, Offset("rutracker", time.Hour))
+
+	at := time.Date(2026, 11, 6, 14, 0, 0, 0, time.UTC)
+	require.Equal(t, at.Add(off), p.Next(at), "the first round of the hour is still ahead")
+	require.Equal(t, at.Add(time.Hour+off), p.Next(at.Add(off)), "a round at its moment is the next hour's")
+	require.Equal(t, at.Add(time.Hour+off), p.Next(at.Add(off+time.Minute)), "past it, the next hour's")
+	require.Equal(t, time.Duration(0), Offset("fake", time.Second), "nothing to spread over")
+}
