@@ -42,17 +42,17 @@ func TestRenderAll(t *testing.T) {
 		{"top-p50", "top", "/top?voice=p50", "top", func(b Base) any { return SampleTopFiltered(b, "movie", "", "p50", false) }},
 		{"top-multilang", "top", "/top?vl=uk", "", func(b Base) any { multi(&b); return SampleTopFiltered(b, "series", "uk", "any", false) }},
 		{"top-nolangs", "top", "/top", "", func(b Base) any { b.VoiceLangs = nil; return SampleTop(b, "movie", false) }},
-		{"work", "work", "/w/" + SampleSpiderID, "", func(b Base) any { return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
-		{"work-explicit", "work", "/w/" + SampleSpiderID + "?voice=explicit", "releases", func(b Base) any {
+		{"work", "work", "/movie/900001", "", func(b Base) any { return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
+		{"work-explicit", "work", "/movie/900001" + "?voice=explicit", "releases", func(b Base) any {
 			return SampleWork(b, SampleSpiderID, ReleaseFilters{Voice: "explicit"})
 		}},
-		{"work-empty", "work", "/w/" + SampleSpiderID + "?quality=sd&source=remux", "releases", func(b Base) any {
+		{"work-empty", "work", "/movie/900001" + "?quality=sd&source=remux", "releases", func(b Base) any {
 			return SampleWork(b, SampleSpiderID, ReleaseFilters{Quality: "sd", Source: "remux"})
 		}},
-		{"work-series", "work", "/w/" + SampleFalloutID, "", func(b Base) any { return SampleWork(b, SampleFalloutID, ReleaseFilters{Season: "2"}) }},
-		{"work-series-multi", "work", "/w/" + SampleFalloutID, "", func(b Base) any { multi(&b); return SampleWork(b, SampleFalloutID, ReleaseFilters{}) }},
-		{"work-tmdbonly", "work", "/w/" + SampleTMDBOnlyID, "", func(b Base) any { return SampleWork(b, SampleTMDBOnlyID, ReleaseFilters{}) }},
-		{"work-nolangs", "work", "/w/" + SampleSpiderID, "", func(b Base) any { b.VoiceLangs = nil; return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
+		{"work-series", "work", "/tv/106379", "", func(b Base) any { return SampleWork(b, SampleFalloutID, ReleaseFilters{Season: "2"}) }},
+		{"work-series-multi", "work", "/tv/106379", "", func(b Base) any { multi(&b); return SampleWork(b, SampleFalloutID, ReleaseFilters{}) }},
+		{"work-tmdbonly", "work", "/movie/1930", "", func(b Base) any { return SampleWork(b, SampleTMDBOnlyID, ReleaseFilters{}) }},
+		{"work-nolangs", "work", "/movie/900001", "", func(b Base) any { b.VoiceLangs = nil; return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
 		{"torrent-poster", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "poster") }},
 		{"torrent-noposter", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "noposter") }},
 		{"torrent-unmatched", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "unmatched") }},
@@ -108,7 +108,7 @@ func TestRenderNoLanguages(t *testing.T) {
 	}{
 		{"torrents", "torrents", "/torrents", func(b Base) any { return SampleTorrents(b, "", Filters{}) }},
 		{"top", "top", "/top", func(b Base) any { return SampleTop(b, "movie", false) }},
-		{"work", "work", "/w/" + SampleSpiderID, func(b Base) any { return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
+		{"work", "work", "/movie/900001", func(b Base) any { return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
 		{"torrent", "torrent", "/t/x", func(b Base) any { return SampleTorrent(b, false, "poster") }},
 		{"data", "data", "/", func(b Base) any {
 			p := SampleData(b)
@@ -155,6 +155,8 @@ func TestFormat(t *testing.T) {
 		{DefaultVoiceLang(nil, "ru"), ""},
 		{WorkID("series", 1399), "tv1399"},
 		{WorkID("movie", 318846), "m318846"},
+		{WorkPath("series", 1399), "/tv/1399"},
+		{WorkPath("movie", 318846), "/movie/318846"},
 		{Base{Seerr: "https://seerr.example.com/"}.SeerrURL(&TMDBWork{State: TMDBMatched, Type: "tv", ID: 1399}), "https://seerr.example.com/tv/1399"},
 		{Base{Seerr: "https://seerr.example.com"}.SeerrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), "https://seerr.example.com/movie/348"},
 		{Base{}.SeerrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), ""},

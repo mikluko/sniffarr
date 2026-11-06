@@ -43,8 +43,8 @@
 {{$r := .Releases}}{{$f := .Releases.Filters}}
 <section id="releases" class="rels">
   <h2>{{.T "work.releases"}} <span class="mu">{{$r.Matched}} {{.T "results.of"}} {{$r.Total}}</span></h2>
-  <form class="filters" action="/w/{{$r.WorkID}}" method="get"
-        hx-get="/w/{{$r.WorkID}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true"
+  <form class="filters" action="{{$r.Path}}" method="get"
+        hx-get="{{$r.Path}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true"
         hx-trigger="change, input changed delay:500ms from:input[type=text], submit">
     <label>{{.T "rel.quality"}}
       <select name="quality">
@@ -83,7 +83,7 @@
       <select name="sort">
         {{range relSorts}}<option value="{{.}}"{{if eq . $f.Sort}} selected{{end}}>{{$.T (concat "relsort." .)}}</option>{{end}}
       </select></label>
-    <a href="/w/{{$r.WorkID}}" class="reset">{{.T "f.reset"}}</a>
+    <a href="{{$r.Path}}" class="reset">{{.T "f.reset"}}</a>
   </form>
   {{if $r.Rows}}
   <div class="scroll">
@@ -117,7 +117,7 @@
     {{if $r.NextURL}}<a href="{{$r.NextURL}}" hx-get="{{$r.NextURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "pager.next"}} →</a>{{end}}
   </nav>
   {{else}}
-  <p>{{.T "work.nomatch"}} <a href="/w/{{$r.WorkID}}">{{.T "f.reset"}}</a></p>
+  <p>{{.T "work.nomatch"}} <a href="{{$r.Path}}">{{.T "f.reset"}}</a></p>
   {{end}}
 </section>
 {{end}}

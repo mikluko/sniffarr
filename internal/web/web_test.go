@@ -255,10 +255,10 @@ func TestTorrents(t *testing.T) {
 	}
 	require.NotContains(t, body, "Hidden.Thing", "adult releases are hidden")
 	require.Less(t, strings.Index(body, alien), strings.Index(body, severance), "most peers first")
-	require.Contains(t, body, `<a href="/w/m348" class="thl" title="Alien"><img class="th" src="https://image.tmdb.org/t/p/w92/p.jpg"`, "a matched row's poster leads to its work")
-	require.Contains(t, body, `<a href="/w/m8195" class="thl" title="Ronin"><span class="th th-ph" aria-label="Ronin">—</span></a>`, "matched without a poster")
+	require.Contains(t, body, `<a href="/movie/348" class="thl" title="Alien"><img class="th" src="https://image.tmdb.org/t/p/w92/p.jpg"`, "a matched row's poster leads to its work")
+	require.Contains(t, body, `<a href="/movie/8195" class="thl" title="Ronin"><span class="th th-ph" aria-label="Ronin">—</span></a>`, "matched without a poster")
 	require.Contains(t, body, `<span class="th th-ph" title="not matched" aria-label="not matched">?</span>`, "unmatched")
-	require.Contains(t, body, `<a class="orig mu" href="/w/m348">Alien · 1979</a>`)
+	require.Contains(t, body, `<a class="orig mu" href="/movie/348">Alien · 1979</a>`)
 	require.Contains(t, body, "<b>Rus</b>", "the mark")
 	require.Contains(t, body, `<td>1080p</td>`, "the quality")
 	require.Contains(t, body, `<option value="other">other</option>`)
@@ -307,31 +307,31 @@ func TestTop(t *testing.T) {
 	body := page(t, get(t, h, "/top", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, `aria-current="page">movies</a>`, "movies without a kind")
-	require.Contains(t, body, `<a href="/w/m348">Alien</a> <span class="mu">1979</span>`, "a row leads to its work")
+	require.Contains(t, body, `<a href="/movie/348">Alien</a> <span class="mu">1979</span>`, "a row leads to its work")
 	require.Contains(t, body, `<img class="th" src="https://image.tmdb.org/t/p/w92/p.jpg" width="28" height="42"`, "its poster")
 	require.Contains(t, body, `<td class="r mu">1</td>`, "its place")
 	require.Contains(t, body, `<td class="r dl">—</td>`, "no peers the week before")
 	require.Contains(t, body, `<td class="r rl" data-l="releases">2</td>`, "both title keys")
 	require.Contains(t, body, "explicit in 1 of 2 <span class=\"mu\">(Rus)</span>", "the audio summary")
-	require.Less(t, strings.Index(body, "/w/m348"), strings.Index(body, "/w/m8195"), "more peers first")
+	require.Less(t, strings.Index(body, "/movie/348"), strings.Index(body, "/movie/8195"), "more peers first")
 	require.NotContains(t, body, "Severance")
 	require.NotContains(t, body, narcissist, "an unmatched release is in no top")
 	require.Contains(t, body, ">show all 100</a>", "the first 25 of 100")
 	require.Contains(t, body, "Oct 20 12:00", "computed at now")
-	require.Contains(t, page(t, get(t, h, "/top?lang=ru", "")), `<a href="/w/m348">Чужой</a>`, "the title in the page's language")
+	require.Contains(t, page(t, get(t, h, "/top?lang=ru", "")), `<a href="/movie/348">Чужой</a>`, "the title in the page's language")
 
 	body = page(t, get(t, h, "/top?kind=series&win=24h&all=1", ""))
 	require.Contains(t, body, `aria-current="page">series</a>`)
-	require.Contains(t, body, `<a href="/w/tv95396">Severance</a>`)
+	require.Contains(t, body, `<a href="/tv/95396">Severance</a>`)
 	require.Contains(t, body, `<td class="r dl">0</td>`, "first the day before too, with more peers then")
 	require.Contains(t, body, "web", "its source")
 	require.NotContains(t, body, ">show all 100</a>", "every work is listed")
 
 	body = page(t, get(t, h, "/top?voice=explicit", ""))
-	require.Contains(t, body, "/w/m348")
-	require.NotContains(t, body, "/w/m8195", "no marker on Ronin")
+	require.Contains(t, body, "/movie/348")
+	require.NotContains(t, body, "/movie/8195", "no marker on Ronin")
 	require.Contains(t, body, "only peers of releases whose name carries an explicit marker", "the filter's hint")
-	require.Contains(t, page(t, get(t, h, "/top?voice=p50", "")), "/w/m348")
+	require.Contains(t, page(t, get(t, h, "/top?voice=p50", "")), "/movie/348")
 
 	frag := fragment(t, get(t, h, "/top?kind=series", "top"), "top")
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<section id="top"`))
@@ -346,14 +346,18 @@ func TestTop(t *testing.T) {
 	} {
 		require.Contains(t, page(t, get(t, h, tt.path, "")), tt.want, "%s falls back to the default", tt.path)
 	}
-	w := get(t, h, "/top/w/eTphbGllbiAxOTc5?open=1", "")
+	w := get(t, h, "/top/w/m348?open=1", "")
 	require.Equal(t, http.StatusMovedPermanently, w.Code, "the old work rows are gone")
-	require.Equal(t, "/w/eTphbGllbiAxOTc5", w.Header().Get("Location"))
+	require.Equal(t, "/movie/348", w.Header().Get("Location"))
+	w = get(t, h, "/w/tv95396", "")
+	require.Equal(t, http.StatusMovedPermanently, w.Code, "the old title pages are gone")
+	require.Equal(t, "/tv/95396", w.Header().Get("Location"))
+	require.Equal(t, http.StatusNotFound, get(t, h, "/w/eTphbGllbiAxOTc5", "").Code, "an id of no version")
 }
 
 func TestWork(t *testing.T) {
 	h := handler(t, nil)
-	body := page(t, get(t, h, "/w/m348", ""))
+	body := page(t, get(t, h, "/movie/348", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
 	require.Contains(t, body, `<a href="/top?kind=movie">← top movies</a>`)
 	require.Contains(t, body, `<img class="tm-poster" src="https://image.tmdb.org/t/p/w342/p.jpg" width="150" height="225"`)
@@ -371,46 +375,46 @@ func TestWork(t *testing.T) {
 	require.Contains(t, body, `<a href="/t/`+hexOf(2)+`">`+chuzhoy+`</a>`, "the release under the Russian title")
 	require.Less(t, strings.Index(body, alien), strings.Index(body, chuzhoy), "most peers first")
 	require.NotContains(t, body, `name="season"`, "a movie has no seasons")
-	ru := page(t, get(t, h, "/w/m348?lang=ru", ""))
+	ru := page(t, get(t, h, "/movie/348?lang=ru", ""))
 	require.Contains(t, ru, `<div class="tm-orig">Alien</div>`, "the original title when it differs")
 	require.Contains(t, ru, `src="https://image.tmdb.org/t/p/w342/r.jpg"`, "the poster of the page's language")
 
-	frag := fragment(t, get(t, h, "/w/m348?vl=ru&voice=explicit", "releases"), "releases")
+	frag := fragment(t, get(t, h, "/movie/348?vl=ru&voice=explicit", "releases"), "releases")
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<section id="releases"`))
 	require.Contains(t, frag, alien)
 	require.NotContains(t, frag, chuzhoy, "no marker")
 	require.Contains(t, frag, `<option value="explicit" selected>`)
-	frag = fragment(t, get(t, h, "/w/m348?quality=sd&source=remux", "releases"), "releases")
+	frag = fragment(t, get(t, h, "/movie/348?quality=sd&source=remux", "releases"), "releases")
 	require.Contains(t, frag, "No releases match the filters.")
-	frag = fragment(t, get(t, h, "/w/m348?min=10&max=60", "releases"), "releases")
+	frag = fragment(t, get(t, h, "/movie/348?min=10&max=60", "releases"), "releases")
 	require.Contains(t, frag, alien)
 	require.NotContains(t, frag, chuzhoy, "8 GB is under the bound")
-	frag = fragment(t, get(t, h, "/w/m348?sort=size&o=1", "releases"), "releases")
+	frag = fragment(t, get(t, h, "/movie/348?sort=size&o=1", "releases"), "releases")
 	require.Contains(t, frag, chuzhoy, "the second largest")
-	require.Contains(t, frag, `<a href="/w/m348?sort=size" hx-get="/w/m348?sort=size"`, "the previous page")
+	require.Contains(t, frag, `<a href="/movie/348?sort=size" hx-get="/movie/348?sort=size"`, "the previous page")
 
-	body = page(t, get(t, h, "/w/tv95396", ""))
+	body = page(t, get(t, h, "/tv/95396", ""))
 	require.Contains(t, body, "series · 2022 · returning · 2 seasons")
 	require.Contains(t, body, `<select name="season">`)
 	require.Contains(t, body, `<option value="1">1</option><option value="2">2</option>`)
 	require.Contains(t, body, `<td class="mono">S02E05</td>`)
 	require.Contains(t, body, `<td class="mono">S01</td>`, "a season pack")
-	frag = fragment(t, get(t, h, "/w/tv95396?season=2&episode=5", "releases"), "releases")
+	frag = fragment(t, get(t, h, "/tv/95396?season=2&episode=5", "releases"), "releases")
 	require.Contains(t, frag, severance)
 	require.NotContains(t, frag, season1)
 	require.Contains(t, frag, `<option value="2" selected>`)
 
-	body = page(t, get(t, h, "/w/m8195", ""))
+	body = page(t, get(t, h, "/movie/8195", ""))
 	require.Contains(t, body, `<div class="tm-poster tm-none" aria-hidden="true">no poster</div>`)
 
-	require.Equal(t, http.StatusNotFound, get(t, h, "/w/m1", "").Code)
-	require.Equal(t, http.StatusNotFound, get(t, h, "/w/348", "").Code, "not an id")
-	require.Equal(t, http.StatusNotFound, get(t, h, "/w/tv348", "").Code, "a series is not the movie of its number")
+	require.Equal(t, http.StatusNotFound, get(t, h, "/movie/1", "").Code)
+	require.Equal(t, http.StatusNotFound, get(t, h, "/movie/m348", "").Code, "not a number")
+	require.Equal(t, http.StatusNotFound, get(t, h, "/tv/348", "").Code, "a series is not the movie of its number")
 
 	seerr := handlerWith(t, "ru", Config{SeerrURL: "https://seerr.example.com/"})
-	require.Contains(t, page(t, get(t, seerr, "/w/m348", "")), `<a href="https://www.imdb.com/title/tt0078748/" rel="noreferrer" target="_blank">IMDb</a> · <a href="https://seerr.example.com/movie/348" rel="noreferrer" target="_blank">Seerr</a>`,
+	require.Contains(t, page(t, get(t, seerr, "/movie/348", "")), `<a href="https://www.imdb.com/title/tt0078748/" rel="noreferrer" target="_blank">IMDb</a> · <a href="https://seerr.example.com/movie/348" rel="noreferrer" target="_blank">Seerr</a>`,
 		"a Seerr link after the others")
-	require.Contains(t, page(t, get(t, seerr, "/w/tv95396", "")), `<a href="https://seerr.example.com/tv/95396" rel="noreferrer" target="_blank">Seerr</a>`, "a series under /tv")
+	require.Contains(t, page(t, get(t, seerr, "/tv/95396", "")), `<a href="https://seerr.example.com/tv/95396" rel="noreferrer" target="_blank">Seerr</a>`, "a series under /tv")
 	require.Contains(t, page(t, get(t, seerr, "/t/"+hexOf(1), "")), `<a href="https://seerr.example.com/movie/348" rel="noreferrer" target="_blank">Seerr</a>`, "the release card too")
 }
 
@@ -424,10 +428,10 @@ func TestTorrent(t *testing.T) {
 	require.Regexp(t, `<th>peers</th><td>\d+ in 7 days <span class="mu">· \d+ in 24 h · \d+ in 30 days</span></td>`, body)
 	require.Contains(t, body, `<section class="tm tm-matched" aria-label="TMDB">`, "the match")
 	require.Contains(t, body, `<img class="tm-poster" src="https://image.tmdb.org/t/p/w342/p.jpg" width="150" height="225"`)
-	require.Contains(t, body, `<a class="tm-stretch" href="/w/m348">Alien</a> <span class="mu">1979</span>`, "the title leads to its work")
+	require.Contains(t, body, `<a class="tm-stretch" href="/movie/348">Alien</a> <span class="mu">1979</span>`, "the title leads to its work")
 	require.Contains(t, body, `№1 among movies · 2 releases, this one by peers #1`)
 	require.Contains(t, body, `picked by the classifier among candidates · confidence 0.80 · Oct 20`, "how it was matched")
-	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1), "", "Referer", "http://example.com/data")), `<a href="/w/m348">← back to results</a>`,
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1), "", "Referer", "http://example.com/data")), `<a href="/movie/348">← back to results</a>`,
 		"from elsewhere, back to its work")
 
 	require.Contains(t, body, "Rules fired")
@@ -587,7 +591,7 @@ func TestLanguage(t *testing.T) {
 
 func TestNoLanguages(t *testing.T) {
 	h := handlerLangs(t, nil, "")
-	for _, path := range []string{"/torrents", "/torrents?vl=ru&voice=explicit", "/top", "/top?voice=explicit", "/w/m348", "/w/m348?voice=explicit", "/t/" + hexOf(1), "/"} {
+	for _, path := range []string{"/torrents", "/torrents?vl=ru&voice=explicit", "/top", "/top?voice=explicit", "/movie/348", "/movie/348?voice=explicit", "/t/" + hexOf(1), "/"} {
 		body := page(t, get(t, h, path, ""))
 		forbidden := []string{`name="vl"`, `name="voice"`, "Languages", "Dub by language", "<b>Rus</b>"}
 		if !strings.Contains(path, "voice=") {
@@ -598,7 +602,7 @@ func TestNoLanguages(t *testing.T) {
 		}
 	}
 	require.Contains(t, page(t, get(t, h, "/torrents?vl=ru&voice=explicit", "")), severance, "a voice filter in the query narrows nothing")
-	require.Contains(t, page(t, get(t, h, "/w/m348?voice=explicit", "")), chuzhoy)
-	require.Contains(t, page(t, get(t, h, "/top", "")), `<a href="/w/m348">Alien</a>`)
+	require.Contains(t, page(t, get(t, h, "/movie/348?voice=explicit", "")), chuzhoy)
+	require.Contains(t, page(t, get(t, h, "/top", "")), `<a href="/movie/348">Alien</a>`)
 	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1), "")), "magnet:?xt=urn:btih:"+hexOf(1))
 }

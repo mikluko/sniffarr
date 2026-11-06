@@ -99,12 +99,12 @@ func New(cfg Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", r.Static())
 	mux.HandleFunc("GET /{$}", s.data)
-	mux.HandleFunc("GET /w/{id}", s.work)
+	mux.HandleFunc("GET /movie/{id}", s.work("movie"))
+	mux.HandleFunc("GET /tv/{id}", s.work("series"))
 	mux.HandleFunc("GET /torrents", s.torrents)
 	mux.HandleFunc("GET /top", s.top)
-	mux.HandleFunc("GET /top/w/{id}", func(w http.ResponseWriter, req *http.Request) {
-		http.Redirect(w, req, "/w/"+url.PathEscape(req.PathValue("id")), http.StatusMovedPermanently)
-	})
+	mux.HandleFunc("GET /w/{id}", redirectWork)
+	mux.HandleFunc("GET /top/w/{id}", redirectWork)
 	mux.HandleFunc("GET /t/{infohash}", s.torrent)
 	return mux, nil
 }
@@ -356,14 +356,32 @@ func pager(offset, shown int, total int64, at func(int) string) (prev, next stri
 	return prev, next
 }
 
-// work serves GET /w/{id}: a movie or series with its releases under the
-// filters of the query.
-func (s *server) work(w http.ResponseWriter, req *http.Request) {
-	id := req.PathValue("id")
-	if _, _, ok := ui.ParseWorkID(id); !ok {
+// redirectWork sends GET /w/{id} and GET /top/w/{id}, the title pages of
+// earlier versions, to the page of the title, or 404 for anything else.
+func redirectWork(w http.ResponseWriter, req *http.Request) {
+	kind, tmdbID, ok := ui.ParseWorkID(req.PathValue("id"))
+	if !ok {
 		http.NotFound(w, req)
 		return
 	}
+	http.Redirect(w, req, ui.WorkPath(kind, tmdbID), http.StatusMovedPermanently)
+}
+
+// work serves GET /movie/{id} and GET /tv/{id}: a movie or series, by its
+// TMDB id, with its releases under the filters of the query.
+func (s *server) work(kind string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		tmdbID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
+		if err != nil || tmdbID <= 0 {
+			http.NotFound(w, req)
+			return
+		}
+		s.workPage(w, req, ui.WorkID(kind, tmdbID), ui.WorkPath(kind, tmdbID))
+	}
+}
+
+// workPage renders the title id, the API's, whose page is at path.
+func (s *server) workPage(w http.ResponseWriter, req *http.Request, id, path string) {
 	qs := req.URL.Query()
 	lang := s.lang(w, req)
 	title, err := s.cfg.Browse.Title(req.Context(), connect.NewRequest(&sniffarrv1.TitleRequest{Id: id, Lang: lang}))
@@ -406,13 +424,13 @@ func (s *server) work(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	m := res.Msg
-	tbl := ui.ReleaseTable{WorkID: id, Kind: sum.Kind, Filters: f, Total: int(m.GetTotal()), Matched: int(m.GetMatched()), Offset: o, Shown: len(m.GetReleases())}
+	tbl := ui.ReleaseTable{Path: path, Kind: sum.Kind, Filters: f, Total: int(m.GetTotal()), Matched: int(m.GetMatched()), Offset: o, Shown: len(m.GetReleases())}
 	for _, n := range m.GetSeasons() {
 		tbl.Seasons = append(tbl.Seasons, int(n))
 	}
 	vdef := ui.DefaultVoiceLang(s.tags, lang)
 	tbl.PrevURL, tbl.NextURL = pager(o, tbl.Shown, m.GetMatched(), func(o int) string {
-		return link("/w/"+url.PathEscape(id), o, "quality", f.Quality, "", "source", f.Source, "", "min", f.MinGB, "", "max", f.MaxGB, "",
+		return link(path, o, "quality", f.Quality, "", "source", f.Source, "", "min", f.MinGB, "", "max", f.MaxGB, "",
 			"vl", f.VoiceLang, vdef, "voice", f.Voice, "any", "season", f.Season, "", "episode", f.Episode, "", "sort", f.Sort, "peers")
 	})
 	for _, r := range m.GetReleases() {
@@ -615,7 +633,7 @@ func backURL(req *http.Request) string {
 	if err != nil || (u.Host != "" && u.Host != req.Host) {
 		return ""
 	}
-	if u.Path == "/torrents" || u.Path == "/top" || strings.HasPrefix(u.Path, "/w/") {
+	if u.Path == "/torrents" || u.Path == "/top" || strings.HasPrefix(u.Path, "/movie/") || strings.HasPrefix(u.Path, "/tv/") {
 		return u.RequestURI()
 	}
 	return ""

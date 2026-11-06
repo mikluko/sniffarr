@@ -155,9 +155,9 @@ func SampleWork(b Base, id string, f ReleaseFilters) WorkPage {
 	}
 	sort.Ints(seasons)
 	rows := filterReleases(all, f)
-	t := ReleaseTable{WorkID: w.ID, Kind: s.kind, Filters: f, Seasons: seasons, Total: len(all), Matched: len(rows)}
+	t := ReleaseTable{Path: w.Path(), Kind: s.kind, Filters: f, Seasons: seasons, Total: len(all), Matched: len(rows)}
 	if len(rows) > 50 {
-		t.NextURL = "/w/" + w.ID + "?o=50"
+		t.NextURL = w.Path() + "?o=50"
 		rows = rows[:50]
 	}
 	t.Rows, t.Shown = rows, len(rows)

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - With `SNIFFARR_SEERR_URL` set, the title page and the release card link a matched title in that Seerr.
 
+### Changed
+
+- A title's page is `/movie/<tmdb id>` or `/tv/<tmdb id>`, the paths Seerr gives the same titles; `/w/<id>` and `/top/w/<id>` redirect there.
+
 ## [0.37.0] - 2026-11-05
 
 ### Changed

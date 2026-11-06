@@ -131,8 +131,17 @@ func ParseWorkID(id string) (kind string, tmdbID int64, ok bool) {
 	return kind, n, true
 }
 
-// WorkPath is the title page of a summary.
-func (w WorkSummary) Path() string { return "/w/" + w.ID }
+// WorkPath is the title page of a TMDB id: "/movie/318846", "/tv/1399", the
+// paths Seerr gives the same titles.
+func WorkPath(kind string, tmdbID int64) string {
+	if kind == "series" {
+		return "/tv/" + strconv.FormatInt(tmdbID, 10)
+	}
+	return "/movie/" + strconv.FormatInt(tmdbID, 10)
+}
+
+// Path is the title page of a summary.
+func (w WorkSummary) Path() string { return WorkPath(w.Kind, w.TMDB.ID) }
 
 // Facts is the one-line description under a title: "фильм · 2015 · 2 ч 10 мин",
 // "сериал · 2011 · завершён · 8 сез.".

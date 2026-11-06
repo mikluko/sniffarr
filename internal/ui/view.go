@@ -178,7 +178,7 @@ type Work struct {
 	FirstSeen   time.Time   // earliest release
 }
 
-// ---------- title page (GET /w/{id}) ----------
+// ---------- title page (GET /movie/{id}, GET /tv/{id}) ----------
 
 // WorkPage is the page of one movie or series: TMDB on top, our releases below.
 type WorkPage struct {
@@ -193,7 +193,7 @@ type WorkPage struct {
 // ReleaseTable is the filterable table of a title's releases; it is also the
 // htmx fragment "releases".
 type ReleaseTable struct {
-	WorkID  string
+	Path    string // the title page, see WorkPath
 	Kind    string // "series" shows season and episode
 	Filters ReleaseFilters
 	Seasons []int // seasons present among releases, for the season filter
