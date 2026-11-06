@@ -1,0 +1,22 @@
+[Unit]
+Description=sniffarr, a private classification database of DHT torrents
+Documentation=https://sarak.sh/arr/sniffarr
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# SNIFFARR_FLAGS and the keys come from /etc/default/sniffarr.
+EnvironmentFile=/etc/default/sniffarr
+Environment=SNIFFARR_DB=/var/lib/sniffarr/sniffarr.db
+ExecSearchPath=/usr/local/bin:/usr/bin
+ExecStart=sniffarr $SNIFFARR_FLAGS
+DynamicUser=yes
+StateDirectory=sniffarr
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+ProtectHome=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

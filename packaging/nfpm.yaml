@@ -1,0 +1,24 @@
+name: sniffarr
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+section: net
+priority: optional
+maintainer: Mikhail Lukianchenko <ml@akabos.com>
+description: A private classification database of BitTorrent torrents discovered on the DHT
+homepage: https://sarak.sh/arr/sniffarr
+license: MIT
+contents:
+  - src: dist/sniffarr
+    dst: /usr/bin/sniffarr
+    file_info:
+      mode: 0755
+  - src: packaging/sniffarr.service
+    dst: /lib/systemd/system/sniffarr.service
+  - src: packaging/sniffarr.default
+    dst: /etc/default/sniffarr
+    type: config|noreplace
+scripts:
+  postinstall: packaging/postinstall.sh
+  preremove: packaging/preremove.sh
+  postremove: packaging/postremove.sh

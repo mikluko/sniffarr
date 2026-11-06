@@ -17,6 +17,8 @@ env:
   REGISTRY: sarak.sh
   IMAGE: sarak.sh/arr/sniffarr
   CHART_REPOSITORY: oci://sarak.sh/arr/charts
+  DEBIAN_DISTRIBUTION: trixie
+  DEBIAN_COMPONENT: main
 
 jobs:
   plan:
@@ -128,14 +130,67 @@ jobs:
           printf '%s' "$TOKEN" | helm registry login "$REGISTRY" --username agent --password-stdin
           helm push "$RUNNER_TEMP/chart/sniffarr-$VERSION.tgz" "$CHART_REPOSITORY"
 
+  # Static binaries for amd64 and arm64: an archive with the systemd unit and
+  # the settings file each, their checksums, and a .deb each for the owner's
+  # Debian registry.
+  packages:
+    needs: plan
+    if: needs.plan.outputs.due == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: https://github.com/actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
+          for GOARCH in amd64 arm64; do
+            export GOARCH
+            CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags=-s -o dist/sniffarr .
+            "$(go env GOPATH)/bin/nfpm" package --config packaging/nfpm.yaml --packager deb --target dist/
+            tar -czf "dist/sniffarr_${VERSION}_linux_${GOARCH}.tar.gz" -C dist sniffarr \
+              -C ../packaging sniffarr.service sniffarr.default
+            rm dist/sniffarr
+          done
+          (cd dist && sha256sum ./*.tar.gz ./*.deb >checksums.txt && cat checksums.txt)
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: packages
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/checksums.txt
+      - name: Upload to the Debian registry
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          owner=${GITHUB_REPOSITORY%%/*}
+          for deb in dist/*.deb; do
+            curl --fail-with-body -sS -X PUT -H "Authorization: token $TOKEN" --upload-file "$deb" \
+              "$GITHUB_SERVER_URL/api/packages/$owner/debian/pool/$DEBIAN_DISTRIBUTION/$DEBIAN_COMPONENT/upload"
+          done
+
   # Last, so a release exists only once every artifact it names does.
   release:
-    needs: [plan, image, chart]
+    needs: [plan, image, chart, packages]
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.due == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: https://code.forgejo.org/forgejo/download-artifact@v4
+        with:
+          name: packages
+          path: dist
       - name: Notes
         env:
           TAG: ${{ needs.plan.outputs.tag }}
@@ -151,8 +206,13 @@ jobs:
           TAG: ${{ needs.plan.outputs.tag }}
           PRERELEASE: ${{ needs.plan.outputs.prerelease }}
         run: |
-          jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes.md" --argjson pre "$PRERELEASE" \
+          api="$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY"
+          id=$(jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes.md" --argjson pre "$PRERELEASE" \
             '{tag_name: $tag, name: $tag, body: $body, prerelease: $pre}' |
             curl --fail-with-body -sS -X POST \
               -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
-              -d @- "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases"
+              -d @- "$api/releases" | jq -r .id)
+          for asset in dist/*; do
+            curl --fail-with-body -sS -X POST -H "Authorization: token $TOKEN" \
+              -F "attachment=@$asset" "$api/releases/$id/assets?name=$(basename "$asset")" >/dev/null
+          done

@@ -15,6 +15,22 @@ does so only with `-probe-dir`: it downloads the first pieces of a stored
 release's main video file to read its tracks, and seeds them back; see
 [Probes](#probes).
 
+## Install
+
+One process on a Linux host, as a systemd service:
+
+```shell
+curl -fsSL https://sarak.sh/arr/sniffarr/raw/branch/main/install.sh | sh
+```
+
+On Debian/Ubuntu the script installs the package from the sarak.sh Debian
+registry; elsewhere, the release archive. Each way has its guide:
+
+- [Debian/Ubuntu](docs/install/debian-ubuntu.md), the `.deb` package
+- [systemd](docs/install/systemd.md), the release archive on any Linux
+- [Docker Compose](docs/install/compose.md), the image in one container
+- [Kubernetes](docs/install/kubernetes.md), the Helm chart
+
 ## Components
 
 sniffarr is one binary whose components are switched on by flags, any number

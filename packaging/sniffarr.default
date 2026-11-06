@@ -1,0 +1,23 @@
+# Environment of the sniffarr service; see https://sarak.sh/arr/sniffarr#configuration.
+
+# The components of the one process: the API with the database, the web UI,
+# the DHT sniffer and the metadata fetcher, with the DHT port forwarded by
+# UPnP. Every flag is listed under "Configuration" in the README.
+SNIFFARR_FLAGS=-api -ui -sniff -fetch -upnp
+
+# The database is /var/lib/sniffarr/sniffarr.db; SNIFFARR_DB in the unit.
+
+# Without a TypeSafe key, only the rules classify.
+#TYPESAFE_API_KEY=
+
+# The web UI listens on :8081 and authenticates nobody: put a proxy in front
+# of it, or bind it to loopback.
+#SNIFFARR_UI_ADDR=127.0.0.1:8081
+
+# Keys of the Torznab indexer and of the Radarr and Sonarr webhook; each is
+# served only when its key is set.
+#SNIFFARR_TORZNAB_TOKEN=
+#SNIFFARR_WEBHOOK_TOKEN=
+
+# Audio languages tracked as dubs, BCP-47 tags.
+#SNIFFARR_AUDIO_LANGUAGES=ru
