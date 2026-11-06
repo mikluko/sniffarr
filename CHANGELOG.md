@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The moment of a feed's rounds within `SNIFFARR_FEED_INTERVAL` is fixed by the feed's name and the database's own key, so two instances read one feed at different moments; it may fall on the hour.
+
 ### Fixed
 
-- A feed's rounds fell within seconds of the hour, every feed's together; the moment a feed's name fixes is now spread over the whole `SNIFFARR_FEED_INTERVAL`.
+- A feed's rounds fell within seconds of the hour, every feed's together; the moment is now spread over the whole `SNIFFARR_FEED_INTERVAL`.
 
 ## [0.40.0] - 2026-11-06
 

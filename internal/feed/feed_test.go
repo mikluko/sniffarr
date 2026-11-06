@@ -260,18 +260,16 @@ func TestPoller(t *testing.T) {
 // fixes, so a restart does not move them and no source reads on the hour.
 func TestNext(t *testing.T) {
 	p := &Poller{Source: &fakeSource{}, Interval: time.Hour}
-	off := Offset("fake", time.Hour)
-	require.Greater(t, off, time.Duration(0))
-	require.Less(t, off, time.Hour)
-	require.Equal(t, off, Offset("fake", time.Hour), "fixed by the name")
-	require.Equal(t, 58*time.Minute+41*time.Second, off, "a whole second, spread over the hour")
-	require.Equal(t, 17*time.Minute+38*time.Second, Offset("rutracker", time.Hour))
-	require.Equal(t, 24*time.Minute+24*time.Second, Offset("nnmclub", time.Hour))
-	require.Equal(t, 1*time.Minute+10*time.Second, Offset("rutor", time.Hour))
+	off := Offset("fake", nil, time.Hour)
+	require.Equal(t, 48*time.Minute+4*time.Second, off, "whole seconds, spread over the hour, fixed by the name")
+	require.Equal(t, 22*time.Minute+4*time.Second, Offset("rutracker", nil, time.Hour))
+	require.Equal(t, 55*time.Minute+32*time.Second, Offset("nnmclub", nil, time.Hour))
+	require.Equal(t, 52*time.Minute+17*time.Second, Offset("rutor", nil, time.Hour))
+	require.Equal(t, 12*time.Minute+17*time.Second, Offset("fake", []byte("another node"), time.Hour), "and by the node")
 
 	at := time.Date(2026, 11, 6, 14, 0, 0, 0, time.UTC)
 	require.Equal(t, at.Add(off), p.Next(at), "the first round of the hour is still ahead")
 	require.Equal(t, at.Add(time.Hour+off), p.Next(at.Add(off)), "a round at its moment is the next hour's")
 	require.Equal(t, at.Add(time.Hour+off), p.Next(at.Add(off+time.Minute)), "past it, the next hour's")
-	require.Equal(t, time.Duration(0), Offset("fake", time.Second), "nothing to spread over")
+	require.Equal(t, time.Duration(0), Offset("fake", nil, 500*time.Millisecond), "nothing to spread over")
 }

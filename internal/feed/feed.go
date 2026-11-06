@@ -320,6 +320,9 @@ type Poller struct {
 	HTTP *http.Client
 	// Now is time.Now when nil.
 	Now func() time.Time
+	// Node tells this node from others reading the same sources, so their
+	// rounds fall at different moments; the store's hash key when empty.
+	Node []byte
 
 	once    sync.Once
 	crawler *crawler
@@ -330,6 +333,13 @@ type Poller struct {
 // moments across restarts, and sources with different names at different
 // ones.
 func (p *Poller) Run(ctx context.Context) error {
+	if len(p.Node) == 0 {
+		key, err := p.Recorder.Store.HashKey(ctx)
+		if err != nil {
+			return err
+		}
+		p.Node = key[:]
+	}
 	for {
 		now := p.now()
 		next := p.Next(now)
@@ -351,27 +361,28 @@ func (p *Poller) Run(ctx context.Context) error {
 }
 
 // Next is the first moment after now that falls on an Interval of
-// wall-clock time plus Offset(Source.Name()).
+// wall-clock time plus Offset(Source.Name(), Node).
 func (p *Poller) Next(now time.Time) time.Time {
 	interval := p.interval()
-	next := now.Truncate(interval).Add(Offset(p.Source.Name(), interval))
+	next := now.Truncate(interval).Add(Offset(p.Source.Name(), p.Node, interval))
 	for !next.After(now) {
 		next = next.Add(interval)
 	}
 	return next
 }
 
-// Offset is the share of interval the rounds of the source name fall at:
-// fixed by the name, never zero for an interval over a second, so no source
-// reads on the hour and two sources read at different moments.
-func Offset(name string, interval time.Duration) time.Duration {
-	if interval <= time.Second {
+// Offset is the share of interval the rounds of the source name fall at
+// on the node: whole seconds fixed by the two, so two sources read at
+// different moments, and so do two nodes reading one source.
+func Offset(name string, node []byte, interval time.Duration) time.Duration {
+	seconds := uint32(interval / time.Second)
+	if seconds == 0 {
 		return 0
 	}
 	h := fnv.New32a()
+	_, _ = h.Write(node)
 	_, _ = h.Write([]byte(name))
-	seconds := uint32((interval - time.Second) / time.Second)
-	return time.Second + time.Duration(h.Sum32()%seconds)*time.Second
+	return time.Duration(h.Sum32()%seconds) * time.Second
 }
 
 func (p *Poller) interval() time.Duration {
