@@ -20,6 +20,8 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/database"
+	"github.com/mikluko/sniffarr/internal/feed"
+	"github.com/mikluko/sniffarr/internal/feed/rutracker"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/rules"
@@ -79,7 +81,22 @@ type Config struct {
 	Sonarr ArrHistory
 	// Probe tunes the probe tasks of the ingest service.
 	Probe ingest.ProbeConfig
+	// Feeds are the tracker feeds read, by source name; none reads no feed.
+	Feeds Feeds
 }
+
+// Feeds is which tracker feeds are read and how.
+type Feeds struct {
+	// Sources names the feeds read: rutracker.Name.
+	Sources []string
+	// Interval is how often each is read; feed.DefaultInterval when zero.
+	Interval time.Duration
+	// Rutracker is the rutracker source, read when Sources names it.
+	Rutracker rutracker.Config
+}
+
+// feedTimeout bounds one request to a feed.
+const feedTimeout = time.Minute
 
 // ArrHistory is where a Radarr or Sonarr serves its API; a zero one imports
 // no history.
@@ -242,6 +259,25 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		hist := &arr.History{App: name, URL: h.URL, APIKey: h.APIKey, HTTP: &http.Client{Timeout: arrTimeout}, Recorder: rec, Log: log}
 		app.Go(lc, sd, log, name+" history", hist.Run)
 	}
+	if len(cfg.Feeds.Sources) > 0 {
+		frec := &feed.Recorder{Store: s, Queue: q, Log: log}
+		for _, src := range feedSources(cfg.Feeds) {
+			p := &feed.Poller{Source: src, Recorder: frec, Interval: cfg.Feeds.Interval, Log: log}
+			app.Go(lc, sd, log, src.Name()+" feed", p.Run)
+		}
+	}
+}
+
+// feedSources are the sources Feeds names, each with its HTTP client; a
+// name it does not know was refused by the configuration.
+func feedSources(f Feeds) []feed.Source {
+	var out []feed.Source
+	for _, name := range f.Sources {
+		if name == rutracker.Name {
+			out = append(out, &rutracker.Source{Config: f.Rutracker, HTTP: &http.Client{Timeout: feedTimeout}})
+		}
+	}
+	return out
 }
 
 // maintain trims the queue and deletes the torrents not seen within

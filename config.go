@@ -21,6 +21,8 @@ import (
 	"github.com/mikluko/sniffarr/internal/app/ui"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
+	"github.com/mikluko/sniffarr/internal/feed"
+	"github.com/mikluko/sniffarr/internal/feed/rutracker"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
@@ -286,6 +288,9 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
 		return a, d, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
 	}
+	if a.Feeds, err = loadFeeds(getenv); err != nil {
+		return a, d, err
+	}
 	if key, ok := lookup("TMDB_API_KEY"); ok {
 		a.TMDBKey = key
 	} else {
@@ -317,6 +322,38 @@ func loadProbe(getenv func(string) string) (ingest.ProbeConfig, error) {
 	}
 	p.Backoff, err = duration(getenv, "SNIFFARR_PROBE_BACKOFF", ingest.DefaultProbeBackoff)
 	return p, err
+}
+
+// loadFeeds reads SNIFFARR_FEEDS, the comma-separated names of the feeds
+// read, and each named feed's settings.
+func loadFeeds(getenv func(string) string) (api.Feeds, error) {
+	var f api.Feeds
+	for _, name := range strings.Split(getenv("SNIFFARR_FEEDS"), ",") {
+		name = strings.TrimSpace(name)
+		switch name {
+		case "":
+		case rutracker.Name:
+			f.Sources = append(f.Sources, name)
+		default:
+			return f, fmt.Errorf("SNIFFARR_FEEDS: %q is not a feed; %s is", name, rutracker.Name)
+		}
+	}
+	if len(f.Sources) == 0 {
+		return f, nil
+	}
+	var err error
+	if f.Interval, err = duration(getenv, "SNIFFARR_FEED_INTERVAL", feed.DefaultInterval); err != nil {
+		return f, err
+	}
+	f.Rutracker.URL = or(getenv("SNIFFARR_RUTRACKER_FEED_URL"), rutracker.DefaultURL)
+	for _, s := range strings.Split(or(getenv("SNIFFARR_RUTRACKER_FORUMS"), "0"), ",") {
+		n, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil || n < 0 {
+			return f, errors.New("SNIFFARR_RUTRACKER_FORUMS: want comma-separated forum numbers, 0 for the whole tracker")
+		}
+		f.Rutracker.Forums = append(f.Rutracker.Forums, n)
+	}
+	return f, nil
 }
 
 // arrHistory reads SNIFFARR_<app>_URL and SNIFFARR_<app>_API_KEY, which

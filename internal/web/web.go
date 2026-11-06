@@ -178,8 +178,9 @@ var (
 	drops = map[sniffarrv1.Rejection]string{sniffarrv1.Rejection_REJECTION_ADULT: "adult", sniffarrv1.Rejection_REJECTION_SOFTWARE: "software",
 		sniffarrv1.Rejection_REJECTION_BOOK: "book", sniffarrv1.Rejection_REJECTION_COURSE: "course", sniffarrv1.Rejection_REJECTION_SCRIPT: "script",
 		sniffarrv1.Rejection_REJECTION_NO_MEDIA: "filetype", sniffarrv1.Rejection_REJECTION_SMALL: "size"}
-	discoveries = map[sniffarrv1.Source]string{sniffarrv1.Source_SOURCE_ANNOUNCE: "announce", sniffarrv1.Source_SOURCE_SAMPLE: "sample", sniffarrv1.Source_SOURCE_ARR: "arr"}
-	sorts       = map[sniffarrv1.Sort]string{sniffarrv1.Sort_SORT_PEERS: "peers", sniffarrv1.Sort_SORT_LAST_SEEN: "last_seen", sniffarrv1.Sort_SORT_SIZE: "size",
+	discoveries = map[sniffarrv1.Source]string{sniffarrv1.Source_SOURCE_ANNOUNCE: "announce", sniffarrv1.Source_SOURCE_SAMPLE: "sample", sniffarrv1.Source_SOURCE_ARR: "arr",
+		sniffarrv1.Source_SOURCE_FEED: "feed"}
+	sorts = map[sniffarrv1.Sort]string{sniffarrv1.Sort_SORT_PEERS: "peers", sniffarrv1.Sort_SORT_LAST_SEEN: "last_seen", sniffarrv1.Sort_SORT_SIZE: "size",
 		sniffarrv1.Sort_SORT_FIRST_SEEN: "first_seen"}
 	windows     = map[sniffarrv1.Window]string{sniffarrv1.Window_WINDOW_DAY: "24h", sniffarrv1.Window_WINDOW_WEEK: "7d", sniffarrv1.Window_WINDOW_MONTH: "30d"}
 	voices      = map[sniffarrv1.Voice]string{sniffarrv1.Voice_VOICE_UNSPECIFIED: "any", sniffarrv1.Voice_VOICE_LIKELY: "p50", sniffarrv1.Voice_VOICE_MARKER: "explicit"}

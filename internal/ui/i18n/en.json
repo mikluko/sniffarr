@@ -53,6 +53,7 @@
   "via.announce": "announce",
   "via.arr": "Radarr/Sonarr",
   "via.sample": "sample",
+  "via.feed": "feed",
   "card.classification": "Classification",
   "cls.feature": "Feature",
   "cls.answer": "Answer",

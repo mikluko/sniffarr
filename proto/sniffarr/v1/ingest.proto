@@ -68,6 +68,8 @@ enum Source {
   // A grab or import Radarr or Sonarr reported; the queue serves these
   // first.
   SOURCE_ARR = 3;
+  // A release a tracker feed listed; the queue serves these after arr.
+  SOURCE_FEED = 4;
 }
 
 message FetchRequest {

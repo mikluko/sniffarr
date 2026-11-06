@@ -463,6 +463,21 @@ event of one download are one event, and the records of a season pack's
 episodes one grab. An event without a download ID is never taken for
 another.
 
+## Feeds
+
+With `SNIFFARR_FEEDS` naming them, the API reads tracker feeds, which list
+releases with their infohash and the tracker's full title. Each named feed
+is read at start and every `SNIFFARR_FEED_INTERVAL`; a read that fails is
+retried after 10 minutes. Every release listed is recorded once per feed
+and infohash, with its title, page, category, size and date; the infohash
+of one the store lacks is queued under discovery `feed`, after `arr` and
+ahead of announced infohashes, unless it is rejected. A feed is a window,
+so a release is listed again until it leaves it and recorded once.
+
+| Feed        | Reads                                                                                                                                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rutracker` | `SNIFFARR_RUTRACKER_FEED_URL` at `/atom/f/<forum>.atom` for each forum of `SNIFFARR_RUTRACKER_FORUMS`, anonymously; forum `0` is the whole tracker, some 150 releases over a few hours, and a forum's feed its latest, about a month of them |
+
 ## Web UI
 
 With `-ui`, sniffarr serves a web UI on `SNIFFARR_UI_ADDR`, in English or
@@ -557,6 +572,10 @@ the same to each.
 | `SNIFFARR_RADARR_API_KEY`          |                  | That Radarr's API key                                                                                                  |
 | `SNIFFARR_SONARR_URL`              |                  | Base URL of the Sonarr whose grab history is imported; set with `SNIFFARR_SONARR_API_KEY` or not at all                |
 | `SNIFFARR_SONARR_API_KEY`          |                  | That Sonarr's API key                                                                                                  |
+| `SNIFFARR_FEEDS`                   |                  | Comma-separated tracker feeds read: `rutracker`; empty reads none                                                      |
+| `SNIFFARR_FEED_INTERVAL`           | `1h`             | How often each feed is read                                                                                            |
+| `SNIFFARR_RUTRACKER_FEED_URL`      | `https://feed.rutracker.cc` | Where rutracker's feeds are served                                                                          |
+| `SNIFFARR_RUTRACKER_FORUMS`        | `0`              | Comma-separated rutracker forums whose feeds are read; `0` is the whole tracker                                        |
 | `SNIFFARR_PROBE_DAILY_BYTES`       | `100GiB`         | Piece data probes download per UTC day at most, in bytes or with a unit of `B`, `KiB`, `MiB`, `GiB` or `TiB`; `0` is no limit |
 | `SNIFFARR_PROBE_SEARCH_RESERVE`    | `25`             | Percentage of the daily bytes left to releases a Torznab search returned, `0` to `100`                                 |
 | `SNIFFARR_PROBE_MAX_BYTES`         | `64MiB`          | Piece data one probe downloads at most, units as above                                                                 |
@@ -682,6 +701,7 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
 | `-api`     | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
 | `-api`     | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
+| `-api`     | `sniffarr.feed.items`                  | `{item}`     | `sniffarr.feed.source`, `sniffarr.feed.outcome` |
 | `-api`     | `sniffarr.store.retention.deletions`   | `{torrent}`  | `sniffarr.store.retention.class`           |
 | `-api`     | `sniffarr.ingest.results`              | `{result}`   | `sniffarr.fetch.outcome`                   |
 | `-api`     | `sniffarr.ingest.rejections`           | `{torrent}`  | `sniffarr.rules.reason`                    |
@@ -717,7 +737,8 @@ counts are the `db.sql.connection.*` metrics.
 | `-fetch`   | `sniffarr.seed.removals`               | `{torrent}`  | `sniffarr.seed.reason`                     |
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`;
-`sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` too; `sniffarr.dht.query` is
+`sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` and `feed` too;
+`sniffarr.feed.outcome` is `stored`, `queued`, `rejected` or `duplicate`; `sniffarr.dht.query` is
 `sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;

@@ -21,6 +21,7 @@ var ErrNotQueued = errors.New("not queued")
 // them.
 const (
 	Arr      = "arr"
+	Feed     = "feed"
 	Announce = "announce"
 	Sample   = "sample"
 )
@@ -93,6 +94,8 @@ func NewQueue(ctx context.Context, db *database.DB, opts QueueOptions) (*Queue, 
 func priority(discovery string) int {
 	switch discovery {
 	case Arr:
+		return -2
+	case Feed:
 		return -1
 	case Announce:
 		return 0
@@ -102,8 +105,10 @@ func priority(discovery string) int {
 
 func discovery(priority int) string {
 	switch {
-	case priority < 0:
+	case priority < -1:
 		return Arr
+	case priority == -1:
+		return Feed
 	case priority == 0:
 		return Announce
 	}
@@ -112,7 +117,7 @@ func discovery(priority int) string {
 
 // Enqueue queues every sighted hash not yet queued, and returns how many it
 // queued and how many it knew. A dead hash is queued only when sighted by
-// announce or arr, which revives it. A queued hash sighted by a discovery
+// announce, arr or feed, which revives it. A queued hash sighted by a discovery
 // served before its own moves ahead to that discovery's queue. The queue may outgrow MaxSize until the next Trim.
 func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time) (queued, known int, err error) {
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
@@ -122,7 +127,7 @@ func (q *Queue) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 				return err
 			}
 			if dead {
-				if g.Discovery != Announce && g.Discovery != Arr {
+				if g.Discovery != Announce && g.Discovery != Arr && g.Discovery != Feed {
 					known++
 					continue
 				}

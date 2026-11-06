@@ -19,6 +19,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/app/ui"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/classify"
+	"github.com/mikluko/sniffarr/internal/feed/rutracker"
 	"github.com/mikluko/sniffarr/internal/ingest"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
@@ -75,6 +76,17 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, ui.Config{Addr: defaultUIAddr}, c.ui)
 		}},
 		{name: "api with a URL", args: []string{"-api", "-ui"}, env: append(apiEnv, "SNIFFARR_URL", "http://api:8080"), err: "SNIFFARR_URL is set, but -api serves the API in this process: unset it"},
+		{name: "no feeds", args: []string{"-api"}, env: apiEnv, want: func(t *testing.T, c config) {
+			require.Equal(t, api.Feeds{}, c.api.Feeds, "feeds are off unless named")
+		}},
+		{name: "feeds", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "rutracker", "SNIFFARR_RUTRACKER_FORUMS", "0, 1457", "SNIFFARR_FEED_INTERVAL", "30m"),
+			want: func(t *testing.T, c config) {
+				require.Equal(t, api.Feeds{Sources: []string{"rutracker"}, Interval: 30 * time.Minute,
+					Rutracker: rutracker.Config{URL: "https://feed.rutracker.cc", Forums: []int{0, 1457}}}, c.api.Feeds)
+			}},
+		{name: "a feed that is not one", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "nnmclub"), err: `SNIFFARR_FEEDS: "nnmclub" is not a feed; rutracker is`},
+		{name: "a forum that is not a number", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "rutracker", "SNIFFARR_RUTRACKER_FORUMS", "uhd"),
+			err: "SNIFFARR_RUTRACKER_FORUMS: want comma-separated forum numbers, 0 for the whole tracker"},
 		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_SEERR_URL", "https://seerr.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},
 			want: func(t *testing.T, c config) {
 				require.Equal(t, client.Config{URL: &url.URL{Scheme: "http", Host: "api:8080"}}, c.client)

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SNIFFARR_FEEDS` names tracker feeds the API reads every `SNIFFARR_FEED_INTERVAL`: `rutracker`, the forums of `SNIFFARR_RUTRACKER_FORUMS` at `SNIFFARR_RUTRACKER_FEED_URL`. A release listed is kept with the feed's title and page, and queued under the discovery `feed`, after `arr`, when the store lacks it.
+
 ## [0.38.0] - 2026-11-06
 
 ### Added

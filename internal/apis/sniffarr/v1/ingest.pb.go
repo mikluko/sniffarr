@@ -33,6 +33,8 @@ const (
 	// A grab or import Radarr or Sonarr reported; the queue serves these
 	// first.
 	Source_SOURCE_ARR Source = 3
+	// A release a tracker feed listed; the queue serves these after arr.
+	Source_SOURCE_FEED Source = 4
 )
 
 // Enum value maps for Source.
@@ -42,12 +44,14 @@ var (
 		1: "SOURCE_SAMPLE",
 		2: "SOURCE_ANNOUNCE",
 		3: "SOURCE_ARR",
+		4: "SOURCE_FEED",
 	}
 	Source_value = map[string]int32{
 		"SOURCE_UNSPECIFIED": 0,
 		"SOURCE_SAMPLE":      1,
 		"SOURCE_ANNOUNCE":    2,
 		"SOURCE_ARR":         3,
+		"SOURCE_FEED":        4,
 	}
 )
 
@@ -1421,13 +1425,14 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x13ProbeResultResponse\"0\n" +
 	"\x12ProbeUploadRequest\x12\x1a\n" +
 	"\buploaded\x18\x01 \x01(\x03R\buploaded\"\x15\n" +
-	"\x13ProbeUploadResponse*X\n" +
+	"\x13ProbeUploadResponse*i\n" +
 	"\x06Source\x12\x16\n" +
 	"\x12SOURCE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSOURCE_SAMPLE\x10\x01\x12\x13\n" +
 	"\x0fSOURCE_ANNOUNCE\x10\x02\x12\x0e\n" +
 	"\n" +
-	"SOURCE_ARR\x10\x03*M\n" +
+	"SOURCE_ARR\x10\x03\x12\x0f\n" +
+	"\vSOURCE_FEED\x10\x04*M\n" +
 	"\aFailure\x12\x17\n" +
 	"\x13FAILURE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10FAILURE_NO_PEERS\x10\x01\x12\x13\n" +

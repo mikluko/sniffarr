@@ -53,6 +53,7 @@
   "via.announce": "announce",
   "via.arr": "Radarr/Sonarr",
   "via.sample": "sample",
+  "via.feed": "фид",
   "card.classification": "Классификация",
   "cls.feature": "Признак",
   "cls.answer": "Ответ",
