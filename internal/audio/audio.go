@@ -70,7 +70,10 @@ var known = []Language{
 		// https://www.rutor.info/torrent/743964. Pm has no source and says
 		// a Russian voice of no known kind.
 		Codes: []string{"D", "P", "P1", "P2", "Pm", "L", "L1", "L2", "A"},
-		Signs: "Russian audio is named or clearly implied: Rus, RUS, rus in a file or folder name, Дубляж, Dub, MVO, DVO, AVO, ПМ, " +			"a separate Rus*.ac3/.mka/.aac track, a Russian-language title of a video release",
+		Signs: "Russian audio is named or clearly implied: Rus, RUS, rus in a file or folder name, Дубляж, Dub, MVO, DVO, AVO, ПМ, " +
+			"a Russian translation code near the year or the source, D dub, P, P1, P2 professional, L, L1, L2 amateur, A author's, Pm, " +
+			"as in Movie.2026.P.WEB-DL or BDRip | D, P2, " +
+			"a separate Rus*.ac3/.mka/.aac track, a Russian-language title of a video release",
 	}),
 }
 

@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `SNIFFARR_FEEDS` takes `nnmclub`, the RSS of the forums of `SNIFFARR_NNMCLUB_FORUMS` at `SNIFFARR_NNMCLUB_URL` with each topic's page read once for its magnet link, and `rutor`, the listing pages of the categories of `SNIFFARR_RUTOR_CATEGORIES` at `SNIFFARR_RUTOR_URL`, `SNIFFARR_RUTOR_DEPTH` pages deep on the first pass.
-- The Russian translation codes of release names, `D`, `P`, `P1`, `P2`, `L`, `L1`, `L2`, `A` and `Pm`, after the year and before the source or listed between bars, are markers of Russian audio, and the Torznab title labels them as `Dub`, `MVO`, `DVO`, `AVO` or `VO`: `Movie.2026.P.WEB-DL.1080p [MVO, RUS]`. Stored releases with a code in the name get the marker once at start.
+- The Russian translation codes of release names, `D`, `P`, `P1`, `P2`, `L`, `L1`, `L2`, `A` and `Pm`, after the year and before the source or listed between bars, are markers of Russian audio, and the Torznab title labels them as `Dub`, `MVO`, `DVO`, `AVO` or `VO`: `Movie.2026.P.WEB-DL.1080p [MVO, RUS]`. Stored releases with a code in the name get the marker once at start. Jev's question about Russian audio names the codes too, for the names where they stand elsewhere.
 
 ### Changed
 

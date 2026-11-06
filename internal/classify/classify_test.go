@@ -44,6 +44,8 @@ func TestQuestions(t *testing.T) {
 		"criteria": map[string]any{
 			"true": map[string]any{
 				"signs": "Russian audio is named or clearly implied: Rus, RUS, rus in a file or folder name, Дубляж, Dub, MVO, DVO, AVO, ПМ, " +
+					"a Russian translation code near the year or the source, D dub, P, P1, P2 professional, L, L1, L2 amateur, A author's, Pm, " +
+					"as in Movie.2026.P.WEB-DL or BDRip | D, P2, " +
 					"a separate Rus*.ac3/.mka/.aac track, a Russian-language title of a video release",
 				"studios": "A Russian dubbing or voice-over studio or release group: lostfilm, newstudio, jaskier, hdrezka, кубик в кубе, alexfilm, " +
 					"baibako, coldfilm, tvshows, novamedia, amedia, кураж-бамбей, red head sound, rhs, гоблин, anilibria, anidub, shiza, anistar, " +
