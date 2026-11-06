@@ -279,11 +279,11 @@ func TestMigrateModules(t *testing.T) {
 
 	s, err := New(ctx, db, Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
-	q, err := NewQueue(ctx, db, QueueOptions{})
+	q, err := NewTasks(ctx, db, TaskOptions{})
 	require.NoError(t, err)
 
 	names := schema(t, db)
-	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "ingest_queue", "ingest_dead",
+	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "task_queue", "task_dead",
 		"ingest_rejected", "ingest_token_usage", "stat_peers_by_hour", "stat_peers_by_day", "stat_top", "tmdb_works", "tmdb_ids", "settings",
 		"torrent_releases_fts_data", "torrent_releases_fts_idx", "torrent_releases_fts_docsize", "torrent_releases_fts_config"} {
 		require.Contains(t, names, "table "+name)
@@ -298,10 +298,10 @@ func TestMigrateModules(t *testing.T) {
 	wantIndexes := []string{
 		"torrent_releases_unclassified", "torrent_releases_last_seen", "torrent_releases_title_key", "torrent_releases_background",
 		"torrent_releases_titled", "torrent_releases_work", "torrent_releases_peers_week", "torrent_releases_size",
-		"ingest_queue_order", "ingest_queue_lease_owner", "ingest_queue_lease_until", "ingest_queue_queued_at", "ingest_queue_evict",
-		"ingest_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id", "tmdb_works_details",
+		"task_queue_order", "task_queue_lease_owner", "task_queue_lease_until", "task_queue_queued_at", "task_queue_evict",
+		"task_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id", "tmdb_works_details",
 		"tmdb_matches_work", "torrent_releases_idle", "torrent_releases_counts", "torrent_releases_first_seen", "ingest_rejected_reason",
-		"arr_events_work", "arr_events_infohash", "arr_events_latest", "probe_releases_wanted", "feed_items_infohash",
+		"arr_events_work", "arr_events_infohash", "arr_events_latest", "feed_items_infohash",
 	}
 	var gotIndexes []string
 	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
@@ -346,7 +346,7 @@ func TestMigrateModules(t *testing.T) {
 	n, err := q.Len(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
-	for table, want := range map[string]int{"ingest_dead": 1, "ingest_rejected": 1, "stat_peers_by_hour": 1, "stat_peers_by_day": 1,
+	for table, want := range map[string]int{"task_dead": 1, "ingest_rejected": 1, "stat_peers_by_hour": 1, "stat_peers_by_day": 1,
 		"stat_top": 0, "tmdb_works": 1, "tmdb_matches": 1, "tmdb_ids": 0} {
 		var n int
 		require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&n))

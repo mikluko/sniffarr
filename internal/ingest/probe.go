@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -68,47 +67,16 @@ func (c ProbeConfig) maxBytes() int64 {
 	return DefaultProbeMaxBytes
 }
 
-// probeLease is a probe task handed out and not yet reported.
-type probeLease struct {
-	id    int64
-	until time.Time
-}
-
-// probeLeases are the probe tasks in flight. They live in memory: a lease
-// lost to a restart frees its release and its share of the budget.
-type probeLeases struct {
-	mu sync.Mutex
-	m  map[store.Hash]probeLease
-}
-
-// active drops the leases expired at now and returns the release IDs of
-// the rest.
-func (l *probeLeases) active(now time.Time) []int64 {
-	var ids []int64
-	for h, p := range l.m {
-		if !now.Before(p.until) {
-			delete(l.m, h)
-			continue
-		}
-		ids = append(ids, p.id)
-	}
-	return ids
-}
-
-func (l *probeLeases) add(h store.Hash, p probeLease) {
-	if l.m == nil {
-		l.m = map[store.Hash]probeLease{}
-	}
-	l.m[h] = p
-}
-
 func (s *Service) ProbeTask(ctx context.Context, _ *connect.Request[sniffarrv1.ProbeTaskRequest]) (*connect.Response[sniffarrv1.ProbeTaskResponse], error) {
 	cfg := s.Probe
-	s.probes.mu.Lock()
-	defer s.probes.mu.Unlock()
+	s.probeMu.Lock()
+	defer s.probeMu.Unlock()
 	now := s.now()
-	leased := s.probes.active(now)
-	reserved := int64(len(leased)) * cfg.maxBytes()
+	leased, err := s.Store.ProbeLeases(ctx, now)
+	if err != nil {
+		return nil, s.internal(ctx, "probe leases", err)
+	}
+	reserved := int64(leased) * cfg.maxBytes()
 	traffic, err := s.Store.ProbeTraffic(ctx, day(now))
 	if err != nil {
 		return nil, s.internal(ctx, "probe traffic", err)
@@ -117,14 +85,13 @@ func (s *Service) ProbeTask(ctx context.Context, _ *connect.Request[sniffarrv1.P
 	if !cfg.admits(traffic.Rx, reserved, true) {
 		return res, nil
 	}
-	c, ok, err := s.Store.NextProbe(ctx, now, cfg.admits(traffic.Rx, reserved, false), leased)
+	c, ok, err := s.Store.LeaseProbe(ctx, s.owners.Add(1), now, or(cfg.Lease, DefaultProbeLease), cfg.admits(traffic.Rx, reserved, false))
 	if err != nil {
-		return nil, s.internal(ctx, "next probe", err)
+		return nil, s.internal(ctx, "lease probe", err)
 	}
 	if !ok {
 		return res, nil
 	}
-	s.probes.add(c.Hash, probeLease{id: c.ID, until: now.Add(or(cfg.Lease, DefaultProbeLease))})
 	s.metrics().probeTasks.Add(ctx, 1, priorityAttr(c.Wanted))
 	res.Msg.Task = &sniffarrv1.ProbeTask{Infohash: c.Hash[:], MaxBytes: cfg.maxBytes()}
 	return res, nil
@@ -175,9 +142,6 @@ func (s *Service) ProbeResult(ctx context.Context, req *connect.Request[sniffarr
 	default:
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("probe result without outcome"))
 	}
-	s.probes.mu.Lock()
-	delete(s.probes.m, h)
-	s.probes.mu.Unlock()
 	if n := m.GetDownloaded(); n > 0 {
 		if err := s.Store.AddProbeTraffic(ctx, day(now), store.ProbeTraffic{Rx: n}); err != nil {
 			return nil, s.internal(ctx, "add probe traffic", err)

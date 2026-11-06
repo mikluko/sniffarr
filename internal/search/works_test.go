@@ -63,6 +63,13 @@ func (f *fakeTitles) SearchWorks(ctx context.Context, typ, query, lang string) (
 // with peers at now, and the tops computed.
 func ranked(t *testing.T) *Browser {
 	t.Helper()
+	b, _ := rankedDB(t)
+	return b
+}
+
+// rankedDB is ranked with its database.
+func rankedDB(t *testing.T) (*Browser, *database.DB) {
+	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
@@ -107,7 +114,7 @@ func ranked(t *testing.T) *Browser {
 	})
 	require.NoError(t, err)
 	require.NoError(t, s.ComputeTop(ctx, now))
-	return &Browser{Store: s, Log: slog.New(slog.DiscardHandler), Languages: []string{"ru"}, Now: func() time.Time { return now }}
+	return &Browser{Store: s, Log: slog.New(slog.DiscardHandler), Languages: []string{"ru"}, Now: func() time.Time { return now }}, db
 }
 
 func TestBrowserHome(t *testing.T) {

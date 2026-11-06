@@ -13,22 +13,22 @@ import (
 	"github.com/mikluko/sniffarr/internal/database"
 )
 
-func openQueue(t *testing.T, opts ...QueueOptions) *Queue {
+func openQueue(t *testing.T, opts ...TaskOptions) *Tasks {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	var o QueueOptions
+	var o TaskOptions
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	q, err := NewQueue(ctx, db, o)
+	q, err := NewTasks(ctx, db, o)
 	require.NoError(t, err)
 	return q
 }
 
-func enqueueAt(t *testing.T, q *Queue, at time.Time, discovery string, bs ...byte) (int, int) {
+func enqueueAt(t *testing.T, q *Tasks, at time.Time, discovery string, bs ...byte) (int, int) {
 	t.Helper()
 	queued, known, err := q.Enqueue(context.Background(), sightings(discovery, bs...), at)
 	require.NoError(t, err)
@@ -43,17 +43,22 @@ func sightings(discovery string, bs ...byte) []Sighting {
 	return out
 }
 
-func enqueue(t *testing.T, q *Queue, discovery string, bs ...byte) (int, int) {
+func enqueue(t *testing.T, q *Tasks, discovery string, bs ...byte) (int, int) {
 	t.Helper()
 	queued, known, err := q.Enqueue(context.Background(), sightings(discovery, bs...), t0)
 	require.NoError(t, err)
 	return queued, known
 }
 
-func lease(t *testing.T, q *Queue, owner int64, n int, at time.Time) []Hash {
+// lease leases up to n tasks to owner at, and returns their hashes.
+func lease(t *testing.T, q *Tasks, owner int64, n int, at time.Time) []Hash {
 	t.Helper()
-	hs, _, err := q.Lease(context.Background(), owner, n, at, time.Minute)
+	tasks, _, err := q.Lease(context.Background(), owner, n, at, time.Minute)
 	require.NoError(t, err)
+	var hs []Hash
+	for _, task := range tasks {
+		hs = append(hs, task.Hash)
+	}
 	return hs
 }
 
@@ -91,7 +96,7 @@ func TestEnqueueArr(t *testing.T) {
 	enqueue(t, q, Sample, 1)
 	enqueue(t, q, Announce, 2)
 	dead := hash(3)
-	_, err := q.db.W.ExecContext(ctx, "INSERT INTO ingest_dead (key, until) VALUES (?, ?)", deadKey(dead[:]), t0.Add(time.Hour).UnixMilli())
+	_, err := q.db.W.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (?, ?)", deadKey(dead[:]), t0.Add(time.Hour).UnixMilli())
 	require.NoError(t, err)
 	queued, known := enqueue(t, q, Arr, 1, 3)
 	require.Equal(t, 1, queued, "arr revives a dead hash")
@@ -119,7 +124,7 @@ func TestLeaseExpiryAndRelease(t *testing.T) {
 	require.Empty(t, lease(t, q, 2, 2, t0.Add(59*time.Second)))
 	hs, expired, err := q.Lease(ctx, 2, 2, t0.Add(time.Minute), time.Minute)
 	require.NoError(t, err)
-	require.Equal(t, []Hash{hash(1), hash(2)}, hs, "expired leases are free")
+	require.Equal(t, []Task{{Kind: TaskFetch, Hash: hash(1)}, {Kind: TaskFetch, Hash: hash(2)}}, hs, "expired leases are free")
 	require.Equal(t, 2, expired)
 
 	require.NoError(t, q.Release(ctx, 1))
@@ -171,7 +176,7 @@ func TestComplete(t *testing.T) {
 	ctx := context.Background()
 	q := openQueue(t)
 	enqueue(t, q, Sample, 1, 2)
-	require.NoError(t, q.Complete(ctx, hash(1)))
+	require.NoError(t, q.Complete(ctx, TaskFetch, hash(1)))
 	n, err := q.Len(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
@@ -179,7 +184,7 @@ func TestComplete(t *testing.T) {
 
 func TestTrimBySize(t *testing.T) {
 	ctx := context.Background()
-	q := openQueue(t, QueueOptions{MaxSize: 3})
+	q := openQueue(t, TaskOptions{MaxSize: 3})
 	enqueueAt(t, q, t0, Announce, 1)
 	enqueueAt(t, q, t0.Add(time.Second), Sample, 2, 3)
 	enqueueAt(t, q, t0.Add(2*time.Second), Announce, 4)
@@ -207,7 +212,7 @@ func TestTrimBySize(t *testing.T) {
 
 func TestTrimByAgeAndDeadExpiry(t *testing.T) {
 	ctx := context.Background()
-	q := openQueue(t, QueueOptions{MaxAge: time.Hour, DeadFor: 24 * time.Hour})
+	q := openQueue(t, TaskOptions{MaxAge: time.Hour, DeadFor: 24 * time.Hour})
 	enqueueAt(t, q, t0, Announce, 1)
 	enqueueAt(t, q, t0.Add(30*time.Minute), Sample, 2)
 
@@ -228,7 +233,7 @@ func TestTrimByAgeAndDeadExpiry(t *testing.T) {
 
 func TestTrimMetrics(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
-	q := openQueue(t, QueueOptions{MaxSize: 1, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
+	q := openQueue(t, TaskOptions{MaxSize: 1, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
 	enqueueAt(t, q, t0, Sample, 1, 2, 3)
 	_, err := q.Trim(context.Background(), t0)
 	require.NoError(t, err)

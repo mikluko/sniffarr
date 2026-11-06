@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
@@ -21,16 +22,19 @@ func byWork(id string) *sniffarrv1.Releases {
 
 func TestBrowserRefreshPeers(t *testing.T) {
 	ctx := context.Background()
-	b := ranked(t)
+	b, db := rankedDB(t)
 	res, err := b.RefreshPeers(ctx, connect.NewRequest(&sniffarrv1.RefreshPeersRequest{Releases: byHash(7)}))
 	require.NoError(t, err)
 	require.Equal(t, int32(1), res.Msg.GetReleases())
 	res, err = b.RefreshPeers(ctx, connect.NewRequest(&sniffarrv1.RefreshPeersRequest{Releases: byWork("m693134")}))
 	require.NoError(t, err)
 	require.Equal(t, int32(3), res.Msg.GetReleases(), "every release of the work")
-	got, err := b.Store.TakePeerLookups(ctx, 10)
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
-	require.ElementsMatch(t, []store.Hash{hash(7), hash(1), hash(2), hash(4)}, got)
+	got, _, err := q.Lease(ctx, 1, 10, now, time.Minute)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []store.Task{{Kind: store.TaskPeers, Hash: hash(7)}, {Kind: store.TaskPeers, Hash: hash(1)},
+		{Kind: store.TaskPeers, Hash: hash(2)}, {Kind: store.TaskPeers, Hash: hash(4)}}, got)
 
 	for _, tt := range []struct {
 		name string
@@ -55,10 +59,11 @@ func TestBrowserRequestProbe(t *testing.T) {
 	res, err := b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byWork("m693134")}))
 	require.NoError(t, err)
 	require.Equal(t, int32(3), res.Msg.GetReleases())
-	c, ok, err := b.Store.NextProbe(ctx, now, false, nil)
+	c, ok, err := b.Store.LeaseProbe(ctx, 1, now, time.Minute, false)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, hash(1), c.Hash, "a probed release again, most peers first")
+	require.Contains(t, []store.Hash{hash(1), hash(2), hash(4)}, c.Hash, "a probed release too")
+	require.True(t, c.Wanted)
 
 	_, err = b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byHash(99)}))
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(err))

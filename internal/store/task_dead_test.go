@@ -41,7 +41,7 @@ func evictions(t *testing.T, reader *sdkmetric.ManualReader) map[string]int64 {
 func TestNoPeers(t *testing.T) {
 	ctx := context.Background()
 	reader := sdkmetric.NewManualReader()
-	q := openQueue(t, QueueOptions{NoPeersFor: time.Hour, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
+	q := openQueue(t, TaskOptions{NoPeersFor: time.Hour, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
 	enqueue(t, q, Sample, 1)
 	require.Len(t, lease(t, q, 1, 1, t0), 1)
 
@@ -94,13 +94,13 @@ func TestDeadKey(t *testing.T) {
 	} {
 		require.Equal(t, c.want, deadKey(c.hash), "%x", c.hash)
 		var got int64
-		require.NoError(t, q.db.R.QueryRowContext(ctx, "SELECT ingest_dead_key(?)", c.hash).Scan(&got))
+		require.NoError(t, q.db.R.QueryRowContext(ctx, "SELECT task_dead_key(?)", c.hash).Scan(&got))
 		require.Equal(t, c.want, got, "%x in SQL", c.hash)
 	}
 	var null sql.NullInt64
-	require.NoError(t, q.db.R.QueryRowContext(ctx, "SELECT ingest_dead_key(NULL)").Scan(&null))
+	require.NoError(t, q.db.R.QueryRowContext(ctx, "SELECT task_dead_key(NULL)").Scan(&null))
 	require.False(t, null.Valid)
-	_, err := q.db.R.ExecContext(ctx, "SELECT ingest_dead_key('text')")
+	_, err := q.db.R.ExecContext(ctx, "SELECT task_dead_key('text')")
 	require.Error(t, err)
 }
 
@@ -144,11 +144,11 @@ func TestMigrateDeadKey(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	q, err := NewQueue(ctx, db, QueueOptions{})
+	q, err := NewTasks(ctx, db, TaskOptions{})
 	require.NoError(t, err)
 	got := map[int64]int64{}
 	require.NoError(t, func() error {
-		rows, err := q.db.R.QueryContext(ctx, "SELECT key, until FROM ingest_dead")
+		rows, err := q.db.R.QueryContext(ctx, "SELECT key, until FROM task_dead")
 		if err != nil {
 			return err
 		}
@@ -164,8 +164,8 @@ func TestMigrateDeadKey(t *testing.T) {
 	}())
 	require.Equal(t, map[int64]int64{deadKey(a[:]): 300, deadKey(c[:]): 100}, got, "one row a key, with the latest until")
 	var index string
-	require.NoError(t, q.db.R.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE name = 'ingest_dead_until'").Scan(&index))
-	require.Contains(t, index, "ingest_dead (until)")
+	require.NoError(t, q.db.R.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE name = 'task_dead_until'").Scan(&index))
+	require.Contains(t, index, "task_dead (until)")
 }
 
 // BenchmarkDeadExpiry times, on a dead set of 3M hashes expiring over a day,
@@ -184,15 +184,15 @@ func BenchmarkDeadExpiry(b *testing.B) {
 			db, err := database.Open(ctx, filepath.Join(b.TempDir(), "test.db"), database.Options{})
 			require.NoError(b, err)
 			defer db.Close()
-			_, err = NewQueue(ctx, db, QueueOptions{})
+			_, err = NewTasks(ctx, db, TaskOptions{})
 			require.NoError(b, err)
 			if !indexed {
-				_, err := db.W.ExecContext(ctx, "DROP INDEX ingest_dead_until")
+				_, err := db.W.ExecContext(ctx, "DROP INDEX task_dead_until")
 				require.NoError(b, err)
 			}
 			insert := func(n int, until func() int64) {
 				require.NoError(b, db.Tx(ctx, func(tx *sql.Tx) error {
-					st, err := tx.PrepareContext(ctx, "INSERT INTO ingest_dead (key, until) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET until = excluded.until")
+					st, err := tx.PrepareContext(ctx, "INSERT INTO task_dead (key, until) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET until = excluded.until")
 					if err != nil {
 						return err
 					}
@@ -208,15 +208,15 @@ func BenchmarkDeadExpiry(b *testing.B) {
 			var now int64
 			insert(rows, func() int64 { return rand.Int64N(day) })
 			var table, index int64
-			require.NoError(b, db.R.QueryRowContext(ctx, `SELECT coalesce(sum(pgsize) FILTER (WHERE name = 'ingest_dead'), 0),
-				coalesce(sum(pgsize) FILTER (WHERE name = 'ingest_dead_until'), 0) FROM dbstat`).Scan(&table, &index))
+			require.NoError(b, db.R.QueryRowContext(ctx, `SELECT coalesce(sum(pgsize) FILTER (WHERE name = 'task_dead'), 0),
+				coalesce(sum(pgsize) FILTER (WHERE name = 'task_dead_until'), 0) FROM dbstat`).Scan(&table, &index))
 			var inserting, deleting time.Duration
 			for b.Loop() {
 				now += int64(time.Minute / time.Millisecond)
 				start := time.Now()
 				insert(perMin, func() int64 { return now + day })
 				mid := time.Now()
-				_, err := db.W.ExecContext(ctx, "DELETE FROM ingest_dead WHERE until <= ?", now)
+				_, err := db.W.ExecContext(ctx, "DELETE FROM task_dead WHERE until <= ?", now)
 				require.NoError(b, err)
 				inserting += mid.Sub(start)
 				deleting += time.Since(mid)

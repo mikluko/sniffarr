@@ -39,7 +39,7 @@ const maxCredit = 10000
 // the default named in their doc.
 type Service struct {
 	Store *store.Store
-	Queue *store.Queue
+	Tasks *store.Tasks
 	Log   *slog.Logger
 	// Lease is how long a fetcher holds a task before it returns to the
 	// queue; DefaultLease.
@@ -66,7 +66,7 @@ type Service struct {
 	// nil.
 	Meter metric.MeterProvider
 
-	probes      probeLeases
+	probeMu     sync.Mutex
 	owners      atomic.Int64
 	wake        notifier
 	metricsOnce sync.Once
@@ -163,7 +163,7 @@ func (s *Service) sight(ctx context.Context, batch []store.Sighting) (queued, kn
 			fresh = append(fresh, g)
 		}
 	}
-	queued, queuedBefore, err := s.Queue.Enqueue(ctx, fresh, s.now())
+	queued, queuedBefore, err := s.Tasks.Enqueue(ctx, fresh, s.now())
 	if err != nil {
 		return 0, 0, nil, s.internal(ctx, "enqueue", err)
 	}
@@ -176,7 +176,7 @@ func (s *Service) store(ctx context.Context, h store.Hash, t *sniffarrv1.Torrent
 	if t.GetName() == "" {
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("torrent %x has no name", h))
 	}
-	d, err := s.Queue.Discovery(ctx, store.Hash(h))
+	d, err := s.Tasks.Discovery(ctx, store.Hash(h))
 	if errors.Is(err, store.ErrNotQueued) {
 		return nil
 	}
@@ -186,7 +186,7 @@ func (s *Service) store(ctx context.Context, h store.Hash, t *sniffarrv1.Torrent
 	if err := s.keep(ctx, h, d, t); err != nil {
 		return err
 	}
-	if err := s.Queue.Complete(ctx, store.Hash(h)); err != nil {
+	if err := s.Tasks.Complete(ctx, store.TaskFetch, store.Hash(h)); err != nil {
 		return s.internal(ctx, "complete", err)
 	}
 	return nil

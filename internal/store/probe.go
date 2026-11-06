@@ -95,47 +95,59 @@ type Probe struct {
 	Downloaded int64
 }
 
-// ProbeCandidate is a stored release to probe.
+// ProbeCandidate is a stored release leased to a probe.
 type ProbeCandidate struct {
-	ID   int64
 	Hash Hash
-	// Wanted reports whether a search of Radarr or Sonarr returned it.
+	// Wanted reports whether its probe was asked for or a search of Radarr
+	// or Sonarr returned it: queued at PriorityArr or ahead.
 	Wanted bool
 }
 
-// WantProbe records that a search returned the releases of the hashes at the
-// time; hashes not stored are ignored.
+// probeGrown selects a release whose failed probes have not run out, or
+// which has twice the peers over 7 days it had at the last probe, and at
+// least two more.
+const probeGrown = `(p.peers_week IS NULL OR t.peers_week >= 2 * p.peers_week AND t.peers_week >= p.peers_week + 2)`
+
+// probeDue selects a failed probe due again: its backoff out, and
+// probeGrown. Its argument is the time in seconds.
+const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND ` + probeGrown
+
+// WantProbe queues a probe at PriorityArr, at the time, for each stored
+// release of the hashes a search returned, unless its probe is done or its
+// failures ran out without its peers growing; a failed one waits out its
+// backoff. A release already queued moves ahead to PriorityArr and to the
+// time.
 func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) error {
 	if len(hashes) == 0 {
 		return nil
 	}
-	args := make([]any, 0, len(hashes)+1)
-	args = append(args, at.Unix())
+	args := make([]any, 0, len(hashes)+2)
+	args = append(args, PriorityArr, at.UnixMilli())
 	for _, h := range hashes {
 		args = append(args, h[:])
 	}
-	_, err := s.w.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, wanted_at)
-		SELECT id, ?1 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
-		ON CONFLICT (torrent_id) DO UPDATE SET wanted_at = excluded.wanted_at`, args...)
+	_, err := s.w.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
+		SELECT 'probe', t.infohash, ?1, ?2, coalesce(p.retry_at * 1000, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
+		WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND (p.outcome IS NULL OR p.outcome = '`+ProbeFailed+`' AND `+probeGrown+`)
+		ON CONFLICT (kind, infohash) DO UPDATE SET priority = min(task_queue.priority, excluded.priority), queued_at = excluded.queued_at`, args...)
 	return err
 }
 
-// RequestProbe records that the releases of the hashes were asked to be
-// probed at the time, and returns how many of them are stored. A requested
-// release is due a probe whatever its last one, ahead of those only wanted,
-// until its next probe is recorded.
+// RequestProbe queues a probe at PriorityRequest, at the time, for each
+// stored release of the hashes, whatever its last probe and backoff, and
+// returns how many of them are stored.
 func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (int, error) {
 	if len(hashes) == 0 {
 		return 0, nil
 	}
-	args := make([]any, 0, len(hashes)+1)
-	args = append(args, at.Unix())
+	args := make([]any, 0, len(hashes)+2)
+	args = append(args, PriorityRequest, at.UnixMilli())
 	for _, h := range hashes {
 		args = append(args, h[:])
 	}
-	res, err := s.w.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, wanted_at, requested_at)
-		SELECT id, ?1, ?1 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
-		ON CONFLICT (torrent_id) DO UPDATE SET wanted_at = excluded.wanted_at, requested_at = excluded.requested_at`, args...)
+	res, err := s.w.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
+		SELECT 'probe', infohash, ?1, ?2 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
+		ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0`, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -143,79 +155,121 @@ func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (
 	return int(n), err
 }
 
-// NextProbe returns the release to probe next at now, other than those of
-// exclude: the most recently requested one, else the most recently wanted
-// one, else, with background, the one never probed with the most peers over
-// 7 days, else the one due a probe again with the most. Each is a movie or a series with peers and a stored
-// file of a format a probe reads. It returns false when there is none.
-func (s *Store) NextProbe(ctx context.Context, now time.Time, background bool, exclude []int64) (ProbeCandidate, bool, error) {
-	var base []any
-	for _, e := range probeExtensions {
-		base = append(base, e)
+// ProbeLeases returns how many probes are leased and unexpired at now.
+func (s *Store) ProbeLeases(ctx context.Context, now time.Time) (int, error) {
+	var n int
+	err := s.r.QueryRowContext(ctx, "SELECT count(*) FROM task_queue WHERE kind = 'probe' AND lease_until > ?", now.UnixMilli()).Scan(&n)
+	return n, err
+}
+
+// LeaseProbe frees the expired probe leases, then leases to owner until
+// now+d the release to probe next and returns it, or false when there is
+// none. It takes the queued probe with the lowest priority, the newest
+// first, among those at PriorityArr or ahead unless background; then, with
+// background, the release never probed with the most peers over 7 days,
+// else the one due a probe again with the most, which it queues at
+// PrioritySample. Each is a movie or a series with peers and a stored file
+// of a format a probe reads.
+func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d time.Duration, background bool) (c ProbeCandidate, ok bool, err error) {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		c, ok, err = leaseProbe(ctx, tx, owner, now, d, background)
+		return err
+	})
+	return c, ok, err
+}
+
+func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d time.Duration, background bool) (ProbeCandidate, bool, error) {
+	if _, err := freeExpired(ctx, tx, "kind = 'probe'", now); err != nil {
+		return ProbeCandidate{}, false, err
 	}
-	base = append(base, int64Args(exclude)...)
-	withNow := append([]any{now.Unix()}, base...)
-	c, err := s.nextProbe(ctx, wantedProbe(len(exclude)), withNow...)
-	if err == nil || !errors.Is(err, sql.ErrNoRows) || !background {
-		return c, err == nil, ignoreNoRows(err)
+	until := now.Add(d).UnixMilli()
+	c, id, err := queuedProbe(ctx, tx, now, background)
+	if err == nil {
+		_, err = tx.ExecContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ? WHERE id = ?", owner, until, id)
+		return c, err == nil, err
 	}
-	c, err = s.nextProbe(ctx, backgroundProbe(len(exclude)), base...)
-	if err == nil || !errors.Is(err, sql.ErrNoRows) {
-		return c, err == nil, ignoreNoRows(err)
+	if !errors.Is(err, sql.ErrNoRows) || !background {
+		return ProbeCandidate{}, false, ignoreNoRows(err)
 	}
-	c, err = s.nextProbe(ctx, retryProbe(len(exclude)), withNow...)
-	return c, err == nil, ignoreNoRows(err)
-}
-
-// probeDue selects a failed probe due again: its backoff out and, once the
-// attempts ran out, the release with twice the peers over 7 days it had at
-// the last probe, and at least two more. Its argument is the time.
-const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ?
-	AND (p.peers_week IS NULL OR t.peers_week >= 2 * p.peers_week AND t.peers_week >= p.peers_week + 2)`
-
-// probeCond selects releases a probe can read, other than excluded ones,
-// whose probe row p passes state; its arguments are those of state, then
-// probeExtensions and the excluded IDs.
-func probeCond(state string, excluded int) string {
-	cond := `t.kind IN ('movie', 'series') AND t.peers_week > 0 AND (` + state + `)
-		AND EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = t.id AND (f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ?))`
-	if excluded > 0 {
-		cond += " AND t.id NOT IN (" + placeholders(excluded) + ")"
+	h, err := unqueuedProbe(ctx, tx, now)
+	if err != nil || h == nil {
+		return ProbeCandidate{}, false, err
 	}
-	return cond
+	_, err = tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at, lease_owner, lease_until) VALUES ('probe', ?, ?, ?, ?, ?)",
+		h, PrioritySample, now.UnixMilli(), owner, until)
+	return ProbeCandidate{Hash: Hash(h)}, err == nil, err
 }
 
-// wantedProbe is the query of the most recently requested release, else the
-// most recently wanted one due a probe. CROSS JOIN keeps SQLite walking the
-// wanted releases rather than every release.
-func wantedProbe(excluded int) string {
-	return `SELECT t.id, t.infohash, 1 FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
-		WHERE p.wanted_at IS NOT NULL AND ` + probeCond("p.requested_at IS NOT NULL OR p.outcome IS NULL OR "+probeDue, excluded) +
-		` ORDER BY p.requested_at IS NULL, p.wanted_at DESC, t.peers_week DESC LIMIT 1`
-}
+// queuedProbeQuery selects the free queued probe due at its first argument,
+// at the priority of its second or ahead unless its third. CROSS JOIN keeps
+// SQLite walking the queued probes rather than every release.
+var queuedProbeQuery = `SELECT q.id, q.infohash, q.priority FROM task_queue q CROSS JOIN torrent_releases t ON t.infohash = q.infohash
+	WHERE q.kind = 'probe' AND q.lease_owner IS NULL AND q.not_before <= ? AND (q.priority <= ? OR ?) AND ` + probeCond("1") + `
+	ORDER BY q.priority, q.queued_at DESC, q.id DESC LIMIT 1`
 
-// backgroundProbe is the query of the release never probed with the most
-// peers over 7 days.
-func backgroundProbe(excluded int) string {
-	return `SELECT t.id, t.infohash, 0 FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
-		WHERE ` + probeCond("p.outcome IS NULL", excluded) + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
-}
+// unqueued selects releases t not queued for a probe.
+const unqueued = ` AND NOT EXISTS (SELECT 1 FROM task_queue q WHERE q.kind = 'probe' AND q.infohash = t.infohash)`
 
-// retryProbe is the query of the release due a probe again with the most
-// peers over 7 days.
-func retryProbe(excluded int) string {
-	return `SELECT t.id, t.infohash, 0 FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
-		WHERE ` + probeCond(probeDue, excluded) + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
-}
+// backgroundProbeQuery selects the release not queued for a probe never
+// probed with the most peers over 7 days.
+var backgroundProbeQuery = `SELECT t.infohash FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
+	WHERE ` + probeCond("p.outcome IS NULL") + unqueued + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
 
-func (s *Store) nextProbe(ctx context.Context, query string, args ...any) (ProbeCandidate, error) {
-	var c ProbeCandidate
+// retryProbeQuery selects the release not queued for a probe due a probe
+// again at its first argument with the most peers over 7 days.
+var retryProbeQuery = `SELECT t.infohash FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
+	WHERE ` + probeCond(probeDue) + unqueued + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
+
+// queuedProbe returns the free queued probe due at now that LeaseProbe takes
+// first, and the ID of its task, or sql.ErrNoRows.
+func queuedProbe(ctx context.Context, tx *sql.Tx, now time.Time, background bool) (ProbeCandidate, int64, error) {
+	var id int64
+	var prio int
 	var h []byte
-	if err := s.r.QueryRowContext(ctx, query, args...).Scan(&c.ID, &h, &c.Wanted); err != nil {
-		return ProbeCandidate{}, err
+	if err := tx.QueryRowContext(ctx, queuedProbeQuery, append([]any{now.UnixMilli(), PriorityArr, background}, probeArgs()...)...).Scan(&id, &h, &prio); err != nil {
+		return ProbeCandidate{}, 0, err
 	}
-	c.Hash = Hash(h)
-	return c, nil
+	return ProbeCandidate{Hash: Hash(h), Wanted: prio <= PriorityArr}, id, nil
+}
+
+// unqueuedProbe returns the infohash of the release not queued for a probe
+// never probed with the most peers over 7 days, else of the one due a probe
+// again at now with the most, or nil.
+func unqueuedProbe(ctx context.Context, tx *sql.Tx, now time.Time) ([]byte, error) {
+	for _, q := range []struct {
+		query string
+		args  []any
+	}{
+		{backgroundProbeQuery, probeArgs()},
+		{retryProbeQuery, append([]any{now.Unix()}, probeArgs()...)},
+	} {
+		var h []byte
+		err := tx.QueryRowContext(ctx, q.query, q.args...).Scan(&h)
+		if err == nil {
+			return h, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
+// probeCond selects releases t a probe can read whose probe row p, when
+// state names it, passes state; its arguments are those of state, then
+// probeArgs.
+func probeCond(state string) string {
+	return `t.kind IN ('movie', 'series') AND t.peers_week > 0 AND (` + state + `)
+		AND EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = t.id AND (f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ?))`
+}
+
+// probeArgs are the arguments probeCond takes after those of its state.
+func probeArgs() []any {
+	args := make([]any, len(probeExtensions))
+	for i, e := range probeExtensions {
+		args[i] = e
+	}
+	return args
 }
 
 func ignoreNoRows(err error) error {
@@ -229,7 +283,9 @@ func ignoreNoRows(err error) error {
 // release is due again after backoff, doubled for each failure before up to
 // attempts; once attempts probes have failed it is due again only with more
 // peers over 7 days than it had at the last, and ProbeFailed reports whether
-// the attempts have run out.
+// the attempts have run out. A probe queued at PriorityArr or ahead stays
+// queued at PriorityArr until the backoff is out, while attempts remain;
+// any other leaves the queue.
 func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts int, backoff time.Duration) (final bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var id, peers int64
@@ -246,17 +302,45 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts 
 		final = failed >= attempts
 		retry := at.Add(backoff << min(failed-1, attempts-1)).Unix()
 		_, err = tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, peers_week) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-			ON CONFLICT (torrent_id) DO UPDATE SET outcome = ?2, attempts = ?3, retry_at = ?4, probed_at = ?5, peers_week = ?6, requested_at = NULL`,
+			ON CONFLICT (torrent_id) DO UPDATE SET outcome = ?2, attempts = ?3, retry_at = ?4, probed_at = ?5, peers_week = ?6`,
 			id, ProbeFailed, failed, retry, at.Unix(), sql.NullInt64{Int64: peers, Valid: final})
-		return err
+		if err != nil {
+			return err
+		}
+		return requeueProbe(ctx, tx, h, final, retry)
 	})
 	return final, err
 }
 
-// ProbeDone records the probe of the stored release at the time, replacing
-// its tracks. With the tracks read, each audio language of Options gets
-// probability 1 when an audio track is in it, and 0 when every audio track
-// gives another language and no marker decided it.
+// requeueProbe keeps the probe of h queued at PriorityArr, due at retry in
+// seconds, when it was queued at PriorityArr or ahead and is not final, and
+// drops it from the queue otherwise.
+func requeueProbe(ctx context.Context, tx *sql.Tx, h Hash, final bool, retry int64) error {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM task_queue WHERE kind = 'probe' AND infohash = ? AND (? OR priority > ?)", h[:], final, PriorityArr); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, "UPDATE task_queue SET priority = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE kind = 'probe' AND infohash = ?",
+		PriorityArr, retry*1000, h[:])
+	return err
+}
+
+// probed records the outcome of the probe of release id, h, at the time,
+// and drops it from the queue.
+func probed(ctx context.Context, tx *sql.Tx, id int64, h Hash, p Probe, at time.Time) error {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, path, format, downloaded)
+		VALUES (?1, ?2, 0, NULL, ?3, ?4, ?5, ?6) ON CONFLICT (torrent_id) DO UPDATE SET
+		outcome = ?2, retry_at = NULL, probed_at = ?3, path = ?4, format = ?5, downloaded = downloaded + ?6`,
+		id, p.Outcome, at.Unix(), nullString(p.Path), nullString(p.Format), p.Downloaded); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, "DELETE FROM task_queue WHERE kind = 'probe' AND infohash = ?", h[:])
+	return err
+}
+
+// ProbeDone records the probe of the stored release at the time, drops it
+// from the queue, and replaces its tracks. With the tracks read, each audio
+// language of Options gets probability 1 when an audio track is in it, and 0
+// when every audio track gives another language and no marker decided it.
 func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		var id int64
@@ -267,10 +351,7 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, path, format, downloaded)
-			VALUES (?1, ?2, 0, NULL, ?3, ?4, ?5, ?6) ON CONFLICT (torrent_id) DO UPDATE SET
-			outcome = ?2, retry_at = NULL, probed_at = ?3, path = ?4, format = ?5, downloaded = downloaded + ?6, requested_at = NULL`,
-			id, p.Outcome, at.Unix(), nullString(p.Path), nullString(p.Format), p.Downloaded); err != nil {
+		if err := probed(ctx, tx, id, h, p, at); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM probe_tracks WHERE torrent_id = ?", id); err != nil {

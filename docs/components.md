@@ -26,13 +26,18 @@ they reach it over an in-process connection; without `-api` they dial
 Any number of sniffing and fetching processes can run against one API.
 `-sniff` and `-fetch` in one process share one DHT node.
 
-The queue serves the infohashes Radarr or Sonarr grabbed first, then
-announced ones before sampled ones, then the oldest first. It lives in the same SQLite database and survives restarts; a task
+The queue holds three kinds of task: the fetch of an infohash's metadata,
+the lookup of a stored release's peers and the probe of its tracks. It
+serves them by priority: the lookups and probes asked for in the web UI
+first, then the infohashes Radarr or Sonarr grabbed and the probes of
+releases a search returned, then feeds, then announced infohashes before
+sampled ones, then the oldest first. Fetchers take fetches and lookups,
+and probers take probes. It lives in the same SQLite database and survives restarts; a task
 whose fetcher goes away, or whose lease expires, goes back to the queue. A
 task whose fetcher finds no peers, or fewer than its `-min-peers`, is dropped
 at once. A task whose metadata times out is retried after a backoff and
 dropped after a few attempts.
-The queue is bounded: once a minute the API evicts the infohashes that have
+The fetches are bounded: once a minute the API evicts the infohashes that have
 waited too long, then the ones beyond the size limit, sampled ones before
 announced ones and the oldest first. A dropped or evicted infohash is kept out
 of the queue for a while, a shorter one when it had no peers, then forgotten.

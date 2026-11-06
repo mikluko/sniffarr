@@ -21,25 +21,27 @@ BlockAdditionMapping, MP4's `dvcC`, `dvvC` or `dvwC`), else `HLG` or
 `HDR10` by the transfer characteristics, or `HDR10` for mastering metadata.
 
 Candidates are stored movies and series with a stored file of those
-formats and at least one distinct peer over the last 7 days. Releases
-asked for with `RequestProbe`, the web UI's probe button, go first, the
-most recently asked for first, whatever their last probe, until their next
-one is recorded. Releases a Torznab search with a query or an ID returned
-go next, the most recently returned first; then the rest, the most peers
-over 7 days first. A release
-without peers waits until it has some. Each release is probed once, and
+formats and at least one distinct peer over the last 7 days. Probes wait in
+the API's task queue beside fetches and peer lookups, by priority and then
+the most recently queued first. Releases asked for with `RequestProbe`, the
+web UI's probe button, go first, whatever their last probe. Releases a
+Torznab search with a query or an ID returned go next, unless their probe is
+done or its failures ran out without the peers growing. With the queue
+empty, the release never probed with the most peers over 7 days goes, then
+the one due a probe again with the most. A release without peers waits
+until it has some. Each release is probed once, and
 the outcome is stored, the tracks in their own table: read, unknown
 (no file of those formats, a track list beyond `max_bytes`, or a header the
 probe cannot read), or failed (fewer than `-min-peers` peers within
 `-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
 before `-probe-timeout`). A failed probe is repeated after
-`SNIFFARR_PROBE_BACKOFF`, doubled for each failure before; once
+`SNIFFARR_PROBE_BACKOFF`, doubled for each failure before; a requested or
+searched one stays queued as searched until then. Once
 `SNIFFARR_PROBE_ATTEMPTS` have failed, the backoff stays at its last doubling
 and the release is probed again only once it has twice the peers over 7 days
-it had at its last probe, and at least two more. Releases never probed go
-before those due again. A task is leased for
-`SNIFFARR_PROBE_LEASE`; leases live in the API's memory, so a restart frees
-them.
+it had at its last probe, and at least two more. A task is leased for
+`SNIFFARR_PROBE_LEASE`; leases are kept in the queue, and a restart of the
+API frees them.
 
 The API meters the piece data probes download per UTC day, as it meters
 the classifier's tokens: `SNIFFARR_PROBE_DAILY_BYTES`, 100 GiB by default.

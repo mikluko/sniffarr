@@ -178,15 +178,15 @@ func newCounts(s *store.Store, log *slog.Logger) *search.Counts {
 	return &search.Counts{Store: s, Log: log}
 }
 
-func newRecorder(s *store.Store, q *store.Queue, c *classifiers, log *slog.Logger) *arr.Recorder {
-	r := &arr.Recorder{Store: s, Queue: q, Log: log}
+func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logger) *arr.Recorder {
+	r := &arr.Recorder{Store: s, Tasks: q, Log: log}
 	if c.matcher != nil {
 		r.Finder = c.matcher.Client
 	}
 	return r
 }
 
-func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts,
+func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts,
 	rec *arr.Recorder, mem *memconn.Listener) error {
 	var titles search.TitleSearch
 	if c.matcher != nil {
@@ -195,7 +195,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 	handler, err := server.New(server.Config{
 		TMDB:         titles,
 		Store:        s,
-		Queue:        q,
+		Tasks:        q,
 		Lease:        cfg.Lease,
 		Attempts:     cfg.Attempts,
 		Backoff:      cfg.Backoff,
@@ -218,7 +218,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 	return nil
 }
 
-func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, q *store.Queue, c *classifiers, counts *search.Counts, rec *arr.Recorder) {
+func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts, rec *arr.Recorder) {
 	app.Go(lc, sd, log, "backfill", func(ctx context.Context) error {
 		backfill(ctx, s, log)
 		return nil
@@ -265,7 +265,7 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		app.Go(lc, sd, log, name+" history", hist.Run)
 	}
 	if len(cfg.Feeds.Sources) > 0 {
-		frec := &feed.Recorder{Store: s, Queue: q, Log: log}
+		frec := &feed.Recorder{Store: s, Tasks: q, Log: log}
 		for _, src := range feedSources(cfg.Feeds) {
 			p := &feed.Poller{Source: src, Recorder: frec, Interval: cfg.Feeds.Interval, HTTP: &http.Client{Timeout: feedTimeout}, Log: log}
 			app.Go(lc, sd, log, src.Name()+" feed", p.Run)
@@ -292,7 +292,7 @@ func feedSources(f Feeds) []feed.Source {
 
 // maintain trims the queue and deletes the torrents not seen within
 // retention, or within idle for those with no TMDB work.
-func maintain(ctx context.Context, q *store.Queue, s *store.Store, retention, idle time.Duration, log *slog.Logger) {
+func maintain(ctx context.Context, q *store.Tasks, s *store.Store, retention, idle time.Duration, log *slog.Logger) {
 	now := time.Now()
 	t, err := q.Trim(ctx, now)
 	if err != nil && !errors.Is(err, context.Canceled) {

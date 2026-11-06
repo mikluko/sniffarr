@@ -66,8 +66,8 @@ func newFetchMetrics(mp metric.MeterProvider) fetchMetrics {
 // Fetcher takes tasks from the server's Fetch, gets their metadata from a
 // MetadataSource, and returns the results on the same stream; a task asking
 // for peers only gets them from the MetadataSource too, counts them in Peers
-// and returns nothing. It grants the server one unit of credit per idle
-// worker.
+// and returns how many it found. It grants the server one unit of credit per
+// idle worker.
 type Fetcher struct {
 	cfg     FetcherConfig
 	source  MetadataSource
@@ -228,13 +228,23 @@ func (f *Fetcher) work(ctx context.Context) {
 			return
 		case t = <-f.tasks:
 		}
-		var ok bool
+		start := time.Now()
+		var r *sniffarrv1.Result
+		var outcome string
 		if t.peers {
-			ok = f.lookup(ctx, t.hash)
+			r, outcome = f.lookup(ctx, t.hash)
 		} else {
-			ok = f.fetch(ctx, t.hash)
+			r, outcome = f.fetch(ctx, t.hash)
 		}
-		if !ok {
+		if ctx.Err() != nil {
+			return
+		}
+		f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))
+		f.metrics.duration.Record(ctx, time.Since(start).Seconds(), outcomeAttr(outcome))
+		f.metrics.inFlight.Add(ctx, -1)
+		select {
+		case f.results <- r:
+		case <-ctx.Done():
 			return
 		}
 		f.mu.Lock()
@@ -245,49 +255,32 @@ func (f *Fetcher) work(ctx context.Context) {
 	}
 }
 
-// fetch gets the metadata of h and queues its result, and reports false
-// when ctx is done first.
-func (f *Fetcher) fetch(ctx context.Context, h Hash) bool {
-	start := time.Now()
+// fetch gets the metadata of h, counts the peers it came through, and
+// returns the result and the name of its outcome.
+func (f *Fetcher) fetch(ctx context.Context, h Hash) (*sniffarrv1.Result, string) {
 	m, err := f.source.Metadata(ctx, h)
-	if ctx.Err() != nil {
-		return false
-	}
 	if err == nil && f.cfg.Peers != nil {
 		f.cfg.Peers.Add(h, m.Peers)
 	}
-	r, outcome := f.result(ctx, h, m, err)
-	f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))
-	f.metrics.duration.Record(ctx, time.Since(start).Seconds(), outcomeAttr(outcome))
-	f.metrics.inFlight.Add(ctx, -1)
-	select {
-	case f.results <- r:
-		return true
-	case <-ctx.Done():
-		return false
-	}
+	return f.result(ctx, h, m, err)
 }
 
-// lookup gets the peers of h and counts them, and reports false when ctx
-// is done first.
-func (f *Fetcher) lookup(ctx context.Context, h Hash) bool {
-	start := time.Now()
+// lookup gets the peers of h, counts them, and returns the result and the
+// name of its outcome.
+func (f *Fetcher) lookup(ctx context.Context, h Hash) (*sniffarrv1.Result, string) {
 	peers, err := f.source.Peers(ctx, h)
-	if ctx.Err() != nil {
-		return false
-	}
-	outcome := "lookup"
-	if err != nil || len(peers) == 0 {
-		outcome = "lookup_no_peers"
+	if err != nil {
+		peers = nil
 	}
 	if f.cfg.Peers != nil {
 		f.cfg.Peers.Add(h, peers)
 	}
 	f.cfg.Log.DebugContext(ctx, "looked up", slog.String("infohash", hex.EncodeToString(h[:])), "peers", len(peers))
-	f.metrics.outcomes.Add(ctx, 1, outcomeAttr(outcome))
-	f.metrics.duration.Record(ctx, time.Since(start).Seconds(), outcomeAttr(outcome))
-	f.metrics.inFlight.Add(ctx, -1)
-	return true
+	outcome := "lookup"
+	if len(peers) == 0 {
+		outcome = "lookup_no_peers"
+	}
+	return &sniffarrv1.Result{Infohash: h[:], Outcome: &sniffarrv1.Result_Lookup{Lookup: &sniffarrv1.Lookup{Peers: int32(len(peers))}}}, outcome
 }
 
 func (f *Fetcher) signal() {

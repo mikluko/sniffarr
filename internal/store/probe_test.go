@@ -32,9 +32,22 @@ func insertProbeable(t *testing.T, s *Store, b byte, name string, peers int64, p
 // markedByte is the hash byte insertProbeable gives a Russian marker.
 const markedByte = 3
 
-func nextProbe(t *testing.T, s *Store, now time.Time, background bool, exclude ...int64) (ProbeCandidate, bool) {
+// nextProbe returns what LeaseProbe would lease at now, leaving the store as
+// it was.
+func nextProbe(t *testing.T, s *Store, now time.Time, background bool) (ProbeCandidate, bool) {
 	t.Helper()
-	c, ok, err := s.NextProbe(context.Background(), now, background, exclude)
+	tx, err := s.w.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, tx.Rollback()) }()
+	c, ok, err := leaseProbe(context.Background(), tx, 1, now, time.Minute, background)
+	require.NoError(t, err)
+	return c, ok
+}
+
+// leaseNext leases the next probe at now for 1000 hours.
+func leaseNext(t *testing.T, s *Store, now time.Time, background bool) (ProbeCandidate, bool) {
+	t.Helper()
+	c, ok, err := s.LeaseProbe(context.Background(), 1, now, 1000*time.Hour, background)
 	require.NoError(t, err)
 	return c, ok
 }
@@ -58,22 +71,25 @@ func TestNextProbeOrder(t *testing.T) {
 	require.False(t, c.Wanted)
 
 	require.NoError(t, s.WantProbe(ctx, []Hash{few, hash(99)}, t0))
-	c, ok = nextProbe(t, s, t0, true)
+	c, ok = leaseNext(t, s, t0, true)
 	require.True(t, ok)
 	require.Equal(t, few, c.Hash, "a searched release before the rest")
 	require.True(t, c.Wanted)
+	n, err := s.ProbeLeases(ctx, t0)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
 
-	_, ok = nextProbe(t, s, t0, false, c.ID)
+	_, ok = nextProbe(t, s, t0, false)
 	require.False(t, ok, "only searched releases without background, and the leased one is left out")
 
-	c, ok = nextProbe(t, s, t0, true, c.ID)
+	c, ok = nextProbe(t, s, t0, true)
 	require.True(t, ok)
 	require.Equal(t, many, c.Hash)
 
 	_, err = s.ProbeFailed(ctx, many, t0, 3, time.Hour)
 	require.NoError(t, err)
 	setPeersWeek(t, s, hash(3), 1)
-	c, ok = nextProbe(t, s, t0.Add(2*time.Hour), true, mustGet(t, s, few).ID)
+	c, ok = nextProbe(t, s, t0.Add(2*time.Hour), true)
 	require.True(t, ok)
 	require.Equal(t, hash(3), c.Hash, "a release never probed before one due again, whatever their peers")
 }
@@ -121,10 +137,13 @@ func TestProbeFailedRetries(t *testing.T) {
 	_, err = s.ProbeFailed(ctx, one, t0, 1, time.Hour)
 	require.NoError(t, err)
 	setPeersWeek(t, s, one, 2)
-	c, ok := nextProbe(t, s, t0.Add(1000*time.Hour), true, mustGet(t, s, h).ID)
+	c, ok := leaseNext(t, s, t0.Add(1000*time.Hour), true)
+	require.True(t, ok)
+	require.Equal(t, h, c.Hash)
+	_, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
 	require.False(t, ok, "one peer to two is twice, but not two more")
 	setPeersWeek(t, s, one, 3)
-	c, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true, mustGet(t, s, h).ID)
+	c, ok = nextProbe(t, s, t0.Add(1000*time.Hour), true)
 	require.True(t, ok)
 	require.Equal(t, one, c.Hash)
 }
@@ -230,14 +249,12 @@ func requireAudio(t *testing.T, r Release, p float64, layer string) {
 
 func TestProbePlans(t *testing.T) {
 	s := open(t)
-	args := []any{0}
-	for _, e := range probeExtensions {
-		args = append(args, e)
-	}
-	args = append(args, 1)
-	for _, tt := range []struct{ query, want string }{
-		{wantedProbe(1), "SEARCH p USING INDEX probe_releases_wanted (wanted_at>?)"},
-		{backgroundProbe(1), "SEARCH t USING INDEX torrent_releases_peers_week (peers_week>?)"},
+	for _, tt := range []struct {
+		query, want string
+		args        []any
+	}{
+		{queuedProbeQuery, "SEARCH q USING INDEX sqlite_autoindex_task_queue_1 (kind=?)", append([]any{0, PriorityArr, false}, probeArgs()...)},
+		{backgroundProbeQuery, "SEARCH t USING INDEX torrent_releases_peers_week (peers_week>?)", probeArgs()},
 	} {
 		var plan []string
 		require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
@@ -248,7 +265,7 @@ func TestProbePlans(t *testing.T) {
 			}
 			plan = append(plan, detail)
 			return nil
-		}, "EXPLAIN QUERY PLAN "+tt.query, args...))
+		}, "EXPLAIN QUERY PLAN "+tt.query, tt.args...))
 		require.Contains(t, plan, tt.want, tt.query)
 	}
 }
@@ -283,28 +300,33 @@ func TestRequestProbe(t *testing.T) {
 	final, err := s.ProbeFailed(ctx, failed, t0, 1, time.Hour)
 	require.NoError(t, err)
 	require.True(t, final)
-	require.NoError(t, s.WantProbe(ctx, []Hash{wanted}, t0.Add(2*time.Minute)))
+	require.NoError(t, s.WantProbe(ctx, []Hash{wanted, done, failed}, t0.Add(2*time.Minute)))
+	c, ok := nextProbe(t, s, t0.Add(time.Minute), false)
+	require.True(t, ok)
+	require.Equal(t, wanted, c.Hash, "a search queues neither a done probe nor one whose attempts ran out")
 
 	n, err := s.RequestProbe(ctx, []Hash{done, failed, hash(99)}, t0.Add(time.Minute))
 	require.NoError(t, err)
 	require.Equal(t, 2, n, "only stored releases")
 
-	c, ok := nextProbe(t, s, t0.Add(time.Minute), false)
+	c, ok = leaseNext(t, s, t0.Add(time.Minute), false)
 	require.True(t, ok)
 	require.True(t, c.Wanted)
-	require.Contains(t, []Hash{done, failed}, c.Hash, "a requested release before a wanted one wanted later, whatever its last probe")
-	other := done
-	if c.Hash == done {
-		other = failed
-	}
-	c2, ok := nextProbe(t, s, t0.Add(time.Minute), false, c.ID)
+	require.Equal(t, failed, c.Hash, "a request before a search, whatever the last probe, the newest first")
+	c2, ok := leaseNext(t, s, t0.Add(time.Minute), false)
 	require.True(t, ok)
-	require.Equal(t, other, c2.Hash, "a failed release past its attempts too")
+	require.Equal(t, done, c2.Hash)
 
-	require.NoError(t, s.ProbeDone(ctx, c.Hash, Probe{Outcome: ProbeUnknown}, t0.Add(time.Minute)))
-	_, err = s.ProbeFailed(ctx, c2.Hash, t0.Add(time.Minute), 1, time.Hour)
+	require.NoError(t, s.ProbeDone(ctx, c2.Hash, Probe{Outcome: ProbeUnknown}, t0.Add(time.Minute)))
+	final, err = s.ProbeFailed(ctx, c.Hash, t0.Add(time.Minute), 3, time.Hour)
 	require.NoError(t, err)
-	c, ok = nextProbe(t, s, t0.Add(time.Minute), false)
+	require.False(t, final)
+	c, ok = leaseNext(t, s, t0.Add(time.Minute), false)
 	require.True(t, ok)
 	require.Equal(t, wanted, c.Hash, "a recorded probe ends the request")
+	_, ok = nextProbe(t, s, t0.Add(time.Minute), false)
+	require.False(t, ok, "a failed request waits out its backoff")
+	c, ok = nextProbe(t, s, t0.Add(3*time.Hour), false)
+	require.True(t, ok)
+	require.Equal(t, failed, c.Hash, "a failed request stays searched, due once its backoff is out")
 }

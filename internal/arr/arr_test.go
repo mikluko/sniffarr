@@ -51,10 +51,10 @@ func setup(t *testing.T) *fixture {
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{TMDB: true})
 	require.NoError(t, err)
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	f := &fixture{db: db, finder: &fakeFinder{}, reader: sdkmetric.NewManualReader()}
-	f.rec = &Recorder{Store: s, Queue: q, Finder: f.finder, Log: slog.New(slog.DiscardHandler),
+	f.rec = &Recorder{Store: s, Tasks: q, Finder: f.finder, Log: slog.New(slog.DiscardHandler),
 		Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(f.reader))}
 	f.hook = httptest.NewServer(&Webhook{Recorder: f.rec, Token: "secret", Log: f.rec.Log})
 	t.Cleanup(f.hook.Close)
@@ -197,7 +197,7 @@ func TestWebhookGrabUnknown(t *testing.T) {
 	code, answer := f.post(t, "?app=radarr", "secret", radarrGrab(hexOf(2)))
 	require.Equal(t, http.StatusOK, code)
 	require.Equal(t, Queued, answer)
-	d, err := f.rec.Queue.Discovery(ctx, hash(2))
+	d, err := f.rec.Tasks.Discovery(ctx, hash(2))
 	require.NoError(t, err)
 	require.Equal(t, store.Arr, d)
 
@@ -213,7 +213,7 @@ func TestWebhookGrabUnknown(t *testing.T) {
 	require.NoError(t, err)
 	_, answer = f.post(t, "", "secret", radarrGrab(hexOf(3)))
 	require.Equal(t, Unknown, answer, "a rejected torrent is not queued")
-	_, err = f.rec.Queue.Discovery(ctx, hash(3))
+	_, err = f.rec.Tasks.Discovery(ctx, hash(3))
 	require.ErrorIs(t, err, store.ErrNotQueued)
 }
 

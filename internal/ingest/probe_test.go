@@ -50,10 +50,10 @@ func newProbeFixture(t *testing.T, cfg ProbeConfig) *probeFixture {
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	f := &probeFixture{st: st, db: db, now: time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)}
-	f.s = &Service{Store: st, Queue: q, Log: slog.New(slog.DiscardHandler), Probe: cfg, Now: func() time.Time { return f.now }}
+	f.s = &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), Probe: cfg, Now: func() time.Time { return f.now }}
 	return f
 }
 

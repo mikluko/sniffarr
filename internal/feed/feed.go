@@ -228,7 +228,7 @@ const (
 // use.
 type Recorder struct {
 	Store *store.Store
-	Queue *store.Queue
+	Tasks *store.Tasks
 	Log   *slog.Logger
 	Now   func() time.Time
 	// Meter records metrics; the global MeterProvider when nil.
@@ -277,7 +277,7 @@ func (r *Recorder) effect(ctx context.Context, rec store.FeedRecorded, h store.H
 	if rejected[h] {
 		return Rejected, nil
 	}
-	if _, _, err := r.Queue.Enqueue(ctx, []store.Sighting{{Hash: h, Discovery: store.Feed}}, r.now()); err != nil {
+	if _, _, err := r.Tasks.Enqueue(ctx, []store.Sighting{{Hash: h, Discovery: store.Feed}}, r.now()); err != nil {
 		return "", fmt.Errorf("enqueue: %w", err)
 	}
 	return Queued, nil

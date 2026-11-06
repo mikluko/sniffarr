@@ -24,7 +24,7 @@ import (
 
 type fixture struct {
 	store  *store.Store
-	queue  *store.Queue
+	queue  *store.Tasks
 	rec    *Recorder
 	reader *sdkmetric.ManualReader
 	now    time.Time
@@ -38,10 +38,10 @@ func setup(t *testing.T) *fixture {
 	t.Cleanup(func() { _ = db.Close() })
 	s, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	f := &fixture{store: s, queue: q, reader: sdkmetric.NewManualReader(), now: time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)}
-	f.rec = &Recorder{Store: s, Queue: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return f.now },
+	f.rec = &Recorder{Store: s, Tasks: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return f.now },
 		Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(f.reader))}
 	return f
 }

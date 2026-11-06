@@ -231,17 +231,14 @@ func (f *fakeIngest) Fetch(ctx context.Context, stream *connect.BidiStream[sniff
 	}
 }
 
-// next takes the first hash of todo as a task, leased unless it is a
-// lookup. The caller holds mu.
+// next takes the first hash of todo as a leased task, asking for peers
+// only when it is one of lookups. The caller holds mu.
 func (f *fakeIngest) next(leased map[Hash]bool) *sniffarrv1.Task {
 	h := f.todo[0]
 	f.todo = f.todo[1:]
-	lookup := f.lookups[h]
-	if !lookup {
-		leased[h] = true
-	}
+	leased[h] = true
 	f.outstanding = max(f.outstanding, len(leased))
-	return &sniffarrv1.Task{Infohash: h[:], Peers: lookup}
+	return &sniffarrv1.Task{Infohash: h[:], Peers: f.lookups[h]}
 }
 
 func (f *fakeIngest) client(t *testing.T) sniffarrv1connect.IngestServiceClient {
@@ -650,11 +647,11 @@ func TestFetcherLookup(t *testing.T) {
 	f := NewFetcher(FetcherConfig{Ingest: ingest.client(t), Workers: 1, Peers: peers}, fakeSource{})
 	run(t, f.Run)
 
-	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 1 }, 5*time.Second, 5*time.Millisecond)
+	require.Eventually(t, func() bool { _, n := ingest.count(); return n == 2 }, 5*time.Second, 5*time.Millisecond)
 	require.Equal(t, 5, peers.count(hash(5)), "a lookup counts the peers found")
 	ingest.mu.Lock()
 	defer ingest.mu.Unlock()
-	require.NotContains(t, ingest.results, hash(5), "a lookup sends no result")
+	require.Equal(t, int32(5), ingest.results[hash(5)].GetLookup().GetPeers(), "and returns how many")
 	require.NotNil(t, ingest.results[hash(1)].GetTorrent(), "the worker is free again")
 }
 

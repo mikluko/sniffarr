@@ -81,7 +81,7 @@ type Finder interface {
 // use.
 type Recorder struct {
 	Store *store.Store
-	Queue *store.Queue
+	Tasks *store.Tasks
 	// Finder, when set, finds the TMDB ID of a series Sonarr names by its
 	// TVDB ID only, unless a stored work has the TVDB ID.
 	Finder Finder
@@ -170,7 +170,7 @@ func (r *Recorder) effect(ctx context.Context, rec store.ArrRecorded, h *store.H
 	if rejected[*h] {
 		return Unknown, nil
 	}
-	if _, _, err := r.Queue.Enqueue(ctx, []store.Sighting{{Hash: *h, Discovery: store.Arr}}, r.now()); err != nil {
+	if _, _, err := r.Tasks.Enqueue(ctx, []store.Sighting{{Hash: *h, Discovery: store.Arr}}, r.now()); err != nil {
 		return "", fmt.Errorf("enqueue: %w", err)
 	}
 	return Queued, nil

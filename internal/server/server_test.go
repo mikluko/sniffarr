@@ -27,7 +27,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-func start(t *testing.T, cfg Config, qopts ...store.QueueOptions) (*httptest.Server, *http.Client) {
+func start(t *testing.T, cfg Config, qopts ...store.TaskOptions) (*httptest.Server, *http.Client) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
@@ -35,17 +35,17 @@ func start(t *testing.T, cfg Config, qopts ...store.QueueOptions) (*httptest.Ser
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(cfg.Languages)})
 	require.NoError(t, err)
-	var qo store.QueueOptions
+	var qo store.TaskOptions
 	if len(qopts) > 0 {
 		qo = qopts[0]
 	}
 	qo.Meter = cfg.Meter
-	q, err := store.NewQueue(ctx, db, qo)
+	q, err := store.NewTasks(ctx, db, qo)
 	require.NoError(t, err)
-	cfg.Queue = q
+	cfg.Tasks = q
 	cfg.Store, cfg.Log = s, slog.New(slog.DiscardHandler)
 	if cfg.Arr != nil {
-		cfg.Arr.Store, cfg.Arr.Queue, cfg.Arr.Log = s, q, cfg.Log
+		cfg.Arr.Store, cfg.Arr.Tasks, cfg.Arr.Log = s, q, cfg.Log
 	}
 	if cfg.Counts != nil {
 		cfg.Counts.Store = s
@@ -420,7 +420,7 @@ func TestFetchLeaseExpiry(t *testing.T) {
 }
 
 func TestFetchRetryAndForget(t *testing.T) {
-	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, Poll: 20 * time.Millisecond}, store.QueueOptions{DeadFor: 300 * time.Millisecond})
+	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, Poll: 20 * time.Millisecond}, store.TaskOptions{DeadFor: 300 * time.Millisecond})
 	ingest := ingestClient(srv, hc)
 	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 	require.NoError(t, err)

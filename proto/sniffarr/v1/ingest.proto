@@ -15,11 +15,10 @@ service IngestService {
   // when the client closes the stream. A sighting of a stored torrent moves
   // its last sighting; an announce sighting moves a queued sample ahead.
   rpc Sight(stream SightRequest) returns (SightResponse);
-  // Fetch leases one queued infohash per unit of credit to the stream, and
-  // takes the results back on it. A lease returns to the queue when the
-  // stream ends without its result or when the lease expires. A peer lookup
-  // BrowseService.RefreshPeers asked for goes ahead of the queue, to one
-  // stream once, and is not repeated when that stream ends.
+  // Fetch leases one queued task per unit of credit to the stream, a fetch
+  // or a peer lookup BrowseService.RefreshPeers asked for, and takes the
+  // results back on it. A lease returns to the queue when the stream ends
+  // without its result or when the lease expires.
   rpc Fetch(stream FetchRequest) returns (stream FetchResponse);
   // HashKey returns the key every client hashes peers with before adding
   // them to a sketch, and the ID of the sniffing DHT node. The server
@@ -86,13 +85,21 @@ message Credit {
   int32 n = 1;
 }
 
-// Result is the outcome of one task.
+// Result is the outcome of one task: a torrent or a failure for a fetch, a
+// lookup for a task asking for peers.
 message Result {
   bytes infohash = 1;
   oneof outcome {
     Torrent torrent = 2;
     Failure failure = 3;
+    Lookup lookup = 4;
   }
+}
+
+// Lookup is what a task asking for peers found.
+message Lookup {
+  // Distinct peers found, each counted through Peers.
+  int32 peers = 1;
 }
 
 // Torrent is the metadata of one torrent, as its peers gave it.
@@ -122,11 +129,11 @@ message FetchResponse {
   Task task = 1;
 }
 
-// Task asks for the metadata of one infohash.
+// Task asks for the metadata of one infohash, or for its peers only.
 message Task {
   bytes infohash = 1;
   // Peers asks only for the infohash's peers on the DHT: the fetcher counts
-  // those it finds through Peers and sends no Result for the task.
+  // those it finds through Peers and returns a Lookup.
   bool peers = 2;
 }
 

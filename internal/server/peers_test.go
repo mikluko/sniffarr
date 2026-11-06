@@ -33,12 +33,12 @@ func serveMem(t *testing.T) (*store.Store, sniffarrv1connect.IngestServiceClient
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	_, _, err = s.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Alien.1979.1080p", Size: 8 << 30, Discovery: "sample", SeenAt: time.Now(),
 		Files: []rules.File{{Path: "Alien.mkv", Size: 8 << 30}}})
 	require.NoError(t, err)
-	h, err := New(Config{Store: s, Queue: q, Log: slog.New(slog.DiscardHandler)})
+	h, err := New(Config{Store: s, Tasks: q, Log: slog.New(slog.DiscardHandler)})
 	require.NoError(t, err)
 	mem := memconn.Listen()
 	srv := &http.Server{Handler: h, Protocols: Protocols()}

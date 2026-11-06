@@ -239,16 +239,16 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Probe, err = loadProbe(getenv); err != nil {
 		return a, d, err
 	}
-	if d.Queue.MaxSize, err = positive(getenv, "SNIFFARR_QUEUE_MAX_SIZE", store.DefaultMaxSize); err != nil {
+	if d.Tasks.MaxSize, err = positive(getenv, "SNIFFARR_QUEUE_MAX_SIZE", store.DefaultMaxSize); err != nil {
 		return a, d, err
 	}
-	if d.Queue.MaxAge, err = duration(getenv, "SNIFFARR_QUEUE_MAX_AGE", store.DefaultMaxAge); err != nil {
+	if d.Tasks.MaxAge, err = duration(getenv, "SNIFFARR_QUEUE_MAX_AGE", store.DefaultMaxAge); err != nil {
 		return a, d, err
 	}
-	if d.Queue.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", store.DefaultDeadFor); err != nil {
+	if d.Tasks.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", store.DefaultDeadFor); err != nil {
 		return a, d, err
 	}
-	if d.Queue.NoPeersFor, err = duration(getenv, "SNIFFARR_QUEUE_NO_PEERS_FOR", store.DefaultNoPeersFor); err != nil {
+	if d.Tasks.NoPeersFor, err = duration(getenv, "SNIFFARR_QUEUE_NO_PEERS_FOR", store.DefaultNoPeersFor); err != nil {
 		return a, d, err
 	}
 	if d.Store.MaxFiles, err = positive(getenv, "SNIFFARR_STORE_MAX_FILES", store.DefaultMaxFiles); err != nil {

@@ -27,7 +27,7 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.db.wal.size`                 | `By`         |                                            |
 | `-api`     | `sniffarr.ingest.sightings`            | `{sighting}` | `sniffarr.sighting.result`                 |
 | `-api`     | `sniffarr.queue.depth`                 | `{infohash}` | `sniffarr.discovery`                       |
-| `-api`     | `sniffarr.queue.leases`                | `{lease}`    |                                            |
+| `-api`     | `sniffarr.queue.leases`                | `{lease}`    | `sniffarr.task.kind`                       |
 | `-api`     | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
 | `-api`     | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
 | `-api`     | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
@@ -73,6 +73,7 @@ counts are the `db.sql.connection.*` metrics.
 `sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
+`sniffarr.task.kind` is `fetch`, `peers` or `probe`;
 `sniffarr.store.retention.class` is `idle` or `expired`;
 `sniffarr.classify.layer` is `rules`, `reuse` or `jev`;
 `sniffarr.search.lazy.result` is `in_time`, `late` or `failed`;

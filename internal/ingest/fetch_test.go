@@ -31,9 +31,9 @@ func TestResultOutlivesStream(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
-	s := &Service{Store: st, Queue: q, Log: slog.New(slog.DiscardHandler)}
+	s := &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler)}
 	now := time.Now()
 	_, _, err = q.Enqueue(ctx, []store.Sighting{{Hash: store.Hash{1}, Discovery: store.Sample}, {Hash: store.Hash{2}, Discovery: store.Sample}}, now)
 	require.NoError(t, err)
@@ -62,10 +62,10 @@ func TestResultFailures(t *testing.T) {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	now := time.Now()
-	s := &Service{Queue: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	s := &Service{Tasks: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
 	_, _, err = q.Enqueue(ctx, []store.Sighting{{Hash: store.Hash{1}, Discovery: store.Sample}, {Hash: store.Hash{2}, Discovery: store.Sample}}, now)
 	require.NoError(t, err)
 	_, _, err = q.Lease(ctx, 1, 2, now, time.Minute)
@@ -82,7 +82,7 @@ func TestResultFailures(t *testing.T) {
 	require.NoError(t, err, "a timeout is retried")
 	again, _, err := q.Lease(ctx, 2, 2, now.Add(DefaultBackoff), time.Minute)
 	require.NoError(t, err)
-	require.Equal(t, []store.Hash{{2}}, again)
+	require.Equal(t, []store.Task{{Kind: store.TaskFetch, Hash: store.Hash{2}}}, again)
 }
 
 func TestSightStoredFlags(t *testing.T) {
@@ -92,14 +92,14 @@ func TestSightStoredFlags(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	now := time.Now()
 	_, _, err = st.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Heat.1995.1080p", Size: 8 << 30, Discovery: store.Sample, SeenAt: now})
 	require.NoError(t, err)
 	_, err = st.Reject(ctx, store.Hash{2}, rules.Adult, now)
 	require.NoError(t, err)
-	s := &Service{Store: st, Queue: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	s := &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
 
 	batch := []store.Sighting{{Hash: store.Hash{3}, Discovery: store.Sample}, {Hash: store.Hash{1}, Discovery: store.Sample},
 		{Hash: store.Hash{2}, Discovery: store.Sample}, {Hash: store.Hash{1}, Discovery: store.Announce}}
@@ -120,11 +120,11 @@ func TestResultStoresFeatures(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	langs, err := audio.Parse("ru")
 	require.NoError(t, err)
-	s := &Service{Store: st, Queue: q, Log: slog.New(slog.DiscardHandler), Languages: langs}
+	s := &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), Languages: langs}
 	now := time.Now()
 	_, _, err = q.Enqueue(ctx, []store.Sighting{{Hash: store.Hash{1}, Discovery: store.Sample}, {Hash: store.Hash{2}, Discovery: store.Sample}}, now)
 	require.NoError(t, err)
@@ -154,14 +154,14 @@ func TestResultStoresFeatures(t *testing.T) {
 	require.Equal(t, "720p", series.Quality)
 }
 
-func TestFetchSendsLookupsFirst(t *testing.T) {
+func TestFetchLookups(t *testing.T) {
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
-	q, err := store.NewQueue(ctx, db, store.QueueOptions{})
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	now := time.Now()
 	_, _, err = st.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Heat.1995.1080p", Size: 8 << 30, Discovery: store.Sample, SeenAt: now})
@@ -172,7 +172,7 @@ func TestFetchSendsLookupsFirst(t *testing.T) {
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
-	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(&Service{Store: st, Queue: q, Log: slog.New(slog.DiscardHandler)}))
+	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(&Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler)}))
 	srv := httptest.NewUnstartedServer(mux)
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
@@ -189,7 +189,11 @@ func TestFetchSendsLookupsFirst(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, infohash(2), second.GetTask().GetInfohash())
 	require.False(t, second.GetTask().GetPeers())
-	left, err := st.TakePeerLookups(ctx, 10)
-	require.NoError(t, err)
-	require.Empty(t, left, "a lookup is sent once")
+	require.NoError(t, stream.Send(&sniffarrv1.FetchRequest{Kind: &sniffarrv1.FetchRequest_Result{Result: &sniffarrv1.Result{Infohash: infohash(1),
+		Outcome: &sniffarrv1.Result_Lookup{Lookup: &sniffarrv1.Lookup{Peers: 4}}}}}))
+	require.Eventually(t, func() bool {
+		var n int
+		require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM task_queue WHERE kind = 'peers'").Scan(&n))
+		return n == 0
+	}, 5*time.Second, 10*time.Millisecond, "a lookup's result completes it")
 }

@@ -12,11 +12,14 @@ import (
 	"modernc.org/sqlite"
 )
 
-// The SQL function ingest_dead_key(infohash), available on every
-// connection, returns deadKey of the infohash blob.
+// The SQL function task_dead_key(infohash), available on every connection,
+// returns deadKey of the infohash blob; ingest_dead_key is the same function
+// under the name migration 012 calls.
 func init() {
-	if err := sqlite.RegisterFunction("ingest_dead_key", &sqlite.FunctionImpl{NArgs: 1, Deterministic: true, Scalar: sqlDeadKey}); err != nil {
-		panic(fmt.Errorf("register ingest_dead_key: %w", err))
+	for _, name := range []string{"task_dead_key", "ingest_dead_key"} {
+		if err := sqlite.RegisterFunction(name, &sqlite.FunctionImpl{NArgs: 1, Deterministic: true, Scalar: sqlDeadKey}); err != nil {
+			panic(fmt.Errorf("register %s: %w", name, err))
+		}
 	}
 }
 
@@ -37,7 +40,7 @@ func sqlDeadKey(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, e
 	case nil:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("ingest_dead_key: want a blob, got %T", v)
+		return nil, fmt.Errorf("task_dead_key: want a blob, got %T", v)
 	}
 }
 
@@ -48,11 +51,11 @@ func evictionAttr(why string) metric.AddOption {
 // evict moves the queued hashes whose ids selectIDs returns into the dead set
 // until until, and returns how many it moved.
 func evict(ctx context.Context, tx *sql.Tx, selectIDs string, until int64, args ...any) (int, error) {
-	if _, err := tx.ExecContext(ctx, "INSERT INTO ingest_dead (key, until) SELECT ingest_dead_key(infohash), ? FROM ingest_queue WHERE id IN ("+selectIDs+") ON CONFLICT (key) DO UPDATE SET until = excluded.until",
+	if _, err := tx.ExecContext(ctx, "INSERT INTO task_dead (key, until) SELECT task_dead_key(infohash), ? FROM task_queue WHERE id IN ("+selectIDs+") ON CONFLICT (key) DO UPDATE SET until = excluded.until",
 		append([]any{until}, args...)...); err != nil {
 		return 0, err
 	}
-	res, err := tx.ExecContext(ctx, "DELETE FROM ingest_queue WHERE id IN ("+selectIDs+")", args...)
+	res, err := tx.ExecContext(ctx, "DELETE FROM task_queue WHERE id IN ("+selectIDs+")", args...)
 	if err != nil {
 		return 0, err
 	}

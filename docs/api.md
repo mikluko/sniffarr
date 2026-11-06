@@ -37,8 +37,9 @@ others out, as the chart's `api.networkPolicy` does.
   take, the server answers with a task per unit, and the client returns each
   task's result, metadata or a failure, on the same stream. A task with
   `peers` set asks only for the infohash's peers, which the client counts in
-  its sketches for `Peers`, and has no result; the lookups `RefreshPeers`
-  asked for go out before queued infohashes, each to one stream once.
+  its sketches for `Peers`, and its result is a `Lookup` with how many it
+  found. The tasks come from one queue by priority, so the lookups
+  `RefreshPeers` asked for go ahead of every fetch.
 - `HashKey` returns the 16-byte SipHash-2-4 key peers are hashed with.
 - `Peers` is client-streaming: each message is an infohash, the start of a
   UTC hour and a sketch in the Aggregate Knowledge storage specification

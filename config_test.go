@@ -187,7 +187,7 @@ func TestLoadAPI(t *testing.T) {
 				Retention: defaultRetention, RetentionIdle: defaultRetentionIdle, StatsInterval: defaultStatsInterval, Scripts: defaultScripts,
 				Probe: defaultProbe},
 			db.Config{Path: "/data/sniffarr.db",
-				Queue: store.QueueOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor},
+				Tasks: store.TaskOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor},
 				Store: store.Options{MaxFiles: store.DefaultMaxFiles, TMDB: true}}
 	}
 	tests := []struct {
@@ -214,7 +214,7 @@ func TestLoadAPI(t *testing.T) {
 					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, RetentionIdle: 72 * time.Hour, StatsInterval: time.Minute, LazyMax: 5, LazyWait: 500 * time.Millisecond,
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian,
 					Probe: ingest.ProbeConfig{DailyBytes: 20 << 30, SearchReserve: 10, MaxBytes: 32 << 20, Lease: 5 * time.Minute, Attempts: 2, Backoff: 12 * time.Hour}}
-				d.Queue = store.QueueOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour}
+				d.Tasks = store.TaskOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour}
 				d.Store = store.Options{MaxFiles: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: func(a *api.Config, _ *db.Config) { a.DailyTokens = 0 }},

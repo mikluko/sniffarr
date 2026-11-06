@@ -119,49 +119,21 @@ func (r *receiver) stop() {
 	<-r.exited
 }
 
-// lease sends up to credit tasks, the peer lookups waiting first and then
-// hashes leased to owner, and returns how many it sent. A failure to take
-// or lease is logged and sends nothing more.
+// lease leases up to credit tasks to owner, sends them, and returns how many
+// it sent. A failure to lease is logged and leases nothing.
 func (s *Service) lease(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse], owner int64, credit int) (int, error) {
-	sent, err := s.lookups(ctx, stream, credit)
-	if err != nil || sent == credit {
-		return sent, err
-	}
-	n, err := s.leaseQueued(ctx, stream, owner, credit-sent)
-	return sent + n, err
-}
-
-// lookups takes up to n peer lookups, sends them, and returns how many it
-// sent.
-func (s *Service) lookups(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse], n int) (int, error) {
-	hashes, err := s.Store.TakePeerLookups(ctx, n)
-	if err != nil {
-		s.Log.ErrorContext(ctx, "peer lookups", "err", err)
-		return 0, nil
-	}
-	for i, h := range hashes {
-		if err := stream.Send(&sniffarrv1.FetchResponse{Task: &sniffarrv1.Task{Infohash: h[:], Peers: true}}); err != nil {
-			return i, err
-		}
-	}
-	return len(hashes), nil
-}
-
-// leaseQueued leases up to credit queued hashes to owner, sends them, and
-// returns how many it sent.
-func (s *Service) leaseQueued(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse], owner int64, credit int) (int, error) {
-	hashes, expired, err := s.Queue.Lease(ctx, owner, credit, s.now(), or(s.Lease, DefaultLease))
+	tasks, expired, err := s.Tasks.Lease(ctx, owner, credit, s.now(), or(s.Lease, DefaultLease))
 	if err != nil {
 		s.Log.ErrorContext(ctx, "lease", "err", err)
 		return 0, nil
 	}
 	s.metrics().expiries.Add(ctx, int64(expired))
-	for i, h := range hashes {
-		if err := stream.Send(&sniffarrv1.FetchResponse{Task: &sniffarrv1.Task{Infohash: h[:]}}); err != nil {
+	for i, t := range tasks {
+		if err := stream.Send(&sniffarrv1.FetchResponse{Task: &sniffarrv1.Task{Infohash: t.Hash[:], Peers: t.Kind == store.TaskPeers}}); err != nil {
 			return i, err
 		}
 	}
-	return len(hashes), nil
+	return len(tasks), nil
 }
 
 // result records a received result, to completion even when the stream ends
@@ -177,17 +149,23 @@ func (s *Service) result(ctx context.Context, owner int64, r *sniffarrv1.Result)
 	case *sniffarrv1.Result_Torrent:
 		s.metrics().results.Add(ctx, 1, outcome("torrent"))
 		return s.store(ctx, h, o.Torrent)
+	case *sniffarrv1.Result_Lookup:
+		s.metrics().results.Add(ctx, 1, outcome("lookup"))
+		if err := s.Tasks.Complete(ctx, store.TaskPeers, store.Hash(h)); err != nil {
+			return s.internal(ctx, "complete lookup", err)
+		}
+		return nil
 	case *sniffarrv1.Result_Failure:
 		switch o.Failure {
 		case sniffarrv1.Failure_FAILURE_NO_PEERS:
 			s.metrics().results.Add(ctx, 1, outcome("no_peers"))
-			if err := s.Queue.NoPeers(ctx, store.Hash(h), owner, s.now()); err != nil {
+			if err := s.Tasks.NoPeers(ctx, store.Hash(h), owner, s.now()); err != nil {
 				return s.internal(ctx, "no peers", err)
 			}
 			return nil
 		case sniffarrv1.Failure_FAILURE_TIMEOUT:
 			s.metrics().results.Add(ctx, 1, outcome("timeout"))
-			if _, err := s.Queue.Fail(ctx, store.Hash(h), owner, s.now(), or(s.Attempts, DefaultAttempts), or(s.Backoff, DefaultBackoff)); err != nil {
+			if _, err := s.Tasks.Fail(ctx, store.Hash(h), owner, s.now(), or(s.Attempts, DefaultAttempts), or(s.Backoff, DefaultBackoff)); err != nil {
 				return s.internal(ctx, "fail", err)
 			}
 			return nil
@@ -201,7 +179,7 @@ func (s *Service) result(ctx context.Context, owner int64, r *sniffarrv1.Result)
 func (s *Service) release(ctx context.Context, owner int64) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
 	defer cancel()
-	if err := s.Queue.Release(ctx, owner); err != nil {
+	if err := s.Tasks.Release(ctx, owner); err != nil {
 		s.Log.ErrorContext(ctx, "release leases", "owner", owner, "err", err)
 		return
 	}
