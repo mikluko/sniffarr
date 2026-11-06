@@ -19,7 +19,7 @@ container, or [a container per component](#a-container-per-component).
    ```yaml
    services:
      sniffarr:
-       image: sarak.sh/arr/sniffarr:${SNIFFARR_VERSION:?a release, such as 0.38.0}
+       image: sarak.sh/mikluko/sniffarr:${SNIFFARR_VERSION:?a release, such as 0.38.0}
        command: ["-api", "-ui", "-sniff", "-fetch", "-upnp"]
        network_mode: host
        environment:
@@ -83,7 +83,7 @@ on loopback. The fetcher's DHT node picks a free port, since the sniffer
 holds `42069`.
 
 ```yaml
-x-image: &image sarak.sh/arr/sniffarr:${SNIFFARR_VERSION:?a release, such as 0.38.0}
+x-image: &image sarak.sh/mikluko/sniffarr:${SNIFFARR_VERSION:?a release, such as 0.38.0}
 
 services:
   api:

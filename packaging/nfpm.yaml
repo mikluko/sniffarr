@@ -6,7 +6,7 @@ section: net
 priority: optional
 maintainer: Mikhail Lukianchenko <ml@akabos.com>
 description: A private classification database of BitTorrent torrents discovered on the DHT
-homepage: https://sarak.sh/arr/sniffarr
+homepage: https://sarak.sh/mikluko/sniffarr
 license: MIT
 contents:
   - src: dist/sniffarr

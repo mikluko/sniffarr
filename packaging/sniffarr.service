@@ -1,6 +1,6 @@
 [Unit]
 Description=sniffarr, a private classification database of DHT torrents
-Documentation=https://sarak.sh/arr/sniffarr
+Documentation=https://sarak.sh/mikluko/sniffarr
 After=network-online.target
 Wants=network-online.target
 

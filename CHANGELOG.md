@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the repository is `sarak.sh/mikluko/sniffarr`, the image `sarak.sh/mikluko/sniffarr:X.Y.Z` and the chart `oci://sarak.sh/mikluko/charts/sniffarr`; the `arr` paths serve the versions before this one.
+
 ### Added
 
 - `SNIFFARR_FEEDS` names tracker feeds the API reads every `SNIFFARR_FEED_INTERVAL`: `rutracker`, the forums of `SNIFFARR_RUTRACKER_FORUMS` at `SNIFFARR_RUTRACKER_FEED_URL`. A release listed is kept with the feed's title and page, and queued under the discovery `feed`, after `arr`, when the store lacks it.
@@ -297,7 +301,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The repository moves to `https://forge.sarak.sh/arr/sniffarr`, the image to `sarak.sh/arr/sniffarr` and the chart to `oci://sarak.sh/arr/charts/sniffarr`; the chart's default `image.repository` follows. Releases from 0.18.0 on are published there and no longer to `ghcr.io/mikluko`.
+- The repository moves to `https://forge.sarak.sh/mikluko/sniffarr`, the image to `sarak.sh/mikluko/sniffarr` and the chart to `oci://sarak.sh/mikluko/charts/sniffarr`; the chart's default `image.repository` follows. Releases from 0.18.0 on are published there and no longer to `ghcr.io/mikluko`.
 
 ## [0.17.1] - 2026-10-21
 
@@ -554,61 +558,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/arr/sniffarr/compare/v0.38.0...HEAD
-[0.38.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.37.0...v0.38.0
-[0.37.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.36.0...v0.37.0
-[0.36.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.2...v0.36.0
-[0.35.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.1...v0.35.2
-[0.35.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.35.0...v0.35.1
-[0.35.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.1...v0.35.0
-[0.34.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.34.0...v0.34.1
-[0.34.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.2...v0.34.0
-[0.32.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.1...v0.32.2
-[0.32.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.32.0...v0.32.1
-[0.32.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.31.0...v0.32.0
-[0.31.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.30.0...v0.31.0
-[0.30.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.29.0...v0.30.0
-[0.29.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.28.0...v0.29.0
-[0.28.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.3...v0.28.0
-[0.27.3]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.2...v0.27.3
-[0.27.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.1...v0.27.2
-[0.27.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.27.0...v0.27.1
-[0.27.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.26.0...v0.27.0
-[0.26.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.2...v0.26.0
-[0.25.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.1...v0.25.2
-[0.25.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.25.0...v0.25.1
-[0.25.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.24.0...v0.25.0
-[0.24.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.1...v0.24.0
-[0.23.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.23.0...v0.23.1
-[0.23.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.1...v0.23.0
-[0.22.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.22.0...v0.22.1
-[0.22.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.21.0...v0.22.0
-[0.21.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.20.0...v0.21.0
-[0.20.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.19.0...v0.20.0
-[0.19.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.18.0...v0.19.0
-[0.18.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.17.1...v0.18.0
-[0.17.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.17.0...v0.17.1
-[0.17.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.16.0...v0.17.0
-[0.16.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.15.1...v0.16.0
-[0.15.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.15.0...v0.15.1
-[0.15.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.14.1...v0.15.0
-[0.14.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.14.0...v0.14.1
-[0.14.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.13.0...v0.14.0
-[0.13.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.12.0...v0.13.0
-[0.12.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.11.0...v0.12.0
-[0.11.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.10.0...v0.11.0
-[0.10.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.9.0...v0.10.0
-[0.9.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.8.0...v0.9.0
-[0.8.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.7.1...v0.8.0
-[0.7.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.7.0...v0.7.1
-[0.7.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.6.0...v0.7.0
-[0.6.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.5.0...v0.6.0
-[0.5.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.4.0...v0.5.0
-[0.4.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.3.0...v0.4.0
-[0.3.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.2.0...v0.3.0
-[0.2.0]: https://forge.sarak.sh/arr/sniffarr/compare/v0.1.4...v0.2.0
-[0.1.4]: https://forge.sarak.sh/arr/sniffarr/compare/v0.1.3...v0.1.4
-[0.1.3]: https://forge.sarak.sh/arr/sniffarr/compare/v0.1.2...v0.1.3
-[0.1.2]: https://forge.sarak.sh/arr/sniffarr/compare/v0.1.1...v0.1.2
-[0.1.1]: https://forge.sarak.sh/arr/sniffarr/compare/v0.1.0...v0.1.1
-[0.1.0]: https://forge.sarak.sh/arr/sniffarr/releases/tag/v0.1.0
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.38.0...HEAD
+[0.38.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.37.0...v0.38.0
+[0.37.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.36.0...v0.37.0
+[0.36.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.35.2...v0.36.0
+[0.35.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.35.1...v0.35.2
+[0.35.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.35.0...v0.35.1
+[0.35.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.34.1...v0.35.0
+[0.34.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.34.0...v0.34.1
+[0.34.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.32.2...v0.34.0
+[0.32.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.32.1...v0.32.2
+[0.32.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.32.0...v0.32.1
+[0.32.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.31.0...v0.32.0
+[0.31.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.30.0...v0.31.0
+[0.30.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.29.0...v0.30.0
+[0.29.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.28.0...v0.29.0
+[0.28.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.27.3...v0.28.0
+[0.27.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.27.2...v0.27.3
+[0.27.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.27.1...v0.27.2
+[0.27.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.27.0...v0.27.1
+[0.27.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.26.0...v0.27.0
+[0.26.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.25.2...v0.26.0
+[0.25.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.25.1...v0.25.2
+[0.25.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.25.0...v0.25.1
+[0.25.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.24.0...v0.25.0
+[0.24.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.23.1...v0.24.0
+[0.23.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.23.0...v0.23.1
+[0.23.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.22.1...v0.23.0
+[0.22.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.22.0...v0.22.1
+[0.22.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.21.0...v0.22.0
+[0.21.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.20.0...v0.21.0
+[0.20.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.19.0...v0.20.0
+[0.19.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.18.0...v0.19.0
+[0.18.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.17.1...v0.18.0
+[0.17.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.17.0...v0.17.1
+[0.17.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.16.0...v0.17.0
+[0.16.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.15.1...v0.16.0
+[0.15.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.15.0...v0.15.1
+[0.15.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.14.1...v0.15.0
+[0.14.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.14.0...v0.14.1
+[0.14.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.13.0...v0.14.0
+[0.13.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.12.0...v0.13.0
+[0.12.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.11.0...v0.12.0
+[0.11.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.10.0...v0.11.0
+[0.10.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.9.0...v0.10.0
+[0.9.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.8.0...v0.9.0
+[0.8.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.7.1...v0.8.0
+[0.7.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.7.0...v0.7.1
+[0.7.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.6.0...v0.7.0
+[0.6.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.5.0...v0.6.0
+[0.5.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.4.0...v0.5.0
+[0.4.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.3.0...v0.4.0
+[0.3.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.2.0...v0.3.0
+[0.2.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.1.4...v0.2.0
+[0.1.4]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.1.3...v0.1.4
+[0.1.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.1.2...v0.1.3
+[0.1.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.1.1...v0.1.2
+[0.1.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.1.0...v0.1.1
+[0.1.0]: https://forge.sarak.sh/mikluko/sniffarr/releases/tag/v0.1.0

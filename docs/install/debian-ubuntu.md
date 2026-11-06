@@ -16,7 +16,7 @@ Ubuntu, amd64 or arm64. The package carries the same systemd service as the
 The script adds the registry and installs the package:
 
 ```shell
-curl -fsSL https://sarak.sh/arr/sniffarr/raw/branch/main/install.sh | sh
+curl -fsSL https://sarak.sh/mikluko/sniffarr/raw/branch/main/install.sh | sh
 ```
 
 ## Install by hand
@@ -25,8 +25,8 @@ curl -fsSL https://sarak.sh/arr/sniffarr/raw/branch/main/install.sh | sh
 
    ```shell
    sudo install -d -m 0755 /etc/apt/keyrings
-   curl -fsSL https://sarak.sh/api/packages/arr/debian/repository.key | sudo tee /etc/apt/keyrings/sniffarr.asc >/dev/null
-   echo "deb [signed-by=/etc/apt/keyrings/sniffarr.asc] https://sarak.sh/api/packages/arr/debian trixie main" | sudo tee /etc/apt/sources.list.d/sniffarr.list
+   curl -fsSL https://sarak.sh/api/packages/mikluko/debian/repository.key | sudo tee /etc/apt/keyrings/sniffarr.asc >/dev/null
+   echo "deb [signed-by=/etc/apt/keyrings/sniffarr.asc] https://sarak.sh/api/packages/mikluko/debian trixie main" | sudo tee /etc/apt/sources.list.d/sniffarr.list
    ```
 
    `trixie` names the registry's distribution, not the host's: the package

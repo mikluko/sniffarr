@@ -44,7 +44,7 @@ under [Helm](../../README.md#helm) in the README.
 1. Install the chart at a release's version:
 
    ```shell
-   helm install sniffarr oci://sarak.sh/arr/charts/sniffarr --version 0.38.0 -f values.yaml
+   helm install sniffarr oci://sarak.sh/mikluko/charts/sniffarr --version 0.38.0 -f values.yaml
    ```
 
 The web UI is the Service `sniffarr-ui` on port 8081 and authenticates
@@ -61,7 +61,7 @@ kubectl logs deploy/sniffarr-api --since=5m
 ## Upgrade
 
 ```shell
-helm upgrade sniffarr oci://sarak.sh/arr/charts/sniffarr --version 0.39.0 -f values.yaml
+helm upgrade sniffarr oci://sarak.sh/mikluko/charts/sniffarr --version 0.39.0 -f values.yaml
 ```
 
 ## Uninstall

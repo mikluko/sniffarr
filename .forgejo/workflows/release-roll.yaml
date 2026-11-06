@@ -13,10 +13,16 @@ concurrency:
   group: release-roll
   cancel-in-progress: false
 
+# The automatic token cannot write packages owned by a user, so registry access
+# trades an OIDC token for an Authorized Integration of the owner's, selected
+# by REGISTRY_AUDIENCE and scoped write:package.
+enable-openid-connect: true
+
 env:
   REGISTRY: sarak.sh
-  IMAGE: sarak.sh/arr/sniffarr
-  CHART_REPOSITORY: oci://sarak.sh/arr/charts
+  REGISTRY_AUDIENCE: u:1:62e83a47-a7dc-4f1e-9075-57e5a37b8449
+  IMAGE: sarak.sh/mikluko/sniffarr
+  CHART_REPOSITORY: oci://sarak.sh/mikluko/charts
   DEBIAN_DISTRIBUTION: trixie
   DEBIAN_COMPONENT: main
 
@@ -82,9 +88,11 @@ jobs:
           persist-credentials: false
       - name: Log in
         if: needs.plan.outputs.publish == 'true'
-        env:
-          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-        run: printf '%s' "$TOKEN" | docker login "$REGISTRY" --username agent --password-stdin
+        run: |
+          jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$REGISTRY_AUDIENCE" | jq -r .value)
+          echo "::add-mask::$jwt"
+          printf '%s' "$jwt" | docker login "$REGISTRY" --username oidc --password-stdin
       - name: Build
         env:
           VERSION: ${{ needs.plan.outputs.version }}
@@ -125,9 +133,11 @@ jobs:
         if: needs.plan.outputs.publish == 'true'
         env:
           VERSION: ${{ needs.plan.outputs.version }}
-          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
-          printf '%s' "$TOKEN" | helm registry login "$REGISTRY" --username agent --password-stdin
+          jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$REGISTRY_AUDIENCE" | jq -r .value)
+          echo "::add-mask::$jwt"
+          printf '%s' "$jwt" | helm registry login "$REGISTRY" --username oidc --password-stdin
           helm push "$RUNNER_TEMP/chart/sniffarr-$VERSION.tgz" "$CHART_REPOSITORY"
 
   # Static binaries for amd64 and arm64: an archive with the systemd unit and
@@ -170,12 +180,13 @@ jobs:
             dist/checksums.txt
       - name: Upload to the Debian registry
         if: needs.plan.outputs.publish == 'true'
-        env:
-          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
+          jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$REGISTRY_AUDIENCE" | jq -r .value)
+          echo "::add-mask::$jwt"
           owner=${GITHUB_REPOSITORY%%/*}
           for deb in dist/*.deb; do
-            curl --fail-with-body -sS -X PUT -H "Authorization: token $TOKEN" --upload-file "$deb" \
+            curl --fail-with-body -sS -X PUT -H "Authorization: Bearer $jwt" --upload-file "$deb" \
               "$GITHUB_SERVER_URL/api/packages/$owner/debian/pool/$DEBIAN_DISTRIBUTION/$DEBIAN_COMPONENT/upload"
           done
 

@@ -20,13 +20,13 @@ architecture, verifies its checksum, and installs the binary, the unit and
 the settings file:
 
 ```shell
-curl -fsSL https://sarak.sh/arr/sniffarr/raw/branch/main/install.sh | sh
+curl -fsSL https://sarak.sh/mikluko/sniffarr/raw/branch/main/install.sh | sh
 ```
 
 To install a release other than the newest, set `SNIFFARR_VERSION`:
 
 ```shell
-curl -fsSL https://sarak.sh/arr/sniffarr/raw/branch/main/install.sh | SNIFFARR_VERSION=0.38.0 sh
+curl -fsSL https://sarak.sh/mikluko/sniffarr/raw/branch/main/install.sh | SNIFFARR_VERSION=0.38.0 sh
 ```
 
 ## Install by hand
@@ -35,8 +35,8 @@ curl -fsSL https://sarak.sh/arr/sniffarr/raw/branch/main/install.sh | SNIFFARR_V
    Replace `0.38.0` with the release and `amd64` with the architecture:
 
    ```shell
-   curl -fsSLO https://sarak.sh/arr/sniffarr/releases/download/v0.38.0/sniffarr_0.38.0_linux_amd64.tar.gz
-   curl -fsSLO https://sarak.sh/arr/sniffarr/releases/download/v0.38.0/checksums.txt
+   curl -fsSLO https://sarak.sh/mikluko/sniffarr/releases/download/v0.38.0/sniffarr_0.38.0_linux_amd64.tar.gz
+   curl -fsSLO https://sarak.sh/mikluko/sniffarr/releases/download/v0.38.0/checksums.txt
    sha256sum -c --ignore-missing checksums.txt
    ```
 
@@ -113,7 +113,7 @@ What the archive and the package carry. The unit runs the binary found in
 ```ini
 [Unit]
 Description=sniffarr, a private classification database of DHT torrents
-Documentation=https://sarak.sh/arr/sniffarr
+Documentation=https://sarak.sh/mikluko/sniffarr
 After=network-online.target
 Wants=network-online.target
 

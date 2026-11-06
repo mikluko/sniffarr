@@ -4,15 +4,15 @@
 # root or with sudo at hand. SNIFFARR_VERSION, "0.38.0", pins the archive's
 # version; the registry gives its newest.
 #
-#   curl -fsSL https://sarak.sh/arr/sniffarr/raw/branch/main/install.sh | sh
+#   curl -fsSL https://sarak.sh/mikluko/sniffarr/raw/branch/main/install.sh | sh
 #
 # The whole script is a function called on its last line, so a download cut
 # short runs nothing.
 set -eu
 
 FORGE=https://sarak.sh
-REPO=arr/sniffarr
-OWNER=arr
+REPO=mikluko/sniffarr
+OWNER=mikluko
 DISTRIBUTION=trixie
 COMPONENT=main
 
