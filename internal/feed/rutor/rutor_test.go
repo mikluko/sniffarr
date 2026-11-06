@@ -3,17 +3,14 @@ package rutor
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/mikluko/sniffarr/internal/feed"
+	"github.com/mikluko/sniffarr/internal/feed/feedtest"
 )
 
 // page is two rows as rutor.info/browse/0/0/0/0 served them on 2026-11-06,
@@ -28,11 +25,6 @@ const page = `<html><body><p align="center"><b>&lt;&lt;&nbsp;Предв.</b> <a 
 <td align="right">700&nbsp;MB</td><td align="center">0</td></tr>
 <tr class="gai"><td>05&nbsp;Ноя&nbsp;26</td><td><a href="/torrent/1/no-magnet">No magnet</a></td><td align="right">1&nbsp;GB</td></tr>
 </table></div></body></html>`
-
-type memState map[string]bool
-
-func (m memState) Done(_ context.Context, key string) (bool, error) { return m[key], nil }
-func (m memState) Mark(_ context.Context, key string) error         { m[key] = true; return nil }
 
 func hashOf(t *testing.T, s string) (h [20]byte) {
 	t.Helper()
@@ -53,45 +45,31 @@ func TestParse(t *testing.T) {
 	require.Equal(t, time.Time{}, date("вчера"))
 }
 
-// The first pass reads Depth pages, marked done; later ones the first page.
+// The first page is read every round, the pages after it once, up to
+// Depth; an empty page ends the pass.
 func TestFetch(t *testing.T) {
-	var mu sync.Mutex
-	var paths []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		paths = append(paths, r.URL.Path)
-		mu.Unlock()
-		switch r.URL.Path {
-		case "/browse/0/0/0/0", "/browse/0/1/0/0":
-			_, _ = w.Write([]byte(page))
-		case "/browse/1/0/0/0":
-			_, _ = w.Write([]byte(strings.ReplaceAll(page, "ee9b7572e848477bbbcfd00967cdfdfd9efdfcb4", "0000000000000000000000000000000000000002")))
-		case "/browse/2/0/0/0":
-			_, _ = w.Write([]byte("<html><body><table></table></body></html>"))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-	state := memState{}
-	src := &Source{Config: Config{URL: srv.URL, Depth: 3}}
+	c := &feedtest.Crawler{Pages: map[string]string{
+		"https://rutor.example/browse/0/0/0/0": page,
+		"https://rutor.example/browse/1/0/0/0": strings.ReplaceAll(page, "ee9b7572e848477bbbcfd00967cdfdfd9efdfcb4", "0000000000000000000000000000000000000002"),
+		"https://rutor.example/browse/2/0/0/0": "<html><body><table></table></body></html>",
+		"https://rutor.example/browse/0/1/0/0": page,
+	}}
+	src := &Source{Config{URL: "https://rutor.example", Depth: 3}}
 	require.Equal(t, "rutor", src.Name())
-	items, err := src.Fetch(context.Background(), state)
+	items, err := src.Fetch(context.Background(), c)
 	require.NoError(t, err)
 	require.Len(t, items, 3, "two pages of two, one release on both, and an empty third ends the pass")
-	require.Equal(t, memState{"deep": true}, state)
-	items, err = src.Fetch(context.Background(), state)
+	items, err = src.Fetch(context.Background(), c)
 	require.NoError(t, err)
 	require.Len(t, items, 2, "the first page alone")
-	mu.Lock()
-	require.Equal(t, []string{"/browse/0/0/0/0", "/browse/1/0/0/0", "/browse/2/0/0/0", "/browse/0/0/0/0"}, paths)
-	mu.Unlock()
+	require.Equal(t, []string{"https://rutor.example/browse/0/0/0/0", "https://rutor.example/browse/1/0/0/0", "https://rutor.example/browse/2/0/0/0",
+		"https://rutor.example/browse/0/0/0/0"}, c.Calls)
 
-	items, err = (&Source{Config: Config{URL: srv.URL, Categories: []int{1}}}).Fetch(context.Background(), memState{"deep": true})
+	items, err = (&Source{Config{URL: "https://rutor.example", Categories: []int{1}, Depth: 1}}).Fetch(context.Background(), c)
 	require.NoError(t, err)
 	require.Len(t, items, 2)
 	require.Equal(t, "1", items[0].Category, "a category asked for is the item's")
 
-	_, err = (&Source{Config: Config{URL: srv.URL, Categories: []int{7}}}).Fetch(context.Background(), memState{"deep": true})
-	require.EqualError(t, err, fmt.Sprintf("category 7 page 0: %s/browse/0/7/0/0: 404 Not Found", srv.URL))
+	_, err = (&Source{Config{URL: "https://rutor.example", Categories: []int{7}}}).Fetch(context.Background(), c)
+	require.EqualError(t, err, "category 7 page 0: https://rutor.example/browse/0/7/0/0: 404 Not Found")
 }

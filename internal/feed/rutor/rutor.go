@@ -6,11 +6,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
-	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/net/html"
@@ -36,54 +33,32 @@ type Config struct {
 	URL string
 	// Categories are the categories read, 0 every one; []int{0}.
 	Categories []int
-	// Depth is how many pages of each category the first pass reads, a
-	// pass marked in the feed.State; later ones read the first page;
-	// DefaultDepth.
+	// Depth is how many pages of each category are read once, the first
+	// page every round; DefaultDepth.
 	Depth int
 }
 
 // Source reads the listing pages of Config.Categories.
 type Source struct {
 	Config
-	// HTTP sends the requests, each traced as a client span;
-	// http.DefaultClient. It is read on the first request.
-	HTTP *http.Client
-	// Log discards everything when nil.
-	Log *slog.Logger
-
-	once   sync.Once
-	traced *http.Client
 }
-
-// pause is the wait between pages.
-const pause = time.Second
-
-// deepKey marks the first pass done.
-const deepKey = "deep"
 
 // Name returns Name.
 func (s *Source) Name() string { return Name }
 
-// Fetch reads the first page of every category, or Depth pages each on the
-// first pass, and returns their releases, one listed under several
-// categories once.
-func (s *Source) Fetch(ctx context.Context, state feed.State) ([]feed.Item, error) {
+// Fetch reads the first page of every category, and the next Depth-1 pages
+// once, and returns their releases, one listed under several categories
+// once. The pages read once stop at the first read before, so a category
+// read before costs one page a round.
+func (s *Source) Fetch(ctx context.Context, c feed.Crawler) ([]feed.Item, error) {
 	categories := s.Categories
 	if len(categories) == 0 {
 		categories = []int{0}
 	}
-	deep, err := state.Done(ctx, deepKey)
-	if err != nil {
-		return nil, err
-	}
-	pages := 1
-	if !deep {
-		pages = s.depth()
-	}
 	var items []feed.Item
 	seen := map[store.Hash]bool{}
-	for i, c := range categories {
-		got, err := s.category(ctx, c, pages, i > 0)
+	for _, cat := range categories {
+		got, err := s.category(ctx, c, cat)
 		if err != nil {
 			return nil, err
 		}
@@ -94,30 +69,40 @@ func (s *Source) Fetch(ctx context.Context, state feed.State) ([]feed.Item, erro
 			}
 		}
 	}
-	if !deep {
-		if err := state.Mark(ctx, deepKey); err != nil {
-			return nil, err
-		}
-	}
 	return items, nil
 }
 
-// category reads up to pages pages of the category, a pause apart, and
-// before the first too when waited; an empty page ends it.
-func (s *Source) category(ctx context.Context, category, pages int, waited bool) ([]feed.Item, error) {
+// category reads the category's first page, and the pages after it that
+// were not read before, up to Depth; an empty page ends it.
+func (s *Source) category(ctx context.Context, c feed.Crawler, category int) ([]feed.Item, error) {
 	var items []feed.Item
-	for p := range pages {
-		if waited || p > 0 {
-			if err := feed.Sleep(ctx, pause); err != nil {
-				return nil, err
-			}
+	for p := range s.depth() {
+		get := c.Once
+		if p == 0 {
+			get = c.Fetch
 		}
-		got, err := s.page(ctx, category, p)
+		body, ok, err := get(ctx, fmt.Sprintf("%s/browse/%d/%d/0/0", s.base(), p, category))
+		if err != nil {
+			return nil, fmt.Errorf("category %d page %d: %w", category, p, err)
+		}
+		if !ok {
+			if p == 0 {
+				continue
+			}
+			break
+		}
+		got, err := Parse(body, s.base())
+		_ = body.Close()
 		if err != nil {
 			return nil, fmt.Errorf("category %d page %d: %w", category, p, err)
 		}
 		if len(got) == 0 {
 			break
+		}
+		if category != 0 {
+			for i := range got {
+				got[i].Category = strconv.Itoa(category)
+			}
 		}
 		items = append(items, got...)
 	}
@@ -136,38 +121,6 @@ func (s *Source) base() string {
 		return DefaultURL
 	}
 	return strings.TrimSuffix(s.URL, "/")
-}
-
-func (s *Source) page(ctx context.Context, category, page int) ([]feed.Item, error) {
-	u := fmt.Sprintf("%s/browse/%d/%d/0/0", s.base(), page, category)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "sniffarr")
-	res, err := s.client().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s: %s", u, res.Status)
-	}
-	items, err := Parse(io.LimitReader(res.Body, 8<<20), s.base())
-	if err != nil {
-		return nil, err
-	}
-	if category != 0 {
-		for i := range items {
-			items[i].Category = strconv.Itoa(category)
-		}
-	}
-	return items, nil
-}
-
-func (s *Source) client() *http.Client {
-	s.once.Do(func() { s.traced = feed.Client(s.HTTP) })
-	return s.traced
 }
 
 // Parse reads a listing page: each table row with a magnet link is a

@@ -266,25 +266,25 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 	}
 	if len(cfg.Feeds.Sources) > 0 {
 		frec := &feed.Recorder{Store: s, Queue: q, Log: log}
-		for _, src := range feedSources(cfg.Feeds, log) {
-			p := &feed.Poller{Source: src, Recorder: frec, Interval: cfg.Feeds.Interval, Log: log}
+		for _, src := range feedSources(cfg.Feeds) {
+			p := &feed.Poller{Source: src, Recorder: frec, Interval: cfg.Feeds.Interval, HTTP: &http.Client{Timeout: feedTimeout}, Log: log}
 			app.Go(lc, sd, log, src.Name()+" feed", p.Run)
 		}
 	}
 }
 
-// feedSources are the sources Feeds names, each with its HTTP client; a
-// name it does not know was refused by the configuration.
-func feedSources(f Feeds, log *slog.Logger) []feed.Source {
+// feedSources are the sources Feeds names; a name it does not know was
+// refused by the configuration.
+func feedSources(f Feeds) []feed.Source {
 	var out []feed.Source
 	for _, name := range f.Sources {
 		switch name {
 		case rutracker.Name:
-			out = append(out, &rutracker.Source{Config: f.Rutracker, HTTP: &http.Client{Timeout: feedTimeout}, Log: log})
+			out = append(out, &rutracker.Source{Config: f.Rutracker})
 		case nnmclub.Name:
-			out = append(out, &nnmclub.Source{Config: f.Nnmclub, HTTP: &http.Client{Timeout: feedTimeout}, Log: log})
+			out = append(out, &nnmclub.Source{Config: f.Nnmclub})
 		case rutor.Name:
-			out = append(out, &rutor.Source{Config: f.Rutor, HTTP: &http.Client{Timeout: feedTimeout}, Log: log})
+			out = append(out, &rutor.Source{Config: f.Rutor})
 		}
 	}
 	return out

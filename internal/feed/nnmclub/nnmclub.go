@@ -8,12 +8,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log/slog"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/net/html"
@@ -39,32 +36,21 @@ type Config struct {
 	Forums []int
 }
 
-// Source reads the RSS of Config.Forums and the page of each topic it
-// lists, once: the topic is marked in the feed.State whether its page had a
-// magnet link or not.
+// Source reads the RSS of Config.Forums every round and the page of each
+// topic it lists once, whether the page has a magnet link or not.
 type Source struct {
 	Config
-	// HTTP sends the requests, each traced as a client span;
-	// http.DefaultClient. It is read on the first request.
-	HTTP *http.Client
-	// Log discards everything when nil.
-	Log *slog.Logger
-
-	once   sync.Once
-	traced *http.Client
 }
-
-// pause is the wait between topic pages.
-const pause = time.Second
 
 // Name returns Name.
 func (s *Source) Name() string { return Name }
 
 // Fetch reads every forum's RSS, then the page of each listed topic not
 // read before, and returns the releases whose page has a magnet link. A
-// topic's page failing is logged, and the topic is left for the next round.
-func (s *Source) Fetch(ctx context.Context, state feed.State) ([]feed.Item, error) {
-	topics, err := s.topics(ctx)
+// topic's page failing is left to the crawler's log, and the topic to the
+// next round.
+func (s *Source) Fetch(ctx context.Context, c feed.Crawler) ([]feed.Item, error) {
+	topics, err := s.topics(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -75,25 +61,37 @@ func (s *Source) Fetch(ctx context.Context, state feed.State) ([]feed.Item, erro
 			continue
 		}
 		seen[t.ID] = true
-		it, ok, err := s.read(ctx, state, t)
+		body, ok, err := c.Once(ctx, s.base()+"/viewtopic.php?t="+strconv.Itoa(t.ID))
 		if err != nil {
-			return nil, err
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			continue
 		}
-		if ok {
-			items = append(items, it)
+		if !ok {
+			continue
+		}
+		hash, found, err := ParseTopic(body)
+		_ = body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("topic %d: %w", t.ID, err)
+		}
+		if found {
+			items = append(items, feed.Item{Hash: hash, Title: t.Title, URL: t.URL, Category: t.Category, At: t.At})
 		}
 	}
 	return items, nil
 }
 
-// topics lists the RSS of every forum, or of the whole forum for none.
-func (s *Source) topics(ctx context.Context) ([]topic, error) {
+// topics lists the RSS of every forum, or of the whole forum for none;
+// a feed with nothing new lists nothing.
+func (s *Source) topics(ctx context.Context, c feed.Crawler) ([]topic, error) {
 	if len(s.Forums) == 0 {
-		return s.rss(ctx, 0)
+		return s.rss(ctx, c, 0)
 	}
 	var topics []topic
 	for _, f := range s.Forums {
-		got, err := s.rss(ctx, f)
+		got, err := s.rss(ctx, c, f)
 		if err != nil {
 			return nil, fmt.Errorf("forum %d: %w", f, err)
 		}
@@ -101,30 +99,6 @@ func (s *Source) topics(ctx context.Context) ([]topic, error) {
 	}
 	return topics, nil
 }
-
-// read returns the release of a topic not read before whose page has a
-// magnet link, marking the topic read; a page that fails leaves the topic
-// for the next round.
-func (s *Source) read(ctx context.Context, state feed.State, t topic) (feed.Item, bool, error) {
-	done, err := state.Done(ctx, topicKey(t.ID))
-	if err != nil || done {
-		return feed.Item{}, false, err
-	}
-	if err := feed.Sleep(ctx, pause); err != nil {
-		return feed.Item{}, false, err
-	}
-	hash, ok, err := s.magnet(ctx, t.ID)
-	if err != nil {
-		s.log().WarnContext(ctx, "read topic", "topic", t.ID, "err", err)
-		return feed.Item{}, false, nil
-	}
-	if err := state.Mark(ctx, topicKey(t.ID)); err != nil {
-		return feed.Item{}, false, err
-	}
-	return feed.Item{Hash: hash, Title: t.Title, URL: t.URL, Category: t.Category, At: t.At}, ok, nil
-}
-
-func topicKey(id int) string { return "topic:" + strconv.Itoa(id) }
 
 // topic is one item of the RSS.
 type topic struct {
@@ -142,57 +116,17 @@ func (s *Source) base() string {
 	return strings.TrimSuffix(s.URL, "/")
 }
 
-func (s *Source) rss(ctx context.Context, forum int) ([]topic, error) {
+func (s *Source) rss(ctx context.Context, c feed.Crawler, forum int) ([]topic, error) {
 	u := s.base() + "/rss.php"
 	if forum > 0 {
 		u += "?f=" + strconv.Itoa(forum)
 	}
-	body, err := s.get(ctx, u)
-	if err != nil {
+	body, ok, err := c.Fetch(ctx, u)
+	if err != nil || !ok {
 		return nil, err
 	}
 	defer func() { _ = body.Close() }()
-	return ParseRSS(io.LimitReader(body, 8<<20))
-}
-
-// magnet reads the topic's page for its magnet link; ok is false when the
-// page has none.
-func (s *Source) magnet(ctx context.Context, id int) (hash [20]byte, ok bool, err error) {
-	body, err := s.get(ctx, s.base()+"/viewtopic.php?t="+strconv.Itoa(id))
-	if err != nil {
-		return hash, false, err
-	}
-	defer func() { _ = body.Close() }()
-	return ParseTopic(io.LimitReader(body, 8<<20))
-}
-
-func (s *Source) get(ctx context.Context, u string) (io.ReadCloser, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "sniffarr")
-	res, err := s.client().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if res.StatusCode != http.StatusOK {
-		_ = res.Body.Close()
-		return nil, fmt.Errorf("%s: %s", u, res.Status)
-	}
-	return res.Body, nil
-}
-
-func (s *Source) client() *http.Client {
-	s.once.Do(func() { s.traced = feed.Client(s.HTTP) })
-	return s.traced
-}
-
-func (s *Source) log() *slog.Logger {
-	if s.Log != nil {
-		return s.Log
-	}
-	return slog.New(slog.DiscardHandler)
+	return ParseRSS(body)
 }
 
 type rssFeed struct {

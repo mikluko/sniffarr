@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A feed is read at start and then at every `SNIFFARR_FEED_INTERVAL` of wall-clock time plus a moment fixed by the feed's name, the same across restarts and never on the hour.
 - The `rutracker` feed reads, once per database, the feed of every forum the forums of `SNIFFARR_RUTRACKER_FORUMS` name in their categories, a month of each.
+- Every page a feed fetches is recorded in the database by URL, with its `ETag` and `Last-Modified`: a page read every round is skipped when unchanged, a page read once is not read again, and requests of one feed are a second apart.
 
 ## [0.39.0] - 2026-11-06
 

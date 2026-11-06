@@ -3,10 +3,7 @@ package nnmclub
 import (
 	"context"
 	"encoding/hex"
-	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +11,7 @@ import (
 	"golang.org/x/text/encoding/charmap"
 
 	"github.com/mikluko/sniffarr/internal/feed"
+	"github.com/mikluko/sniffarr/internal/feed/feedtest"
 )
 
 // rss is two items as nnmclub.to/forum/rss.php served them on 2026-11-05,
@@ -44,26 +42,21 @@ const rss = `<?xml version="1.0" encoding="windows-1251" ?>
 </rss>
 `
 
-// topic is the part of a topic page that holds the magnet link.
+// topicPage is the part of a topic page that holds the magnet link.
 const topicPage = `<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1251"><title>Вышка 2 :: NNM-Club</title></head>
 <body><table><tr><td class="gensmall"><a href="profile.php?mode=register">Зарегистрируйтесь</a><br />16.5&nbsp;KB<br />
 <!--noindex--><a rel="nofollow" href="magnet:?xt=urn:btih:56DEE5B6B78025762EF3091308DB64CE2C34BD66" title="Примагнититься"><img src="magnet48.png" /></a><!--/noindex--></td></tr></table></body></html>`
 
 // cp1251 encodes s as the forum does.
-func cp1251(t *testing.T, s string) []byte {
+func cp1251(t *testing.T, s string) string {
 	t.Helper()
 	b, err := charmap.Windows1251.NewEncoder().Bytes([]byte(s))
 	require.NoError(t, err)
-	return b
+	return string(b)
 }
 
-type memState map[string]bool
-
-func (m memState) Done(_ context.Context, key string) (bool, error) { return m[key], nil }
-func (m memState) Mark(_ context.Context, key string) error         { m[key] = true; return nil }
-
 func TestParseRSS(t *testing.T) {
-	topics, err := ParseRSS(strings.NewReader(string(cp1251(t, rss))))
+	topics, err := ParseRSS(strings.NewReader(cp1251(t, rss)))
 	require.NoError(t, err)
 	require.Equal(t, []topic{
 		{ID: 1898322, Title: "Вышка 2 / Fall 2: Deadpoint (2026) WEB-DLRip [H.264]", Category: "Зарубежные Новинки (SD, DVD)",
@@ -74,7 +67,7 @@ func TestParseRSS(t *testing.T) {
 }
 
 func TestParseTopic(t *testing.T) {
-	h, ok, err := ParseTopic(strings.NewReader(string(cp1251(t, topicPage))))
+	h, ok, err := ParseTopic(strings.NewReader(cp1251(t, topicPage)))
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "56dee5b6b78025762ef3091308db64ce2c34bd66", hex.EncodeToString(h[:]))
@@ -83,47 +76,33 @@ func TestParseTopic(t *testing.T) {
 	require.False(t, ok)
 }
 
-// Each topic's page is read once; a page without a magnet link is marked
-// read too, one that fails is not.
+// Each topic's page is read once; a page without a magnet link counts as
+// read too, one that fails is tried again.
 func TestFetch(t *testing.T) {
-	var mu sync.Mutex
-	var paths []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		paths = append(paths, r.URL.RequestURI())
-		mu.Unlock()
-		switch r.URL.RequestURI() {
-		case "/forum/rss.php?f=218":
-			w.Header().Set("Content-Type", "application/rss+xml;charset=windows-1251")
-			_, _ = w.Write(cp1251(t, rss))
-		case "/forum/viewtopic.php?t=1898322":
-			w.Header().Set("Content-Type", "text/html; charset=windows-1251")
-			_, _ = w.Write(cp1251(t, topicPage))
-		case "/forum/viewtopic.php?t=1898300":
-			_, _ = w.Write([]byte("<html><body>no magnet yet</body></html>"))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-	state := memState{}
-	src := &Source{Config: Config{URL: srv.URL + "/forum/", Forums: []int{218}}}
+	c := &feedtest.Crawler{Pages: map[string]string{
+		"https://club.example/forum/rss.php?f=218":           cp1251(t, rss),
+		"https://club.example/forum/viewtopic.php?t=1898322": cp1251(t, topicPage),
+		"https://club.example/forum/viewtopic.php?t=1898300": "<html><body>no magnet yet</body></html>",
+	}}
+	src := &Source{Config{URL: "https://club.example/forum/", Forums: []int{218}}}
 	require.Equal(t, "nnmclub", src.Name())
-	items, err := src.Fetch(context.Background(), state)
+	items, err := src.Fetch(context.Background(), c)
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	require.Equal(t, "56dee5b6b78025762ef3091308db64ce2c34bd66", hex.EncodeToString(items[0].Hash[:]))
 	require.Equal(t, feed.Item{Hash: items[0].Hash, Title: "Вышка 2 / Fall 2: Deadpoint (2026) WEB-DLRip [H.264]", Category: "Зарубежные Новинки (SD, DVD)",
 		URL: "https://nnmclub.to/forum/viewtopic.php?t=1898322", At: time.Date(2026, 11, 5, 18, 30, 55, 0, time.UTC)}, items[0])
-	require.Equal(t, memState{"topic:1898322": true, "topic:1898300": true}, state)
 
-	items, err = src.Fetch(context.Background(), state)
+	items, err = src.Fetch(context.Background(), c)
 	require.NoError(t, err)
 	require.Empty(t, items, "nothing new")
-	mu.Lock()
-	require.Equal(t, []string{"/forum/rss.php?f=218", "/forum/viewtopic.php?t=1898322", "/forum/viewtopic.php?t=1898300", "/forum/rss.php?f=218"}, paths)
-	mu.Unlock()
+	require.Equal(t, []string{"https://club.example/forum/rss.php?f=218", "https://club.example/forum/viewtopic.php?t=1898322", "https://club.example/forum/viewtopic.php?t=1898300",
+		"https://club.example/forum/rss.php?f=218"}, c.Calls)
 
-	_, err = (&Source{Config: Config{URL: srv.URL + "/forum"}}).Fetch(context.Background(), memState{})
-	require.ErrorContains(t, err, "/forum/rss.php: 404", "no forums reads the RSS of every forum")
+	c = &feedtest.Crawler{Pages: map[string]string{"https://club.example/forum/rss.php": cp1251(t, rss)}}
+	items, err = (&Source{Config{URL: "https://club.example/forum"}}).Fetch(context.Background(), c)
+	require.NoError(t, err)
+	require.Empty(t, items, "the topic pages fail, so nothing yet")
+	require.Equal(t, "https://club.example/forum/rss.php", c.Calls[0], "no forums reads the RSS of every forum")
+	require.Empty(t, c.Done(), "failed pages are not marked")
 }

@@ -3,17 +3,14 @@ package rutracker
 import (
 	"context"
 	"encoding/hex"
-	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/mikluko/sniffarr/internal/feed"
+	"github.com/mikluko/sniffarr/internal/feed/feedtest"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -54,12 +51,6 @@ const atom = `<?xml version="1.0" encoding="utf-8"?>
 	</entry>
 </feed>
 `
-
-// memState is a feed.State in memory.
-type memState map[string]bool
-
-func (m memState) Done(_ context.Context, key string) (bool, error) { return m[key], nil }
-func (m memState) Mark(_ context.Context, key string) error         { m[key] = true; return nil }
 
 func hashOf(t *testing.T, s string) store.Hash {
 	t.Helper()
@@ -103,70 +94,39 @@ func TestSize(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
-	var forums atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		forums.Add(1)
-		switch r.URL.Path {
-		case "/atom/f/0.atom", "/atom/f/1457.atom":
-			w.Header().Set("Content-Type", "application/atom+xml")
-			_, _ = w.Write([]byte(atom))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-	state := memState{}
-	src := &Source{Config: Config{URL: srv.URL + "/", Forums: []int{0, 1457}}}
+	c := &feedtest.Crawler{Pages: map[string]string{
+		"https://feed.example/atom/f/0.atom":    atom,
+		"https://feed.example/atom/f/1457.atom": atom,
+	}}
+	src := &Source{Config{URL: "https://feed.example/", Forums: []int{0, 1457}}}
 	require.Equal(t, "rutracker", src.Name())
-	items, err := src.Fetch(context.Background(), state)
+	items, err := src.Fetch(context.Background(), c)
 	require.NoError(t, err)
 	require.Len(t, items, 2, "a release listed by both forums once")
-	require.Equal(t, int32(2), forums.Load())
+	require.Equal(t, []string{"https://feed.example/atom/f/0.atom", "https://feed.example/atom/f/1457.atom"}, c.Calls)
 
-	_, err = (&Source{Config: Config{URL: srv.URL, Forums: []int{9}}}).Fetch(context.Background(), state)
+	_, err = (&Source{Config{URL: "https://feed.example", Forums: []int{9}}}).Fetch(context.Background(), c)
 	require.ErrorContains(t, err, "forum 9: ")
 	require.ErrorContains(t, err, "404")
-
-	items, err = (&Source{Config: Config{URL: srv.URL}}).Fetch(context.Background(), state)
-	require.NoError(t, err)
-	require.Len(t, items, 2, "no forums reads forum 0")
 }
 
-// A forum the whole-tracker feed names in a category is read once per
-// Source for its month of releases; one whose feed fails is logged and not
-// tried again.
+// A forum the whole-tracker feed names in a category is read once, for its
+// month of releases; one whose feed fails is left to the crawler.
 func TestFetchDiscovers(t *testing.T) {
 	deep := strings.Replace(atom, "t=6932892", "t=1", 1)
 	deep = strings.Replace(deep, "925E3FCDD454CC67A734826D17C3DAED5E22FE3C", "0000000000000000000000000000000000000001", 1)
-	var paths []string
-	var mu sync.Mutex
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		paths = append(paths, r.URL.Path)
-		mu.Unlock()
-		switch r.URL.Path {
-		case "/atom/f/0.atom":
-			_, _ = w.Write([]byte(strings.Replace(atom, `term="f-1457"`, `term="f-77"`, 1)))
-		case "/atom/f/1457.atom":
-			_, _ = w.Write([]byte(deep))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-	state := memState{}
-	src := &Source{Config: Config{URL: srv.URL}}
-	items, err := src.Fetch(context.Background(), state)
+	c := &feedtest.Crawler{Pages: map[string]string{
+		"https://feed.example/atom/f/0.atom":    strings.Replace(atom, `term="f-1457"`, `term="f-77"`, 1),
+		"https://feed.example/atom/f/1457.atom": deep,
+	}}
+	src := &Source{Config{URL: "https://feed.example"}}
+	items, err := src.Fetch(context.Background(), c)
 	require.NoError(t, err)
 	require.Len(t, items, 3, "forum 0's two and the one more forum 1457 holds; forum 77's 404 is skipped")
-	items, err = src.Fetch(context.Background(), state)
+	items, err = src.Fetch(context.Background(), c)
 	require.NoError(t, err)
-	require.Len(t, items, 2, "the second round reads forum 0 alone")
-	items, err = (&Source{Config: Config{URL: srv.URL}}).Fetch(context.Background(), state)
-	require.NoError(t, err)
-	require.Len(t, items, 2, "a new Source with the same state, as after a restart, reads forum 0 alone too")
-	require.Equal(t, memState{"forum:77": true, "forum:1457": true}, state)
-	mu.Lock()
-	defer mu.Unlock()
-	require.Equal(t, []string{"/atom/f/0.atom", "/atom/f/77.atom", "/atom/f/1457.atom", "/atom/f/0.atom", "/atom/f/0.atom"}, paths)
+	require.Len(t, items, 2, "the second round reads forum 0 alone, forum 77 tried again")
+	require.Equal(t, []string{"https://feed.example/atom/f/0.atom", "https://feed.example/atom/f/77.atom", "https://feed.example/atom/f/1457.atom",
+		"https://feed.example/atom/f/0.atom", "https://feed.example/atom/f/77.atom"}, c.Calls)
+	require.Equal(t, map[string]bool{"https://feed.example/atom/f/1457.atom": true}, c.Done())
 }

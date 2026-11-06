@@ -3,9 +3,13 @@ package feed
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -112,43 +116,109 @@ func TestRecord(t *testing.T) {
 
 // fakeSource lists what it is given, or fails.
 type fakeSource struct {
-	mu    sync.Mutex
-	items []Item
-	err   error
-	calls int
-	state State // the last one Fetch was handed
+	mu      sync.Mutex
+	items   []Item
+	err     error
+	calls   int
+	crawler Crawler // the last one Fetch was handed
 }
 
 func (s *fakeSource) Name() string { return "fake" }
-func (s *fakeSource) Fetch(_ context.Context, state State) ([]Item, error) {
+func (s *fakeSource) Fetch(_ context.Context, c Crawler) ([]Item, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls++
-	s.state = state
+	s.crawler = c
 	return s.items, s.err
 }
 
-// The state a source is handed is its own, kept in the store across
-// pollers and so across restarts.
-func TestState(t *testing.T) {
+// The crawler a source is handed records every fetch in the store, asks
+// only for what changed, fetches a page once on request, and a request at
+// most every Pause.
+func TestCrawler(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		switch r.URL.Path {
+		case "/feed":
+			if r.Header.Get("If-None-Match") == `"v1"` && r.Header.Get("If-Modified-Since") == "Thu, 05 Nov 2026 18:30:55 GMT" {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+			w.Header().Set("ETag", `"v1"`)
+			w.Header().Set("Last-Modified", "Thu, 05 Nov 2026 18:30:55 GMT")
+			_, _ = w.Write([]byte("feed"))
+		case "/page":
+			_, _ = w.Write([]byte("page"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
 	src := &fakeSource{}
-	require.NoError(t, (&Poller{Source: src, Recorder: f.rec, Log: slog.New(slog.DiscardHandler)}).Round(ctx))
-	done, err := src.state.Done(ctx, "forum:1457")
-	require.NoError(t, err)
-	require.False(t, done)
-	require.NoError(t, src.state.Mark(ctx, "forum:1457"))
-	require.NoError(t, src.state.Mark(ctx, "forum:1457"), "marking twice is fine")
+	p := &Poller{Source: src, Recorder: f.rec, HTTP: srv.Client(), Now: func() time.Time { return f.now }, Log: slog.New(slog.DiscardHandler)}
+	require.NoError(t, p.Round(ctx))
+	c := src.crawler
 
-	again := &fakeSource{}
-	require.NoError(t, (&Poller{Source: again, Recorder: f.rec, Log: slog.New(slog.DiscardHandler)}).Round(ctx))
-	done, err = again.state.Done(ctx, "forum:1457")
+	body, ok, err := c.Fetch(ctx, srv.URL+"/feed")
 	require.NoError(t, err)
-	require.True(t, done, "another poller of the same source sees the mark")
-	done, err = storeState{store: f.store, source: "other", now: f.rec.now}.Done(ctx, "forum:1457")
+	require.True(t, ok)
+	b, _ := io.ReadAll(body)
+	require.NoError(t, body.Close())
+	require.Equal(t, "feed", string(b))
+	rec, found, err := f.store.CrawlState(ctx, "fake", srv.URL+"/feed")
 	require.NoError(t, err)
-	require.False(t, done, "another source does not")
+	require.True(t, found)
+	require.Equal(t, store.Crawl{Source: "fake", URL: srv.URL + "/feed", CreatedAt: f.now, UpdatedAt: f.now, Status: 200, ETag: `"v1"`, LastModified: "Thu, 05 Nov 2026 18:30:55 GMT"}, rec)
+
+	f.now = f.now.Add(time.Hour)
+	_, ok, err = c.Fetch(ctx, srv.URL+"/feed")
+	require.NoError(t, err)
+	require.False(t, ok, "unchanged since: the validators went back and 304 came")
+	rec, _, err = f.store.CrawlState(ctx, "fake", srv.URL+"/feed")
+	require.NoError(t, err)
+	require.Equal(t, 304, rec.Status)
+	require.Equal(t, `"v1"`, rec.ETag, "the validators kept")
+	require.Equal(t, f.now, rec.UpdatedAt)
+	require.Equal(t, f.now.Add(-time.Hour), rec.CreatedAt)
+
+	body, ok, err = c.Once(ctx, srv.URL+"/page")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NoError(t, body.Close())
+	_, ok, err = c.Once(ctx, srv.URL+"/page")
+	require.NoError(t, err)
+	require.False(t, ok, "fetched before")
+
+	_, _, err = c.Once(ctx, srv.URL+"/gone")
+	require.ErrorContains(t, err, "404")
+	rec, _, err = f.store.CrawlState(ctx, "fake", srv.URL+"/gone")
+	require.NoError(t, err)
+	require.Equal(t, 404, rec.Status)
+	require.Contains(t, rec.Error, "404")
+	_, _, err = c.Once(ctx, srv.URL+"/gone")
+	require.ErrorContains(t, err, "404", "a failed fetch is tried again")
+	require.Equal(t, int32(5), hits.Load())
+}
+
+// Two requests of one source are a Pause apart.
+func TestCrawlerPause(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) }))
+	defer srv.Close()
+	src := &fakeSource{}
+	p := &Poller{Source: src, Recorder: f.rec, HTTP: srv.Client(), Log: slog.New(slog.DiscardHandler)}
+	require.NoError(t, p.Round(ctx))
+	start := time.Now()
+	for range 2 {
+		body, _, err := src.crawler.Fetch(ctx, srv.URL)
+		require.NoError(t, err)
+		require.NoError(t, body.Close())
+	}
+	require.GreaterOrEqual(t, time.Since(start), Pause)
 }
 
 func (s *fakeSource) fail(err error) {

@@ -7,11 +7,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log/slog"
-	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mikluko/sniffarr/internal/feed"
@@ -34,25 +31,13 @@ type Config struct {
 	Forums []int
 }
 
-// Source reads the feeds of Config.Forums, and once the feed of every other
-// forum those name in their categories: a forum's feed holds about a
-// month, the whole tracker's a few hours, so the first Fetch fills a store
-// from each forum the tracker is active in. The forums read are marked in
-// the feed.State, so a restart does not read them again.
+// Source reads the feeds of Config.Forums every round, and once the feed
+// of every other forum those name in their categories: a forum's feed
+// holds about a month, the whole tracker's a few hours, so the first round
+// fills a store from each forum the tracker is active in.
 type Source struct {
 	Config
-	// HTTP sends the requests, each traced as a client span;
-	// http.DefaultClient. It is read on the first request.
-	HTTP *http.Client
-	// Log discards everything when nil.
-	Log *slog.Logger
-
-	once   sync.Once
-	traced *http.Client
 }
-
-// pause is the wait between the feeds of forums read for their categories.
-const pause = time.Second
 
 // Name returns Name.
 func (s *Source) Name() string { return Name }
@@ -60,9 +45,9 @@ func (s *Source) Name() string { return Name }
 // Fetch reads every forum's feed and returns their releases, a release
 // listed by several forums once. An entry without a magnet link, or with
 // one naming no v1 infohash, is left out. A forum of a category that is
-// not among Forums is read too, the first time it is named; its feed
-// failing is logged and not retried.
-func (s *Source) Fetch(ctx context.Context, state feed.State) ([]feed.Item, error) {
+// not among Forums is read too, once; its feed failing is left to the
+// crawler's log.
+func (s *Source) Fetch(ctx context.Context, c feed.Crawler) ([]feed.Item, error) {
 	forums := s.Forums
 	if len(forums) == 0 {
 		forums = []int{0}
@@ -78,59 +63,41 @@ func (s *Source) Fetch(ctx context.Context, state feed.State) ([]feed.Item, erro
 		}
 	}
 	for _, f := range forums {
-		got, err := s.fetch(ctx, f)
+		got, err := s.fetch(ctx, c.Fetch, f)
 		if err != nil {
 			return nil, fmt.Errorf("forum %d: %w", f, err)
 		}
 		add(got)
 	}
-	unread, err := s.unread(ctx, state, forums, items)
-	if err != nil {
-		return nil, err
-	}
-	for _, f := range unread {
-		if err := feed.Sleep(ctx, pause); err != nil {
-			return nil, err
-		}
-		got, err := s.fetch(ctx, f)
+	for _, f := range others(forums, items) {
+		got, err := s.fetch(ctx, c.Once, f)
 		if err != nil {
-			s.log().WarnContext(ctx, "read forum feed", "forum", f, "err", err)
-		} else {
-			add(got)
+			if ctx.Err() != nil {
+				return nil, err
+			}
+			continue
 		}
-		if err := state.Mark(ctx, forumKey(f)); err != nil {
-			return nil, err
-		}
+		add(got)
 	}
 	return items, nil
 }
 
-// unread returns the forums the items' categories name that are neither
-// among forums nor marked read in state, each once.
-func (s *Source) unread(ctx context.Context, state feed.State, forums []int, items []feed.Item) ([]int, error) {
+// others returns the forums the items' categories name that are not among
+// forums, each once.
+func others(forums []int, items []feed.Item) []int {
 	skip := map[int]bool{}
 	for _, f := range forums {
 		skip[f] = true
 	}
 	var out []int
 	for _, it := range items {
-		f, ok := forum(it.Category)
-		if !ok || skip[f] {
-			continue
-		}
-		skip[f] = true
-		done, err := state.Done(ctx, forumKey(f))
-		if err != nil {
-			return nil, err
-		}
-		if !done {
+		if f, ok := forum(it.Category); ok && !skip[f] {
+			skip[f] = true
 			out = append(out, f)
 		}
 	}
-	return out, nil
+	return out
 }
-
-func forumKey(f int) string { return "forum:" + strconv.Itoa(f) }
 
 // forum reads the forum number of a category term, "f-1457".
 func forum(category string) (int, bool) {
@@ -142,37 +109,18 @@ func forum(category string) (int, bool) {
 	return n, err == nil && n > 0
 }
 
-func (s *Source) fetch(ctx context.Context, forum int) ([]feed.Item, error) {
+// fetch reads a forum's feed through get, nothing when get has nothing new.
+func (s *Source) fetch(ctx context.Context, get func(context.Context, string) (io.ReadCloser, bool, error), forum int) ([]feed.Item, error) {
 	base := s.URL
 	if base == "" {
 		base = DefaultURL
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(base, "/")+"/atom/f/"+strconv.Itoa(forum)+".atom", nil)
-	if err != nil {
+	body, ok, err := get(ctx, strings.TrimSuffix(base, "/")+"/atom/f/"+strconv.Itoa(forum)+".atom")
+	if err != nil || !ok {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "sniffarr")
-	res, err := s.client().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s: %s", req.URL, res.Status)
-	}
-	return Parse(io.LimitReader(res.Body, 8<<20))
-}
-
-func (s *Source) client() *http.Client {
-	s.once.Do(func() { s.traced = feed.Client(s.HTTP) })
-	return s.traced
-}
-
-func (s *Source) log() *slog.Logger {
-	if s.Log != nil {
-		return s.Log
-	}
-	return slog.New(slog.DiscardHandler)
+	defer func() { _ = body.Close() }()
+	return Parse(body)
 }
 
 // atomFeed is what of the feed Parse reads.

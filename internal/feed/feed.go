@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -47,46 +48,122 @@ type Source interface {
 	// Name keys the source's items in the store and its metrics:
 	// "rutracker".
 	Name() string
-	// Fetch returns the releases the feed lists at the moment. A feed is a
-	// window, so Fetch returns the same release again until it leaves it.
-	// What the source did once and need not do again, a page read or a
-	// pass made, it marks in state.
-	Fetch(ctx context.Context, state State) ([]Item, error)
+	// Fetch returns the releases the feed lists at the moment, reading the
+	// feed's pages through the Crawler. A feed is a window, so Fetch
+	// returns the same release again until it leaves it.
+	Fetch(ctx context.Context, c Crawler) ([]Item, error)
 }
 
-// State keeps, per source and across restarts, the keys a source marked
-// done.
-type State interface {
-	Done(ctx context.Context, key string) (bool, error)
-	Mark(ctx context.Context, key string) error
+// Crawler fetches a source's pages and keeps, in the store and across
+// restarts, what each URL answered last: crawl_state. The body returned is
+// the caller's to close.
+type Crawler interface {
+	// Fetch GETs the URL, asking only for what changed since the last
+	// fetch; ok is false when nothing has.
+	Fetch(ctx context.Context, url string) (body io.ReadCloser, ok bool, err error)
+	// Once GETs the URL unless a fetch of it succeeded before; ok is false
+	// when one did.
+	Once(ctx context.Context, url string) (body io.ReadCloser, ok bool, err error)
 }
 
-// storeState is the State of one source in the store.
-type storeState struct {
+// Pause is the least time a crawler leaves between two requests of a source.
+const Pause = time.Second
+
+// MaxBody is how much of a page a crawler reads.
+const MaxBody = 8 << 20
+
+// crawler is the Crawler of one source: a request at most every Pause,
+// each traced as a client span, each recorded in the store.
+type crawler struct {
 	store  *store.Store
 	source string
+	http   *http.Client
 	now    func() time.Time
+	log    *slog.Logger
+	last   time.Time
 }
 
-func (s storeState) Done(ctx context.Context, key string) (bool, error) {
-	return s.store.FeedDone(ctx, s.source, key)
-}
-
-func (s storeState) Mark(ctx context.Context, key string) error {
-	return s.store.MarkFeedDone(ctx, s.source, key, s.now())
-}
-
-// Client returns c, or http.DefaultClient for nil, with each request traced
-// as a client span.
-func Client(c *http.Client) *http.Client {
-	if c == nil {
-		c = http.DefaultClient
+func (c *crawler) Fetch(ctx context.Context, url string) (io.ReadCloser, bool, error) {
+	prev, _, err := c.store.CrawlState(ctx, c.source, url)
+	if err != nil {
+		return nil, false, err
 	}
-	return telemetry.HTTPClient(c)
+	return c.get(ctx, url, prev)
 }
 
-// Sleep waits d, or until ctx is done.
-func Sleep(ctx context.Context, d time.Duration) error {
+func (c *crawler) Once(ctx context.Context, url string) (io.ReadCloser, bool, error) {
+	prev, ok, err := c.store.CrawlState(ctx, c.source, url)
+	if err != nil {
+		return nil, false, err
+	}
+	if ok && prev.Fetched() {
+		return nil, false, nil
+	}
+	return c.get(ctx, url, store.Crawl{})
+}
+
+// get GETs the URL with prev's validators, a Pause after the last request,
+// and records the answer.
+func (c *crawler) get(ctx context.Context, url string, prev store.Crawl) (io.ReadCloser, bool, error) {
+	if wait := c.last.Add(Pause).Sub(c.now()); wait > 0 {
+		if err := sleep(ctx, wait); err != nil {
+			return nil, false, err
+		}
+	}
+	c.last = c.now()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	req.Header.Set("User-Agent", "sniffarr")
+	if prev.ETag != "" {
+		req.Header.Set("If-None-Match", prev.ETag)
+	}
+	if prev.LastModified != "" {
+		req.Header.Set("If-Modified-Since", prev.LastModified)
+	}
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, false, c.record(ctx, store.Crawl{Source: c.source, URL: url, Error: err.Error()}, err)
+	}
+	rec := store.Crawl{Source: c.source, URL: url, Status: res.StatusCode, ETag: res.Header.Get("ETag"), LastModified: res.Header.Get("Last-Modified")}
+	switch {
+	case res.StatusCode == http.StatusNotModified:
+		_ = res.Body.Close()
+		rec.ETag, rec.LastModified = prev.ETag, prev.LastModified
+		return nil, false, c.record(ctx, rec, nil)
+	case res.StatusCode < 200 || res.StatusCode >= 300:
+		_ = res.Body.Close()
+		err := fmt.Errorf("%s: %s", url, res.Status)
+		rec.Error = err.Error()
+		return nil, false, c.record(ctx, rec, err)
+	}
+	if err := c.record(ctx, rec, nil); err != nil {
+		_ = res.Body.Close()
+		return nil, false, err
+	}
+	return body{io.LimitReader(res.Body, MaxBody), res.Body}, true, nil
+}
+
+// record keeps rec and returns err, or the store's error over it; a failed
+// fetch is logged.
+func (c *crawler) record(ctx context.Context, rec store.Crawl, err error) error {
+	if err != nil {
+		c.log.WarnContext(ctx, "fetch", "source", c.source, "url", rec.URL, "err", err)
+	}
+	if serr := c.store.RecordCrawl(ctx, rec, c.now()); serr != nil {
+		return serr
+	}
+	return err
+}
+
+// body is a response body read to MaxBody.
+type body struct {
+	io.Reader
+	io.Closer
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 	select {
@@ -238,8 +315,14 @@ type Poller struct {
 	Interval time.Duration
 	Retry    time.Duration
 	Log      *slog.Logger
+	// HTTP sends the source's requests, each traced as a client span;
+	// http.DefaultClient.
+	HTTP *http.Client
 	// Now is time.Now when nil.
 	Now func() time.Time
+
+	once    sync.Once
+	crawler *crawler
 }
 
 // Run reads the feed at once, then at every Interval of wall-clock time
@@ -311,10 +394,27 @@ func (p *Poller) now() time.Time {
 	return time.Now()
 }
 
+// crawl is the source's Crawler, one for the life of the Poller so its
+// pauses hold across rounds.
+func (p *Poller) crawl() *crawler {
+	p.once.Do(func() {
+		c := p.HTTP
+		if c == nil {
+			c = http.DefaultClient
+		}
+		log := p.Log
+		if log == nil {
+			log = slog.New(slog.DiscardHandler)
+		}
+		p.crawler = &crawler{store: p.Recorder.Store, source: p.Source.Name(), http: telemetry.HTTPClient(c), now: p.now, log: log}
+	})
+	return p.crawler
+}
+
 // Round reads the feed once and records every item, logging how many were
 // new.
 func (p *Poller) Round(ctx context.Context) error {
-	items, err := p.Source.Fetch(ctx, storeState{store: p.Recorder.Store, source: p.Source.Name(), now: p.Recorder.now})
+	items, err := p.Source.Fetch(ctx, p.crawl())
 	if err != nil {
 		return err
 	}
