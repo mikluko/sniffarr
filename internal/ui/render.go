@@ -128,7 +128,6 @@ func New() (*Renderer, error) {
 		"sorts":       func() []string { return Sorts },
 		"qualities":   func() []string { return Qualities },
 		"matchedOpts": func() []string { return []string{"yes", "no"} },
-		"relSources":  func() []string { return ReleaseSources },
 		"relSorts":    func() []string { return ReleaseSorts },
 		"concat":      func(a ...string) string { return strings.Join(a, "") },
 		"int64":       func(i int) int64 { return int64(i) },
@@ -167,6 +166,8 @@ func New() (*Renderer, error) {
 		"imdbSearch":  IMDbSearchURL,
 		"posterThumb": func() string { return PosterThumb },
 		"posterCard":  func() string { return PosterCard },
+		"posterWork":  func() string { return PosterWork },
+		"posterWork2": func() string { return PosterWork2 },
 		"pathEscape":  url.PathEscape,
 		"queryEscape": url.QueryEscape,
 	}

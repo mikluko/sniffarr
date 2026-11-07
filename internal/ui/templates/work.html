@@ -8,7 +8,10 @@
 
 <section class="hero" aria-label="TMDB">
   {{if $m.HasPoster}}
-  <img class="hero-ph" src="{{tmdbImg posterCard $m.PosterPath}}" width="154" height="231" alt="" referrerpolicy="no-referrer">
+  <picture class="hero-pic">
+    <source media="(max-width:640px)" srcset="{{tmdbImg posterWork $m.PosterPath}}">
+    <img class="hero-ph" src="{{tmdbImg posterWork $m.PosterPath}}" srcset="{{tmdbImg posterWork2 $m.PosterPath}} 2x" width="185" height="278" alt="" referrerpolicy="no-referrer">
+  </picture>
   {{else}}
   <div class="hero-ph hero-none" aria-hidden="true">{{.T "tmdb.noposter"}}</div>
   {{end}}
@@ -25,7 +28,9 @@
   {{if $w.Releases}}
   <div class="hero-facts">
     <span>{{.T "work.f.rank"}}</span>
-    <span>{{range $i, $win := windows}}{{if $i}} · {{end}}{{$.T (concat "win." $win)}} {{with index $.Ranks $i}}{{if eq $win "7d"}}<b>№{{.}}</b>{{else}}№{{.}}{{end}}{{else}}<span class="mu">—</span>{{end}}{{end}}</span>
+    <span>{{template "wplaces" .RankPlaces}}</span>
+    <span>{{template "tip" (tipArgs (.T "work.f.peak") (.T "work.f.peak_tip"))}}</span>
+    <span>{{template "wplaces" .PeakPlaces}}</span>
     <span>{{.T "work.f.peers"}}</span>
     <span><b>{{.Num .Peers.Week}}</b> {{.T "win.7d_lc"}} <span class="mu">· {{.Num .Peers.Day}} {{.T "win.24h_lc"}} · {{.Num .Peers.Month}} {{.T "win.30d_lc"}}</span></span>
     <span>{{.T "work.f.releases"}}</span>
@@ -46,6 +51,9 @@
 {{template "releases" .}}
 {{end}}
 {{end}}
+
+{{/* A title's places over the windows on a line: "24 h №2 · 7 days №1 · 30 days —"; "—" is no place. */}}
+{{define "wplaces"}}{{$b := .B}}{{range $i, $win := windows}}{{if $i}} · {{end}}{{$b.T (concat "win." $win)}} {{with index $.N $i}}{{if eq $i $.Bold}}<b>№{{.}}</b>{{else}}№{{.}}{{end}}{{else}}<span class="mu">—</span>{{end}}{{end}}{{end}}
 
 {{/* Dub of a title in one language, on a line: how many of its N releases are marked, the marks
      in the tooltip, and how many more are likely. */}}
@@ -70,8 +78,6 @@
         hx-trigger="change, input changed delay:500ms from:input[type=text], submit">
     {{with .Back}}<input type="hidden" name="from" value="{{.}}">{{end}}
     {{with $f.Quality}}<input type="hidden" name="quality" value="{{.}}">{{end}}
-    {{with $f.Source}}<input type="hidden" name="source" value="{{.}}">{{end}}
-    {{if .VoiceLangs}}{{if gt (len .VoiceLangs) 1}}<input type="hidden" name="vl" value="{{$f.VoiceLang}}">{{end}}{{if ne $f.Voice "any"}}<input type="hidden" name="voice" value="{{$f.Voice}}">{{end}}{{end}}
     {{if and (eq $r.Kind "series") $f.Season}}<input type="hidden" name="season" value="{{$f.Season}}">{{end}}
     <label for="relf" class="rtog">{{.T "work.filters"}}{{if $set}}<span class="mu"> · {{$set}}</span>{{end}}</label>
     {{if eq $r.Kind "series"}}
@@ -84,15 +90,6 @@
       {{- template "relseg" (.Seg "quality" "" (.T "f.all") (eq $f.Quality ""))}}
       {{- range qualities}}{{template "relseg" ($.Seg "quality" . ($.T (concat "quality." .)) (eq . $f.Quality))}}{{end -}}
     </span></div>
-    <div class="fx" role="group" aria-label="{{.T "f.source"}}"><span>{{.T "f.source"}}</span><span class="seg">
-      {{- template "relseg" (.Seg "source" "" (.T "f.all") (eq $f.Source ""))}}
-      {{- range relSources}}{{template "relseg" ($.Seg "source" . ($.T (concat "source." .)) (eq . $f.Source))}}{{end -}}
-    </span></div>
-    {{if .VoiceLangs}}
-    <div class="fx" role="group" aria-label="{{.T "audio.filter"}}"><span>{{.T "audio.filter"}}</span>
-      {{- if gt (len .VoiceLangs) 1}}<span class="seg">{{range .VoiceLangs}}{{template "relseg" ($.Seg "vl" . ($.LangName .) (eq . $f.VoiceLang))}}{{end}}</span>{{end -}}
-      <span class="seg">{{range voiceModes}}{{template "relseg" ($.Seg "voice" . ($.T (concat "relvoice." .)) (eq . $f.Voice))}}{{end}}</span></div>
-    {{end}}
     <label class="fx">{{.T "rel.size"}}
       <input name="min" type="text" inputmode="decimal" value="{{$f.MinGB}}" placeholder="{{.T "rel.from"}}" class="num{{if $f.MinGB}} set{{end}}" aria-label="{{.T "rel.size"}} {{.T "rel.from"}}">
       –
@@ -114,8 +111,7 @@
     <thead><tr>
       <th>{{.T "rel.release"}}</th>
       {{if eq $r.Kind "series"}}<th>{{.T "rel.ep"}}</th>{{end}}
-      <th class="r">{{.T "col.peers7"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "rel.quality_c"}}</th><th>{{.T "col.source"}}</th>
-      {{if .VoiceLangs}}<th>{{.T "top.audio"}}</th>{{end}}
+      <th class="r">{{.T "col.peers7"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "rel.quality_c"}}</th>
       <th class="r">{{.T "col.first"}}</th>
     </tr></thead>
     <tbody>
@@ -126,8 +122,6 @@
         <td class="r pe"><b>{{$.Num .Peers}}</b></td>
         <td class="r{{if ne $r.Kind "series"}} l1{{end}}">{{$.Size .Size}}</td>
         <td{{if not .Quality}} class="none mu"{{end}}>{{if .Quality}}{{$.T (concat "quality." .Quality)}}{{else}}—{{end}}</td>
-        <td>{{$.T (concat "source." .Source)}}</td>
-        {{if $.VoiceLangs}}<td class="au{{if not .HasAudio}} none{{end}}">{{if eq (len $.VoiceLangs) 1}}<span class="ml mu">{{index $.VoiceLangs 0}} </span>{{end}}{{template "relaudio" (audioArgs $ .Audio)}}</td>{{end}}
         <td class="r mu fs">{{$.Date .FirstSeen}}</td>
       </tr>
     {{end}}

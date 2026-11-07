@@ -463,24 +463,23 @@ func (s *server) workPage(w http.ResponseWriter, req *http.Request, id, path str
 	sum := summary(t.GetWork())
 	r := t.GetRanks()
 	page := ui.WorkPage{Base: s.base(req, lang, ""), Back: workBack(req), Work: *sum, Ranks: [3]int{int(r.GetDay()), int(r.GetWeek()), int(r.GetMonth())},
+		Peaks: [3]int{int(t.GetPeaks().GetDay()), int(t.GetPeaks().GetWeek()), int(t.GetPeaks().GetMonth())},
 		Peers: ui.PeerCounts{Day: t.GetPeers().GetDay(), Week: t.GetPeers().GetWeek(), Month: t.GetPeers().GetMonth()}, Audio: workAudio(t.GetAudio())}
 	if sum.Releases == 0 {
 		s.render(w, req, "work", page)
 		return
 	}
-	f := ui.ReleaseFilters{Quality: oneOf(qs.Get("quality"), ui.Qualities), Source: oneOf(qs.Get("source"), ui.ReleaseSources),
+	f := ui.ReleaseFilters{Quality: oneOf(qs.Get("quality"), ui.Qualities),
 		MinGB: strings.TrimSpace(qs.Get("min")), MaxGB: strings.TrimSpace(qs.Get("max")), Sort: oneOf(qs.Get("sort"), ui.ReleaseSorts)}
 	if f.Sort == "" {
 		f.Sort = "peers"
 	}
-	f.VoiceLang, f.Voice = s.voice(qs, lang)
 	if sum.Kind == "series" {
 		f.Season, f.Episode = number(qs.Get("season")), number(strings.TrimLeft(strings.TrimSpace(qs.Get("episode")), "Ee"))
 	}
 	o := offset(qs)
-	rr := &sniffarrv1.TitleReleasesRequest{Id: id, Quality: key(qualities, f.Quality), Source: key(sources, f.Source),
+	rr := &sniffarrv1.TitleReleasesRequest{Id: id, Quality: key(qualities, f.Quality),
 		MinSize: size(f.MinGB), MaxSize: size(f.MaxGB), Sort: key(sorts, f.Sort), Offset: int32(o), Limit: PageSize}
-	rr.Voice, rr.AudioLanguage = apiVoice(f.VoiceLang, f.Voice)
 	season, _ := strconv.Atoi(f.Season)
 	episode, _ := strconv.Atoi(f.Episode)
 	rr.Season, rr.Episode = int32(season), int32(episode)
@@ -498,8 +497,8 @@ func (s *server) workPage(w http.ResponseWriter, req *http.Request, id, path str
 	tbl.PrevURL, tbl.NextURL = pager(o, tbl.Shown, m.GetMatched(), page.ReleasePageURL)
 	for _, r := range m.GetReleases() {
 		tbl.Rows = append(tbl.Rows, ui.Release{InfoHash: hex.EncodeToString(r.GetInfohash()), Name: r.GetName(), Peers: r.GetPeersWeek(), Size: r.GetSize(),
-			Quality: qualities[r.GetQuality()], Source: uiOr(sources, r.GetSource(), "none"), Season: int(r.GetSeason()), Episode: int(r.GetEpisode()),
-			Audio: s.releaseAudio(r.GetAudio()), FirstSeen: r.GetFirstSeen().AsTime()})
+			Quality: qualities[r.GetQuality()], Season: int(r.GetSeason()), Episode: int(r.GetEpisode()),
+			FirstSeen: r.GetFirstSeen().AsTime()})
 	}
 	page.Releases = tbl
 	s.render(w, req, "work", page)

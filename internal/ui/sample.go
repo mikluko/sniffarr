@@ -147,12 +147,6 @@ func SampleWork(b Base, id string, f ReleaseFilters) WorkPage {
 	if !ok {
 		s, i = spiderMan, 0
 	}
-	if f.VoiceLang == "" {
-		f.VoiceLang = DefaultVoiceLang(b.VoiceLangs, b.Lang)
-	}
-	if f.Voice == "" {
-		f.Voice = "any"
-	}
 	if f.Sort == "" {
 		f.Sort = "peers"
 	}
@@ -167,6 +161,12 @@ func SampleWork(b Base, id string, f ReleaseFilters) WorkPage {
 	p.Ranks = s.ranks
 	if p.Ranks == [3]int{} {
 		p.Ranks = [3]int{i + 2, i + 1, i + 1}
+	}
+	p.Peaks = p.Ranks
+	for i, n := range p.Peaks {
+		if n > 1 {
+			p.Peaks[i] = n - 1
+		}
 	}
 	p.Peers = PeerCounts{Day: s.peers / 6, Week: s.peers, Month: s.peers * 3}
 	all := sampleReleases(b, s)
@@ -203,20 +203,11 @@ func sampleReleases(b Base, s titleSample) []Release {
 		if src == "disc" {
 			q = ""
 		}
-		r := Release{InfoHash: "a1c0ffee" + pad(k), Quality: q, Source: src, Size: sizes[q] + int64(k%5)*gb/3, Peers: peers,
+		r := Release{InfoHash: "a1c0ffee" + pad(k), Quality: q, Size: sizes[q] + int64(k%5)*gb/3, Peers: peers,
 			FirstSeen: b.Now.Add(-time.Duration(3+k*5%s.ageDays+1) * day)}
 		peers = peers * 83 / 100
 		if min := int64(s.rels - k); peers < min {
 			peers = min
-		}
-		ru := Audio{Lang: "ru"}
-		switch {
-		case k%11 == 3:
-			ru.Probability = fp(.88)
-		case k%4 == 1:
-			ru.Probability = fp(.12)
-		case k%4 == 2:
-			ru.Probability = fp(.03)
 		}
 		if s.kind == "series" {
 			r.Season = 1 + k%t.Seasons
@@ -227,25 +218,13 @@ func sampleReleases(b Base, s titleSample) []Release {
 				r.Episode = 1 + k%8
 			}
 		}
-		r.Name = sampleName(s, t, b, k, r)
-		r.Audio = []Audio{ru}
-		for _, l := range b.VoiceLangs {
-			if l == "uk" && k%5 == 0 {
-				r.Audio = append(r.Audio, Audio{Lang: "uk", Probability: fp(.71)})
-			}
-		}
+		r.Name = sampleName(s, t, b, k, r, src)
 		out = append(out, r)
 	}
 	// The 95-release title: the two explicitly marked releases have 16 peers between them.
 	if s.rels == 95 {
-		out[93].Audio[0] = Audio{Lang: "ru", Marker: true, Mark: "seleZen", Probability: fp(.97)}
 		out[93].Peers, out[93].Name = 11, "Человек-паук. Новый день (2026) BDRip 1080p seleZen"
-		out[94].Audio[0] = Audio{Lang: "ru", Marker: true, Mark: "ExKinoRay", Probability: fp(.96)}
 		out[94].Peers, out[94].Name = 5, "Chelovek-pauk.Novyj.den.2026.HDRip.ExKinoRay"
-	} else if s.voice.Explicit {
-		for k := 0; k < len(out); k += 3 {
-			out[k].Audio[0] = Audio{Lang: "ru", Marker: true, Mark: markPool[k%len(markPool)], Probability: fp(.95)}
-		}
 	}
 	return out
 }
@@ -271,7 +250,7 @@ func strconvItoa(k int) string {
 }
 
 // sampleName alternates the spellings of a title, the point of merging.
-func sampleName(s titleSample, t *TMDBWork, b Base, k int, r Release) string {
+func sampleName(s titleSample, t *TMDBWork, b Base, k int, r Release, src string) string {
 	ru := s.m("ru").Title
 	q := r.Quality
 	if q == "" {
@@ -283,11 +262,11 @@ func sampleName(s titleSample, t *TMDBWork, b Base, k int, r Release) string {
 	}
 	switch k % 3 {
 	case 0:
-		return dotted(t.Title) + dottedSE(se) + "." + strconvItoa(t.Year) + "." + q + "." + srcTag(r.Source)
+		return dotted(t.Title) + dottedSE(se) + "." + strconvItoa(t.Year) + "." + q + "." + srcTag(src)
 	case 1:
-		return ru + se + " (" + strconvItoa(t.Year) + ") " + srcTag(r.Source) + " " + q
+		return ru + se + " (" + strconvItoa(t.Year) + ") " + srcTag(src) + " " + q
 	}
-	return t.Title + se + " " + strconvItoa(t.Year) + " " + q + " " + srcTag(r.Source)
+	return t.Title + se + " " + strconvItoa(t.Year) + " " + q + " " + srcTag(src)
 }
 
 func dotted(s string) string {
@@ -313,17 +292,11 @@ func srcTag(src string) string {
 func filterReleases(all []Release, f ReleaseFilters) []Release {
 	var out []Release
 	for _, r := range all {
-		if f.Quality != "" && r.Quality != f.Quality || f.Source != "" && r.Source != f.Source {
+		if f.Quality != "" && r.Quality != f.Quality {
 			continue
 		}
 		if f.Season != "" && strconvItoa(r.Season) != f.Season || f.Episode != "" && strconvItoa(r.Episode) != f.Episode {
 			continue
-		}
-		if f.Voice == "explicit" || f.Voice == "p50" {
-			a, _ := AudioOf(r.Audio, f.VoiceLang)
-			if !(a.Marker || f.Voice == "p50" && a.Likely()) {
-				continue
-			}
 		}
 		out = append(out, r)
 	}

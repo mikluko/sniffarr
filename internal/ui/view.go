@@ -36,8 +36,6 @@ var (
 	ReleaseSorts = []string{"peers", "first_seen", "size"}
 	// Qualities of a release, by resolution; "" = unknown.
 	Qualities = []string{"2160p", "1080p", "720p", "sd"}
-	// ReleaseSources are the sources offered by the release table filter.
-	ReleaseSources = []string{"web", "rip", "remux", "disc"}
 )
 
 // PeerCounts are unique peers seen in each window.
@@ -250,11 +248,26 @@ type WorkPage struct {
 	Base
 	Work     WorkSummary
 	Ranks    [3]int     // place in the top of its kind for 24h, 7d, 30d; 0 = outside
+	Peaks    [3]int     // best place in each of those tops since its history began; 0 = never in it
 	Peers    PeerCounts // all releases
 	Audio    []WorkAudio
 	Releases ReleaseTable
 	Back     string // the page the visitor came from, see BackTarget; "" shows no back link
 }
+
+// Places is a title's places in the tops over the windows, N[i] for
+// Windows[i], 0 = none; the window at index Bold is shown in bold.
+type Places struct {
+	B    Base
+	N    [3]int
+	Bold int
+}
+
+// RankPlaces is the title's places now, the week's in bold.
+func (p WorkPage) RankPlaces() Places { return Places{B: p.Base, N: p.Ranks, Bold: 1} }
+
+// PeakPlaces is the title's best places since the tops' history began.
+func (p WorkPage) PeakPlaces() Places { return Places{B: p.Base, N: p.Peaks, Bold: -1} }
 
 // ReleaseURL is the title page under the release filters with the query
 // parameter key set to value, from the first release.
@@ -292,29 +305,24 @@ func (p WorkPage) Dub(lang string) WorkDub {
 	return WorkDub{B: p.Base, A: WorkAudioOf(p.Audio, lang), N: p.Work.Releases}
 }
 
-// FiltersSet counts the release filters set; the language of the dub
-// filter and the order are not filters.
+// FiltersSet counts the release filters set; the order is not a filter.
 func (p WorkPage) FiltersSet() int {
 	f := p.Releases.Filters
 	n := 0
-	for _, v := range []string{f.Quality, f.Source, f.MinGB, f.MaxGB, f.Season, f.Episode} {
+	for _, v := range []string{f.Quality, f.MinGB, f.MaxGB, f.Season, f.Episode} {
 		if v != "" {
 			n++
 		}
 	}
-	if f.Voice != "" && f.Voice != "any" {
-		n++
-	}
 	return n
 }
 
-// releaseURL leaves out every parameter at its default: the dub language
-// the page starts with, voice "any", sort "peers", offset 0, the rest "".
+// releaseURL leaves out every parameter at its default: sort "peers",
+// offset 0, the rest "".
 func (p WorkPage) releaseURL(offset int, key, value string) string {
 	f := p.Releases.Filters
 	pairs := [][3]string{
-		{"quality", f.Quality, ""}, {"source", f.Source, ""}, {"min", f.MinGB, ""}, {"max", f.MaxGB, ""},
-		{"vl", f.VoiceLang, DefaultVoiceLang(p.VoiceLangs, p.Lang)}, {"voice", f.Voice, "any"},
+		{"quality", f.Quality, ""}, {"min", f.MinGB, ""}, {"max", f.MaxGB, ""},
 		{"season", f.Season, ""}, {"episode", f.Episode, ""}, {"sort", f.Sort, "peers"},
 	}
 	v := url.Values{}
@@ -355,15 +363,12 @@ type ReleaseTable struct {
 }
 
 type ReleaseFilters struct {
-	Quality   string // Qualities value, "" = any
-	Source    string // ReleaseSources value, "" = any
-	MinGB     string // raw inputs, echoed back
-	MaxGB     string
-	VoiceLang string // one of Base.VoiceLangs
-	Voice     string // VoiceModes value, "" = any
-	Season    string // "" = all, else a number; series only
-	Episode   string // "" = all, else a number; series only
-	Sort      string // ReleaseSorts value, "" = peers
+	Quality string // Qualities value, "" = any
+	MinGB   string // raw inputs, echoed back
+	MaxGB   string
+	Season  string // "" = all, else a number; series only
+	Episode string // "" = all, else a number; series only
+	Sort    string // ReleaseSorts value, "" = peers
 }
 
 type Release struct {
@@ -372,16 +377,9 @@ type Release struct {
 	Peers     int64 // unique peers, 7 days
 	Size      int64
 	Quality   string // Qualities value, "" = unknown
-	Source    string // Sources value
 	Season    int    // series: 0 = unknown
 	Episode   int    // series: 0 = whole season or unknown
-	Audio     []Audio
 	FirstSeen time.Time
-}
-
-// HasAudio reports a marker or a probability for any language.
-func (r Release) HasAudio() bool {
-	return slices.ContainsFunc(r.Audio, func(a Audio) bool { return a.Marker || a.Probability != nil })
 }
 
 // ---------- torrent card ----------

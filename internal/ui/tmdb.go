@@ -25,6 +25,8 @@ var TMDBImageBase = "https://image.tmdb.org/t/p/"
 const (
 	PosterThumb = "w92"  // top rows and search hits, shown at 28–40 px
 	PosterCard  = "w342" // card, shown at 150 px
+	PosterWork  = "w185" // title page, shown at 185 px, and at 96 px on a phone
+	PosterWork2 = "w342" // title page, for a screen of twice the density
 )
 
 // LowConfidence marks matches the operator should look at.

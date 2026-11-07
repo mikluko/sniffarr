@@ -54,11 +54,11 @@ func TestRenderAll(t *testing.T) {
 		{"top-nolangs", "top", "/top", "", func(b Base) any { b.VoiceLangs = nil; return SampleTop(b, "movie", false) }},
 		{"top-since", "top", "/top", "", func(b Base) any { b.Nav = "top"; return SampleTopSince(b, "movie", b.Now.Add(-10*24*time.Hour)) }},
 		{"work", "work", "/movie/900001", "", func(b Base) any { return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
-		{"work-explicit", "work", "/movie/900001" + "?voice=explicit", "releases", func(b Base) any {
-			return SampleWork(b, SampleSpiderID, ReleaseFilters{Voice: "explicit"})
+		{"work-quality", "work", "/movie/900001?quality=sd", "releases", func(b Base) any {
+			return SampleWork(b, SampleSpiderID, ReleaseFilters{Quality: "sd"})
 		}},
-		{"work-empty", "work", "/movie/900001" + "?quality=sd&source=remux", "releases", func(b Base) any {
-			return SampleWork(b, SampleSpiderID, ReleaseFilters{Quality: "sd", Source: "remux"})
+		{"work-empty", "work", "/tv/106379?season=2&episode=9", "releases", func(b Base) any {
+			return SampleWork(b, SampleFalloutID, ReleaseFilters{Season: "2", Episode: "9"})
 		}},
 		{"work-series", "work", "/tv/106379", "", func(b Base) any { return SampleWork(b, SampleFalloutID, ReleaseFilters{Season: "2"}) }},
 		{"work-series-filtered", "work", "/tv/106379?season=2&episode=4", "", func(b Base) any {
@@ -1035,12 +1035,11 @@ func TestTorrentsMarkup(t *testing.T) {
 // A release filter's URL keeps the others, drops defaults and the offset.
 func TestReleaseURL(t *testing.T) {
 	p := WorkPage{Base: Base{Lang: "en", VoiceLangs: []string{"ru", "uk"}}, Releases: ReleaseTable{Path: "/tv/1",
-		Filters: ReleaseFilters{Quality: "1080p", VoiceLang: "ru", Voice: "any", Season: "2", Sort: "peers"}}}
+		Filters: ReleaseFilters{Quality: "1080p", Season: "2", Sort: "peers"}}}
 	for _, c := range []struct{ got, want string }{
-		{p.ReleaseURL("source", "web"), "/tv/1?quality=1080p&season=2&source=web"},
+		{p.ReleaseURL("episode", "4"), "/tv/1?episode=4&quality=1080p&season=2"},
 		{p.ReleaseURL("quality", ""), "/tv/1?season=2"},
-		{p.ReleaseURL("vl", "uk"), "/tv/1?quality=1080p&season=2&vl=uk"},
-		{p.ReleaseURL("voice", "any"), "/tv/1?quality=1080p&season=2"},
+		{p.ReleaseURL("sort", "size"), "/tv/1?quality=1080p&season=2&sort=size"},
 		{p.ReleasePageURL(50), "/tv/1?o=50&quality=1080p&season=2"},
 	} {
 		if c.got != c.want {
@@ -1050,15 +1049,15 @@ func TestReleaseURL(t *testing.T) {
 	if n := p.FiltersSet(); n != 2 {
 		t.Errorf("FiltersSet = %d, want 2", n)
 	}
-	p.Releases.Filters.Voice, p.Releases.Filters.MinGB = "explicit", "4"
+	p.Releases.Filters.MinGB, p.Releases.Filters.Episode, p.Releases.Filters.Sort = "4", "5", "size"
 	if n := p.FiltersSet(); n != 4 {
-		t.Errorf("FiltersSet = %d, want 4", n)
+		t.Errorf("FiltersSet = %d, want 4, the order not counted", n)
 	}
 }
 
-// The work page hides the probe button while probes are off and every dub
-// fact, filter and column without languages; the reset shows only with a
-// filter set.
+// The work page hides the probe button while probes are off and the dub
+// fact without languages; the reset shows only with a filter set; there is
+// no source or dub filter or column.
 func TestWorkMarkup(t *testing.T) {
 	r, err := New()
 	if err != nil {
@@ -1076,7 +1075,10 @@ func TestWorkMarkup(t *testing.T) {
 	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
 	b.Probes = true
 	on := render(b, ReleaseFilters{})
-	for _, want := range []string{`id="act-probe"`, `<span>Dub</span>`, `role="group" aria-label="Dub"`, `<th>Languages</th>`, `Releases <span class="mu">95</span>`} {
+	for _, want := range []string{`id="act-probe"`, `<span>Dub</span>`, `Releases <span class="mu">95</span>`, `<th>Quality</th>`, `<th class="r">First seen</th>`,
+		`role="group" aria-label="Quality"`, `name="min"`, `name="sort"`,
+		`<img class="hero-ph" src="https://image.tmdb.org/t/p/w185/`, ` 2x" width="185" height="278"`,
+		`<span>24 h №2 · 7 days <b>№1</b> · 30 days №3</span>`, `<span>24 h №1 · 7 days №1 · 30 days №2</span>`} {
 		if !strings.Contains(on, want) {
 			t.Errorf("no %s", want)
 		}
@@ -1091,11 +1093,68 @@ func TestWorkMarkup(t *testing.T) {
 	if off := render(b, ReleaseFilters{}); strings.Contains(off, "act-probe") {
 		t.Error("the probe button shows while probes are off")
 	}
+	for _, s := range []string{`aria-label="Source"`, `aria-label="Dub"`, `name="source"`, `name="voice"`, `<th>Source</th>`, `<th>Languages</th>`, `name="episode"`, `<th>Episode</th>`} {
+		if strings.Contains(on, s) {
+			t.Errorf("a movie has %s", s)
+		}
+	}
 	b.VoiceLangs = nil
 	none := render(b, ReleaseFilters{})
-	for _, s := range []string{`<span>Dub</span>`, `aria-label="Dub"`, `<th>Languages</th>`, `class="ml`} {
-		if strings.Contains(none, s) {
-			t.Errorf("has %s without languages", s)
+	if strings.Contains(none, `<span>Dub</span>`) {
+		t.Error("the dub fact shows without languages")
+	}
+}
+
+// A series adds season and episode filters and an episode column to the
+// movie's, and has no source or dub filter or column either.
+func TestWorkSeriesMarkup(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/tv/106379", nil)
+	w := httptest.NewRecorder()
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	if err := r.Render(w, req, "work", SampleWork(b, SampleFalloutID, ReleaseFilters{Season: "2"})); err != nil {
+		t.Fatal(err)
+	}
+	body := w.Body.String()
+	for _, want := range []string{`aria-label="Season"`, `aria-label="Quality"`, `name="min"`, `name="episode"`, `name="sort"`,
+		`<th>Release</th>`, `<th>Episode</th>`, `<th class="r">Peers 7 d</th>`, `<th class="r">Size</th>`, `<th>Quality</th>`, `<th class="r">First seen</th>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %s", want)
+		}
+	}
+	for _, s := range []string{`aria-label="Source"`, `aria-label="Dub"`, `name="source"`, `name="voice"`, `<th>Source</th>`, `<th>Languages</th>`} {
+		if strings.Contains(body, s) {
+			t.Errorf("has %s", s)
+		}
+	}
+}
+
+// The peak row shows a dash for a window the title has no best place in,
+// which is every window before the top's history begins, and its label
+// carries the tooltip saying what the row is.
+func TestWorkPeakWithoutHistory(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/movie/900001", nil)
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	p := SampleWork(b, SampleSpiderID, ReleaseFilters{})
+	p.Peaks = [3]int{}
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "work", p); err != nil {
+		t.Fatal(err)
+	}
+	body := w.Body.String()
+	for _, want := range []string{
+		`<span class="tip" tabindex="0" aria-label="Peak: `,
+		`<span>24 h <span class="mu">—</span> · 7 days <span class="mu">—</span> · 30 days <span class="mu">—</span></span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %s", want)
 		}
 	}
 }
