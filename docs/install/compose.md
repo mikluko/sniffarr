@@ -65,6 +65,11 @@ docker compose logs -f
 
 Start it again with the new release in `SNIFFARR_VERSION`.
 
+Migrations run at start and are not undone. A release older than the database's
+schema refuses to start with `database schema is at version N, newer than the M
+this binary knows`; roll back by restoring a database backup taken before the
+upgrade.
+
 ## Uninstall
 
 ```shell

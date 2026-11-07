@@ -152,7 +152,9 @@ func (db *DB) Close() error {
 
 // Migrate applies the *.sql files of migrations that component has not
 // applied yet, in name order, each in a transaction of its own, logging
-// each one as it begins and as it ends, with how long it took.
+// each one as it begins and as it ends, with how long it took. It fails
+// before running anything when the database records more migrations for
+// component than migrations holds, as after a rollback to an older binary.
 func (db *DB) Migrate(ctx context.Context, component string, migrations fs.FS) error {
 	names, err := fs.Glob(migrations, "*.sql")
 	if err != nil {
@@ -163,6 +165,10 @@ func (db *DB) Migrate(ctx context.Context, component string, migrations fs.FS) e
 	err = db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = ?", component).Scan(&version)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
+	}
+	if version > len(names) {
+		return fmt.Errorf("%s: database schema is at version %d, newer than the %d this binary knows; run a release that carries migration %d or restore a database backup from before it",
+			component, version, len(names), version)
 	}
 	for i := version; i < len(names); i++ {
 		body, err := fs.ReadFile(migrations, names[i])

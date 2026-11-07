@@ -34,6 +34,33 @@ func TestMigrate(t *testing.T) {
 	require.Equal(t, 1, n)
 }
 
+func TestMigrateRefusesNewerSchema(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "test.db")
+	db, err := Open(ctx, path, Options{})
+	require.NoError(t, err)
+	newer := fstest.MapFS{
+		"001.sql": {Data: []byte("CREATE TABLE a (x INTEGER)")},
+		"002.sql": {Data: []byte("CREATE TABLE a2 (x INTEGER)")},
+	}
+	b := fstest.MapFS{"001.sql": {Data: []byte("CREATE TABLE b (x INTEGER)")}}
+	require.NoError(t, db.Migrate(ctx, "a", newer))
+	require.NoError(t, db.Migrate(ctx, "b", b))
+	require.NoError(t, db.Close())
+
+	db, err = Open(ctx, path, Options{})
+	require.NoError(t, err)
+	defer db.Close()
+	older := fstest.MapFS{"001.sql": newer["001.sql"]}
+	err = db.Migrate(ctx, "a", older)
+	require.ErrorContains(t, err, "a: database schema is at version 2, newer than the 1 this binary knows")
+
+	var v int
+	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'a'").Scan(&v))
+	require.Equal(t, 2, v, "the recorded version is left as it was")
+	require.NoError(t, db.Migrate(ctx, "b", b), "another component is judged by its own version")
+}
+
 func TestMigrateLogs(t *testing.T) {
 	ctx := context.Background()
 	var buf bytes.Buffer

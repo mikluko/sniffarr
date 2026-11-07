@@ -64,6 +64,11 @@ kubectl logs deploy/sniffarr-api --since=5m
 helm upgrade sniffarr oci://sarak.sh/mikluko/charts/sniffarr --version 0.39.0 -f values.yaml
 ```
 
+Migrations run at start and are not undone. A release older than the database's
+schema refuses to start with `database schema is at version N, newer than the M
+this binary knows`; roll back by restoring a database backup taken before the
+upgrade.
+
 ## Uninstall
 
 ```shell

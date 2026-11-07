@@ -91,6 +91,11 @@ journalctl -u sniffarr.service -f
 Run the script again, or repeat the download and `install` steps and restart
 the service. The settings file is left as it is.
 
+Migrations run at start and are not undone. A release older than the database's
+schema refuses to start with `database schema is at version N, newer than the M
+this binary knows`; roll back by restoring a database backup taken before the
+upgrade.
+
 ## Uninstall
 
 ```shell
