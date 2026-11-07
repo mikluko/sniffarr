@@ -132,8 +132,8 @@ button:disabled{cursor:default;opacity:.5;background:var(--background)}
 .charthead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px;margin-top:8px}
 .chart{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 8px}
 .chart .yax{display:flex;flex-direction:column;justify-content:space-between;text-align:right;color:var(--muted-foreground);font:11px var(--mono);height:160px}
-.chart .bars{position:relative;height:160px}
-.chart .col{position:absolute;top:0;bottom:0;text-decoration:none;cursor:default;outline:none}
+.chart .bars{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:2px;height:160px}
+.chart .col{position:relative;text-decoration:none;cursor:default;outline:none}
 .chart .col i{position:absolute;left:0;right:0;bottom:0}
 .chart .bar{background:var(--ln)}
 .chart .proj{border:1px dashed var(--ln);pointer-events:none}

@@ -110,12 +110,6 @@ func NewBarChart(values []int64, labels []string, labelEvery int, partial bool, 
 	return c
 }
 
-// Left is the bar's left edge in percent of the chart's width.
-func (b Bar) Left() float64 { return r1(b.X / chartW * 100) }
-
-// Width is the bar's width in percent of the chart's width.
-func (b Bar) Width() float64 { return r1(b.W / chartW * 100) }
-
 // Height is the bar's height in percent of the chart's height.
 func (b Bar) Height() float64 { return r1(b.H / chartH * 100) }
 

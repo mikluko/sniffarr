@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The data page's refresh tooltip says how often the server recomputes the data.
 - In English, the title page's facts say "Chart position".
 
+### Fixed
+
+- The data page's chart bars stand 2 px apart, evenly, at every width.
+
 ## [0.44.0-beta.1] - 2026-11-07
 
 ### Added

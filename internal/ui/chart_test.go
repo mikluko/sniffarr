@@ -6,14 +6,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// A bar is placed in percent of the chart's box; the right half's tooltips
+// A bar's height is in percent of the chart's; the right half's tooltips
 // hang to the left.
 func TestBarChartPercent(t *testing.T) {
 	c := NewBarChart([]int64{50, 100}, []string{"a", "b"}, 1, true, 80)
 	require.Len(t, c.Bars, 2)
 	first, last := c.Bars[0], c.Bars[1]
-	require.InDelta(t, 3.8, first.Left(), 0.1)
-	require.InDelta(t, 42.5, first.Width(), 0.1)
 	require.Equal(t, 50.0, first.Height())
 	require.False(t, first.RightHalf())
 	require.Equal(t, 100.0, last.Height())
