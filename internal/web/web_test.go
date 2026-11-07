@@ -781,7 +781,7 @@ func TestFeatures(t *testing.T) {
 
 	body = page(t, get(t, handlerWith(t, "", Config{}), "/", ""))
 	for _, want := range []string{
-		`<span class="mu">no key</span>`, "Turned on by the API key in TYPESAFE_API_KEY at start.",
+		`<span class="mu">no key</span>`, "Turned on by the API key in SNIFFARR_CLASSIFY_API_KEY at start.",
 		"Turned on by the -probe flag at start.", "Turned on at start, by the languages in SNIFFARR_AUDIO_LANGUAGES.",
 		"Turned on at start, by the feeds in SNIFFARR_FEEDS.", `>P2: feeds (off)<`,
 	} {

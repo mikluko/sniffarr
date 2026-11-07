@@ -302,7 +302,7 @@ func TestBrowserSettingsFeatures(t *testing.T) {
 		return out
 	}
 	off := []state{
-		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, Setting: "TYPESAFE_API_KEY"},
+		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, Setting: "SNIFFARR_CLASSIFY_API_KEY"},
 		{Feature: sniffarrv1.Feature_FEATURE_PROBES, Setting: "-probe"},
 		{Feature: sniffarrv1.Feature_FEATURE_AUDIO, Setting: "SNIFFARR_AUDIO_LANGUAGES"},
 		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, Setting: "SNIFFARR_FEEDS"},
@@ -312,7 +312,7 @@ func TestBrowserSettingsFeatures(t *testing.T) {
 	b := browser(t)
 	b.Tasks, b.Classifier, b.Probes, b.Feeds = tasks(t), true, true, []string{"rutracker", "rutor"}
 	on := []state{
-		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, On: true, Works: true, Setting: "TYPESAFE_API_KEY"},
+		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, On: true, Works: true, Setting: "SNIFFARR_CLASSIFY_API_KEY"},
 		{Feature: sniffarrv1.Feature_FEATURE_PROBES, On: true, Setting: "-probe"},
 		{Feature: sniffarrv1.Feature_FEATURE_AUDIO, On: true, Works: true, Setting: "SNIFFARR_AUDIO_LANGUAGES", Values: []string{"ru"}},
 		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, On: true, Works: true, Setting: "SNIFFARR_FEEDS", Values: []string{"rutracker", "rutor"}},

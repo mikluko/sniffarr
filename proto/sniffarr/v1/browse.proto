@@ -166,7 +166,7 @@ message FeatureState {
   // not while Stats.probers is 0; audio and feeds do whenever they are on.
   bool works = 3;
   // The command-line flag, "-probe", or the environment variable,
-  // "TYPESAFE_API_KEY", that turns the feature on.
+  // "SNIFFARR_CLASSIFY_API_KEY", that turns the feature on.
   string setting = 4;
   // What the feature is on with: the audio languages, BCP-47 tags in the
   // server's order, or the names of the feeds read; empty for the others

@@ -820,7 +820,7 @@ type FeatureState struct {
 	// not while Stats.probers is 0; audio and feeds do whenever they are on.
 	Works bool `protobuf:"varint,3,opt,name=works,proto3" json:"works,omitempty"`
 	// The command-line flag, "-probe", or the environment variable,
-	// "TYPESAFE_API_KEY", that turns the feature on.
+	// "SNIFFARR_CLASSIFY_API_KEY", that turns the feature on.
 	Setting string `protobuf:"bytes,4,opt,name=setting,proto3" json:"setting,omitempty"`
 	// What the feature is on with: the audio languages, BCP-47 tags in the
 	// server's order, or the names of the feeds read; empty for the others

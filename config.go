@@ -239,6 +239,7 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	}
 	a := api.Config{
 		Addr:         or(getenv("SNIFFARR_ADDR"), ":8080"),
+		ClassifyKey:  getenv("SNIFFARR_CLASSIFY_API_KEY"),
 		TypesafeKey:  getenv("TYPESAFE_API_KEY"),
 		TorznabToken: getenv("SNIFFARR_TORZNAB_TOKEN"),
 		WebhookToken: getenv("SNIFFARR_WEBHOOK_TOKEN"),

@@ -248,6 +248,7 @@ func TestLoadAPI(t *testing.T) {
 			}},
 		{name: "classifier endpoint", env: with("SNIFFARR_CLASSIFY_URL", "http://laya:8000/v1/systemone"),
 			want: func(a *api.Config, _ *db.Config) { a.ClassifyURL = "http://laya:8000/v1/systemone" }},
+		{name: "classifier key", env: with("SNIFFARR_CLASSIFY_API_KEY", "ck"), want: func(a *api.Config, _ *db.Config) { a.ClassifyKey = "ck" }},
 		{name: "classifier endpoint not a URL", env: with("SNIFFARR_CLASSIFY_URL", "laya:8000"), err: "SNIFFARR_CLASSIFY_URL: want an http or https URL"},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: func(a *api.Config, _ *db.Config) { a.DailyTokens = 0 }},
 		{name: "no reserve", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0"), want: func(a *api.Config, _ *db.Config) { a.SearchReserve = 0 }},

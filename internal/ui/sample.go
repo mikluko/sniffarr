@@ -468,7 +468,7 @@ func SampleData(b Base) DataPage {
 // "degraded".
 func SampleFeatures(state string) []Feature {
 	fs := []Feature{
-		{Key: "classifier", On: true, Works: true, Setting: "TYPESAFE_API_KEY"},
+		{Key: "classifier", On: true, Works: true, Setting: "SNIFFARR_CLASSIFY_API_KEY"},
 		{Key: "probes", On: true, Works: true, Setting: "-probe"},
 		{Key: "audio", On: true, Works: true, Setting: "SNIFFARR_AUDIO_LANGUAGES", Values: []string{"ru"}},
 		{Key: "feeds", On: true, Works: true, Setting: "SNIFFARR_FEEDS", Values: []string{"rutracker", "rutor"}},

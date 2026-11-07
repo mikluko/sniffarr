@@ -37,13 +37,14 @@ import (
 type Config struct {
 	// Addr is the listen address.
 	Addr string
-	// TypesafeKey is the TypeSafe API key; empty leaves Jev out unless
-	// ClassifyURL is set.
-	TypesafeKey string
-	// ClassifyURL is the classifier's Jev-compatible endpoint; empty is
-	// TypeSafe's. Another endpoint is asked without TypesafeKey and outside
-	// DailyTokens.
+	// ClassifyURL is the classifier's System One endpoint; empty is
+	// classify.DefaultURL. Another endpoint is asked outside DailyTokens.
 	ClassifyURL string
+	// ClassifyKey is the key sent to ClassifyURL; empty sends none.
+	ClassifyKey string
+	// TypesafeKey is ClassifyKey's deprecated fallback, sent to
+	// classify.DefaultURL only.
+	TypesafeKey string
 	// TMDBKey is the TMDB API key or read access token; empty matches no
 	// titles.
 	TMDBKey string
@@ -167,26 +168,33 @@ type endpoint struct {
 	setting string
 }
 
-// classifierEndpoint returns cfg's classifier endpoint, and false while
-// neither TypesafeKey nor an endpoint other than TypeSafe's is set.
+// classifierEndpoint returns cfg's classifier endpoint, and whether the
+// classifier is on: always with an endpoint other than classify.DefaultURL,
+// else only with a key.
 func classifierEndpoint(cfg Config) (endpoint, bool) {
 	if cfg.ClassifyURL != "" && cfg.ClassifyURL != classify.DefaultURL {
-		return endpoint{url: cfg.ClassifyURL, setting: "SNIFFARR_CLASSIFY_URL"}, true
+		return endpoint{url: cfg.ClassifyURL, key: cfg.ClassifyKey, setting: "SNIFFARR_CLASSIFY_URL"}, true
 	}
-	e := endpoint{url: classify.DefaultURL, key: cfg.TypesafeKey, dailyTokens: cfg.DailyTokens, setting: "TYPESAFE_API_KEY"}
+	e := endpoint{url: classify.DefaultURL, key: cfg.ClassifyKey, dailyTokens: cfg.DailyTokens, setting: "SNIFFARR_CLASSIFY_API_KEY"}
+	if e.key == "" && cfg.TypesafeKey != "" {
+		e.key, e.setting = cfg.TypesafeKey, "TYPESAFE_API_KEY"
+	}
 	return e, e.key != ""
 }
 
 func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 	e, on := classifierEndpoint(cfg)
 	c := &classifiers{endpoint: e}
+	if cfg.TypesafeKey != "" {
+		log.Warn("TYPESAFE_API_KEY is deprecated: set SNIFFARR_CLASSIFY_API_KEY")
+	}
 	if !on && cfg.TMDBKey == "" {
-		log.Info("TYPESAFE_API_KEY and TMDB_API_KEY are not set: torrents are classified by their names only")
+		log.Info("the classifier is off and TMDB_API_KEY is not set: torrents are classified by their names only")
 		return c
 	}
 	c.lazy = &search.Lazy{Max: cfg.LazyMax, MaxTMDB: cfg.LazyTMDB, Wait: cfg.LazyWait, MaxFiles: classify.MaxFiles, Log: log}
 	if !on {
-		log.Info("TYPESAFE_API_KEY is not set: torrents are classified by their names only")
+		log.Info("the classifier is off: torrents are classified by their names only")
 	} else {
 		client := classify.New(e.key)
 		client.URL = e.url
