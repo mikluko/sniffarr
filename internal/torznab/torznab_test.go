@@ -350,9 +350,9 @@ func TestTitleRussianAudio(t *testing.T) {
 	}{
 		{"a marker with studios", ru(&sniffarrv1.Audio{Marker: true, Probability: new(float32(1)), Studios: []string{"LostFilm", "HDRezka"}}),
 			name + " [RUS LostFilm HDRezka]"},
-		{"a marker without a studio", ru(&sniffarrv1.Audio{Marker: true}), name + " [RUS]"},
-		{"a likely track without a studio", ru(&sniffarrv1.Audio{Probability: new(float32(0.93))}), name + " [RUS]"},
-		{"the threshold", ru(&sniffarrv1.Audio{Probability: new(float32(russian))}), name + " [RUS]"},
+		{"a marker without a studio", ru(&sniffarrv1.Audio{Marker: true}), name + " [RUS, -]"},
+		{"a likely track without a studio", ru(&sniffarrv1.Audio{Probability: new(float32(0.93))}), name + " [RUS, -]"},
+		{"the threshold", ru(&sniffarrv1.Audio{Probability: new(float32(russian))}), name + " [RUS, -]"},
 		{"an unlikely track", ru(&sniffarrv1.Audio{Probability: new(float32(0.6))}), name},
 		{"an unknown track", ru(&sniffarrv1.Audio{}), name},
 		{"another language", &sniffarrv1.Release{Name: name, Audio: []*sniffarrv1.Audio{{Language: "uk", Marker: true}}}, name},
@@ -368,7 +368,7 @@ func TestTitleRussianCodes(t *testing.T) {
 	}
 	for _, c := range []struct{ name, want string }{
 		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", "Bad.Apples.2026.P.WEB-DL.1080p.mkv [MVO, RUS]"},
-		{"Bad.Apples.2025.Pm.WEB-DL.1O8Op.mkv", "Bad.Apples.2025.Pm.WEB-DL.1080p.mkv [RUS]"},
+		{"Bad.Apples.2025.Pm.WEB-DL.1O8Op.mkv", "Bad.Apples.2025.Pm.WEB-DL.1080p.mkv [RUS, -]"},
 		{"Movie.2001.A.P2.D.BDRip.1080p", "Movie.2001.A.P2.D.BDRip.1080p [Dub, DVO, AVO, RUS]"},
 		{"Movie (2001) BDRip 1080p | L1 | MVO", "Movie (2001) BDRip 1080p | L1 | MVO [VO, RUS]"},
 	} {
@@ -442,11 +442,13 @@ func TestTitleProbedTracks(t *testing.T) {
 		{"two- and one-voice", probed(name, nil, audioTrack("rus", "Двухголосый закадровый"), audioTrack("rus", "Одноголосый, Сербин"), audioTrack("rus", "DVO")),
 			name + " [DVO, VO, RUS]"},
 		{"a Russian track without a name", probed(name, &sniffarrv1.Audio{Probability: one}, &sniffarrv1.Track{Kind: sniffarrv1.TrackKind_TRACK_KIND_AUDIO, LanguageBcp47: "ru-RU"}),
-			name + " [RUS]"},
+			name + " [RUS, -]"},
 		{"the studios of a marker stay", probed(name, &sniffarrv1.Audio{Marker: true, Probability: one, Studios: []string{"LostFilm"}}, audioTrack("rus", "MVO")),
 			name + " [MVO, RUS LostFilm]"},
 		{"a label the name has", probed("Coraline.2009.2160p.2xDub.MVO", nil, audioTrack("rus", "Дубляж"), audioTrack("rus", "Многоголосый"), audioTrack("rus", "АВО")),
 			"Coraline.2009.2160p.2xDub.MVO [AVO, RUS]"},
+		{"every label in the name", probed("Coraline.2009.2160p.Dub", nil, audioTrack("rus", "Дубляж")),
+			"Coraline.2009.2160p.Dub [RUS, -]"},
 		{"a Ukrainian dub in the name", probed("Coraline.2009.2160p.Dub (Ukr)", nil, audioTrack("rus", "Дубляж")),
 			"Coraline.2009.2160p.Dub (Ukr) [Dub, RUS]"},
 		{"no Russian track", probed(name, &sniffarrv1.Audio{Probability: new(float32(0))}, audioTrack("eng", ""), audioTrack("ukr", "Дубляж")),
@@ -456,7 +458,7 @@ func TestTitleProbedTracks(t *testing.T) {
 		{"no Russian track, BCP-47 only", probed(name, nil, &sniffarrv1.Track{Kind: sniffarrv1.TrackKind_TRACK_KIND_AUDIO, LanguageBcp47: "uk"}),
 			name + " [NORUS UKR]"},
 		{"no Russian track, but a marker", probed(name, &sniffarrv1.Audio{Marker: true, Probability: one}, audioTrack("eng", "")),
-			name + " [RUS]"},
+			name + " [RUS, -]"},
 		{"a track of no language", probed(name, nil, audioTrack("eng", ""), audioTrack("", "")), name},
 		{"no audio track", probed(name, nil), name},
 	} {

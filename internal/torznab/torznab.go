@@ -304,7 +304,8 @@ const russian = 0.9
 // Russian marker, NORUS and the tracks' languages, as in " [NORUS ENG, UKR]";
 // else, for a Russian marker or a probability of at least russian, the
 // labels of the name's translation codes it lacks and RUS, as in
-// " [MVO, RUS]" for P. RUS carries the Russian audio's studios.
+// " [MVO, RUS]" for P. RUS carries the Russian audio's studios; with no
+// label and no studio the block is " [RUS, -]".
 func title(r *sniffarrv1.Release) string {
 	name := names.InDigits(r.GetName())
 	var ru *sniffarrv1.Audio
@@ -327,13 +328,18 @@ func title(r *sniffarrv1.Release) string {
 	return name
 }
 
-// bracket is " [", the labels of voices name lacks, rus, and "]".
+// bracket is " [", the labels of voices name lacks, rus, and "]"; a block
+// of rus alone, when rus is a single word, gets ", -" after it, since Radarr
+// reads a bare trailing word in brackets as the release group.
 func bracket(name string, voices []voice, rus string) string {
 	var add []string
 	for _, v := range voices {
 		if !v.inName(name) {
 			add = append(add, v.label)
 		}
+	}
+	if len(add) == 0 && !strings.Contains(rus, " ") {
+		return " [" + rus + ", -]"
 	}
 	return " [" + strings.Join(append(add, rus), ", ") + "]"
 }

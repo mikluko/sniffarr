@@ -54,7 +54,10 @@ Radarr and Sonarr:
   under [Components](components.md).
 
 `RUS` is followed by the Russian studios in the name or stored file paths,
-`[RUS LostFilm]`. A release that has none of these keeps its name.
+`[RUS LostFilm]`. A block with no label and no studio is `[RUS, -]`, the
+dash standing where a label would: Radarr reads a bare `[RUS]` at the end of
+a title as the release group, and the title's language as unknown. A
+release that has none of these keeps its name.
 
 In Prowlarr, add an indexer of type Generic Torznab with URL
 `http://<host>:8080/torznab`, API path `/api`, and the token as API key.
