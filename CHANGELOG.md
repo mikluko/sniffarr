@@ -13,12 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `BrowseService.Stats` replaces `queue` with `queue_fetches`, `queue_lookups` and `queue_probes`, one `TaskQueue` per kind with its pace and its levels.
+- The data page shows the task queue per kind: metadata fetches, peer lookups and probes each get their own bar split by priority, with how long until each priority is done at that kind's own pace.
 - Torznab titles carry every voice label of the Russian track, even one the release name already has, as in `HIN.DUB [Dub, RUS]`.
 
 ### Fixed
 
 - Torznab titles write `[RUS, -]` instead of a bare `[RUS]`, which Radarr read as the release group.
 - A Russian word in a subtitle file's path no longer marks a release as having Russian audio; stored markers from subtitle paths alone are cleared.
+- A release asked for again after a successful probe gets its full number of probe attempts.
+- Searches no longer queue probes of releases a probe cannot read (AVI only, BDMV, ISO, not a movie or series), and such probes already queued leave the queue.
+- A probe requested from the web UI while an attempt is running is no longer lost when that attempt fails.
+- A release whose probe found audio tracks, all in other languages, is titled `[NORUS …]` rather than `[RUS, -]` from a word in its name, unless it has an audio file of its own.
 - A slow or locked database no longer fails the API's start: leftover leases are freed before it.
 - The Helm chart gives the API an hour to start before its liveness probe runs, so a long migration is no longer killed.
 
