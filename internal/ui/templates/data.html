@@ -80,20 +80,27 @@
 {{with .Queue}}
 <section>
   <h2>{{$.T "d.queue"}} <span class="mu">{{$.Num (queueTasks .)}}</span></h2>
-  <div class="qbar" role="img" aria-label="{{$.T "d.queue"}}">
-    {{- range .}}{{if .Tasks}}<div class="q{{.Priority}}" style="flex-grow: {{.Tasks}}" title="P{{.Priority}} · {{$.Num .Tasks}}"></div>{{end}}{{end -}}
-  </div>
-  <div class="scroll">
-  <table class="t">
-    <thead><tr><th>{{$.T "q.priority"}}</th><th class="r">{{$.T "q.fetches"}}</th><th class="r">{{$.T "q.lookups"}}</th><th class="r">{{$.T "q.probes"}}</th><th class="r">{{$.T "q.eta"}}</th></tr></thead>
-    <tbody>
-    {{range .}}
-      <tr><td><span class="qkey q{{.Priority}}" aria-hidden="true"></span>P{{.Priority}} <span class="mu">{{$.T (printf "q.p%d" .Priority)}}</span></td>
-        <td class="r">{{$.Num .Fetches}}</td><td class="r">{{$.Num .Lookups}}</td><td class="r">{{$.Num .Probes}}</td>
-        <td class="r">{{if not .Known}}<span class="mu" title="{{$.T "q.nopace"}}">?</span>{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
-    {{end}}
-    </tbody>
-  </table>
+  <div class="grid">
+  {{range .}}{{if or .Tasks .Paced}}
+    <div>
+      <h3>{{$.T (concat "q." .Kind)}} <span class="mu">{{$.Num .Tasks}}</span></h3>
+      <div class="qbar" role="img" aria-label="{{$.T (concat "q." .Kind)}}">
+        {{- range .Levels}}{{if .Tasks}}<div class="q{{.Priority}}" style="flex-grow: {{.Tasks}}" title="P{{.Priority}} · {{$.Num .Tasks}}"></div>{{end}}{{end -}}
+      </div>
+      <div class="scroll">
+      <table class="t">
+        <thead><tr><th>{{$.T "q.priority"}}</th><th class="r">{{$.T "q.tasks"}}</th><th class="r">{{$.T "q.eta"}}</th></tr></thead>
+        <tbody>
+        {{range .Levels}}
+          <tr><td><span class="qkey q{{.Priority}}" aria-hidden="true"></span>P{{.Priority}} <span class="mu">{{$.T (printf "q.p%d" .Priority)}}</span></td>
+            <td class="r">{{$.Num .Tasks}}</td>
+            <td class="r">{{if not .Known}}<span class="mu" title="{{$.T "q.nopace"}}">?</span>{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
+        {{end}}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  {{end}}{{end}}
   </div>
   <p class="mu">{{$.T "q.note"}}</p>
 </section>

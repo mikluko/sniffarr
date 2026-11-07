@@ -454,23 +454,34 @@ message StatsResponse {
   // Releases first seen in each of the hours asked for, the latest first.
   // The hours are UTC clock hours, which every zone's hours align with.
   repeated int64 hours = 15;
-  // The task queue at each priority, P0 first, read at the request; empty
-  // on a server without the queue.
-  repeated QueueLevel queue = 16;
+  reserved 16;
+  reserved "queue";
+  // The metadata fetches, peer lookups and probes queued, read at the
+  // request; absent on a server without the queue.
+  TaskQueue queue_fetches = 17;
+  TaskQueue queue_lookups = 18;
+  TaskQueue queue_probes = 19;
 }
 
-// QueueLevel is the task queue at one priority.
-message QueueLevel {
+// TaskQueue is the tasks of one kind queued, by priority.
+message TaskQueue {
+  // Tasks of the kind finished per minute over the last 15 minutes since
+  // the server started, 0 for none.
+  double per_minute = 1;
+  // One per priority, P0 first.
+  repeated TaskLevel levels = 2;
+}
+
+// TaskLevel is the tasks of one kind queued at one priority.
+message TaskLevel {
   // 0, P0, is served first.
   int32 priority = 1;
-  // Tasks queued at the priority, leased or not, by kind.
-  int64 fetches = 2;
-  int64 lookups = 3;
-  int64 probes = 4;
-  // How long until every task at the priority or ahead is finished at the
-  // pace of the last 15 minutes since the server started, fetchers and
-  // probers each at their own; absent while a pace it needs is unknown.
-  google.protobuf.Duration eta = 5;
+  // Tasks queued at the priority, leased or not.
+  int64 tasks = 2;
+  // How long until every task of the kind at the priority or ahead is
+  // finished at the kind's per_minute; absent while that is 0 and tasks
+  // are queued.
+  google.protobuf.Duration eta = 3;
 }
 
 message KindCount {

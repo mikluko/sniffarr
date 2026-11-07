@@ -2314,9 +2314,11 @@ type StatsResponse struct {
 	// Releases first seen in each of the hours asked for, the latest first.
 	// The hours are UTC clock hours, which every zone's hours align with.
 	Hours []int64 `protobuf:"varint,15,rep,packed,name=hours,proto3" json:"hours,omitempty"`
-	// The task queue at each priority, P0 first, read at the request; empty
-	// on a server without the queue.
-	Queue         []*QueueLevel `protobuf:"bytes,16,rep,name=queue,proto3" json:"queue,omitempty"`
+	// The metadata fetches, peer lookups and probes queued, read at the
+	// request; absent on a server without the queue.
+	QueueFetches  *TaskQueue `protobuf:"bytes,17,opt,name=queue_fetches,json=queueFetches,proto3" json:"queue_fetches,omitempty"`
+	QueueLookups  *TaskQueue `protobuf:"bytes,18,opt,name=queue_lookups,json=queueLookups,proto3" json:"queue_lookups,omitempty"`
+	QueueProbes   *TaskQueue `protobuf:"bytes,19,opt,name=queue_probes,json=queueProbes,proto3" json:"queue_probes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2449,44 +2451,53 @@ func (x *StatsResponse) GetHours() []int64 {
 	return nil
 }
 
-func (x *StatsResponse) GetQueue() []*QueueLevel {
+func (x *StatsResponse) GetQueueFetches() *TaskQueue {
 	if x != nil {
-		return x.Queue
+		return x.QueueFetches
 	}
 	return nil
 }
 
-// QueueLevel is the task queue at one priority.
-type QueueLevel struct {
+func (x *StatsResponse) GetQueueLookups() *TaskQueue {
+	if x != nil {
+		return x.QueueLookups
+	}
+	return nil
+}
+
+func (x *StatsResponse) GetQueueProbes() *TaskQueue {
+	if x != nil {
+		return x.QueueProbes
+	}
+	return nil
+}
+
+// TaskQueue is the tasks of one kind queued, by priority.
+type TaskQueue struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 0, P0, is served first.
-	Priority int32 `protobuf:"varint,1,opt,name=priority,proto3" json:"priority,omitempty"`
-	// Tasks queued at the priority, leased or not, by kind.
-	Fetches int64 `protobuf:"varint,2,opt,name=fetches,proto3" json:"fetches,omitempty"`
-	Lookups int64 `protobuf:"varint,3,opt,name=lookups,proto3" json:"lookups,omitempty"`
-	Probes  int64 `protobuf:"varint,4,opt,name=probes,proto3" json:"probes,omitempty"`
-	// How long until every task at the priority or ahead is finished at the
-	// pace of the last 15 minutes since the server started, fetchers and
-	// probers each at their own; absent while a pace it needs is unknown.
-	Eta           *durationpb.Duration `protobuf:"bytes,5,opt,name=eta,proto3" json:"eta,omitempty"`
+	// Tasks of the kind finished per minute over the last 15 minutes since
+	// the server started, 0 for none.
+	PerMinute float64 `protobuf:"fixed64,1,opt,name=per_minute,json=perMinute,proto3" json:"per_minute,omitempty"`
+	// One per priority, P0 first.
+	Levels        []*TaskLevel `protobuf:"bytes,2,rep,name=levels,proto3" json:"levels,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *QueueLevel) Reset() {
-	*x = QueueLevel{}
+func (x *TaskQueue) Reset() {
+	*x = TaskQueue{}
 	mi := &file_sniffarr_v1_browse_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *QueueLevel) String() string {
+func (x *TaskQueue) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*QueueLevel) ProtoMessage() {}
+func (*TaskQueue) ProtoMessage() {}
 
-func (x *QueueLevel) ProtoReflect() protoreflect.Message {
+func (x *TaskQueue) ProtoReflect() protoreflect.Message {
 	mi := &file_sniffarr_v1_browse_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2498,40 +2509,85 @@ func (x *QueueLevel) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use QueueLevel.ProtoReflect.Descriptor instead.
-func (*QueueLevel) Descriptor() ([]byte, []int) {
+// Deprecated: Use TaskQueue.ProtoReflect.Descriptor instead.
+func (*TaskQueue) Descriptor() ([]byte, []int) {
 	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{30}
 }
 
-func (x *QueueLevel) GetPriority() int32 {
+func (x *TaskQueue) GetPerMinute() float64 {
+	if x != nil {
+		return x.PerMinute
+	}
+	return 0
+}
+
+func (x *TaskQueue) GetLevels() []*TaskLevel {
+	if x != nil {
+		return x.Levels
+	}
+	return nil
+}
+
+// TaskLevel is the tasks of one kind queued at one priority.
+type TaskLevel struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 0, P0, is served first.
+	Priority int32 `protobuf:"varint,1,opt,name=priority,proto3" json:"priority,omitempty"`
+	// Tasks queued at the priority, leased or not.
+	Tasks int64 `protobuf:"varint,2,opt,name=tasks,proto3" json:"tasks,omitempty"`
+	// How long until every task of the kind at the priority or ahead is
+	// finished at the kind's per_minute; absent while that is 0 and tasks
+	// are queued.
+	Eta           *durationpb.Duration `protobuf:"bytes,3,opt,name=eta,proto3" json:"eta,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskLevel) Reset() {
+	*x = TaskLevel{}
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskLevel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskLevel) ProtoMessage() {}
+
+func (x *TaskLevel) ProtoReflect() protoreflect.Message {
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskLevel.ProtoReflect.Descriptor instead.
+func (*TaskLevel) Descriptor() ([]byte, []int) {
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *TaskLevel) GetPriority() int32 {
 	if x != nil {
 		return x.Priority
 	}
 	return 0
 }
 
-func (x *QueueLevel) GetFetches() int64 {
+func (x *TaskLevel) GetTasks() int64 {
 	if x != nil {
-		return x.Fetches
+		return x.Tasks
 	}
 	return 0
 }
 
-func (x *QueueLevel) GetLookups() int64 {
-	if x != nil {
-		return x.Lookups
-	}
-	return 0
-}
-
-func (x *QueueLevel) GetProbes() int64 {
-	if x != nil {
-		return x.Probes
-	}
-	return 0
-}
-
-func (x *QueueLevel) GetEta() *durationpb.Duration {
+func (x *TaskLevel) GetEta() *durationpb.Duration {
 	if x != nil {
 		return x.Eta
 	}
@@ -2548,7 +2604,7 @@ type KindCount struct {
 
 func (x *KindCount) Reset() {
 	*x = KindCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[31]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2560,7 +2616,7 @@ func (x *KindCount) String() string {
 func (*KindCount) ProtoMessage() {}
 
 func (x *KindCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[31]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2573,7 +2629,7 @@ func (x *KindCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KindCount.ProtoReflect.Descriptor instead.
 func (*KindCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{31}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *KindCount) GetKind() Kind {
@@ -2600,7 +2656,7 @@ type LayerCount struct {
 
 func (x *LayerCount) Reset() {
 	*x = LayerCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[32]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2612,7 +2668,7 @@ func (x *LayerCount) String() string {
 func (*LayerCount) ProtoMessage() {}
 
 func (x *LayerCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[32]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2625,7 +2681,7 @@ func (x *LayerCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LayerCount.ProtoReflect.Descriptor instead.
 func (*LayerCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{32}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *LayerCount) GetLayer() Layer {
@@ -2652,7 +2708,7 @@ type SourceCount struct {
 
 func (x *SourceCount) Reset() {
 	*x = SourceCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[33]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2664,7 +2720,7 @@ func (x *SourceCount) String() string {
 func (*SourceCount) ProtoMessage() {}
 
 func (x *SourceCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[33]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2677,7 +2733,7 @@ func (x *SourceCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SourceCount.ProtoReflect.Descriptor instead.
 func (*SourceCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{33}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SourceCount) GetSource() VideoSource {
@@ -2709,7 +2765,7 @@ type AudioCounts struct {
 
 func (x *AudioCounts) Reset() {
 	*x = AudioCounts{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[34]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2721,7 +2777,7 @@ func (x *AudioCounts) String() string {
 func (*AudioCounts) ProtoMessage() {}
 
 func (x *AudioCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[34]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2734,7 +2790,7 @@ func (x *AudioCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AudioCounts.ProtoReflect.Descriptor instead.
 func (*AudioCounts) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{34}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AudioCounts) GetLanguage() string {
@@ -2775,7 +2831,7 @@ type RejectionCount struct {
 
 func (x *RejectionCount) Reset() {
 	*x = RejectionCount{}
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[35]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2787,7 +2843,7 @@ func (x *RejectionCount) String() string {
 func (*RejectionCount) ProtoMessage() {}
 
 func (x *RejectionCount) ProtoReflect() protoreflect.Message {
-	mi := &file_sniffarr_v1_browse_proto_msgTypes[35]
+	mi := &file_sniffarr_v1_browse_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2800,7 +2856,7 @@ func (x *RejectionCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectionCount.ProtoReflect.Descriptor instead.
 func (*RejectionCount) Descriptor() ([]byte, []int) {
-	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{35}
+	return file_sniffarr_v1_browse_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *RejectionCount) GetReason() Rejection {
@@ -2971,7 +3027,7 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\n" +
 	"_prev_rankJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05R\x05delta\"0\n" +
 	"\fStatsRequest\x12\x14\n" +
-	"\x05hours\x18\x02 \x01(\x05R\x05hoursJ\x04\b\x01\x10\x02R\x04days\"\xa8\x05\n" +
+	"\x05hours\x18\x02 \x01(\x05R\x05hoursJ\x04\b\x01\x10\x02R\x04days\"\xbb\x06\n" +
 	"\rStatsResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x03R\x05total\x12,\n" +
 	"\x05kinds\x18\x02 \x03(\v2\x16.sniffarr.v1.KindCountR\x05kinds\x12/\n" +
@@ -2988,15 +3044,18 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x12probe_bytes_rx_day\x18\f \x01(\x03R\x0fprobeBytesRxDay\x121\n" +
 	"\x15probe_bytes_limit_day\x18\r \x01(\x03R\x12probeBytesLimitDay\x12+\n" +
 	"\x12probe_bytes_tx_day\x18\x0e \x01(\x03R\x0fprobeBytesTxDay\x12\x14\n" +
-	"\x05hours\x18\x0f \x03(\x03R\x05hours\x12-\n" +
-	"\x05queue\x18\x10 \x03(\v2\x17.sniffarr.v1.QueueLevelR\x05queueJ\x04\b\b\x10\tR\x04days\"\xa1\x01\n" +
+	"\x05hours\x18\x0f \x03(\x03R\x05hours\x12;\n" +
+	"\rqueue_fetches\x18\x11 \x01(\v2\x16.sniffarr.v1.TaskQueueR\fqueueFetches\x12;\n" +
+	"\rqueue_lookups\x18\x12 \x01(\v2\x16.sniffarr.v1.TaskQueueR\fqueueLookups\x129\n" +
+	"\fqueue_probes\x18\x13 \x01(\v2\x16.sniffarr.v1.TaskQueueR\vqueueProbesJ\x04\b\b\x10\tJ\x04\b\x10\x10\x11R\x04daysR\x05queue\"Z\n" +
+	"\tTaskQueue\x12\x1d\n" +
 	"\n" +
-	"QueueLevel\x12\x1a\n" +
-	"\bpriority\x18\x01 \x01(\x05R\bpriority\x12\x18\n" +
-	"\afetches\x18\x02 \x01(\x03R\afetches\x12\x18\n" +
-	"\alookups\x18\x03 \x01(\x03R\alookups\x12\x16\n" +
-	"\x06probes\x18\x04 \x01(\x03R\x06probes\x12+\n" +
-	"\x03eta\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\x03eta\"H\n" +
+	"per_minute\x18\x01 \x01(\x01R\tperMinute\x12.\n" +
+	"\x06levels\x18\x02 \x03(\v2\x16.sniffarr.v1.TaskLevelR\x06levels\"j\n" +
+	"\tTaskLevel\x12\x1a\n" +
+	"\bpriority\x18\x01 \x01(\x05R\bpriority\x12\x14\n" +
+	"\x05tasks\x18\x02 \x01(\x03R\x05tasks\x12+\n" +
+	"\x03eta\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x03eta\"H\n" +
 	"\tKindCount\x12%\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x03R\x05count\"L\n" +
@@ -3067,7 +3126,7 @@ func file_sniffarr_v1_browse_proto_rawDescGZIP() []byte {
 }
 
 var file_sniffarr_v1_browse_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_sniffarr_v1_browse_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
+var file_sniffarr_v1_browse_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_sniffarr_v1_browse_proto_goTypes = []any{
 	(Sort)(0),                     // 0: sniffarr.v1.Sort
 	(Window)(0),                   // 1: sniffarr.v1.Window
@@ -3103,103 +3162,107 @@ var file_sniffarr_v1_browse_proto_goTypes = []any{
 	(*TopEntry)(nil),              // 31: sniffarr.v1.TopEntry
 	(*StatsRequest)(nil),          // 32: sniffarr.v1.StatsRequest
 	(*StatsResponse)(nil),         // 33: sniffarr.v1.StatsResponse
-	(*QueueLevel)(nil),            // 34: sniffarr.v1.QueueLevel
-	(*KindCount)(nil),             // 35: sniffarr.v1.KindCount
-	(*LayerCount)(nil),            // 36: sniffarr.v1.LayerCount
-	(*SourceCount)(nil),           // 37: sniffarr.v1.SourceCount
-	(*AudioCounts)(nil),           // 38: sniffarr.v1.AudioCounts
-	(*RejectionCount)(nil),        // 39: sniffarr.v1.RejectionCount
-	(Kind)(0),                     // 40: sniffarr.v1.Kind
-	(*TMDBWork)(nil),              // 41: sniffarr.v1.TMDBWork
-	(Quality)(0),                  // 42: sniffarr.v1.Quality
-	(VideoSource)(0),              // 43: sniffarr.v1.VideoSource
-	(*Release)(nil),               // 44: sniffarr.v1.Release
-	(Layer)(0),                    // 45: sniffarr.v1.Layer
-	(Source)(0),                   // 46: sniffarr.v1.Source
-	(*File)(nil),                  // 47: sniffarr.v1.File
-	(*timestamppb.Timestamp)(nil), // 48: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 49: google.protobuf.Duration
+	(*TaskQueue)(nil),             // 34: sniffarr.v1.TaskQueue
+	(*TaskLevel)(nil),             // 35: sniffarr.v1.TaskLevel
+	(*KindCount)(nil),             // 36: sniffarr.v1.KindCount
+	(*LayerCount)(nil),            // 37: sniffarr.v1.LayerCount
+	(*SourceCount)(nil),           // 38: sniffarr.v1.SourceCount
+	(*AudioCounts)(nil),           // 39: sniffarr.v1.AudioCounts
+	(*RejectionCount)(nil),        // 40: sniffarr.v1.RejectionCount
+	(Kind)(0),                     // 41: sniffarr.v1.Kind
+	(*TMDBWork)(nil),              // 42: sniffarr.v1.TMDBWork
+	(Quality)(0),                  // 43: sniffarr.v1.Quality
+	(VideoSource)(0),              // 44: sniffarr.v1.VideoSource
+	(*Release)(nil),               // 45: sniffarr.v1.Release
+	(Layer)(0),                    // 46: sniffarr.v1.Layer
+	(Source)(0),                   // 47: sniffarr.v1.Source
+	(*File)(nil),                  // 48: sniffarr.v1.File
+	(*timestamppb.Timestamp)(nil), // 49: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 50: google.protobuf.Duration
 }
 var file_sniffarr_v1_browse_proto_depIdxs = []int32{
 	4,  // 0: sniffarr.v1.RefreshPeersRequest.releases:type_name -> sniffarr.v1.Releases
 	4,  // 1: sniffarr.v1.RequestProbeRequest.releases:type_name -> sniffarr.v1.Releases
-	40, // 2: sniffarr.v1.WorkSummary.kind:type_name -> sniffarr.v1.Kind
-	41, // 3: sniffarr.v1.WorkSummary.tmdb:type_name -> sniffarr.v1.TMDBWork
-	40, // 4: sniffarr.v1.SearchTitlesRequest.kind:type_name -> sniffarr.v1.Kind
+	41, // 2: sniffarr.v1.WorkSummary.kind:type_name -> sniffarr.v1.Kind
+	42, // 3: sniffarr.v1.WorkSummary.tmdb:type_name -> sniffarr.v1.TMDBWork
+	41, // 4: sniffarr.v1.SearchTitlesRequest.kind:type_name -> sniffarr.v1.Kind
 	11, // 5: sniffarr.v1.SearchTitlesResponse.works:type_name -> sniffarr.v1.WorkSummary
 	11, // 6: sniffarr.v1.TitleResponse.work:type_name -> sniffarr.v1.WorkSummary
 	17, // 7: sniffarr.v1.TitleResponse.ranks:type_name -> sniffarr.v1.WindowRanks
 	26, // 8: sniffarr.v1.TitleResponse.peers:type_name -> sniffarr.v1.PeerCounts
 	12, // 9: sniffarr.v1.TitleResponse.audio:type_name -> sniffarr.v1.WorkAudio
-	42, // 10: sniffarr.v1.TitleReleasesRequest.quality:type_name -> sniffarr.v1.Quality
-	43, // 11: sniffarr.v1.TitleReleasesRequest.source:type_name -> sniffarr.v1.VideoSource
+	43, // 10: sniffarr.v1.TitleReleasesRequest.quality:type_name -> sniffarr.v1.Quality
+	44, // 11: sniffarr.v1.TitleReleasesRequest.source:type_name -> sniffarr.v1.VideoSource
 	2,  // 12: sniffarr.v1.TitleReleasesRequest.voice:type_name -> sniffarr.v1.Voice
 	0,  // 13: sniffarr.v1.TitleReleasesRequest.sort:type_name -> sniffarr.v1.Sort
-	44, // 14: sniffarr.v1.TitleReleasesResponse.releases:type_name -> sniffarr.v1.Release
-	40, // 15: sniffarr.v1.TorrentsRequest.kind:type_name -> sniffarr.v1.Kind
-	42, // 16: sniffarr.v1.TorrentsRequest.quality:type_name -> sniffarr.v1.Quality
+	45, // 14: sniffarr.v1.TitleReleasesResponse.releases:type_name -> sniffarr.v1.Release
+	41, // 15: sniffarr.v1.TorrentsRequest.kind:type_name -> sniffarr.v1.Kind
+	43, // 16: sniffarr.v1.TorrentsRequest.quality:type_name -> sniffarr.v1.Quality
 	2,  // 17: sniffarr.v1.TorrentsRequest.voice:type_name -> sniffarr.v1.Voice
-	43, // 18: sniffarr.v1.TorrentsRequest.source:type_name -> sniffarr.v1.VideoSource
-	45, // 19: sniffarr.v1.TorrentsRequest.layer:type_name -> sniffarr.v1.Layer
+	44, // 18: sniffarr.v1.TorrentsRequest.source:type_name -> sniffarr.v1.VideoSource
+	46, // 19: sniffarr.v1.TorrentsRequest.layer:type_name -> sniffarr.v1.Layer
 	0,  // 20: sniffarr.v1.TorrentsRequest.sort:type_name -> sniffarr.v1.Sort
 	22, // 21: sniffarr.v1.TorrentsResponse.rows:type_name -> sniffarr.v1.TorrentRow
-	44, // 22: sniffarr.v1.TorrentRow.release:type_name -> sniffarr.v1.Release
+	45, // 22: sniffarr.v1.TorrentRow.release:type_name -> sniffarr.v1.Release
 	11, // 23: sniffarr.v1.TorrentRow.work:type_name -> sniffarr.v1.WorkSummary
-	44, // 24: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
-	46, // 25: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
-	47, // 26: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
+	45, // 24: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
+	47, // 25: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
+	48, // 26: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
 	26, // 27: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
 	11, // 28: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkSummary
 	25, // 29: sniffarr.v1.CardResponse.rules:type_name -> sniffarr.v1.RuleHit
-	48, // 30: sniffarr.v1.HomeResponse.computed_at:type_name -> google.protobuf.Timestamp
-	40, // 31: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
+	49, // 30: sniffarr.v1.HomeResponse.computed_at:type_name -> google.protobuf.Timestamp
+	41, // 31: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
 	1,  // 32: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
 	2,  // 33: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
 	31, // 34: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
-	48, // 35: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
+	49, // 35: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
 	11, // 36: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.WorkSummary
 	12, // 37: sniffarr.v1.TopEntry.audio:type_name -> sniffarr.v1.WorkAudio
-	43, // 38: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
-	48, // 39: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
-	35, // 40: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
-	36, // 41: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
-	37, // 42: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
-	38, // 43: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
-	39, // 44: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
-	48, // 45: sniffarr.v1.StatsResponse.computed_at:type_name -> google.protobuf.Timestamp
-	34, // 46: sniffarr.v1.StatsResponse.queue:type_name -> sniffarr.v1.QueueLevel
-	49, // 47: sniffarr.v1.QueueLevel.eta:type_name -> google.protobuf.Duration
-	40, // 48: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
-	45, // 49: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
-	43, // 50: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
-	3,  // 51: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
-	13, // 52: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
-	15, // 53: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
-	18, // 54: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
-	20, // 55: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
-	23, // 56: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
-	32, // 57: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
-	27, // 58: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
-	29, // 59: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
-	9,  // 60: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
-	5,  // 61: sniffarr.v1.BrowseService.RefreshPeers:input_type -> sniffarr.v1.RefreshPeersRequest
-	7,  // 62: sniffarr.v1.BrowseService.RequestProbe:input_type -> sniffarr.v1.RequestProbeRequest
-	14, // 63: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
-	16, // 64: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
-	19, // 65: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
-	21, // 66: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
-	24, // 67: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
-	33, // 68: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
-	28, // 69: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
-	30, // 70: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
-	10, // 71: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
-	6,  // 72: sniffarr.v1.BrowseService.RefreshPeers:output_type -> sniffarr.v1.RefreshPeersResponse
-	8,  // 73: sniffarr.v1.BrowseService.RequestProbe:output_type -> sniffarr.v1.RequestProbeResponse
-	63, // [63:74] is the sub-list for method output_type
-	52, // [52:63] is the sub-list for method input_type
-	52, // [52:52] is the sub-list for extension type_name
-	52, // [52:52] is the sub-list for extension extendee
-	0,  // [0:52] is the sub-list for field type_name
+	44, // 38: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
+	49, // 39: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
+	36, // 40: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
+	37, // 41: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
+	38, // 42: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
+	39, // 43: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
+	40, // 44: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
+	49, // 45: sniffarr.v1.StatsResponse.computed_at:type_name -> google.protobuf.Timestamp
+	34, // 46: sniffarr.v1.StatsResponse.queue_fetches:type_name -> sniffarr.v1.TaskQueue
+	34, // 47: sniffarr.v1.StatsResponse.queue_lookups:type_name -> sniffarr.v1.TaskQueue
+	34, // 48: sniffarr.v1.StatsResponse.queue_probes:type_name -> sniffarr.v1.TaskQueue
+	35, // 49: sniffarr.v1.TaskQueue.levels:type_name -> sniffarr.v1.TaskLevel
+	50, // 50: sniffarr.v1.TaskLevel.eta:type_name -> google.protobuf.Duration
+	41, // 51: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
+	46, // 52: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
+	44, // 53: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
+	3,  // 54: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
+	13, // 55: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
+	15, // 56: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
+	18, // 57: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
+	20, // 58: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
+	23, // 59: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
+	32, // 60: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
+	27, // 61: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
+	29, // 62: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
+	9,  // 63: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
+	5,  // 64: sniffarr.v1.BrowseService.RefreshPeers:input_type -> sniffarr.v1.RefreshPeersRequest
+	7,  // 65: sniffarr.v1.BrowseService.RequestProbe:input_type -> sniffarr.v1.RequestProbeRequest
+	14, // 66: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
+	16, // 67: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
+	19, // 68: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
+	21, // 69: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
+	24, // 70: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
+	33, // 71: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
+	28, // 72: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
+	30, // 73: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
+	10, // 74: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
+	6,  // 75: sniffarr.v1.BrowseService.RefreshPeers:output_type -> sniffarr.v1.RefreshPeersResponse
+	8,  // 76: sniffarr.v1.BrowseService.RequestProbe:output_type -> sniffarr.v1.RequestProbeResponse
+	66, // [66:77] is the sub-list for method output_type
+	55, // [55:66] is the sub-list for method input_type
+	55, // [55:55] is the sub-list for extension type_name
+	55, // [55:55] is the sub-list for extension extendee
+	0,  // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_browse_proto_init() }
@@ -3222,7 +3285,7 @@ func file_sniffarr_v1_browse_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sniffarr_v1_browse_proto_rawDesc), len(file_sniffarr_v1_browse_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   36,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

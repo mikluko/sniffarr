@@ -303,7 +303,7 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Hours: slices.Clone(st.Hours[:hours]), TokensUsedDay: used,
 		TokensLimitDay: b.DailyTokens, ProbeBytesRxDay: traffic.Rx, ProbeBytesTxDay: traffic.Tx, ProbeBytesLimitDay: b.ProbeDailyBytes,
 		ComputedAt: timestamppb.New(snap.At)}
-	if res.Queue, err = b.queue(ctx); err != nil {
+	if err = b.queue(ctx, res); err != nil {
 		return nil, b.internal(ctx, "stats", err)
 	}
 	byKind := map[sniffarrv1.Kind]int64{}
@@ -333,27 +333,35 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	return connect.NewResponse(res), nil
 }
 
-// internal logs a failure of the operation and returns the INTERNAL error
-// the client gets for it.
-// queue returns the levels of Tasks, or none without it.
-func (b *Browser) queue(ctx context.Context) ([]*sniffarrv1.QueueLevel, error) {
+// queue sets the queue fields of res from Tasks, and none without it.
+func (b *Browser) queue(ctx context.Context, res *sniffarrv1.StatsResponse) error {
 	if b.Tasks == nil {
-		return nil, nil
+		return nil
 	}
-	levels, err := b.Tasks.Levels(ctx, b.now())
+	queues, err := b.Tasks.Queues(ctx, b.now())
 	if err != nil {
-		return nil, err
+		return err
 	}
-	out := make([]*sniffarrv1.QueueLevel, len(levels))
-	for i, l := range levels {
-		out[i] = &sniffarrv1.QueueLevel{Priority: int32(l.Priority), Fetches: l.Tasks[store.TaskFetch], Lookups: l.Tasks[store.TaskPeers], Probes: l.Tasks[store.TaskProbe]}
-		if l.Known {
-			out[i].Eta = durationpb.New(l.ETA)
-		}
-	}
-	return out, nil
+	res.QueueFetches = taskQueue(queues[store.TaskFetch])
+	res.QueueLookups = taskQueue(queues[store.TaskPeers])
+	res.QueueProbes = taskQueue(queues[store.TaskProbe])
+	return nil
 }
 
+// taskQueue returns q as the API gives it, its pace per minute.
+func taskQueue(q store.Queue) *sniffarrv1.TaskQueue {
+	out := &sniffarrv1.TaskQueue{PerMinute: q.PerSecond * 60, Levels: make([]*sniffarrv1.TaskLevel, len(q.Levels))}
+	for i, l := range q.Levels {
+		out.Levels[i] = &sniffarrv1.TaskLevel{Priority: int32(l.Priority), Tasks: l.Tasks}
+		if l.Known {
+			out.Levels[i].Eta = durationpb.New(l.ETA)
+		}
+	}
+	return out
+}
+
+// internal logs a failure of the operation and returns the INTERNAL error
+// the client gets for it.
 func (b *Browser) internal(ctx context.Context, op string, err error) error {
 	b.Log.ErrorContext(ctx, op, "err", err)
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s failed", op))

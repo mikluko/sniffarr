@@ -319,7 +319,7 @@ type Stats struct {
 
 	Classifier ClassifierStats
 	Probe      ProbeStats
-	Queue      []QueueLevel // P0 first; none when the API has no queue
+	Queue      []TaskQueue // one per TaskKinds, in its order; none when the API has no queue
 
 	Hourly Chart // new torrents per clock hour, 48 hours
 	Daily  Chart // new torrents per calendar day, 30 days
@@ -345,24 +345,41 @@ type ClassifierStats struct {
 
 // ProbeStats is the piece data of probes on the UTC day, in bytes: RxDay
 // downloaded, against LimitDay, 0 for none, and TxDay uploaded back.
-// QueueLevel is the task queue at one priority.
+// TaskQueue is the tasks of one kind queued, by priority.
+type TaskQueue struct {
+	Kind   string // a TaskKinds key
+	Paced  bool   // whether the kind has a pace over the last 15 minutes
+	Levels []QueueLevel
+}
+
+// TaskKinds are the task kinds a TaskQueue is of, in the order the data
+// page shows them.
+var TaskKinds = []string{"fetch", "peers", "probe"}
+
+// QueueLevel is the tasks of one kind queued at one priority.
 type QueueLevel struct {
-	Priority                 int
-	Fetches, Lookups, Probes int64
+	Priority int
+	Tasks    int64
 	// ETA is how long until this priority and those ahead are done, when
 	// Known.
 	ETA   time.Duration
 	Known bool
 }
 
-// Tasks is every task queued at the level.
-func (l QueueLevel) Tasks() int64 { return l.Fetches + l.Lookups + l.Probes }
-
-// QueueTasks is every task queued at the levels.
-func QueueTasks(levels []QueueLevel) int64 {
+// Tasks is every task queued at the levels.
+func (q TaskQueue) Tasks() int64 {
 	var n int64
-	for _, l := range levels {
-		n += l.Tasks()
+	for _, l := range q.Levels {
+		n += l.Tasks
+	}
+	return n
+}
+
+// QueueTasks is every task queued in the queues.
+func QueueTasks(queues []TaskQueue) int64 {
+	var n int64
+	for _, q := range queues {
+		n += q.Tasks()
 	}
 	return n
 }

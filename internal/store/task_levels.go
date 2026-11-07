@@ -6,17 +6,24 @@ import (
 	"time"
 )
 
-// PaceWindow is how far back Levels reads the pace of finished tasks.
+// PaceWindow is how far back Queues reads the pace of finished tasks.
 const PaceWindow = 15 * time.Minute
 
-// Level is the queue at one priority.
+// Queue is the tasks of one kind queued, by priority.
+type Queue struct {
+	// PerSecond is the kind's pace over the last PaceWindow, 0 for none.
+	PerSecond float64
+	// Levels run from PriorityRequest to PrioritySample.
+	Levels []Level
+}
+
+// Level is the tasks of one kind queued at one priority.
 type Level struct {
 	Priority int
-	// Tasks are the tasks queued at the priority, leased or not, by kind.
-	Tasks map[string]int64
+	// Tasks are the tasks queued at the priority, leased or not.
+	Tasks int64
 	// ETA is how long until every task at the priority or ahead is
-	// finished at the pace of the last PaceWindow, and Known whether that
-	// pace is known for every kind queued there.
+	// finished at the kind's pace, and Known whether that pace is known.
 	ETA   time.Duration
 	Known bool
 }
@@ -53,10 +60,10 @@ func (p *pace) add(kind string, at time.Time) {
 	}
 }
 
-// perSecond returns the tasks of the kinds finished per second over the
+// perSecond returns the tasks of the kind finished per second over the
 // last PaceWindow at now, or over the time since the earliest it counted
-// when that is shorter, and at least a minute.
-func (p *pace) perSecond(now time.Time, kinds ...string) float64 {
+// of any kind when that is shorter, and at least a minute.
+func (p *pace) perSecond(now time.Time, kind string) float64 {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.buckets == nil {
@@ -71,37 +78,43 @@ func (p *pace) perSecond(now time.Time, kinds ...string) float64 {
 		span = 60
 	}
 	var n int64
-	for _, k := range kinds {
-		for b, c := range p.buckets[k] {
-			if b > now.Unix()/60-int64(PaceWindow/time.Minute) {
-				n += c
-			}
+	for b, c := range p.buckets[kind] {
+		if b > now.Unix()/60-int64(PaceWindow/time.Minute) {
+			n += c
 		}
 	}
 	return float64(n) / span
 }
 
 // Finished counts a task of the kind as finished at the time, for the
-// pace Levels reads. The count lives in memory and starts over with the
+// pace Queues reads. The count lives in memory and starts over with the
 // process.
 func (q *Tasks) Finished(kind string, at time.Time) {
 	q.pace.add(kind, at)
 }
 
-// Levels returns the queue at each priority from PriorityRequest to
-// PrioritySample at now. Fetchers work fetches and peer lookups, and
-// probers probes, so each priority's ETA is the longer of the two: the
-// tasks of each pool at the priority or ahead over that pool's pace.
-func (q *Tasks) Levels(ctx context.Context, now time.Time) ([]Level, error) {
-	levels := make([]Level, PrioritySample-PriorityRequest+1)
-	for i := range levels {
-		levels[i] = Level{Priority: PriorityRequest + i, Tasks: map[string]int64{TaskFetch: 0, TaskPeers: 0, TaskProbe: 0}}
+// Queues returns the queue of each task kind at now, keyed by kind.
+func (q *Tasks) Queues(ctx context.Context, now time.Time) (map[string]Queue, error) {
+	counts, err := q.queued(ctx)
+	if err != nil {
+		return nil, err
 	}
+	out := map[string]Queue{}
+	for _, kind := range []string{TaskFetch, TaskPeers, TaskProbe} {
+		out[kind] = queue(counts[kind], q.pace.perSecond(now, kind))
+	}
+	return out, nil
+}
+
+// queued returns the tasks queued per kind at each priority from
+// PriorityRequest to PrioritySample.
+func (q *Tasks) queued(ctx context.Context) (map[string][]int64, error) {
 	rows, err := q.db.R.QueryContext(ctx, "SELECT priority, kind, count(*) FROM task_queue GROUP BY priority, kind")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	counts := map[string][]int64{}
 	for rows.Next() {
 		var p int
 		var kind string
@@ -109,24 +122,32 @@ func (q *Tasks) Levels(ctx context.Context, now time.Time) ([]Level, error) {
 		if err := rows.Scan(&p, &kind, &n); err != nil {
 			return nil, err
 		}
-		if p >= PriorityRequest && p <= PrioritySample {
-			levels[p-PriorityRequest].Tasks[kind] += n
+		if p < PriorityRequest || p > PrioritySample {
+			continue
 		}
+		if counts[kind] == nil {
+			counts[kind] = make([]int64, PrioritySample-PriorityRequest+1)
+		}
+		counts[kind][p-PriorityRequest] += n
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	return counts, rows.Err()
+}
+
+// queue is the Queue of the tasks counted at each priority from
+// PriorityRequest, none when counts is nil, worked at perSecond.
+func queue(counts []int64, perSecond float64) Queue {
+	out := Queue{PerSecond: perSecond, Levels: make([]Level, PrioritySample-PriorityRequest+1)}
+	var ahead int64
+	for i := range out.Levels {
+		var n int64
+		if counts != nil {
+			n = counts[i]
+		}
+		ahead += n
+		out.Levels[i] = Level{Priority: PriorityRequest + i, Tasks: n}
+		out.Levels[i].ETA, out.Levels[i].Known = eta(ahead, perSecond)
 	}
-	fetchers := q.pace.perSecond(now, TaskFetch, TaskPeers)
-	probers := q.pace.perSecond(now, TaskProbe)
-	var fetches, probes int64
-	for i := range levels {
-		fetches += levels[i].Tasks[TaskFetch] + levels[i].Tasks[TaskPeers]
-		probes += levels[i].Tasks[TaskProbe]
-		f, fok := eta(fetches, fetchers)
-		p, pok := eta(probes, probers)
-		levels[i].ETA, levels[i].Known = max(f, p), fok && pok
-	}
-	return levels, nil
+	return out
 }
 
 // eta is how long n tasks take at perSecond, and whether that is known.

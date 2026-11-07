@@ -176,6 +176,7 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 	for i := range 10 {
 		tasks.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
 	}
+	tasks.Finished(store.TaskPeers, now.Add(-time.Minute))
 	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages)), Languages: languages, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
@@ -560,6 +561,9 @@ func TestData(t *testing.T) {
 	require.Equal(t, http.StatusOK, get(t, h, "/", "", "Cookie", "tz=Mars/Olympus").Code, "an unknown zone is the process's")
 	require.Contains(t, body, "Dub by language")
 	require.Contains(t, body, `<h2>Task queue <span class="mu">3</span></h2>`)
+	require.Contains(t, body, `<h3>Metadata fetches <span class="mu">3</span></h3>`)
+	require.NotContains(t, body, `<h3>Probes`, "no probes queued and none done")
+	require.Contains(t, body, `<h3>Peer lookups <span class="mu">0</span></h3>`, "none queued, one done")
 	require.Contains(t, body, `<div class="q1" style="flex-grow: 1" title="P1 · 1"></div><div class="q4" style="flex-grow: 2" title="P4 · 2"></div>`, "a segment per priority with tasks")
 	require.Contains(t, body, "<td class=\"r\">1\u00a0min</td>", "one fetch at P1 at a pace of one a minute")
 	require.Contains(t, body, "<td class=\"r\">3\u00a0min</td>", "three at P4 or ahead")

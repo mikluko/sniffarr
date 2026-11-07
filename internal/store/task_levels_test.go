@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLevels(t *testing.T) {
+func TestQueues(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	q, err := NewTasks(ctx, s.db, TaskOptions{})
@@ -21,38 +21,45 @@ func TestLevels(t *testing.T) {
 	enqueue(t, q, Arr, 11, 12)
 	enqueue(t, q, Sample, 21, 22, 23, 24, 25, 26)
 
-	levels, err := q.Levels(ctx, t0)
+	queues, err := q.Queues(ctx, t0)
 	require.NoError(t, err)
-	require.Len(t, levels, 5)
-	require.Equal(t, map[string]int64{TaskFetch: 0, TaskPeers: 1, TaskProbe: 1}, levels[0].Tasks)
-	require.Equal(t, int64(2), levels[1].Tasks[TaskFetch])
-	require.Equal(t, int64(6), levels[4].Tasks[TaskFetch])
-	require.False(t, levels[0].Known, "no pace yet")
+	require.Len(t, queues, 3)
+	tasks := func(kind string) []int64 {
+		var n []int64
+		for _, l := range queues[kind].Levels {
+			n = append(n, l.Tasks)
+		}
+		return n
+	}
+	require.Equal(t, []int64{0, 2, 0, 0, 6}, tasks(TaskFetch))
+	require.Equal(t, []int64{1, 0, 0, 0, 0}, tasks(TaskPeers))
+	require.Equal(t, []int64{1, 0, 0, 0, 0}, tasks(TaskProbe))
+	require.Equal(t, 4, queues[TaskFetch].Levels[4].Priority)
+	require.True(t, queues[TaskFetch].Levels[0].Known, "nothing queued at P0 or ahead")
+	require.False(t, queues[TaskFetch].Levels[1].Known, "no pace yet")
+	require.Zero(t, queues[TaskFetch].PerSecond)
 
 	for i := range 30 {
 		q.Finished(TaskFetch, t0.Add(time.Duration(i)*2*time.Second))
 	}
-	levels, err = q.Levels(ctx, t0.Add(time.Minute))
+	queues, err = q.Queues(ctx, t0.Add(time.Minute))
 	require.NoError(t, err)
-	require.False(t, levels[0].Known, "the probe's pace is unknown")
-	require.False(t, levels[1].Known, "a priority waits for those ahead")
+	require.InDelta(t, 0.5, queues[TaskFetch].PerSecond, 1e-9)
+	require.Equal(t, 4*time.Second, queues[TaskFetch].Levels[1].ETA, "two fetches at 30 a minute")
+	require.Equal(t, 16*time.Second, queues[TaskFetch].Levels[4].ETA, "eight at P4 or ahead")
+	require.False(t, queues[TaskPeers].Levels[0].Known, "a lookup goes at its own pace, not the fetches'")
+	require.False(t, queues[TaskProbe].Levels[4].Known, "a priority waits for those ahead")
 
-	q.Finished(TaskProbe, t0)
-	levels, err = q.Levels(ctx, t0.Add(time.Minute))
+	q.Finished(TaskPeers, t0)
+	q.Finished(TaskProbe, t0.Add(30*time.Second))
+	q.Finished(TaskProbe, t0.Add(30*time.Second))
+	queues, err = q.Queues(ctx, t0.Add(time.Minute))
 	require.NoError(t, err)
-	for _, l := range levels {
-		require.True(t, l.Known, l.Priority)
-	}
-	require.Equal(t, 60*time.Second, levels[0].ETA, "one probe at one a minute outlasts one lookup at 30 a minute")
-	for range 29 {
-		q.Finished(TaskProbe, t0.Add(30*time.Second))
-	}
-	levels, err = q.Levels(ctx, t0.Add(time.Minute))
+	require.Equal(t, time.Minute, queues[TaskPeers].Levels[4].ETA, "one lookup at one a minute")
+	require.Equal(t, 30*time.Second, queues[TaskProbe].Levels[0].ETA, "one probe at two a minute")
+	require.Equal(t, 16*time.Second, queues[TaskFetch].Levels[4].ETA, "the fetches' pace is theirs alone")
+
+	queues, err = q.Queues(ctx, t0.Add(time.Minute+PaceWindow))
 	require.NoError(t, err)
-	require.Equal(t, 2*time.Second, levels[0].ETA)
-	require.Equal(t, 6*time.Second, levels[1].ETA, "three fetches and lookups at P1 or ahead at 30 a minute")
-	require.Equal(t, 18*time.Second, levels[4].ETA, "nine at P4 or ahead")
-	levels, err = q.Levels(ctx, t0.Add(time.Minute+PaceWindow))
-	require.NoError(t, err)
-	require.False(t, levels[0].Known, "the pace forgets what is older than the window")
+	require.False(t, queues[TaskFetch].Levels[1].Known, "the pace forgets what is older than the window")
 }

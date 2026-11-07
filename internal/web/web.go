@@ -675,10 +675,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 		Probe:      ui.ProbeStats{RxDay: st.GetProbeBytesRxDay(), TxDay: st.GetProbeBytesTxDay(), LimitDay: st.GetProbeBytesLimitDay(), PaceDay: dayPace(now, st.GetProbeBytesRxDay())},
 		Hourly:     hourly, Daily: daily, Weekly: weekly,
 	}
-	for _, l := range st.GetQueue() {
-		out.Queue = append(out.Queue, ui.QueueLevel{Priority: int(l.GetPriority()), Fetches: l.GetFetches(), Lookups: l.GetLookups(), Probes: l.GetProbes(),
-			ETA: l.GetEta().AsDuration(), Known: l.GetEta() != nil})
-	}
+	out.Queue = taskQueues(st)
 	byKind := map[string]int64{}
 	for _, c := range st.GetKinds() {
 		byKind[uiOr(kinds, c.GetKind(), "")] += c.GetCount()
@@ -788,6 +785,23 @@ func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, we
 	return ui.NewBarChart(hv, hl, 12, true, pace(hv[len(hv)-1], first, first.Add(time.Hour))),
 		ui.NewBarChart(dv, dl, 7, true, pace(dv[nd-1], today, today.AddDate(0, 0, 1))),
 		ui.NewBarChart(wv, wl, 4, true, pace(wv[nw-1], week, week.AddDate(0, 0, 7)))
+}
+
+// taskQueues returns the queue of st per ui.TaskKinds, or none when st has
+// no queue.
+func taskQueues(st *sniffarrv1.StatsResponse) []ui.TaskQueue {
+	if st.GetQueueFetches() == nil && st.GetQueueLookups() == nil && st.GetQueueProbes() == nil {
+		return nil
+	}
+	var out []ui.TaskQueue
+	for i, q := range []*sniffarrv1.TaskQueue{st.GetQueueFetches(), st.GetQueueLookups(), st.GetQueueProbes()} {
+		tq := ui.TaskQueue{Kind: ui.TaskKinds[i], Paced: q.GetPerMinute() > 0}
+		for _, l := range q.GetLevels() {
+			tq.Levels = append(tq.Levels, ui.QueueLevel{Priority: int(l.GetPriority()), Tasks: l.GetTasks(), ETA: l.GetEta().AsDuration(), Known: l.GetEta() != nil})
+		}
+		out = append(out, tq)
+	}
+	return out
 }
 
 // dayPace is what v, spent so far on the UTC day of now, comes to by its end
