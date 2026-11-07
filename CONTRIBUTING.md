@@ -38,6 +38,11 @@ can be a sentence; the case for it is what takes the work:
 
 ## Pull requests
 
-A pull request the maintainer has not agreed to in an issue first will most
-likely be closed by AI at the next maintenance pass. An idea in one is
-welcome as an issue, made the case for as above.
+Code from outside isn't accepted right now. A pull request the maintainer
+hasn't agreed to in an issue first will most likely be closed by AI at the
+next maintenance pass. That says nothing about the work in it; it's just
+how the project runs for now.
+
+The idea in a pull request is still welcome: open an issue and make the
+case for it as above. If code makes the idea clearer, link your branch from
+the issue.
