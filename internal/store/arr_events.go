@@ -182,18 +182,19 @@ func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at, now, even
 }
 
 // applyPendingArr applies, as RecordArr does, the work of the latest event
-// with a work that has the hash, if there is one.
-func applyPendingArr(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) error {
+// with a work that has the hash, if there is one, and reports whether there
+// is.
+func applyPendingArr(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) (bool, error) {
 	var work, happened int64
 	err := tx.QueryRowContext(ctx, "SELECT work, at FROM arr_events WHERE infohash = ? AND work IS NOT NULL ORDER BY at DESC, id DESC LIMIT 1", h[:]).Scan(&work, &happened)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil
+		return false, nil
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 	_, err = applyArr(ctx, tx, h, work, at, at, time.Unix(happened, 0), true)
-	return err
+	return true, err
 }
 
 // LatestArr returns when the latest event of the app and event happened,

@@ -219,10 +219,23 @@ func TestJournalFetched(t *testing.T) {
 	_, _, err = s.Insert(ctx, titled(3, "Heat.1995.1080p", "y:heat 1995"))
 	require.NoError(t, err)
 	work := matchTo(t, s, "y:heat 1995", TypeMovie, 949, "Heat")
-	_, _, err = s.Insert(ctx, titled(4, "Heat.1995.2160p", "y:heat 1995"))
+	stored := titled(4, "Heat.1995.2160p", "y:heat 1995")
+	stored.SeenAt = t0.Add(time.Hour)
+	_, _, err = s.Insert(ctx, stored)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"name":"Heat.1995.2160p","size":1073741824,"discovery":"sample","kind":"movie","kind_layer":"rules","work":`+strconv.FormatInt(work, 10)+`}`,
-		entry(t, s, hash(4), JournalFetched, "stored").Detail, "the work its title key is matched to")
+	require.JSONEq(t, `{"name":"Heat.1995.2160p","size":1073741824,"discovery":"sample","kind":"movie","kind_layer":"rules"}`,
+		entry(t, s, hash(4), JournalFetched, "stored").Detail)
+	require.Equal(t, []string{"fetched/stored", "matched/tmdb"}, entries(t, s, hash(4)), "the match its title key took before")
+	m := entry(t, s, hash(4), JournalMatched, LayerTMDB)
+	require.Equal(t, stored.SeenAt, m.At, "at the time it is stored")
+	require.JSONEq(t, `{"work":`+strconv.FormatInt(work, 10)+`,"tmdb_id":949,"type":"movie","confidence":1,"key_matched_at":`+unix(t0)+`}`, m.Detail,
+		"marked as the key's earlier match")
+
+	_, _, err = s.RecordMatch(ctx, "y:ronin 1998", Found{}, t0)
+	require.NoError(t, err)
+	_, _, err = s.Insert(ctx, titled(5, "Ronin.1998.1080p", "y:ronin 1998"))
+	require.NoError(t, err)
+	require.Equal(t, []string{"fetched/stored"}, entries(t, s, hash(5)), "a key matched to nothing gives no work")
 }
 
 func TestJournalQueue(t *testing.T) {
