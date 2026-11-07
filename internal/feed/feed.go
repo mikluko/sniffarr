@@ -247,7 +247,8 @@ func (r *Recorder) now() time.Time {
 
 // Record records the item of the source and returns its outcome. The
 // infohash of a new item whose torrent is neither stored nor rejected is
-// queued under store.Feed.
+// queued under store.Feed. The outcome is journaled once recorded, in a
+// transaction of its own; a failure to journal it is logged, not returned.
 func (r *Recorder) Record(ctx context.Context, source string, it Item) (string, error) {
 	r.init()
 	now := r.now()
@@ -262,7 +263,7 @@ func (r *Recorder) Record(ctx context.Context, source string, it Item) (string, 
 	}
 	if err := r.Store.JournalFeed(ctx, it.Hash, now, outcome, store.Detail("source", source, "title", it.Title, "url", it.URL,
 		"category", it.Category, "size", it.Size, "published_at", it.At)); err != nil {
-		return "", fmt.Errorf("journal feed item: %w", err)
+		r.Log.ErrorContext(ctx, "journal feed item", "source", source, "infohash", hex.EncodeToString(it.Hash[:]), "err", err)
 	}
 	r.items.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.feed.source", source), attribute.String("sniffarr.feed.outcome", outcome)))
 	return outcome, nil

@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -24,6 +25,7 @@ import (
 )
 
 type fixture struct {
+	db     *database.DB
 	store  *store.Store
 	queue  *store.Tasks
 	rec    *Recorder
@@ -41,7 +43,7 @@ func setup(t *testing.T) *fixture {
 	require.NoError(t, err)
 	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
-	f := &fixture{store: s, queue: q, reader: sdkmetric.NewManualReader(), now: time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)}
+	f := &fixture{db: db, store: s, queue: q, reader: sdkmetric.NewManualReader(), now: time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)}
 	f.rec = &Recorder{Store: s, Tasks: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return f.now },
 		Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(f.reader))}
 	return f
@@ -122,6 +124,22 @@ func TestRecord(t *testing.T) {
 	published := strconv.FormatInt(f.now.Add(-time.Hour).Unix(), 10)
 	require.JSONEq(t, `{"source":"rutracker","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[1].Detail)
 	require.JSONEq(t, `{"source":"other","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[3].Detail)
+}
+
+func TestRecordJournalFails(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	var logs bytes.Buffer
+	f.rec.Log = slog.New(slog.NewTextHandler(&logs, nil))
+	_, err := f.db.W.ExecContext(ctx, `CREATE TRIGGER feed_journal_fails BEFORE INSERT ON torrent_journal WHEN NEW.kind = '`+store.JournalFeed+`'
+		BEGIN SELECT RAISE(ABORT, 'feed'); END`)
+	require.NoError(t, err)
+
+	outcome, err := f.rec.Record(ctx, "rutracker", Item{Hash: hash(1), Title: "Title 1", URL: "https://example.com/t/1", Size: 1 << 30, At: f.now})
+	require.NoError(t, err, "the round goes on")
+	require.Equal(t, Queued, outcome)
+	require.Equal(t, map[string]int64{Queued: 1}, f.items(t))
+	require.Contains(t, logs.String(), `level=ERROR msg="journal feed item" source=rutracker infohash=01`)
 }
 
 // fakeSource lists what it is given, or fails.
