@@ -47,6 +47,32 @@ The idea in a pull request is still welcome: open an issue and make the
 case for it as above. If code makes the idea clearer, link your branch from
 the issue.
 
+## Use of AI
+
+sniffarr is built with AI, and pretending otherwise would be dishonest:
+competitive software is not written without it today. The worries about
+AI-made code are partly fair, though, so the project says plainly how it
+works and asks the same openness of everyone else.
+
+How sniffarr is made, and what is expected of any contribution:
+
+- **A person decides what to build.** Every change starts from a decision a
+  maintainer made, usually in an issue.
+- **AI does the work in between.** Coding agents write most of the code,
+  tests and documentation, and help with research and review.
+- **A person decides whether it is good enough.** A maintainer reviews every
+  change and answers for it as if they had written it themselves.
+
+Disclose any use of AI, and name the model: in the commit message for code,
+in the text for an issue or a proposal. For example:
+
+```
+Assisted-by: Claude Code (claude-opus-5-5)
+```
+
+Spelling and grammar checks and code completion in an editor need no
+disclosure. The rule holds for maintainers too.
+
 ## Becoming a maintainer
 
 Working on the code is open to maintainers, and the door to becoming one is
