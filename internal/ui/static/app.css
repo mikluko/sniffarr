@@ -428,10 +428,8 @@ a.btn:hover{background:var(--muted);text-decoration:none}
 .nf .acts{margin-top:8px}
 @media (max-width:640px){.nf{padding:40px 0 56px}}
 
-/* optional features: a store table that is gone leaves its column empty,
- * a feature on but not working is amber with a square marker, and the
- * block of features lists each with its state and a note */
-#data .grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+/* optional features: a feature on but not working is amber with a square
+ * marker, and the block of features lists each with its state and a note */
 .meter.full i{background:var(--warn)}
 .m{display:inline-block;width:8px;height:8px;margin-right:6px;background:var(--warn)}
 .act-ans.dw{color:var(--warn)}
@@ -475,4 +473,17 @@ a.btn:hover{background:var(--muted);text-decoration:none}
   .topv .tt tr.wk td.rl{grid-area:4/2/5/6}
   .topv .mb{display:inline}
   .topv .rl .dk{display:none}
+}
+
+/* data page, store: three columns, a share bar after each row's percentage;
+ * a table that is gone leaves its cell empty */
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 40px;align-items:start}
+.dstore p{margin:0 0 4px}
+.st td{padding:3px 8px}
+.st .nw{white-space:nowrap}
+.st td.bar{width:30%;padding-right:0}
+.st .bar i{display:block;height:6px;background:var(--ln)}
+@media (max-width:640px){
+  .g3{grid-template-columns:1fr}
+  .g3 .gone{display:none}
 }

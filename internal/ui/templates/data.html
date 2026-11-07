@@ -67,39 +67,30 @@
   {{template "chart" (chartArgs $.Base .Weekly ($.T "d.weekly"))}}
 </section>
 
-<section>
+<section class="dstore">
   <h2>{{$.T "d.store"}}</h2>
-  <div class="grid">
+  <div class="g3">
     <div>
-      <h3>{{$.T "d.bykind"}}</h3>
-      <table class="t">{{range .ByKind}}<tr><td><a href="/torrents?kind={{.Key}}">{{$.T (concat "kind." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+      <p class="mu">{{$.T "d.bykind"}}</p>
+      <table class="t st">{{range .ByKind}}<tr><td><a href="/torrents?kind={{.Key}}">{{$.T (concat "kind." .Key)}}</a></td>{{template "share" (shareArgs $.Base .N $.Stats.Total)}}</tr>{{end}}</table>
     </div>
     <div>
-      <h3>{{$.T "d.bylayer"}}</h3>
-      <table class="t">{{range .ByLayer}}{{if or $.Classifier (ne .Key "classifier")}}<tr><td><a href="/torrents?layer={{.Key}}">{{$.T (concat "layer." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}{{end}}</table>
-      <h3 class="gap">{{$.T "d.bysource"}}</h3>
-      <table class="t">{{range .BySource}}<tr><td><a href="/torrents?source={{.Key}}">{{$.T (concat "source." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+      <p class="mu">{{$.T "d.bylayer"}}</p>
+      <table class="t st">{{range .ByLayer}}{{if or $.Classifier (ne .Key "classifier")}}<tr><td><a href="/torrents?layer={{.Key}}">{{$.T (concat "layer." .Key)}}</a></td>{{template "share" (shareArgs $.Base .N $.Stats.Total)}}</tr>{{end}}{{end}}</table>
     </div>
-    {{if .Voice}}
     <div>
-      <h3>{{$.T "d.voice"}}</h3>
-      <table class="t">
-        <thead><tr><th></th>{{range .Voice}}<th class="r">{{.Lang}}</th><th></th>{{end}}</tr></thead>
-        <tbody>
-        {{range $i, $band := voiceBands}}
-          <tr><td>{{$.T (concat "voiceband." $band)}}</td>
-          {{range $.Stats.Voice}}{{$n := index .Bands $i}}<td class="r">{{$.Num $n}}</td><td class="r mu">{{$.Pct $n $.Stats.Total}}</td>{{end}}</tr>
-        {{end}}
-        </tbody>
-      </table>
+      <p class="mu">{{$.T "d.bysource"}}</p>
+      <table class="t st">{{range .BySource}}<tr><td><a href="/torrents?source={{.Key}}">{{$.T (concat "source." .Key)}}</a></td>{{template "share" (shareArgs $.Base .N $.Stats.Total)}}</tr>{{end}}</table>
     </div>
-    {{end}}
+    {{range .Voice}}
     <div>
-      <h3>{{$.T "d.droppedby"}}</h3>
-      <table class="t">
-        <tbody>{{range .Dropped}}<tr><td>{{$.T (concat "drop." .Key)}}</td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.DroppedTotal}}</td></tr>{{end}}</tbody>
-        <tfoot><tr><td>{{$.T "d.sum"}}</td><td class="r">{{$.Num .DroppedTotal}}</td><td></td></tr></tfoot>
-      </table>
+      <p class="mu">{{$.T "d.voice"}}: {{.Lang}}</p>
+      <table class="t st">{{$bands := .Bands}}{{range $i, $band := voiceBands}}<tr><td>{{$.T (concat "voiceband." $band)}}</td>{{template "share" (shareArgs $.Base (index $bands $i) $.Stats.Total)}}</tr>{{end}}</table>
+    </div>
+    {{else}}<div class="gone"></div>{{end}}
+    <div>
+      <p class="mu">{{$.T "d.droppedby"}}</p>
+      <table class="t st">{{range .Dropped}}<tr><td>{{$.T (concat "drop." .Key)}}</td>{{template "share" (shareArgs $.Base .N $.Stats.DroppedTotal)}}</tr>{{end}}</table>
     </div>
   </div>
 </section>
@@ -128,3 +119,6 @@
 
 {{/* A daily limit's meter: Done filled, Pace outlined dashed, both clamped to the limit. */}}
 {{define "meter"}}{{$b := .B}}<div class="meter" role="img" aria-label="{{$b.Pct .Done .Limit}}"><i style="width: {{$b.PctW .Done .Limit | safeCSS}}"></i>{{if .Pace}}<span class="proj" style="width: {{$b.PctW .Pace .Limit | safeCSS}}"></span>{{end}}</div>{{end}}
+
+{{/* A store row's count, its share of the whole as a percentage and as a bar. */}}
+{{define "share"}}{{$b := .B}}<td class="r nw">{{$b.Num .N}}</td><td class="r mu nw">{{$b.Pct .N .Total}}</td><td class="bar"><i style="width: {{$b.PctW .N .Total | safeCSS}}"></i></td>{{end}}

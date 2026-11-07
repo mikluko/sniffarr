@@ -54,6 +54,12 @@ type limitArgs struct {
 	Done, Pace, Limit int64
 }
 
+// shareArgs are a store row's count N out of Total.
+type shareArgs struct {
+	B        Base
+	N, Total int64
+}
+
 // tipArgs are a tooltip's trigger Label and its Text.
 type tipArgs struct {
 	Label, Text string
@@ -135,6 +141,7 @@ func New() (*Renderer, error) {
 		"workAudio":  WorkAudioOf,
 		"queueTasks": QueueTasks,
 		"tipArgs":    func(label, text string) tipArgs { return tipArgs{Label: label, Text: text} },
+		"shareArgs":  func(b Base, n, total int64) shareArgs { return shareArgs{B: b, N: n, Total: total} },
 		"limitArgs": func(b Base, done, pace, limit int64) limitArgs {
 			return limitArgs{B: b, Done: done, Pace: pace, Limit: limit}
 		},
