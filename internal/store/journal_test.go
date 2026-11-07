@@ -128,6 +128,35 @@ func TestJournalDetailBounded(t *testing.T) {
 		"every string, at any depth, keys among them")
 }
 
+func TestJournalDetailBoundedAnyType(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	long, cut := strings.Repeat("x", 1<<20), strings.Repeat("x", 1<<10)+"…"
+	require.NoError(t, s.tx(ctx, func(tx *sql.Tx) error {
+		return journal(ctx, tx, hash(1), t0, JournalProbed, ProbeTracks, map[string]any{
+			"maps":   []map[string]any{{"s": long}},
+			"strs":   map[string]string{long: long, "k": "v"},
+			"matrix": [][]string{{long, "a"}, {"b"}},
+		})
+	}))
+	var d map[string]any
+	require.NoError(t, json.Unmarshal([]byte(entry(t, s, hash(1), JournalProbed, ProbeTracks).Detail), &d))
+	require.Equal(t, map[string]any{
+		"maps":   []any{map[string]any{"s": cut}},
+		"strs":   map[string]any{cut: cut, "k": "v"},
+		"matrix": []any{[]any{cut, "a"}, []any{"b"}},
+	}, d, "a type the cut has no case for is cut all the same")
+}
+
+func TestJournalDetailKeepsNumbers(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	require.NoError(t, s.tx(ctx, func(tx *sql.Tx) error {
+		return journal(ctx, tx, hash(1), t0, JournalProbed, ProbeTracks, Detail("big", int64(1<<62), "ratio", 0.25, "at", t0))
+	}))
+	require.JSONEq(t, `{"big":4611686018427387904,"ratio":0.25,"at":`+unix(t0)+`}`, entry(t, s, hash(1), JournalProbed, ProbeTracks).Detail, "numbers as written, none through float64")
+}
+
 func TestJournalProbedTracksBounded(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
@@ -260,18 +289,18 @@ func TestJournalFetched(t *testing.T) {
 
 	_, _, err = s.Insert(ctx, titled(3, "Heat.1995.1080p", "y:heat 1995"))
 	require.NoError(t, err)
-	work := matchTo(t, s, "y:heat 1995", TypeMovie, 949, "Heat")
+	matchTo(t, s, "y:heat 1995", TypeMovie, 949, "Heat")
 	stored := titled(4, "Heat.1995.2160p", "y:heat 1995")
 	stored.SeenAt = t0.Add(time.Hour)
 	_, _, err = s.Insert(ctx, stored)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"name":"Heat.1995.2160p","size":1073741824,"discovery":"sample","kind":"movie","kind_layer":"rules"}`,
 		entry(t, s, hash(4), JournalFetched, "stored").Detail)
-	require.Equal(t, []string{"fetched/stored", "matched/tmdb"}, entries(t, s, hash(4)), "the match its title key took before")
-	m := entry(t, s, hash(4), JournalMatched, LayerTMDB)
+	require.Equal(t, []string{"fetched/stored", "matched/earlier"}, entries(t, s, hash(4)), "the match its title key took before, not a search of its own")
+	m := entry(t, s, hash(4), JournalMatched, "earlier")
 	require.Equal(t, stored.SeenAt, m.At, "at the time it is stored")
-	require.JSONEq(t, `{"work":`+strconv.FormatInt(work, 10)+`,"tmdb_id":949,"type":"movie","confidence":1,"key_matched_at":`+unix(t0)+`}`, m.Detail,
-		"marked as the key's earlier match")
+	require.JSONEq(t, `{"tmdb_id":949,"type":"movie","confidence":1,"layer":"tmdb","key_matched_at":`+unix(t0)+`}`, m.Detail,
+		"with the layer and the time of the key's match")
 
 	_, _, err = s.RecordMatch(ctx, "y:ronin 1998", Found{}, t0)
 	require.NoError(t, err)
@@ -293,7 +322,7 @@ func TestJournalQueue(t *testing.T) {
 	require.Empty(t, entries(t, s, hash(2)), "a sample's sighting is not journaled")
 
 	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, owner, 2, t0))
-	require.JSONEq(t, `{"owner":7,"attempt":1,"lease_until":`+unix(t0.Add(time.Minute))+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail)
+	require.JSONEq(t, `{"attempt":1,"lease_until":`+unix(t0.Add(time.Minute))+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail)
 	require.Empty(t, entries(t, s, hash(2)), "nor its lease")
 	first := t0.Add(time.Minute)
 	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, owner, 2, first), "the leases expired")
@@ -315,23 +344,23 @@ func TestJournalQueue(t *testing.T) {
 		entries(t, s, hash(1)))
 	got, err := s.Journal(ctx, hash(1), 10)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"owner":7,"attempt":1,"retry_at":`+unix(first.Add(10*time.Minute))+`,"leases":2}`, got[2].Detail, "the attempt's lease expired once")
-	require.JSONEq(t, `{"owner":7,"attempt":2,"lease_until":`+unix(first.Add(11*time.Minute))+`}`, got[3].Detail, "the attempt number carries over the retry")
-	require.JSONEq(t, `{"owner":7,"attempt":3,"dead_until":`+unix(at.Add(24*time.Hour))+`}`, got[6].Detail)
+	require.JSONEq(t, `{"attempt":1,"retry_at":`+unix(first.Add(10*time.Minute))+`,"leases":2}`, got[2].Detail, "the attempt's lease expired once")
+	require.JSONEq(t, `{"attempt":2,"lease_until":`+unix(first.Add(11*time.Minute))+`}`, got[3].Detail, "the attempt number carries over the retry")
+	require.JSONEq(t, `{"attempt":3,"dead_until":`+unix(at.Add(24*time.Hour))+`}`, got[6].Detail)
 	require.Empty(t, entries(t, s, hash(2)), "nor its failures")
 
 	enqueueAt(t, q, at, Announce, 3)
 	require.Len(t, lease(t, q, owner, 1, at), 1)
 	require.Len(t, lease(t, q, owner, 1, at.Add(time.Minute)), 1)
 	require.NoError(t, q.NoPeers(ctx, hash(3), owner, at))
-	require.JSONEq(t, `{"owner":7,"dead_until":`+unix(at.Add(time.Hour))+`,"leases":2}`, entry(t, s, hash(3), JournalFetchFailed, "no_peers").Detail)
+	require.JSONEq(t, `{"dead_until":`+unix(at.Add(time.Hour))+`,"leases":2}`, entry(t, s, hash(3), JournalFetchFailed, "no_peers").Detail)
 	enqueueAt(t, q, at, Announce, 3)
 	require.JSONEq(t, `{"discovery":"announce"}`, entry(t, s, hash(3), JournalSighted, "revived").Detail)
 	require.Equal(t, []string{"sighted/queued", "leased/fetch", "fetch_failed/no_peers", "sighted/revived"}, entries(t, s, hash(3)), "a revival is not queued too")
 
 	enqueueAt(t, q, at, Sample, 4)
 	enqueueAt(t, q, at, Feed, 4)
-	require.JSONEq(t, `{"discovery":"feed","from":"sample","to":"feed"}`, entry(t, s, hash(4), JournalSighted, "promoted").Detail)
+	require.JSONEq(t, `{"from":"sample","to":"feed"}`, entry(t, s, hash(4), JournalSighted, "promoted").Detail)
 	enqueueAt(t, q, at, Announce, 4)
 	require.Equal(t, []string{"sighted/promoted"}, entries(t, s, hash(4)), "a later discovery does not promote")
 
@@ -353,6 +382,28 @@ func TestJournalQueue(t *testing.T) {
 	require.Equal(t, []string{"sighted/queued"}, entries(t, s, hash(6)))
 }
 
+func TestJournalFetchedLeases(t *testing.T) {
+	ctx := context.Background()
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	q, err := NewTasks(ctx, db, TaskOptions{})
+	require.NoError(t, err)
+	enqueue(t, q, Announce, 1, 2)
+	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, 7, 2, t0))
+	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, 7, 2, t0.Add(time.Minute)), "the first leases expired")
+	require.Equal(t, []Hash{hash(1)}, lease(t, q, 7, 1, t0.Add(2*time.Minute)), "and hash 1's second")
+	require.NoError(t, q.Complete(ctx, TaskFetch, hash(2)))
+	for _, b := range []byte{1, 2} {
+		tr := torrent(b, "Alien.1979."+strconv.Itoa(int(b)))
+		tr.SeenAt = t0.Add(3 * time.Minute)
+		_, _, err = s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	require.JSONEq(t, `{"name":"Alien.1979.1","size":1073741824,"discovery":"sample","queued_at":`+unix(t0)+`,"leases":3}`, entry(t, s, hash(1), JournalFetched, "stored").Detail,
+		"the leases its attempt took, as the failure rows say")
+	require.NotContains(t, entry(t, s, hash(2), JournalFetched, "stored").Detail, "leases", "none for a hash no longer queued")
+}
+
 func TestJournalLeasedAfterPromotion(t *testing.T) {
 	ctx := context.Background()
 	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
@@ -365,7 +416,7 @@ func TestJournalLeasedAfterPromotion(t *testing.T) {
 	moved := t0.Add(2 * time.Minute)
 	enqueueAt(t, q, moved, Announce, 1)
 	require.Equal(t, []Hash{hash(1)}, lease(t, q, owner, 1, moved), "the sample's lease expired")
-	require.JSONEq(t, `{"owner":7,"attempt":1,"lease_until":`+unix(moved.Add(time.Minute))+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail,
+	require.JSONEq(t, `{"attempt":1,"lease_until":`+unix(moved.Add(time.Minute))+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail,
 		"the first lease since an announce moved it ahead")
 
 	again := moved.Add(2 * time.Minute)
@@ -436,13 +487,13 @@ func TestJournalMatched(t *testing.T) {
 	work, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 348, Title: "Alien"}, Confidence: 0.8, Layer: LayerJev, Trigger: TriggerWorker}, t0)
 	require.NoError(t, err)
 	for _, h := range []Hash{hash(1), hash(2)} {
-		require.JSONEq(t, `{"work":`+strconv.FormatInt(work, 10)+`,"tmdb_id":348,"type":"movie","confidence":0.8,"trigger":"worker"}`, entry(t, s, h, JournalMatched, LayerJev).Detail)
+		require.JSONEq(t, `{"tmdb_id":348,"type":"movie","confidence":0.8,"trigger":"worker"}`, entry(t, s, h, JournalMatched, LayerJev).Detail)
 	}
 	require.Equal(t, []string{"fetched/stored"}, entries(t, s, hash(3)), "another key")
 
-	other, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 8077, Title: "Alien³"}, Confidence: 1, Layer: LayerTMDB, Trigger: TriggerSearch}, t0.Add(time.Hour))
+	_, _, err = s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 8077, Title: "Alien³"}, Confidence: 1, Layer: LayerTMDB, Trigger: TriggerSearch}, t0.Add(time.Hour))
 	require.NoError(t, err)
-	require.JSONEq(t, `{"work":`+strconv.FormatInt(other, 10)+`,"tmdb_id":8077,"type":"movie","confidence":1,"previous":`+strconv.FormatInt(work, 10)+`,"trigger":"search"}`,
+	require.JSONEq(t, `{"tmdb_id":8077,"type":"movie","confidence":1,"previous":`+strconv.FormatInt(work, 10)+`,"trigger":"search"}`,
 		entry(t, s, hash(1), JournalMatched, LayerTMDB).Detail, "a rematch names the work before")
 	_, _, err = s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 8077}, Confidence: 1, Layer: LayerTMDB}, t0.Add(2*time.Hour))
 	require.NoError(t, err)
@@ -485,11 +536,10 @@ func TestJournalArr(t *testing.T) {
 	rec, err := s.RecordArr(ctx, e, now)
 	require.NoError(t, err)
 	require.True(t, rec.New)
-	w := strconv.FormatInt(rec.Work, 10)
 	got := entry(t, s, hash(1), JournalArr, EventGrab)
-	require.JSONEq(t, `{"app":"radarr","source":"history","indexer":"tracker","title":"Alien.1979.1080p.BluRay","size":1073741824,"work":`+w+`,"recorded_at":`+unix(now)+`}`, got.Detail)
+	require.JSONEq(t, `{"app":"radarr","source":"history","indexer":"tracker","title":"Alien.1979.1080p.BluRay","size":1073741824,"recorded_at":`+unix(now)+`}`, got.Detail)
 	require.Equal(t, grabbed, got.At, "at the time of the grab, with the time it was recorded")
-	matched := `{"work":` + w + `,"tmdb_id":348,"type":"movie","trigger":"arr","event_at":` + unix(grabbed) + `}`
+	matched := `{"tmdb_id":348,"type":"movie","trigger":"arr","event_at":` + unix(grabbed) + `}`
 	for _, h := range []Hash{hash(1), hash(2)} {
 		got := entry(t, s, h, JournalMatched, LayerArr)
 		require.JSONEq(t, matched, got.Detail, "the key's other release follows")
@@ -514,7 +564,7 @@ func TestJournalArr(t *testing.T) {
 	_, _, err = s.Insert(ctx, stored)
 	require.NoError(t, err)
 	got = entry(t, s, hash(3), JournalMatched, LayerArr)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr","pending":true,"event_at":`+unix(grabbed)+`}`, got.Detail)
+	require.JSONEq(t, `{"tmdb_id":348,"type":"movie","trigger":"arr","pending":true,"event_at":`+unix(grabbed)+`}`, got.Detail)
 	require.Equal(t, later, got.At, "applied as the torrent is stored")
 	require.Equal(t, []string{"arr/grab", "fetched/stored", "matched/arr"}, entries(t, s, hash(3)))
 
@@ -526,7 +576,7 @@ func TestJournalArr(t *testing.T) {
 	require.NoError(t, err)
 	_, _, err = s.Insert(ctx, titled(7, "Aliens.1986.2160p", "y:aliens 1986"))
 	require.NoError(t, err)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr","pending":true,"event_at":`+unix(grabbed)+`}`, entry(t, s, hash(7), JournalMatched, LayerArr).Detail)
+	require.JSONEq(t, `{"tmdb_id":348,"type":"movie","trigger":"arr","pending":true,"event_at":`+unix(grabbed)+`}`, entry(t, s, hash(7), JournalMatched, LayerArr).Detail)
 	require.JSONEq(t, matched, entry(t, s, hash(5), JournalMatched, LayerArr).Detail, "the sibling's row is not pending")
 
 	hashless := grab(8, "jkl", t0)
@@ -645,6 +695,50 @@ func leasedProbes(t *testing.T, s *Store, h Hash) []string {
 	return out
 }
 
+// requestRows returns how many probe_wanted/request entries the hash has.
+func requestRows(t *testing.T, s *Store, h Hash) int {
+	t.Helper()
+	got, err := s.Journal(context.Background(), h, 1000)
+	require.NoError(t, err)
+	n := 0
+	for _, e := range got {
+		if e.Kind == JournalProbeWanted && e.Outcome == "request" {
+			n++
+		}
+	}
+	return n
+}
+
+func TestJournalProbeRequestRepeated(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	request := func(at time.Time) {
+		t.Helper()
+		n, err := s.RequestProbe(ctx, []Hash{h}, at)
+		require.NoError(t, err)
+		require.Equal(t, 1, n, "still counted as stored")
+	}
+
+	request(t0)
+	request(t0.Add(time.Minute))
+	require.Equal(t, 1, requestRows(t, s, h), "a request while it waits for its first lease")
+
+	_, ok := leaseNext(t, s, t0.Add(2*time.Minute), false)
+	require.True(t, ok)
+	request(t0.Add(3 * time.Minute))
+	require.Equal(t, 2, requestRows(t, s, h), "a request after a lease began")
+	request(t0.Add(4 * time.Minute))
+	require.Equal(t, 2, requestRows(t, s, h), "none since that one")
+
+	s2 := open(t)
+	moved := insertProbeable(t, s2, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	require.NoError(t, s2.WantProbe(ctx, []Hash{moved}, ProbeWant{T: "movie", Query: "heat"}, t0))
+	_, err := s2.RequestProbe(ctx, []Hash{moved}, t0.Add(time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, 1, requestRows(t, s2, moved), "a request that moves a searched probe ahead is the first")
+}
+
 func TestJournalProbeLeasedOncePerAttempt(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
@@ -674,7 +768,8 @@ func TestJournalProbeLeasedOncePerAttempt(t *testing.T) {
 			}
 
 			lease(t0)
-			require.JSONEq(t, `{"attempt":1,"max_bytes":67108864}`, entry(t, s, h, JournalProbeLeased, tc.outcome).Detail, "nothing of the day's other probes")
+			require.JSONEq(t, `{"attempt":1,"max_bytes":67108864,"lease_until":`+unix(t0.Add(10*time.Minute))+`}`, entry(t, s, h, JournalProbeLeased, tc.outcome).Detail,
+				"when the lease ends, and nothing of the day's other probes")
 			lease(t0.Add(10 * time.Minute))
 			require.Equal(t, []string{tc.outcome + "/1"}, leasedProbes(t, s, h), "a lease again after one expired is the same attempt")
 			require.NoError(t, q.Reset(ctx))
@@ -839,14 +934,14 @@ func TestJournalDeleted(t *testing.T) {
 	s := open(t)
 	_, _, err := s.Insert(ctx, titled(1, "Alien.1979.1080p", "y:alien 1979"))
 	require.NoError(t, err)
-	work := matchTo(t, s, "y:alien 1979", TypeMovie, 348, "Alien")
+	matchTo(t, s, "y:alien 1979", TypeMovie, 348, "Alien")
 	_, _, err = s.Insert(ctx, torrent(2, "Unknown.2024"))
 	require.NoError(t, err)
 	now := t0.Add(48 * time.Hour)
 	sw, err := s.Sweep(ctx, t0.Add(36*time.Hour), t0.Add(time.Hour), now, 10)
 	require.NoError(t, err)
 	require.Equal(t, Swept{Idle: 1, Expired: 1}, sw)
-	require.JSONEq(t, `{"name":"Alien.1979.1080p","last_seen":`+unix(t0)+`,"work":`+strconv.FormatInt(work, 10)+`}`, entry(t, s, hash(1), JournalDeleted, "expired").Detail)
+	require.JSONEq(t, `{"name":"Alien.1979.1080p","last_seen":`+unix(t0)+`}`, entry(t, s, hash(1), JournalDeleted, "expired").Detail)
 	require.JSONEq(t, `{"name":"Unknown.2024","last_seen":`+unix(t0)+`}`, entry(t, s, hash(2), JournalDeleted, "idle").Detail)
 	require.Equal(t, now, entry(t, s, hash(2), JournalDeleted, "idle").At)
 	require.Equal(t, []string{"fetched/stored", "matched/tmdb", "deleted/expired"}, entries(t, s, hash(1)), "the trail outlives the torrent")

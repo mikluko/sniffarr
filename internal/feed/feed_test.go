@@ -119,12 +119,23 @@ func TestRecord(t *testing.T) {
 	journal, err := f.store.Journal(ctx, hash(3), 10)
 	require.NoError(t, err)
 	require.Len(t, journal, 3)
-	require.Equal(t, []string{"sighted/queued", "feed/queued", "feed/queued"},
+	require.Equal(t, []string{"sighted/queued", "feed/queued", "feed/already_queued"},
 		[]string{journal[0].Kind + "/" + journal[0].Outcome, journal[1].Kind + "/" + journal[1].Outcome, journal[2].Kind + "/" + journal[2].Outcome},
-		"a listing the source listed before writes no row")
+		"a listing the source listed before writes no row; another source's listing of a hash queued already says so")
 	published := strconv.FormatInt(f.now.Add(-time.Hour).Unix(), 10)
 	require.JSONEq(t, `{"source":"rutracker","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[1].Detail)
 	require.JSONEq(t, `{"source":"other","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[2].Detail)
+
+	_, _, err = f.queue.Enqueue(ctx, []store.Sighting{{Hash: hash(4), Discovery: store.Sample}}, f.now)
+	require.NoError(t, err)
+	outcome, err = f.rec.Record(ctx, "rutracker", item(4))
+	require.NoError(t, err)
+	require.Equal(t, Queued, outcome)
+	journal, err = f.store.Journal(ctx, hash(4), 10)
+	require.NoError(t, err)
+	require.Len(t, journal, 2)
+	require.Equal(t, []string{"sighted/promoted", "feed/queued"}, []string{journal[0].Kind + "/" + journal[0].Outcome, journal[1].Kind + "/" + journal[1].Outcome},
+		"a listing that moves a queued hash ahead is a queueing")
 }
 
 func TestRecordJournalFails(t *testing.T) {

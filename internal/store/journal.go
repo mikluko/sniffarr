@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -26,12 +27,13 @@ const (
 	// JournalClassified is a classification recorded: jev, reuse, failed.
 	JournalClassified = "classified"
 	// JournalMatched is a title key match the release took: tmdb, jev, arr,
-	// none, error.
+	// none, error; or earlier, the key's match from before the release was
+	// stored.
 	JournalMatched = "matched"
 	// JournalArr is an event Radarr or Sonarr reported: grab, import.
 	JournalArr = "arr"
 	// JournalFeed is a tracker feed's first listing of an item: stored,
-	// queued, rejected.
+	// queued, already_queued, rejected.
 	JournalFeed = "feed"
 	// JournalProbeWanted is a probe asked for: search, request.
 	JournalProbeWanted = "probe_wanted"
@@ -43,6 +45,10 @@ const (
 	// JournalDeleted is the torrent swept from the store: idle, expired.
 	JournalDeleted = "deleted"
 )
+
+// MatchEarlier is the outcome of a matched entry for a release that took the
+// match its title key had when the release was stored.
+const MatchEarlier = "earlier"
 
 // Triggers of a classification or a match, as the journal names who asked.
 const (
@@ -73,8 +79,8 @@ const journalNoMatch = 50
 // journalTracks is the most tracks a probed/tracks entry lists.
 const journalTracks = 32
 
-// journalWantedFor is how long after a probe_wanted entry a search that
-// returns the release again is not journaled.
+// journalWantedFor is how long after a search's probe_wanted entry a search
+// that returns the release again is not journaled.
 const journalWantedFor = 24 * time.Hour
 
 // JournalEntry is one event of a torrent's life.
@@ -137,34 +143,36 @@ func Detail(kv ...any) map[string]any {
 	return d
 }
 
-// clipped returns v with clip applied to every string in it, the keys and
-// elements of its maps and lists at any depth among them.
-func clipped(v any) any {
+// clipped returns the detail as decoded JSON with clip applied to every
+// string in it, the keys of its objects among them. A detail is cut
+// through its JSON, so the cut holds for whatever types a caller puts in.
+func clipped(detail map[string]any) (any, error) {
+	b, err := json.Marshal(detail)
+	if err != nil {
+		return nil, err
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	return clipValue(v), nil
+}
+
+// clipValue applies clip to every string of v, a value decoded from JSON.
+func clipValue(v any) any {
 	switch x := v.(type) {
 	case string:
 		return clip(x)
-	case []string:
-		out := make([]string, len(x))
-		for i, s := range x {
-			out[i] = clip(s)
-		}
-		return out
 	case []any:
-		out := make([]any, len(x))
 		for i, e := range x {
-			out[i] = clipped(e)
+			x[i] = clipValue(e)
 		}
-		return out
 	case map[string]any:
 		out := make(map[string]any, len(x))
 		for k, e := range x {
-			out[clip(k)] = clipped(e)
-		}
-		return out
-	case map[string]float64:
-		out := make(map[string]float64, len(x))
-		for k, e := range x {
-			out[clip(k)] = e
+			out[clip(k)] = clipValue(e)
 		}
 		return out
 	}
@@ -193,10 +201,14 @@ func clip(s string) string {
 func journal(ctx context.Context, tx *sql.Tx, h Hash, at time.Time, kind, outcome string, detail map[string]any) error {
 	var d any
 	if len(detail) > 0 {
+		cut, err := clipped(detail)
+		if err != nil {
+			return err
+		}
 		var b strings.Builder
 		enc := json.NewEncoder(&b)
 		enc.SetEscapeHTML(false)
-		if err := enc.Encode(clipped(detail)); err != nil {
+		if err := enc.Encode(cut); err != nil {
 			return err
 		}
 		d = strings.TrimSuffix(b.String(), "\n")

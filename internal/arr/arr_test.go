@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -176,7 +175,7 @@ func TestWebhookGrabStored(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, journal, 3, "stored, grabbed, matched; the duplicate adds nothing")
 	require.Equal(t, store.JournalArr, journal[1].Kind)
-	require.JSONEq(t, `{"app":"radarr","source":"webhook","indexer":"Tracker (Prowlarr)","title":"Alien.1979.1080p.BluRay.x264-GRP","size":8589934592,"work":`+strconv.FormatInt(r.Work, 10)+`}`,
+	require.JSONEq(t, `{"app":"radarr","source":"webhook","indexer":"Tracker (Prowlarr)","title":"Alien.1979.1080p.BluRay.x264-GRP","size":8589934592}`,
 		journal[1].Detail, "a webhook's event is recorded as it happens")
 	require.Equal(t, now.UTC(), journal[1].At)
 

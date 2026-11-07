@@ -152,7 +152,7 @@ func (s *Store) sweep(ctx context.Context, ids string, before, now time.Time, ba
 			if _, err := tx.ExecContext(ctx, "DELETE FROM torrent_releases_fts WHERE rowid IN ("+ids+")", before.Unix(), batch); err != nil {
 				return err
 			}
-			rows, err := tx.QueryContext(ctx, "DELETE FROM torrent_releases WHERE id IN ("+ids+") RETURNING infohash, name, last_seen, work", before.Unix(), batch)
+			rows, err := tx.QueryContext(ctx, "DELETE FROM torrent_releases WHERE id IN ("+ids+") RETURNING infohash, name, last_seen", before.Unix(), batch)
 			if err != nil {
 				return err
 			}
@@ -161,13 +161,12 @@ func (s *Store) sweep(ctx context.Context, ids string, before, now time.Time, ba
 				hash     Hash
 				name     string
 				lastSeen int64
-				work     sql.NullInt64
 			}
 			var deleted []gone
 			for rows.Next() {
 				var g gone
 				var b []byte
-				if err := rows.Scan(&b, &g.name, &g.lastSeen, &g.work); err != nil {
+				if err := rows.Scan(&b, &g.name, &g.lastSeen); err != nil {
 					return err
 				}
 				g.hash = Hash(b)
@@ -178,7 +177,7 @@ func (s *Store) sweep(ctx context.Context, ids string, before, now time.Time, ba
 			}
 			n = len(deleted)
 			for _, g := range deleted {
-				if err := journal(ctx, tx, g.hash, now, JournalDeleted, class, Detail("name", g.name, "last_seen", time.Unix(g.lastSeen, 0), "work", g.work.Int64)); err != nil {
+				if err := journal(ctx, tx, g.hash, now, JournalDeleted, class, Detail("name", g.name, "last_seen", time.Unix(g.lastSeen, 0))); err != nil {
 					return err
 				}
 			}

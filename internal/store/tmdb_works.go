@@ -310,7 +310,7 @@ func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Ti
 		switch {
 		case f.Hit != nil:
 			outcome = f.Layer
-			d = Detail("work", work, "tmdb_id", f.Hit.TMDBID, "type", f.Hit.Type, "confidence", f.Confidence, "trigger", f.Trigger)
+			d = Detail("tmdb_id", f.Hit.TMDBID, "type", f.Hit.Type, "confidence", f.Confidence, "trigger", f.Trigger)
 		case f.Error != "":
 			outcome = "error"
 			d["error"] = f.Error

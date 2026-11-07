@@ -182,7 +182,8 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at ti
 
 // RequestProbe queues a probe at PriorityRequest, at the time, for each
 // stored release of the hashes, whatever its last probe and backoff, and
-// returns how many of them are stored; each is journaled as requested.
+// returns how many of them are stored; each is journaled as requested,
+// unless it was queued at PriorityRequest already and no lease began since.
 func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (int, error) {
 	if len(hashes) == 0 {
 		return 0, nil
@@ -194,6 +195,11 @@ func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (
 	}
 	var n int
 	err := s.tx(ctx, func(tx *sql.Tx) error {
+		waiting, err := hashesOf(tx.QueryContext(ctx, `SELECT infohash FROM task_queue WHERE kind = 'probe' AND priority = ?1 AND infohash IN (`+placeholders(len(hashes))+`)
+			AND (leased_at IS NULL OR queued_at > leased_at)`, append([]any{PriorityRequest}, args[2:]...)...))
+		if err != nil {
+			return err
+		}
 		queued, err := hashesOf(tx.QueryContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
 			SELECT 'probe', infohash, ?1, ?2 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
 			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0,
@@ -203,7 +209,7 @@ func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (
 			return err
 		}
 		n = len(queued)
-		return journalEach(ctx, tx, queued, n, at, JournalProbeWanted, "request", nil)
+		return journalEach(ctx, tx, slices.DeleteFunc(queued, func(h Hash) bool { return slices.Contains(waiting, h) }), n, at, JournalProbeWanted, "request", nil)
 	})
 	return n, err
 }
@@ -224,8 +230,8 @@ func (s *Store) ProbeLeases(ctx context.Context, now time.Time) (int, error) {
 // PrioritySample. Each is a movie or a series with peers and a stored file
 // of a format a probe reads. The first lease of each attempt, and the first
 // after a request or a search moved it ahead, is journaled with maxBytes,
-// the most piece data the probe may download; a lease after one expired or
-// was freed is not.
+// the most piece data the probe may download, and when the lease ends; a
+// lease after one expired or was freed is not.
 func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d time.Duration, background bool, maxBytes int64) (c ProbeCandidate, ok bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var leases int
@@ -234,7 +240,7 @@ func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d ti
 		if err != nil || leases != 1 {
 			return err
 		}
-		return journal(ctx, tx, c.Hash, now, JournalProbeLeased, probeLeaseOutcome(c), Detail("attempt", c.Attempts+1, "max_bytes", maxBytes))
+		return journal(ctx, tx, c.Hash, now, JournalProbeLeased, probeLeaseOutcome(c), Detail("attempt", c.Attempts+1, "max_bytes", maxBytes, "lease_until", now.Add(d)))
 	})
 	if err != nil {
 		return ProbeCandidate{}, false, err

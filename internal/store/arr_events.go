@@ -103,7 +103,7 @@ func (s *Store) RecordArr(ctx context.Context, e ArrEvent, now time.Time) (ArrRe
 				recorded = now
 			}
 			if err := journal(ctx, tx, *e.Hash, e.At, JournalArr, e.Event, Detail("app", e.App, "source", e.Source, "indexer", e.Indexer, "title", e.Title,
-				"size", e.Size, "season", e.Season, "episode", e.Episode, "work", r.Work, "recorded_at", recorded)); err != nil {
+				"size", e.Size, "season", e.Season, "episode", e.Episode, "recorded_at", recorded)); err != nil {
 				return err
 			}
 		}
@@ -156,7 +156,7 @@ func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at, now, even
 	if err := tx.QueryRowContext(ctx, "SELECT type, tmdb_id FROM tmdb_works WHERE id = ?", work).Scan(&typ, &tmdbID); err != nil {
 		return false, err
 	}
-	d := Detail("work", work, "tmdb_id", tmdbID, "type", typ, "trigger", TriggerArr, "event_at", eventAt)
+	d := Detail("tmdb_id", tmdbID, "type", typ, "trigger", TriggerArr, "event_at", eventAt)
 	own := d
 	if pending {
 		own = maps.Clone(d)

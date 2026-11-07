@@ -223,6 +223,11 @@ const (
 	Duplicate = "duplicate"
 )
 
+// alreadyQueued is the journal's outcome for a new item whose infohash was
+// queued already and which its listing moved nowhere; Record counts it as
+// Queued.
+const alreadyQueued = "already_queued"
+
 // Recorder records items in the store, queues the infohashes of their
 // torrents that are not stored, and counts them. It is safe for concurrent
 // use.
@@ -248,8 +253,9 @@ func (r *Recorder) now() time.Time {
 // Record records the item of the source and returns its outcome. The
 // infohash of a new item whose torrent is neither stored nor rejected is
 // queued under store.Feed. The outcome of a new item is journaled once
-// recorded, in a transaction of its own; a failure to journal it is logged,
-// not returned.
+// recorded, in a transaction of its own, as already_queued where its infohash
+// was queued already and stayed where it was; a failure to journal it is
+// logged, not returned.
 func (r *Recorder) Record(ctx context.Context, source string, it Item) (string, error) {
 	r.init()
 	now := r.now()
@@ -258,12 +264,16 @@ func (r *Recorder) Record(ctx context.Context, source string, it Item) (string, 
 	if err != nil {
 		return "", fmt.Errorf("record feed item: %w", err)
 	}
-	outcome, err := r.effect(ctx, rec, it.Hash)
+	outcome, unmoved, err := r.effect(ctx, rec, it.Hash)
 	if err != nil {
 		return "", err
 	}
 	if rec.New {
-		if err := r.Store.JournalFeed(ctx, it.Hash, now, outcome, store.Detail("source", source, "title", it.Title, "url", it.URL,
+		journaled := outcome
+		if unmoved {
+			journaled = alreadyQueued
+		}
+		if err := r.Store.JournalFeed(ctx, it.Hash, now, journaled, store.Detail("source", source, "title", it.Title, "url", it.URL,
 			"category", it.Category, "size", it.Size, "published_at", it.At)); err != nil {
 			r.Log.ErrorContext(ctx, "journal feed item", "source", source, "infohash", hex.EncodeToString(it.Hash[:]), "err", err)
 		}
@@ -272,24 +282,27 @@ func (r *Recorder) Record(ctx context.Context, source string, it Item) (string, 
 	return outcome, nil
 }
 
-func (r *Recorder) effect(ctx context.Context, rec store.FeedRecorded, h store.Hash) (string, error) {
+// effect queues the infohash of a new item and returns the item's outcome,
+// and whether the infohash was queued already and stayed where it was.
+func (r *Recorder) effect(ctx context.Context, rec store.FeedRecorded, h store.Hash) (outcome string, unmoved bool, err error) {
 	switch {
 	case !rec.New:
-		return Duplicate, nil
+		return Duplicate, false, nil
 	case rec.Stored:
-		return Stored, nil
+		return Stored, false, nil
 	}
 	_, rejected, err := r.Store.Known(ctx, []store.Hash{h}, r.now())
 	if err != nil {
-		return "", fmt.Errorf("known: %w", err)
+		return "", false, fmt.Errorf("known: %w", err)
 	}
 	if rejected[h] {
-		return Rejected, nil
+		return Rejected, false, nil
 	}
-	if _, _, err := r.Tasks.Enqueue(ctx, []store.Sighting{{Hash: h, Discovery: store.Feed}}, r.now()); err != nil {
-		return "", fmt.Errorf("enqueue: %w", err)
+	got, err := r.Tasks.Sight(ctx, store.Sighting{Hash: h, Discovery: store.Feed}, r.now())
+	if err != nil {
+		return "", false, fmt.Errorf("enqueue: %w", err)
 	}
-	return Queued, nil
+	return Queued, got == store.SightKnown, nil
 }
 
 func (r *Recorder) init() {

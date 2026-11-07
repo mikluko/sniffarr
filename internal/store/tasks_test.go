@@ -78,6 +78,28 @@ func TestEnqueue(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotQueued)
 }
 
+func TestSight(t *testing.T) {
+	ctx := context.Background()
+	q := openQueue(t)
+	sight := func(discovery string, b byte) Sighted {
+		t.Helper()
+		got, err := q.Sight(ctx, Sighting{Hash: hash(b), Discovery: discovery}, t0)
+		require.NoError(t, err)
+		return got
+	}
+	require.Equal(t, SightQueued, sight(Sample, 1))
+	require.Equal(t, SightKnown, sight(Sample, 1), "queued as it was")
+	require.Equal(t, SightPromoted, sight(Feed, 1), "moved ahead")
+	require.Equal(t, SightKnown, sight(Feed, 1))
+	require.Equal(t, SightKnown, sight(Sample, 1), "a sighting that serves later moves it nowhere")
+
+	dead := hash(2)
+	_, err := q.db.W.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (?, ?)", deadKey(dead[:]), t0.Add(time.Hour).UnixMilli())
+	require.NoError(t, err)
+	require.Equal(t, SightKnown, sight(Sample, 2), "a dead hash a sample sights stays out")
+	require.Equal(t, SightQueued, sight(Feed, 2), "a feed revives it")
+}
+
 func TestLeaseOrder(t *testing.T) {
 	q := openQueue(t)
 	enqueue(t, q, Sample, 1, 2)

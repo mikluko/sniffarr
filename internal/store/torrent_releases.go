@@ -213,7 +213,8 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 			copied = len(siblings)
 		}
 		var queuedAt sql.NullInt64
-		if err := ignoreNoRows(tx.QueryRowContext(ctx, "SELECT queued_at FROM task_queue WHERE kind = 'fetch' AND infohash = ?", t.Hash[:]).Scan(&queuedAt)); err != nil {
+		var leases int
+		if err := ignoreNoRows(tx.QueryRowContext(ctx, "SELECT queued_at, leases FROM task_queue WHERE kind = 'fetch' AND infohash = ?", t.Hash[:]).Scan(&queuedAt, &leases)); err != nil {
 			return err
 		}
 		var queued time.Time
@@ -221,7 +222,7 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 			queued = time.UnixMilli(queuedAt.Int64)
 		}
 		if err := journal(ctx, tx, t.Hash, t.SeenAt, JournalFetched, "stored", Detail("name", t.Name, "size", t.Size, "files", len(t.Files),
-			"discovery", t.Discovery, "queued_at", queued, "kind", t.Kind, "kind_layer", t.KindLayer, "copied", copied)); err != nil {
+			"discovery", t.Discovery, "queued_at", queued, "leases", manyLeases(leases), "kind", t.Kind, "kind_layer", t.KindLayer, "copied", copied)); err != nil {
 			return err
 		}
 		pending, err := applyPendingArr(ctx, tx, t.Hash, t.SeenAt)
@@ -239,19 +240,20 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 }
 
 // journalKeyMatch journals on the hash, at the time, the recorded match of
-// the title key, with key_matched_at the time the key was matched.
+// the title key as the earlier one the release took, with the layer that
+// decided it and key_matched_at, the time it was recorded.
 func journalKeyMatch(ctx context.Context, tx *sql.Tx, h Hash, key string, at time.Time) error {
-	var work, matchedAt int64
+	var matchedAt int64
 	var layer sql.NullString
 	var confidence sql.NullFloat64
 	var typ string
 	var tmdbID int
-	if err := tx.QueryRowContext(ctx, `SELECT m.work, m.layer, m.confidence, m.matched_at, w.type, w.tmdb_id FROM tmdb_matches m JOIN tmdb_works w ON w.id = m.work
-		WHERE m.title_key = ?`, key).Scan(&work, &layer, &confidence, &matchedAt, &typ, &tmdbID); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT m.layer, m.confidence, m.matched_at, w.type, w.tmdb_id FROM tmdb_matches m JOIN tmdb_works w ON w.id = m.work
+		WHERE m.title_key = ?`, key).Scan(&layer, &confidence, &matchedAt, &typ, &tmdbID); err != nil {
 		return err
 	}
-	return journal(ctx, tx, h, at, JournalMatched, layer.String, Detail("work", work, "tmdb_id", tmdbID, "type", typ, "confidence", confidence.Float64,
-		"key_matched_at", time.Unix(matchedAt, 0)))
+	return journal(ctx, tx, h, at, JournalMatched, MatchEarlier, Detail("tmdb_id", tmdbID, "type", typ, "confidence", confidence.Float64,
+		"layer", layer.String, "key_matched_at", time.Unix(matchedAt, 0)))
 }
 
 // reuseKind copies the kind to the stored torrents of the title key whose

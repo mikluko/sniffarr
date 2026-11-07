@@ -154,11 +154,11 @@ func discovery(priority int) string {
 func (q *Tasks) Enqueue(ctx context.Context, sightings []Sighting, now time.Time) (queued, known int, err error) {
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
 		for _, g := range sightings {
-			added, err := enqueueFetch(ctx, tx, g, now)
+			got, err := enqueueFetch(ctx, tx, g, now)
 			if err != nil {
 				return err
 			}
-			if added {
+			if got == SightQueued {
 				queued++
 			} else {
 				known++
@@ -169,49 +169,73 @@ func (q *Tasks) Enqueue(ctx context.Context, sightings []Sighting, now time.Time
 	return queued, known, err
 }
 
+// Sighted is what a sighting came to in the fetch queue.
+type Sighted int
+
+const (
+	// SightKnown is a hash the sighting moved nowhere: queued already, or
+	// dead and left so.
+	SightKnown Sighted = iota
+	// SightQueued is a hash the sighting queued, reviving it when dead.
+	SightQueued
+	// SightPromoted is a queued hash the sighting moved ahead.
+	SightPromoted
+)
+
+// Sight queues the fetch of the sighting as Enqueue does and returns what
+// came of it.
+func (q *Tasks) Sight(ctx context.Context, g Sighting, now time.Time) (Sighted, error) {
+	var got Sighted
+	err := q.db.Tx(ctx, func(tx *sql.Tx) (err error) {
+		got, err = enqueueFetch(ctx, tx, g, now)
+		return err
+	})
+	return got, err
+}
+
 // enqueueFetch queues the fetch of the sighting as Enqueue does, and reports
-// whether it queued it.
-func enqueueFetch(ctx context.Context, tx *sql.Tx, g Sighting, now time.Time) (bool, error) {
+// what came of it.
+func enqueueFetch(ctx context.Context, tx *sql.Tx, g Sighting, now time.Time) (Sighted, error) {
 	var dead bool
 	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM task_dead WHERE key = ? AND until > ?)", deadKey(g.Hash[:]), now.UnixMilli()).Scan(&dead); err != nil {
-		return false, err
+		return SightKnown, err
 	}
 	if dead {
 		if g.Discovery != Announce && g.Discovery != Arr && g.Discovery != Feed {
-			return false, nil
+			return SightKnown, nil
 		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM task_dead WHERE key = ?", deadKey(g.Hash[:])); err != nil {
-			return false, err
+			return SightKnown, err
 		}
 	}
 	p := priority(g.Discovery)
 	res, err := tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at) VALUES ('fetch', ?1, ?2, ?3) ON CONFLICT (kind, infohash) DO NOTHING",
 		g.Hash[:], p, now.UnixMilli())
 	if err != nil {
-		return false, err
+		return SightKnown, err
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return false, err
+		return SightKnown, err
 	}
 	if n > 0 {
 		if !journaled(p) {
-			return true, nil
+			return SightQueued, nil
 		}
 		outcome := "queued"
 		if dead {
 			outcome = "revived"
 		}
-		return true, journal(ctx, tx, g.Hash, now, JournalSighted, outcome, Detail("discovery", g.Discovery))
+		return SightQueued, journal(ctx, tx, g.Hash, now, JournalSighted, outcome, Detail("discovery", g.Discovery))
 	}
 	var old int
 	if err := tx.QueryRowContext(ctx, "SELECT priority FROM task_queue WHERE kind = 'fetch' AND infohash = ?", g.Hash[:]).Scan(&old); err != nil {
-		return false, err
+		return SightKnown, err
 	}
 	if p >= old {
-		return false, nil
+		return SightKnown, nil
 	}
-	return false, promote(ctx, tx, g, old, now)
+	return SightPromoted, promote(ctx, tx, g, old, now)
 }
 
 // promote moves the queued fetch of the sighting, at priority old, to its
@@ -220,7 +244,7 @@ func promote(ctx context.Context, tx *sql.Tx, g Sighting, old int, now time.Time
 	if _, err := tx.ExecContext(ctx, "UPDATE task_queue SET priority = ?, leases = 0 WHERE kind = 'fetch' AND infohash = ?", priority(g.Discovery), g.Hash[:]); err != nil {
 		return err
 	}
-	return journal(ctx, tx, g.Hash, now, JournalSighted, "promoted", Detail("discovery", g.Discovery, "from", discovery(old), "to", g.Discovery))
+	return journal(ctx, tx, g.Hash, now, JournalSighted, "promoted", Detail("from", discovery(old), "to", g.Discovery))
 }
 
 // Trimmed is what one Trim removed.
@@ -332,7 +356,7 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 			if l.task.Kind != TaskFetch || l.leases != 1 || !journaled(int(l.priority)) {
 				continue
 			}
-			if err := journal(ctx, tx, l.task.Hash, now, JournalLeased, "fetch", Detail("owner", owner, "attempt", l.attempts+1, "lease_until", until)); err != nil {
+			if err := journal(ctx, tx, l.task.Hash, now, JournalLeased, "fetch", Detail("attempt", l.attempts+1, "lease_until", until)); err != nil {
 				return err
 			}
 		}
@@ -437,7 +461,7 @@ func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 				return err
 			}
 			return journalEvicted(ctx, tx, rows, now, JournalFetchFailed, "dropped", func(e evicted) map[string]any {
-				return Detail("owner", owner, "attempt", attempts, "dead_until", time.UnixMilli(until), "leases", manyLeases(e.leases))
+				return Detail("attempt", attempts, "dead_until", time.UnixMilli(until), "leases", manyLeases(e.leases))
 			})
 		}
 		retry := now.Add(backoff << (attempts - 1))
@@ -448,7 +472,7 @@ func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 		if !journaled(p) {
 			return nil
 		}
-		return journal(ctx, tx, h, now, JournalFetchFailed, "timeout", Detail("owner", owner, "attempt", attempts, "retry_at", retry, "leases", manyLeases(leases)))
+		return journal(ctx, tx, h, now, JournalFetchFailed, "timeout", Detail("attempt", attempts, "retry_at", retry, "leases", manyLeases(leases)))
 	})
 	return dropped, err
 }
@@ -466,7 +490,7 @@ func (q *Tasks) NoPeers(ctx context.Context, h Hash, owner int64, now time.Time)
 		}
 		n = len(rows)
 		return journalEvicted(ctx, tx, rows, now, JournalFetchFailed, "no_peers", func(e evicted) map[string]any {
-			return Detail("owner", owner, "dead_until", time.UnixMilli(until), "leases", manyLeases(e.leases))
+			return Detail("dead_until", time.UnixMilli(until), "leases", manyLeases(e.leases))
 		})
 	})
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -136,8 +137,9 @@ func TestProbeTaskBudget(t *testing.T) {
 		"no peers and a timeout are told apart")
 	got, err := f.st.Journal(ctx, b, 10)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"attempt":1,"max_bytes":41943040}`, got[1].Detail, "a's lease, held while b is handed out, is not b's")
-	require.JSONEq(t, `{"attempt":2,"max_bytes":41943040}`, got[3].Detail, "nor what a's and c's probes downloaded today")
+	until := func(e store.JournalEntry) string { return strconv.FormatInt(e.At.Add(10*time.Minute).Unix(), 10) }
+	require.JSONEq(t, `{"attempt":1,"max_bytes":41943040,"lease_until":`+until(got[1])+`}`, got[1].Detail, "a's lease, held while b is handed out, is not b's")
+	require.JSONEq(t, `{"attempt":2,"max_bytes":41943040,"lease_until":`+until(got[3])+`}`, got[3].Detail, "nor what a's and c's probes downloaded today")
 }
 
 func TestProbeLeaseExpires(t *testing.T) {
