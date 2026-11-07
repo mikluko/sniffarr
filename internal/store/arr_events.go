@@ -63,8 +63,10 @@ type ArrRecorded struct {
 // it lacks; with an infohash too, it points the stored torrent of the hash
 // at the work, and matches the torrent's title key to the work under
 // LayerArr. Insert does the same for a torrent stored later. The event is
-// journaled on its infohash once, when it first has one; its entries are
-// written at now, with the event's own time as event_at.
+// journaled on its infohash once, when it first has one, at the event's own
+// time, with now as recorded_at when the two are more than a minute apart;
+// the matches it applies are journaled at now, with the event's time as
+// event_at.
 func (s *Store) RecordArr(ctx context.Context, e ArrEvent, now time.Time) (ArrRecorded, error) {
 	var r ArrRecorded
 	err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -96,8 +98,12 @@ func (s *Store) RecordArr(ctx context.Context, e ArrEvent, now time.Time) (ArrRe
 			return nil
 		}
 		if !hashed {
-			if err := journal(ctx, tx, *e.Hash, now, JournalArr, e.Event, Detail("app", e.App, "source", e.Source, "indexer", e.Indexer, "title", e.Title,
-				"size", e.Size, "season", e.Season, "episode", e.Episode, "work", r.Work, "event_at", e.At)); err != nil {
+			var recorded time.Time
+			if d := now.Sub(e.At); d > time.Minute || d < -time.Minute {
+				recorded = now
+			}
+			if err := journal(ctx, tx, *e.Hash, e.At, JournalArr, e.Event, Detail("app", e.App, "source", e.Source, "indexer", e.Indexer, "title", e.Title,
+				"size", e.Size, "season", e.Season, "episode", e.Episode, "work", r.Work, "recorded_at", recorded)); err != nil {
 				return err
 			}
 		}

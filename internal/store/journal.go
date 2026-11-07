@@ -77,7 +77,8 @@ const journalWantedFor = 24 * time.Hour
 // JournalEntry is one event of a torrent's life.
 type JournalEntry struct {
 	Hash Hash
-	// At is when the store recorded the event.
+	// At is when the store recorded the event; for a grab or an import
+	// Radarr or Sonarr reports, when it happened.
 	At      time.Time
 	Kind    string
 	Outcome string
@@ -208,8 +209,11 @@ func wantedSince(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) (bool, e
 	return recent, err
 }
 
+// journalQuery selects, given a hash and a limit, the hash's newest entries.
+const journalQuery = "SELECT at, kind, outcome, detail FROM torrent_journal WHERE infohash = ? ORDER BY at DESC, id DESC LIMIT ?"
+
 // Journal returns the newest entries of the hash, up to limit, oldest
-// first.
+// first, in the order of their times and, at one time, of their writing.
 func (s *Store) Journal(ctx context.Context, h Hash, limit int) ([]JournalEntry, error) {
 	var out []JournalEntry
 	err := s.each(ctx, func(rows *sql.Rows) error {
@@ -222,7 +226,7 @@ func (s *Store) Journal(ctx context.Context, h Hash, limit int) ([]JournalEntry,
 		e.At, e.Detail = time.Unix(at, 0).UTC(), d.String
 		out = append(out, e)
 		return nil
-	}, "SELECT at, kind, outcome, detail FROM torrent_journal WHERE infohash = ? ORDER BY id DESC LIMIT ?", h[:], limit)
+	}, journalQuery, h[:], limit)
 	slices.Reverse(out)
 	return out, err
 }

@@ -81,7 +81,9 @@ API deletes, in small batches, the torrents nobody has sighted within the
 retention period, or within the idle retention period for those matched to no
 TMDB work, with their peer sketches; a later sighting queues them again.
 Then, in batches of its own, it deletes the journal entries older than the
-journal retention period; with a journal retention shorter than the
+journal retention period, counted from each entry's time, so the entry of a
+grab or an import Radarr or Sonarr reports later than that after it
+happened goes at the next sweep; with a journal retention shorter than the
 torrents', as by default, a torrent's trail has lost its beginning by the
 time the torrent is deleted, and only its end remains. Once an hour it
 unions the hour sketches older than 8 days into day sketches and deletes the

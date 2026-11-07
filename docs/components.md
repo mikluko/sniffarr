@@ -63,9 +63,12 @@ copied to more than 50 releases of a title key, a match of more than 500, or
 no match for a key of more than 50, is journaled on none of them. The journal
 is keyed by infohash and outlives the torrent's row, so a rejected, dropped
 or deleted infohash keeps its trail; the release card shows the newest 200
-entries, and entries are kept for `SNIFFARR_RETENTION_JOURNAL`. An entry's
-time is when it was recorded; the entries of a grab or an import Radarr or
-Sonarr reports carry the time it happened as `event_at`.
+entries, and entries are kept for `SNIFFARR_RETENTION_JOURNAL`. Entries
+read in the order of their times. An entry's time is when it was recorded,
+except for a grab or an import Radarr or Sonarr reports: its entry is at the
+time the event happened, with the time it was recorded as `recorded_at` when
+that is more than a minute apart, and the matches it applies carry the time
+it happened as `event_at`.
 
 The server passes fetched metadata through a first filter by name and file
 extensions, rejecting what is never worth classifying: adult content,

@@ -55,15 +55,19 @@ func TestJournalOrderAndLimit(t *testing.T) {
 				return err
 			}
 		}
+		if err := journal(ctx, tx, hash(1), t0.Add(-time.Hour), JournalArr, EventGrab, nil); err != nil {
+			return err
+		}
 		return journal(ctx, tx, hash(2), t0, JournalFetched, "duplicate", nil)
 	}))
 	got, err := s.Journal(ctx, hash(1), 10)
 	require.NoError(t, err)
 	require.Equal(t, []JournalEntry{
+		{Hash: hash(1), At: t0.Add(-time.Hour), Kind: JournalArr, Outcome: EventGrab},
 		{Hash: hash(1), At: t0, Kind: JournalSighted, Outcome: "queued", Detail: `{"discovery":"announce"}`},
 		{Hash: hash(1), At: t0.Add(time.Second), Kind: JournalSighted, Outcome: "promoted", Detail: `{"discovery":"announce"}`},
 		{Hash: hash(1), At: t0.Add(2 * time.Second), Kind: JournalSighted, Outcome: "revived", Detail: `{"discovery":"announce"}`},
-	}, got, "oldest first, zero values left out of the detail")
+	}, got, "in time order, an entry written later of an earlier time first; zero values left out of the detail")
 	got, err = s.Journal(ctx, hash(1), 2)
 	require.NoError(t, err)
 	require.Equal(t, []string{"promoted", "revived"}, []string{got[0].Outcome, got[1].Outcome}, "the newest ones within the limit")
@@ -171,7 +175,7 @@ func TestJournalPlans(t *testing.T) {
 	s := open(t)
 	for query, want := range map[string]string{
 		journalSweep: "INDEX torrent_journal_at (at<?)",
-		"SELECT at, kind, outcome, detail FROM torrent_journal WHERE infohash = ? ORDER BY id DESC LIMIT ?": "INDEX torrent_journal_infohash (infohash=?)",
+		journalQuery: "INDEX torrent_journal_infohash (infohash=?)",
 	} {
 		var plan []string
 		require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
@@ -436,8 +440,8 @@ func TestJournalArr(t *testing.T) {
 	require.True(t, rec.New)
 	w := strconv.FormatInt(rec.Work, 10)
 	got := entry(t, s, hash(1), JournalArr, EventGrab)
-	require.JSONEq(t, `{"app":"radarr","source":"history","indexer":"tracker","title":"Alien.1979.1080p.BluRay","size":1073741824,"work":`+w+`,"event_at":`+unix(grabbed)+`}`, got.Detail)
-	require.Equal(t, now, got.At, "recorded now, whenever the grab was")
+	require.JSONEq(t, `{"app":"radarr","source":"history","indexer":"tracker","title":"Alien.1979.1080p.BluRay","size":1073741824,"work":`+w+`,"recorded_at":`+unix(now)+`}`, got.Detail)
+	require.Equal(t, grabbed, got.At, "at the time of the grab, with the time it was recorded")
 	matched := `{"work":` + w + `,"tmdb_id":348,"type":"movie","trigger":"arr","event_at":` + unix(grabbed) + `}`
 	for _, h := range []Hash{hash(1), hash(2)} {
 		got := entry(t, s, h, JournalMatched, LayerArr)
@@ -446,10 +450,11 @@ func TestJournalArr(t *testing.T) {
 	}
 	_, err = s.RecordArr(ctx, e, now.Add(time.Minute))
 	require.NoError(t, err)
-	require.Equal(t, []string{"fetched/stored", "arr/grab", "matched/arr"}, entries(t, s, hash(1)), "a duplicate event writes nothing")
+	require.Equal(t, []string{"arr/grab", "fetched/stored", "matched/arr"}, entries(t, s, hash(1)), "in time order; a duplicate event writes nothing")
 	swept, err := s.SweepJournal(ctx, now.Add(-30*24*time.Hour), 100)
 	require.NoError(t, err)
-	require.Zero(t, swept, "a grab older than the retention is not swept once recorded")
+	require.Equal(t, 1, swept, "a grab older than the retention is swept on the next sweep")
+	require.Equal(t, []string{"fetched/stored", "matched/arr"}, entries(t, s, hash(1)))
 
 	later := now.Add(time.Hour)
 	pending := grab(3, "def", grabbed)
@@ -489,8 +494,8 @@ func TestJournalArr(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"arr/grab"}, entries(t, s, hash(8)), "journaled once the event has its hash, and once")
 	got = entry(t, s, hash(8), JournalArr, EventGrab)
-	require.Equal(t, t0.Add(2*time.Minute), got.At)
-	require.Contains(t, got.Detail, `"event_at":`+unix(t0.Add(time.Minute)))
+	require.Equal(t, t0.Add(time.Minute), got.At)
+	require.NotContains(t, got.Detail, "recorded_at", "recorded within a minute of the event")
 }
 
 func TestJournalProbes(t *testing.T) {
