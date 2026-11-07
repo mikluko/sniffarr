@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -242,25 +243,56 @@ func TestStatic(t *testing.T) {
 	}
 }
 
-func TestJournalPairs(t *testing.T) {
-	e := JournalEntry{Detail: map[string]any{"retry_at": 1762500000.0, "attempt": 2.0, "confidence": 0.93, "final": true,
-		"tracks": []any{"video::hevc", "audio:rus:eac3"}, "audio": map[string]any{"ru": 0.88, "en": 0.0}, "name": "x"}}
-	got := e.Pairs()
-	want := []DetailPair{
-		{Key: "attempt", Value: "2"},
-		{Key: "audio", Value: "en 0, ru 0.88"},
-		{Key: "confidence", Value: "0.93"},
-		{Key: "final", Value: "true"},
-		{Key: "name", Value: "x"},
-		{Key: "retry_at", Time: time.Unix(1762500000, 0)},
-		{Key: "tracks", Value: "video::hevc, audio:rus:eac3"},
+func TestJournalDetail(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(got) != len(want) {
-		t.Fatalf("pairs = %v, want %v", got, want)
+	loc := time.FixedZone("CEST", 2*3600)
+	base := func(lang string) Base {
+		return r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", nil, loc)
 	}
-	for i := range want {
-		if got[i].Key != want[i].Key || got[i].Value != want[i].Value || !got[i].Time.Equal(want[i].Time) {
-			t.Errorf("pair %d = %+v, want %+v", i, got[i], want[i])
+	var missing []string
+	onMissing = func(lang, key string) { missing = append(missing, lang+":"+key) }
+	defer func() { onMissing = nil }()
+
+	for _, c := range []struct {
+		name, lang string
+		e          JournalEntry
+		want       []DetailPair
+	}{
+		{"probed", "en", JournalEntry{Kind: "probed", Detail: map[string]any{"retry_at": 1762500000.0, "attempt": 2.0, "final": true, "downloaded": 4194304.0,
+			"tracks": []any{"video::hevc", "audio:rus:eac3"}, "audio": map[string]any{"ru": 0.88, "en": 0.0}, "path": "a.mkv", "novel": "x"}},
+			[]DetailPair{
+				{"attempt", "2"},
+				{"audio", "en 0, ru 0.88"},
+				{"downloaded", "4.0\u00a0MB"},
+				{"attempts ran out", "yes"},
+				{"novel", "x"},
+				{"file", "a.mkv"},
+				{"next try", "2025-11-07 09:20"},
+				{"tracks", "video::hevc, audio:rus:eac3"},
+			}},
+		{"probed in Russian", "ru", JournalEntry{Kind: "probed", Detail: map[string]any{"final": false, "downloaded": 4194304.0, "audio": map[string]any{"ru": 0.88}}},
+			[]DetailPair{{"звук", "ru 0,88"}, {"скачано", "4,0\u00a0МБ"}, {"попытки исчерпаны", "нет"}}},
+		{"stored", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"kind": "movie", "kind_layer": "reuse", "discovery": "announce", "size": 26629001216.0}},
+			[]DetailPair{{"discovered by", "announce"}, {"kind", "movie"}, {"kind decided by", "title repeat"}, {"size", "24.8\u00a0GB"}}},
+		{"an unknown value", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"kind": "opera", "reason": "nomedia"}},
+			[]DetailPair{{"kind", "opera"}, {"reason", "no video or audio files"}}},
+		{"classified", "ru", JournalEntry{Kind: "classified", Detail: map[string]any{"source": "web", "source_confidence": 0.8, "trigger": "search"}},
+			[]DetailPair{{"источник", "web"}, {"уверенность в источнике", "0,8"}, {"кто запросил", "поиск"}}},
+		{"arr", "en", JournalEntry{Kind: "arr", Detail: map[string]any{"app": "sonarr", "source": "history", "recorded_at": 1762500000.0}},
+			[]DetailPair{{"app", "Sonarr"}, {"recorded", "2025-11-07 09:20"}, {"came by", "history import"}}},
+		{"feed", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker"}}, []DetailPair{{"feed", "rutracker"}}},
+		{"promoted", "ru", JournalEntry{Kind: "sighted", Detail: map[string]any{"from": "sample", "to": "feed"}}, []DetailPair{{"откуда", "sample"}, {"куда", "фид"}}},
+		{"reuse", "en", JournalEntry{Kind: "classified", Detail: map[string]any{"from": "3c1e"}}, []DetailPair{{"kind taken from", "3c1e"}}},
+	} {
+		got := base(c.lang).JournalDetail(c.e)
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("untranslated keys: %v", missing)
 	}
 }

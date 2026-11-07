@@ -309,27 +309,93 @@ type JournalEntry struct {
 	Detail map[string]any
 }
 
-// DetailPair is one particular of an entry: Time is set for a key that
-// names a moment, else Value is its text.
+// DetailPair is one particular of an entry as the card writes it.
 type DetailPair struct {
 	Key   string
 	Value string
-	Time  time.Time
 }
 
-// Pairs returns the entry's particulars by key.
-func (e JournalEntry) Pairs() []DetailPair {
+// journalValues maps a detail key, or an entry's kind and a key joined by
+// ".", to the i18n prefix of the key's values; the kind's mapping wins.
+var journalValues = map[string]string{
+	"kind":              "kind.",
+	"kind_layer":        "journal.layer.",
+	"trigger":           "journal.trigger.",
+	"discovery":         "via.",
+	"reason":            "journal.reason.",
+	"type":              "journal.type.",
+	"sighted.from":      "via.",
+	"sighted.to":        "via.",
+	"classified.source": "source.",
+	"arr.source":        "journal.arrsource.",
+	"arr.app":           "journal.app.",
+}
+
+// JournalDetail returns the entry's particulars in the order of their keys:
+// a key by "journal.key.<kind>.<key>" or else "journal.key.<key>"; a moment
+// by TimeFull, a size by Size, a boolean by "journal.bool.<value>", and a
+// value journalValues maps by its message. A key or a string value without
+// a message is written as it is.
+func (b Base) JournalDetail(e JournalEntry) []DetailPair {
 	out := make([]DetailPair, 0, len(e.Detail))
 	for _, k := range slices.Sorted(maps.Keys(e.Detail)) {
-		p := DetailPair{Key: k}
-		if sec, ok := e.Detail[k].(float64); ok && detailTime(k) {
-			p.Time = time.Unix(int64(sec), 0)
-		} else {
-			p.Value = detailString(e.Detail[k])
-		}
-		out = append(out, p)
+		out = append(out, DetailPair{Key: b.journalKey(e.Kind, k), Value: b.journalValue(e.Kind, k, e.Detail[k])})
 	}
 	return out
+}
+
+// journalKey is the label of the detail key of an entry of the kind.
+func (b Base) journalKey(kind, key string) string {
+	for _, m := range []string{"journal.key." + kind + "." + key, "journal.key." + key} {
+		if b.has(m) {
+			return b.T(m)
+		}
+	}
+	return key
+}
+
+// journalValue formats the decoded JSON value of the key of an entry of the
+// kind, as JournalDetail does; a list by commas, an object as "key value"
+// by commas, a number with the locale's decimal mark.
+func (b Base) journalValue(kind, key string, v any) string {
+	switch x := v.(type) {
+	case string:
+		prefix, ok := journalValues[kind+"."+key]
+		if !ok {
+			prefix, ok = journalValues[key]
+		}
+		if ok && b.has(prefix+x) {
+			return b.T(prefix + x)
+		}
+		return x
+	case float64:
+		switch {
+		case detailTime(key):
+			return b.TimeFull(time.Unix(int64(x), 0))
+		case detailSize(key):
+			return b.Size(int64(x))
+		case x == math.Trunc(x) && math.Abs(x) < 1<<53:
+			return strconv.FormatInt(int64(x), 10)
+		}
+		return b.dec(x, -1)
+	case bool:
+		return b.T("journal.bool." + strconv.FormatBool(x))
+	case []any:
+		parts := make([]string, len(x))
+		for i, e := range x {
+			parts[i] = b.journalValue(kind, key, e)
+		}
+		return strings.Join(parts, ", ")
+	case map[string]any:
+		parts := make([]string, 0, len(x))
+		for _, k := range slices.Sorted(maps.Keys(x)) {
+			parts = append(parts, k+" "+b.journalValue(kind, k, x[k]))
+		}
+		return strings.Join(parts, ", ")
+	case nil:
+		return ""
+	}
+	return fmt.Sprint(v)
 }
 
 // detailTime reports whether the store writes the key as a moment.
@@ -337,35 +403,9 @@ func detailTime(key string) bool {
 	return strings.HasSuffix(key, "_at") || strings.HasSuffix(key, "_until") || key == "last_seen"
 }
 
-// detailString formats a decoded JSON value: a whole number without a
-// fraction, a list by commas, an object as "key value" by commas.
-func detailString(v any) string {
-	switch x := v.(type) {
-	case string:
-		return x
-	case float64:
-		if x == math.Trunc(x) && math.Abs(x) < 1<<53 {
-			return strconv.FormatInt(int64(x), 10)
-		}
-		return strconv.FormatFloat(x, 'f', -1, 64)
-	case bool:
-		return strconv.FormatBool(x)
-	case []any:
-		parts := make([]string, len(x))
-		for i, e := range x {
-			parts[i] = detailString(e)
-		}
-		return strings.Join(parts, ", ")
-	case map[string]any:
-		parts := make([]string, 0, len(x))
-		for _, k := range slices.Sorted(maps.Keys(x)) {
-			parts = append(parts, k+" "+detailString(x[k]))
-		}
-		return strings.Join(parts, ", ")
-	case nil:
-		return ""
-	}
-	return fmt.Sprint(v)
+// detailSize reports whether the store writes the key as bytes.
+func detailSize(key string) bool {
+	return key == "size" || key == "downloaded" || key == "max_bytes"
 }
 
 type FileList struct {
