@@ -101,14 +101,17 @@ func (s *Service) ProbeTask(ctx context.Context, _ *connect.Request[sniffarrv1.P
 }
 
 // probeLeaseOutcome is the journal outcome of a probe task of the
-// candidate: search for a release a search returned, retry for one probed
-// before, background for the rest.
+// candidate: retry for a release whose probe failed before, request for
+// one asked for, search for one a search returned, background for the
+// rest.
 func probeLeaseOutcome(c store.ProbeCandidate) string {
 	switch {
-	case c.Wanted:
-		return "search"
 	case c.Attempts > 0:
 		return "retry"
+	case c.Priority <= store.PriorityRequest:
+		return "request"
+	case c.Wanted:
+		return "search"
 	}
 	return "background"
 }

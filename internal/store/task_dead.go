@@ -49,8 +49,8 @@ func evictionAttr(why string) metric.AddOption {
 	return metric.WithAttributes(attribute.String("sniffarr.queue.eviction", why))
 }
 
-// evicted is a queued hash evict moved into the dead set, with its queue
-// row's priority and queued_at.
+// evicted is a queued hash that evict moved into the dead set, with the
+// priority and queued_at of its queue row.
 type evicted struct {
 	hash     Hash
 	priority int

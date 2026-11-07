@@ -281,7 +281,10 @@ func (b *Browser) Journal(ctx context.Context, req *connect.Request[sniffarrv1.J
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("infohash of %d bytes, want 20", len(h)))
 	}
 	limit := int(req.Msg.GetLimit())
-	if limit <= 0 {
+	if limit < 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("limit %d", limit))
+	}
+	if limit == 0 {
 		limit = DefaultJournalLimit
 	}
 	entries, err := b.journal(ctx, store.Hash(h), min(limit, MaxJournalLimit))

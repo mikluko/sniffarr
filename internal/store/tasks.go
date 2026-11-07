@@ -183,9 +183,6 @@ func enqueueFetch(ctx context.Context, tx *sql.Tx, g Sighting, now time.Time) (b
 		if _, err := tx.ExecContext(ctx, "DELETE FROM task_dead WHERE key = ?", deadKey(g.Hash[:])); err != nil {
 			return false, err
 		}
-		if err := journal(ctx, tx, g.Hash, now, JournalSighted, "revived", Detail("discovery", g.Discovery)); err != nil {
-			return false, err
-		}
 	}
 	p := priority(g.Discovery)
 	res, err := tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at) VALUES ('fetch', ?1, ?2, ?3) ON CONFLICT (kind, infohash) DO NOTHING",
@@ -201,7 +198,11 @@ func enqueueFetch(ctx context.Context, tx *sql.Tx, g Sighting, now time.Time) (b
 		if !journaled(p) {
 			return true, nil
 		}
-		return true, journal(ctx, tx, g.Hash, now, JournalSighted, "queued", Detail("discovery", g.Discovery))
+		outcome := "queued"
+		if dead {
+			outcome = "revived"
+		}
+		return true, journal(ctx, tx, g.Hash, now, JournalSighted, outcome, Detail("discovery", g.Discovery))
 	}
 	var old int
 	if err := tx.QueryRowContext(ctx, "SELECT priority FROM task_queue WHERE kind = 'fetch' AND infohash = ?", g.Hash[:]).Scan(&old); err != nil {
@@ -293,12 +294,14 @@ func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 // Lease frees the expired leases of fetches and peer lookups, then leases up
 // to n of them that are free to owner until now+d. It returns the leased
 // tasks in the queue's order, and how many leases expired. A task is free
-// when it has no lease and its retry backoff has passed.
+// when it has no lease and its retry backoff has passed. A fetch is
+// journaled on the first lease of each attempt, not on one after a lease
+// expired or was released.
 func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d time.Duration) (tasks []Task, expired int, err error) {
 	type leased struct {
-		task         Task
-		priority, id int64
-		attempts     int
+		task             Task
+		priority, id     int64
+		attempts, leases int
 	}
 	var out []leased
 	err = q.db.Tx(ctx, func(tx *sql.Tx) error {
@@ -306,7 +309,7 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 			return err
 		}
 		until := now.Add(d)
-		rows, err := tx.QueryContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ? WHERE id IN ("+leaseIDs+") RETURNING kind, infohash, priority, id, attempts",
+		rows, err := tx.QueryContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ?, leases = leases + 1 WHERE id IN ("+leaseIDs+") RETURNING kind, infohash, priority, id, attempts, leases",
 			owner, until.UnixMilli(), now.UnixMilli(), now.UnixMilli(), n)
 		if err != nil {
 			return err
@@ -315,7 +318,7 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 		for rows.Next() {
 			var l leased
 			var b []byte
-			if err := rows.Scan(&l.task.Kind, &b, &l.priority, &l.id, &l.attempts); err != nil {
+			if err := rows.Scan(&l.task.Kind, &b, &l.priority, &l.id, &l.attempts, &l.leases); err != nil {
 				return err
 			}
 			l.task.Hash = Hash(b)
@@ -325,7 +328,7 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 			return err
 		}
 		for _, l := range out {
-			if l.task.Kind != TaskFetch || !journaled(int(l.priority)) {
+			if l.task.Kind != TaskFetch || l.leases != 1 || !journaled(int(l.priority)) {
 				continue
 			}
 			if err := journal(ctx, tx, l.task.Hash, now, JournalLeased, "fetch", Detail("owner", owner, "attempt", l.attempts+1, "lease_until", until)); err != nil {
@@ -437,7 +440,7 @@ func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 			})
 		}
 		retry := now.Add(backoff << (attempts - 1))
-		if _, err := tx.ExecContext(ctx, "UPDATE task_queue SET attempts = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE kind = 'fetch' AND infohash = ?",
+		if _, err := tx.ExecContext(ctx, "UPDATE task_queue SET attempts = ?, not_before = ?, lease_owner = NULL, lease_until = NULL, leases = 0 WHERE kind = 'fetch' AND infohash = ?",
 			attempts, retry.UnixMilli(), h[:]); err != nil {
 			return err
 		}

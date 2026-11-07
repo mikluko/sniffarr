@@ -135,6 +135,14 @@ func TestJournalFetched(t *testing.T) {
 	_, _, err = s.Insert(ctx, torrent(2, "xxx"))
 	require.NoError(t, err)
 	require.Equal(t, []string{"fetched/rejected"}, entries(t, s, hash(2)), "a second rejection and a store of a rejected hash write nothing")
+
+	_, _, err = s.Insert(ctx, titled(3, "Heat.1995.1080p", "y:heat 1995"))
+	require.NoError(t, err)
+	work := matchTo(t, s, "y:heat 1995", TypeMovie, 949, "Heat")
+	_, _, err = s.Insert(ctx, titled(4, "Heat.1995.2160p", "y:heat 1995"))
+	require.NoError(t, err)
+	require.JSONEq(t, `{"name":"Heat.1995.2160p","size":1073741824,"discovery":"sample","kind":"movie","kind_layer":"rules","work":`+strconv.FormatInt(work, 10)+`}`,
+		entry(t, s, hash(4), JournalFetched, "stored").Detail, "the work its title key is matched to")
 }
 
 func TestJournalQueue(t *testing.T) {
@@ -152,8 +160,11 @@ func TestJournalQueue(t *testing.T) {
 	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, owner, 2, t0))
 	require.JSONEq(t, `{"owner":7,"attempt":1,"lease_until":`+unix(t0.Add(time.Minute))+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail)
 	require.Empty(t, entries(t, s, hash(2)), "nor its lease")
+	first := t0.Add(time.Minute)
+	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, owner, 2, first), "the leases expired")
+	require.Equal(t, []string{"sighted/queued", "leased/fetch"}, entries(t, s, hash(1)), "a lease of the same attempt again is not journaled")
 
-	at := t0
+	at := first
 	for attempt := 1; attempt <= 3; attempt++ {
 		dropped, err := q.Fail(ctx, hash(1), owner, at, 3, 10*time.Minute)
 		require.NoError(t, err)
@@ -169,8 +180,8 @@ func TestJournalQueue(t *testing.T) {
 		entries(t, s, hash(1)))
 	got, err := s.Journal(ctx, hash(1), 10)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"owner":7,"attempt":1,"retry_at":`+unix(t0.Add(10*time.Minute))+`}`, got[2].Detail)
-	require.JSONEq(t, `{"owner":7,"attempt":2,"lease_until":`+unix(t0.Add(11*time.Minute))+`}`, got[3].Detail, "the attempt number carries over the retry")
+	require.JSONEq(t, `{"owner":7,"attempt":1,"retry_at":`+unix(first.Add(10*time.Minute))+`}`, got[2].Detail)
+	require.JSONEq(t, `{"owner":7,"attempt":2,"lease_until":`+unix(first.Add(11*time.Minute))+`}`, got[3].Detail, "the attempt number carries over the retry")
 	require.JSONEq(t, `{"owner":7,"attempt":3,"dead_until":`+unix(at.Add(24*time.Hour))+`}`, got[6].Detail)
 	require.Empty(t, entries(t, s, hash(2)), "nor its failures")
 
@@ -180,7 +191,7 @@ func TestJournalQueue(t *testing.T) {
 	require.JSONEq(t, `{"owner":7,"dead_until":`+unix(at.Add(time.Hour))+`}`, entry(t, s, hash(3), JournalFetchFailed, "no_peers").Detail)
 	enqueueAt(t, q, at, Announce, 3)
 	require.JSONEq(t, `{"discovery":"announce"}`, entry(t, s, hash(3), JournalSighted, "revived").Detail)
-	require.Equal(t, []string{"sighted/queued", "leased/fetch", "fetch_failed/no_peers", "sighted/revived", "sighted/queued"}, entries(t, s, hash(3)))
+	require.Equal(t, []string{"sighted/queued", "leased/fetch", "fetch_failed/no_peers", "sighted/revived"}, entries(t, s, hash(3)), "a revival is not queued too")
 
 	enqueueAt(t, q, at, Sample, 4)
 	enqueueAt(t, q, at, Feed, 4)
@@ -273,8 +284,16 @@ func TestJournalMatched(t *testing.T) {
 	_, _, err = s.RecordMatch(ctx, "y:heat 1995", Found{Error: "tmdb: 401"}, t0.Add(time.Hour))
 	require.NoError(t, err)
 	require.JSONEq(t, `{"error":"tmdb: 401"}`, entry(t, s, hash(3), JournalMatched, "error").Detail)
+	_, _, err = s.RecordMatch(ctx, "y:heat 1995", Found{Error: "tmdb: 503"}, t0.Add(2*time.Hour))
+	require.NoError(t, err)
+	_, _, err = s.RecordMatch(ctx, "y:heat 1995", Found{Trigger: TriggerWorker}, t0.Add(3*time.Hour))
+	require.NoError(t, err)
+	_, _, err = s.RecordMatch(ctx, "y:heat 1995", Found{Trigger: TriggerWorker}, t0.Add(4*time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, []string{"fetched/stored", "matched/none", "matched/error", "matched/none"}, entries(t, s, hash(3)),
+		"no match, or an error, again is not journaled; a change between them is")
 
-	for i := 10; i < 10+journalReuse+1; i++ {
+	for i := 10; i < 10+journalNoMatch+1; i++ {
 		_, _, err := s.Insert(ctx, titled(byte(i), "Ronin.1998."+strconv.Itoa(i), "y:ronin 1998"))
 		require.NoError(t, err)
 	}
@@ -298,8 +317,8 @@ func TestJournalArr(t *testing.T) {
 	w := strconv.FormatInt(rec.Work, 10)
 	require.JSONEq(t, `{"app":"radarr","source":"webhook","indexer":"tracker","title":"Alien.1979.1080p.BluRay","size":1073741824,"work":`+w+`}`,
 		entry(t, s, hash(1), JournalArr, EventGrab).Detail)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie"}`, entry(t, s, hash(1), JournalMatched, LayerArr).Detail)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie"}`, entry(t, s, hash(2), JournalMatched, LayerArr).Detail, "the key's other release follows")
+	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr"}`, entry(t, s, hash(1), JournalMatched, LayerArr).Detail)
+	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr"}`, entry(t, s, hash(2), JournalMatched, LayerArr).Detail, "the key's other release follows")
 	_, err = s.RecordArr(ctx, e)
 	require.NoError(t, err)
 	require.Equal(t, []string{"fetched/stored", "arr/grab", "matched/arr"}, entries(t, s, hash(1)), "a duplicate event writes nothing")
@@ -311,8 +330,32 @@ func TestJournalArr(t *testing.T) {
 	require.Equal(t, []string{"arr/grab"}, entries(t, s, hash(3)), "the torrent is not stored yet")
 	_, _, err = s.Insert(ctx, titled(3, "Alien.1979.720p", "y:alien 1979"))
 	require.NoError(t, err)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","pending":true}`, entry(t, s, hash(3), JournalMatched, LayerArr).Detail)
+	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr","pending":true}`, entry(t, s, hash(3), JournalMatched, LayerArr).Detail)
 	require.Equal(t, []string{"arr/grab", "fetched/stored", "matched/arr"}, entries(t, s, hash(3)))
+
+	for _, x := range []Torrent{titled(5, "Aliens.1986.1080p", "y:aliens 1986"), titled(6, "Aliens.1986.720p", "y:aliens 1986")} {
+		_, _, err := s.Insert(ctx, x)
+		require.NoError(t, err)
+	}
+	_, err = s.RecordArr(ctx, grab(7, "ghi", t0))
+	require.NoError(t, err)
+	_, _, err = s.Insert(ctx, titled(7, "Aliens.1986.2160p", "y:aliens 1986"))
+	require.NoError(t, err)
+	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr","pending":true}`, entry(t, s, hash(7), JournalMatched, LayerArr).Detail)
+	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr"}`, entry(t, s, hash(5), JournalMatched, LayerArr).Detail, "the sibling's row is not pending")
+
+	hashless := grab(8, "jkl", t0)
+	hashless.Hash = nil
+	rec, err = s.RecordArr(ctx, hashless)
+	require.NoError(t, err)
+	require.True(t, rec.New)
+	rec, err = s.RecordArr(ctx, grab(8, "jkl", t0.Add(time.Minute)))
+	require.NoError(t, err)
+	require.False(t, rec.New)
+	_, err = s.RecordArr(ctx, grab(8, "jkl", t0.Add(2*time.Minute)))
+	require.NoError(t, err)
+	require.Equal(t, []string{"arr/grab"}, entries(t, s, hash(8)), "journaled once the event has its hash, and once")
+	require.Equal(t, t0.Add(time.Minute), entry(t, s, hash(8), JournalArr, EventGrab).At)
 }
 
 func TestJournalProbes(t *testing.T) {
@@ -345,6 +388,17 @@ func TestJournalProbes(t *testing.T) {
 	require.JSONEq(t, `{"attempt":3,"max_bytes":67108864,"reserved":134217728}`, entry(t, s, h, JournalProbeLeased, "retry").Detail)
 	require.NoError(t, s.JournalFeed(ctx, h, t0, "queued", Detail("source", "rutracker", "title", "Alien", "published_at", t0)))
 	require.JSONEq(t, `{"source":"rutracker","title":"Alien","published_at":`+unix(t0)+`}`, entry(t, s, h, JournalFeed, "queued").Detail)
+
+	require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0.Add(23*time.Hour)))
+	require.Len(t, entries(t, s, h), 8, "wanted again within a day is not journaled")
+	require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0.Add(25*time.Hour)))
+	got, err := s.Journal(ctx, h, 1)
+	require.NoError(t, err)
+	require.Equal(t, "probe_wanted/search", got[0].Kind+"/"+got[0].Outcome, "a day after the last it is")
+	n, err := s.RequestProbe(ctx, []Hash{h, hash(9)}, t0.Add(26*time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, JournalEntry{Hash: h, At: t0.Add(26 * time.Hour), Kind: JournalProbeWanted, Outcome: "request"}, entry(t, s, h, JournalProbeWanted, "request"))
 }
 
 func TestJournalDeleted(t *testing.T) {

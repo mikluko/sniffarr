@@ -35,10 +35,10 @@ const (
 	// JournalFeed is a listing in a tracker feed: stored, queued, rejected,
 	// duplicate.
 	JournalFeed = "feed"
-	// JournalProbeWanted is a search that returned the release: search.
+	// JournalProbeWanted is a probe asked for: search, request.
 	JournalProbeWanted = "probe_wanted"
-	// JournalProbeLeased is a probe task handed to a fetcher: search,
-	// background, retry.
+	// JournalProbeLeased is a probe task handed to a fetcher: retry,
+	// request, search, background.
 	JournalProbeLeased = "probe_leased"
 	// JournalProbed is a probe's result: tracks, unknown, no_peers, timeout.
 	JournalProbed = "probed"
@@ -67,6 +67,14 @@ const journalFanOut = 500
 // journalReuse is the most siblings a kind copied by reuse is journaled on;
 // a copy to more is journaled on none.
 const journalReuse = 50
+
+// journalNoMatch is the most releases of one title key a match that found
+// nothing, or failed, is journaled on; a bigger key's is journaled on none.
+const journalNoMatch = 50
+
+// journalWantedFor is how long after a probe_wanted entry a search that
+// returns the release again is not journaled.
+const journalWantedFor = 24 * time.Hour
 
 // JournalEntry is one event of a torrent's life.
 type JournalEntry struct {
@@ -167,6 +175,15 @@ func hashesOf(rows *sql.Rows, err error) ([]Hash, error) {
 		out = append(out, Hash(b))
 	}
 	return out, rows.Err()
+}
+
+// wantedSince reports whether the hash has a probe_wanted entry younger
+// than journalWantedFor at the time.
+func wantedSince(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) (bool, error) {
+	var recent bool
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM torrent_journal WHERE infohash = ? AND kind = ? AND at > ?)`,
+		h[:], JournalProbeWanted, at.Add(-journalWantedFor).Unix()).Scan(&recent)
+	return recent, err
 }
 
 // Journal returns the newest entries of the hash, up to limit, oldest

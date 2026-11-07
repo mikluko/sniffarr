@@ -290,8 +290,12 @@ func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Ti
 			}
 			ref = work
 		}
+		previous, err := matchOutcome(ctx, tx, key)
+		if err != nil {
+			return err
+		}
 		var one int
-		err := tx.QueryRowContext(ctx, `INSERT INTO tmdb_matches (title_key, work, layer, confidence, matched_at, error) VALUES (?, ?, ?, ?, ?, ?)
+		err = tx.QueryRowContext(ctx, `INSERT INTO tmdb_matches (title_key, work, layer, confidence, matched_at, error) VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT (title_key) DO UPDATE SET work = excluded.work, layer = excluded.layer, confidence = excluded.confidence,
 			matched_at = excluded.matched_at, error = excluded.error
 			WHERE tmdb_matches.layer IS NOT ? OR excluded.layer IS ? RETURNING 1`,
@@ -302,13 +306,6 @@ func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Ti
 		if err != nil {
 			return err
 		}
-		releases, err := matchedReleases(ctx, tx, key, f.Hit != nil, ref)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE title_key = ? AND work IS NOT ?", ref, key, ref); err != nil {
-			return err
-		}
 		outcome, d := "none", Detail("trigger", f.Trigger)
 		switch {
 		case f.Hit != nil:
@@ -317,6 +314,15 @@ func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Ti
 		case f.Error != "":
 			outcome = "error"
 			d["error"] = f.Error
+		}
+		var releases []matchedRelease
+		if f.Hit != nil || outcome != previous {
+			if releases, err = matchedReleases(ctx, tx, key, f.Hit != nil, ref); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE title_key = ? AND work IS NOT ?", ref, key, ref); err != nil {
+			return err
 		}
 		for _, r := range releases {
 			delete(d, "previous")
@@ -332,6 +338,26 @@ func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Ti
 	return work, detailed, err
 }
 
+// matchOutcome returns the journal outcome of the key's recorded match:
+// "none" for no work and no error, "error" for an error, else the layer,
+// "" when none is recorded.
+func matchOutcome(ctx context.Context, tx *sql.Tx, key string) (string, error) {
+	var work sql.NullInt64
+	var layer, e sql.NullString
+	err := tx.QueryRowContext(ctx, "SELECT work, layer, error FROM tmdb_matches WHERE title_key = ?", key).Scan(&work, &layer, &e)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return "", nil
+	case err != nil:
+		return "", err
+	case e.Valid:
+		return "error", nil
+	case !work.Valid:
+		return "none", nil
+	}
+	return layer.String, nil
+}
+
 // matchedRelease is a release of a title key a match concerns, with the
 // work it had before.
 type matchedRelease struct {
@@ -341,10 +367,10 @@ type matchedRelease struct {
 
 // matchedReleases returns the releases of the key a match is journaled on:
 // with a hit, those not pointed at work already, up to journalFanOut of
-// them; without, every release, up to journalReuse; more of either are
+// them; without, every release, up to journalNoMatch; more of either are
 // none.
 func matchedReleases(ctx context.Context, tx *sql.Tx, key string, hit bool, work any) ([]matchedRelease, error) {
-	stmt, limit, args := "SELECT infohash, work FROM torrent_releases WHERE title_key = ?", journalReuse, []any{key}
+	stmt, limit, args := "SELECT infohash, work FROM torrent_releases WHERE title_key = ?", journalNoMatch, []any{key}
 	if hit {
 		stmt, limit, args = stmt+" AND work IS NOT ?", journalFanOut, append(args, work)
 	}

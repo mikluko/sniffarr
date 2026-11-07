@@ -192,6 +192,8 @@ func TestBrowserJournal(t *testing.T) {
 	require.Empty(t, res.Msg.GetEntries())
 	_, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: []byte{1}}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	_, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Limit: -1}))
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "a negative limit")
 }
 
 func TestBrowserStats(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"maps"
 	"time"
 )
 
@@ -61,7 +62,8 @@ type ArrRecorded struct {
 // TMDB ID it stores the work, without details when it is new, and the IDs
 // it lacks; with an infohash too, it points the stored torrent of the hash
 // at the work, and matches the torrent's title key to the work under
-// LayerArr. Insert does the same for a torrent stored later.
+// LayerArr. Insert does the same for a torrent stored later. The event is
+// journaled on its infohash once, when it first has one.
 func (s *Store) RecordArr(ctx context.Context, e ArrEvent) (ArrRecorded, error) {
 	var r ArrRecorded
 	err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -77,11 +79,12 @@ func (s *Store) RecordArr(ctx context.Context, e ArrEvent) (ArrRecorded, error) 
 		if e.Hash != nil {
 			hash = e.Hash[:]
 		}
-		var existed bool
-		if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM arr_events WHERE app = ? AND event = ? AND key = ?)", e.App, e.Event, e.Key).Scan(&existed); err != nil {
+		var hashed bool
+		err := tx.QueryRowContext(ctx, "SELECT infohash IS NOT NULL FROM arr_events WHERE app = ? AND event = ? AND key = ?", e.App, e.Event, e.Key).Scan(&hashed)
+		r.New = errors.Is(err, sql.ErrNoRows)
+		if err != nil && !r.New {
 			return err
 		}
-		r.New = !existed
 		if _, err := tx.ExecContext(ctx, `INSERT INTO arr_events (app, event, key, infohash, work, title, indexer, size, season, episode, at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (app, event, key) DO UPDATE SET work = coalesce(arr_events.work, excluded.work), infohash = coalesce(arr_events.infohash, excluded.infohash)`,
@@ -91,7 +94,7 @@ func (s *Store) RecordArr(ctx context.Context, e ArrEvent) (ArrRecorded, error) 
 		if e.Hash == nil {
 			return nil
 		}
-		if r.New {
+		if !hashed {
 			if err := journal(ctx, tx, *e.Hash, e.At, JournalArr, e.Event, Detail("app", e.App, "source", e.Source, "indexer", e.Indexer, "title", e.Title,
 				"size", e.Size, "season", e.Season, "episode", e.Episode, "work", r.Work)); err != nil {
 				return err
@@ -100,7 +103,6 @@ func (s *Store) RecordArr(ctx context.Context, e ArrEvent) (ArrRecorded, error) 
 		if r.Work == 0 {
 			return tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM torrent_releases WHERE infohash = ?)", e.Hash[:]).Scan(&r.Stored)
 		}
-		var err error
 		r.Stored, err = applyArr(ctx, tx, *e.Hash, r.Work, e.At, false)
 		return err
 	})
@@ -146,9 +148,11 @@ func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at time.Time,
 	if err := tx.QueryRowContext(ctx, "SELECT type, tmdb_id FROM tmdb_works WHERE id = ?", work).Scan(&typ, &tmdbID); err != nil {
 		return false, err
 	}
-	d := Detail("work", work, "tmdb_id", tmdbID, "type", typ)
+	d := Detail("work", work, "tmdb_id", tmdbID, "type", typ, "trigger", TriggerArr)
+	own := d
 	if pending {
-		d["pending"] = true
+		own = maps.Clone(d)
+		own["pending"] = true
 	}
 	if before.Int64 != work {
 		if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET work = ? WHERE infohash = ?", work, h[:]); err != nil {
@@ -156,7 +160,7 @@ func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at time.Time,
 		}
 	}
 	if pending || before.Int64 != work {
-		if err := journal(ctx, tx, h, at, JournalMatched, LayerArr, d); err != nil {
+		if err := journal(ctx, tx, h, at, JournalMatched, LayerArr, own); err != nil {
 			return false, err
 		}
 	}

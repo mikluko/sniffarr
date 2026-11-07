@@ -102,6 +102,8 @@ type ProbeCandidate struct {
 	// Wanted reports whether its probe was asked for or a search of Radarr
 	// or Sonarr returned it: queued at PriorityArr or ahead.
 	Wanted bool
+	// Priority is the queue priority its task was leased at.
+	Priority int
 	// Attempts is how many probes of it failed since one last read it.
 	Attempts int
 }
@@ -133,7 +135,7 @@ const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND ` + 
 // its probe is done or its failures ran out without its peers growing; a
 // failed one waits out its backoff. A release already queued at PriorityArr
 // or behind moves to PriorityArr and to the time; a requested one stays as
-// it is. Every stored release is journaled as wanted.
+// it is. Every stored release is journaled as wanted, at most once a day.
 func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at time.Time) error {
 	if len(hashes) == 0 {
 		return nil
@@ -156,13 +158,26 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at ti
 			WHERE task_queue.priority >= excluded.priority`, args...); err != nil {
 			return err
 		}
-		return journalEach(ctx, tx, stored, len(stored), at, JournalProbeWanted, "search", Detail("t", w.T, "query", w.Query, "id", w.ID, "season", w.Season, "episode", w.Episode))
+		d := Detail("t", w.T, "query", w.Query, "id", w.ID, "season", w.Season, "episode", w.Episode)
+		for _, h := range stored {
+			recent, err := wantedSince(ctx, tx, h, at)
+			if err != nil || recent {
+				if err != nil {
+					return err
+				}
+				continue
+			}
+			if err := journal(ctx, tx, h, at, JournalProbeWanted, "search", d); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
 // RequestProbe queues a probe at PriorityRequest, at the time, for each
 // stored release of the hashes, whatever its last probe and backoff, and
-// returns how many of them are stored.
+// returns how many of them are stored; each is journaled as requested.
 func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (int, error) {
 	if len(hashes) == 0 {
 		return 0, nil
@@ -172,14 +187,19 @@ func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (
 	for _, h := range hashes {
 		args = append(args, h[:])
 	}
-	res, err := s.w.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
-		SELECT 'probe', infohash, ?1, ?2 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
-		ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0`, args...)
-	if err != nil {
-		return 0, err
-	}
-	n, err := res.RowsAffected()
-	return int(n), err
+	var n int
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		queued, err := hashesOf(tx.QueryContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
+			SELECT 'probe', infohash, ?1, ?2 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
+			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0
+			RETURNING infohash`, args...))
+		if err != nil {
+			return err
+		}
+		n = len(queued)
+		return journalEach(ctx, tx, queued, n, at, JournalProbeWanted, "request", nil)
+	})
+	return n, err
 }
 
 // ProbeLeases returns how many probes are leased and unexpired at now.
@@ -224,7 +244,7 @@ func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d t
 	}
 	_, err = tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at, lease_owner, lease_until, leased_at) VALUES ('probe', ?1, ?2, ?3, ?4, ?5, ?3)",
 		h, PrioritySample, now.UnixMilli(), owner, until)
-	return ProbeCandidate{Hash: Hash(h), Attempts: attempts}, err == nil, err
+	return ProbeCandidate{Hash: Hash(h), Priority: PrioritySample, Attempts: attempts}, err == nil, err
 }
 
 // queuedProbeQuery selects the free queued probe due at its first argument,
@@ -259,7 +279,7 @@ func queuedProbe(ctx context.Context, tx *sql.Tx, now time.Time, background bool
 	if err := tx.QueryRowContext(ctx, queuedProbeQuery, append([]any{now.UnixMilli(), PriorityArr, background}, probeArgs()...)...).Scan(&id, &h, &prio, &attempts); err != nil {
 		return ProbeCandidate{}, 0, err
 	}
-	return ProbeCandidate{Hash: Hash(h), Wanted: prio <= PriorityArr, Attempts: attempts}, id, nil
+	return ProbeCandidate{Hash: Hash(h), Wanted: prio <= PriorityArr, Priority: prio, Attempts: attempts}, id, nil
 }
 
 // unqueuedProbe returns the infohash of the release not queued for a probe

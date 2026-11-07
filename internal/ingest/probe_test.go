@@ -116,15 +116,22 @@ func TestProbeTaskBudget(t *testing.T) {
 	require.Equal(t, store.LayerProbe, r.Audio[0].Layer)
 
 	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: b[:], Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_TIMEOUT}})
-	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: c[:], Downloaded: 1 << 20, Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_UNKNOWN}})
+	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: c[:], Downloaded: 1 << 20, Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_TIMEOUT}})
 	require.Nil(t, f.task(t), "a probed release is not probed again, a failed one waits out its backoff")
 
 	f.now = f.now.Add(DefaultProbeBackoff)
+	require.Equal(t, c[:], f.task(t).GetInfohash(), "the searched release first")
+	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: c[:], Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_UNKNOWN}})
 	require.Equal(t, b[:], f.task(t).GetInfohash())
 	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: b[:], Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_NO_PEERS}})
+	n, err := f.st.RequestProbe(ctx, []store.Hash{a}, f.now)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, a[:], f.task(t).GetInfohash(), "a requested release is probed again, whatever its last probe")
 
-	require.Equal(t, []string{"fetched/stored", "probe_leased/background", "probed/tracks"}, journal(t, f.st, a))
-	require.Equal(t, []string{"fetched/stored", "probe_wanted/search", "probe_leased/search", "probed/unknown"}, journal(t, f.st, c))
+	require.Equal(t, []string{"fetched/stored", "probe_leased/background", "probed/tracks", "probe_wanted/request", "probe_leased/request"}, journal(t, f.st, a))
+	require.Equal(t, []string{"fetched/stored", "probe_wanted/search", "probe_leased/search", "probed/timeout", "probe_leased/retry", "probed/unknown"}, journal(t, f.st, c),
+		"a searched release probed again is a retry")
 	require.Equal(t, []string{"fetched/stored", "probe_leased/background", "probed/timeout", "probe_leased/retry", "probed/no_peers"}, journal(t, f.st, b),
 		"no peers and a timeout are told apart")
 	got, err := f.st.Journal(ctx, b, 10)

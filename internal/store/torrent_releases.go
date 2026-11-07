@@ -168,12 +168,13 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 			return err
 		}
 		var id int64
+		var work sql.NullInt64
 		err := tx.QueryRowContext(ctx, `INSERT INTO torrent_releases (infohash, name, size, file_count, discovery, first_seen, last_seen,
 				kind, kind_layer, title_key, year, season, episode, quality, work)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT work FROM tmdb_matches WHERE title_key = ?10))
-			ON CONFLICT (infohash) DO NOTHING RETURNING id`,
+			ON CONFLICT (infohash) DO NOTHING RETURNING id, work`,
 			t.Hash[:], t.Name, t.Size, len(t.Files), t.Discovery, t.SeenAt.Unix(), t.SeenAt.Unix(),
-			null(t.Kind), null(t.KindLayer), null(t.TitleKey), nullInt(t.Year), nullInt(t.Season), nullInt(t.Episode), null(t.Quality)).Scan(&id)
+			null(t.Kind), null(t.KindLayer), null(t.TitleKey), nullInt(t.Year), nullInt(t.Season), nullInt(t.Episode), null(t.Quality)).Scan(&id, &work)
 		if errors.Is(err, sql.ErrNoRows) {
 			return journal(ctx, tx, t.Hash, t.SeenAt, JournalFetched, "duplicate", nil)
 		}
@@ -218,7 +219,7 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 			queued = time.UnixMilli(queuedAt.Int64)
 		}
 		if err := journal(ctx, tx, t.Hash, t.SeenAt, JournalFetched, "stored", Detail("name", t.Name, "size", t.Size, "files", len(t.Files),
-			"discovery", t.Discovery, "queued_at", queued, "kind", t.Kind, "kind_layer", t.KindLayer, "copied", copied)); err != nil {
+			"discovery", t.Discovery, "queued_at", queued, "kind", t.Kind, "kind_layer", t.KindLayer, "copied", copied, "work", work.Int64)); err != nil {
 			return err
 		}
 		if err := applyPendingArr(ctx, tx, t.Hash, t.SeenAt); err != nil {
