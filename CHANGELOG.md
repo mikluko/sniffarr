@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `-probe` turns probing on, probe tasks and seeding; it is off by default, `-api` and `-fetch` both read it, and the web UI hides the probe button, meter and queue card while the API does not probe. Probe results already stored still show.
+- `BrowseService.Settings` reports `probes`; `RequestProbe` fails with `FAILED_PRECONDITION` while probes are off.
 - A release card offers "Match now" for a movie or series matched to no work: it looks the title up on TMDB at once and answers with the work found or that TMDB still finds nothing; `BrowseService.RequestMatch` does the same.
 - What happens to an infohash is recorded in the new table `torrent_journal`, one row per event in the transaction of the change: queued, promoted, leased, failed, dropped and evicted for one sighted by announce, a feed or Radarr and Sonarr, never for the queue's events of one only sampled; metadata stored, rejected or already stored; classifications by Jev with who asked, kinds copied from a release of the same title and failed classifications; title lookups' matches, no matches and errors with who asked, and the earlier match a release takes from its title as it is stored; grabs and imports; the first listing in each feed, journaled after it is recorded, in a transaction of its own; probes wanted, started and done; deletion. `Card` carries the newest 200 entries as `journal`, the `Journal` RPC of `BrowseService` returns up to 1000 for any infohash, stored or not, and the release card shows them under the classification; an infohash whose torrent is not stored has a card of its journal alone. Entries are kept for `SNIFFARR_RETENTION_JOURNAL`, `720h` by default, and `sniffarr.store.journal.deletions` counts those deleted.
 - With `SNIFFARR_RADARR_URL` or `SNIFFARR_SONARR_URL` set for the UI, the title page and the release card link a matched movie in that Radarr and a series in that Sonarr.
@@ -17,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** probes no longer turn on with `-probe-dir` alone, and `-probe-dir`, `-probers`, `-probe-timeout`, `-seed-max-size` or `-seed-max-age` without `-probe` stops sniffarr at start: add `-probe` to the fetchers that probe and to the process running `-api`. With the Helm chart, `probe.enabled` renders it.
+- `-probe-dir` is optional: without it, `-fetch -probe` keeps the pieces in a temporary directory removed at stop.
 - **Breaking:** TMDB matching is part of the core and cannot be turned off: an empty `TMDB_API_KEY` uses the built-in token instead of turning matching off.
 - The release card follows the new design: how the title was matched is in a tooltip, size and file count share a line, and an action's answer shows on a line under the buttons with the pressed button disabled; the peer lookup's answer gives its priority and links the queue on the data page.
 - The web UI has a new look: JetBrains Mono served by sniffarr itself, neutral colours with blue for data and links, amber for a state or a failure that is retried, red for a final failure, and borders only on blocks with a state of their own.
