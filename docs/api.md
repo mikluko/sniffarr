@@ -103,7 +103,7 @@ of TMDB's search for `SearchTitles`. A work's `id` that is not one fails
 with `INVALID_ARGUMENT`, one of no stored work with `NOT_FOUND`;
 `RefreshPeers`, `RequestProbe` and `RequestMatch` fail with `NOT_FOUND`
 when they name no stored release; `RequestMatch` fails with
-`FAILED_PRECONDITION` while TMDB is off, `RESOURCE_EXHAUSTED` once the
+`RESOURCE_EXHAUSTED` once the
 classifier's daily budget is spent, and `UNAVAILABLE` when TMDB fails. An `infohash` that is not 20 bytes fails `Card` and
 `Journal` with `INVALID_ARGUMENT`, as a negative `limit` fails `Journal`;
 one of no stored release fails `Card` with `NOT_FOUND`, while `Journal`

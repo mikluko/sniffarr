@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** TMDB matching is part of the core and cannot be turned off: an empty `TMDB_API_KEY` uses the built-in token instead of turning matching off.
 - The release card follows the new design: how the title was matched is in a tooltip, size and file count share a line, and an action's answer shows on a line under the buttons with the pressed button disabled; the peer lookup's answer gives its priority and links the queue on the data page.
 - The web UI has a new look: JetBrains Mono served by sniffarr itself, neutral colours with blue for data and links, amber for a state or a failure that is retried, red for a final failure, and borders only on blocks with a state of their own.
 - Explanations open as a tooltip on a dotted-underlined label, on hover or focus; the notes under the task queue on the data page and under the top's controls are such tooltips.

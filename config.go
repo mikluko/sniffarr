@@ -305,9 +305,7 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Feeds, err = loadFeeds(getenv); err != nil {
 		return a, d, err
 	}
-	if key, ok := lookup("TMDB_API_KEY"); ok {
-		a.TMDBKey = key
-	} else {
+	if a.TMDBKey = getenv("TMDB_API_KEY"); a.TMDBKey == "" {
 		a.TMDBKey = tmdb.DefaultKey
 	}
 	d.Store.TMDB = a.TMDBKey != ""

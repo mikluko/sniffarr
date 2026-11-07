@@ -156,10 +156,10 @@ the background classifier has nothing to select, `BrowseService.Settings`
 returns no languages, and the web UI shows no voice filter, no per-language
 columns in search results and tops, and no audio rows on a release's card.
 
-TMDB is a second extension, on by default with the
+TMDB is part of the core and cannot be turned off. It runs on the
 [TMDB](https://www.themoviedb.org) read access token sniffarr ships with;
-`TMDB_API_KEY` replaces it with a v3 API key or a read access token of your
-own, and set empty turns the extension off. It matches title keys,
+`TMDB_API_KEY`, when set and not empty, replaces it with a v3 API key or a
+read access token of your own. It matches title keys,
 not torrents, to works, so every release under a key shares its match. A
 background matcher walks the keys of movies and series without a match, newest
 torrents first, and a search matches the unmatched keys of its candidates
@@ -175,8 +175,7 @@ votes and the first sentence of its overview, within the classifier's daily
 budget and its search reserve. Without `TYPESAFE_API_KEY` several fits with no
 such favourite match nothing. A key that matched nothing is looked up again
 after `SNIFFARR_TMDB_RETRY`, and one that matched never is; `RequestMatch`,
-the release card's button, looks a key that matched nothing up at once. Without the key
-nothing is matched and releases carry no IDs.
+the release card's button, looks a key that matched nothing up at once.
 
 A work is a movie or a series on TMDB, stored once per TMDB type and ID,
 with or without releases. Title keys are matched to works many to one: the
@@ -216,7 +215,7 @@ the card, in the top and in search results, with posters from
 `image.tmdb.org`; every page carries the TMDB logo and the notice "This
 product uses the TMDB API but is not endorsed or certified by TMDB."
 
-Peers are a third extension, always on. A peer is an `IP:port`; `-sniff` sees
+Peers are a second extension, always on. A peer is an `IP:port`; `-sniff` sees
 one in every `announce_peer` its node receives, `-fetch` in every `get_peers`
 answer and every connection of a fetch. Each client hashes a peer with
 SipHash-2-4 under a 128-bit key the API generated once and keeps in the store,

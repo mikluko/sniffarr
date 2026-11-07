@@ -203,7 +203,7 @@ func TestLoadAPI(t *testing.T) {
 		err  string
 	}{
 		{name: "defaults", env: required, want: func(*api.Config, *db.Config) {}},
-		{name: "tmdb off", env: with("TMDB_API_KEY", ""), want: func(a *api.Config, d *db.Config) { a.TMDBKey, d.Store.TMDB = "", false }},
+		{name: "tmdb key empty", env: with("TMDB_API_KEY", ""), want: func(*api.Config, *db.Config) {}},
 		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",

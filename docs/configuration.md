@@ -42,7 +42,7 @@ the same to each.
 | `SNIFFARR_STATS_INTERVAL`          | `5m`             | How often the counts of `Stats` and `Home` are recomputed                                                              |
 | `SNIFFARR_SCRIPTS`                 | `Latin,Cyrillic` | Scripts, by Go `unicode.Scripts` name and comma-separated, whose letters a torrent name may have; empty is the default |
 | `SNIFFARR_AUDIO_LANGUAGES`         |                  | Audio languages, BCP-47 tags and comma-separated; unset or empty leaves the extension off. An unknown tag fails startup |
-| `TMDB_API_KEY`                     | built-in token   | TMDB API key or read access token; set empty, no titles are matched                                                    |
+| `TMDB_API_KEY`                     | built-in token   | TMDB API key or read access token in place of the built-in one; unset or empty uses the built-in one                   |
 | `SNIFFARR_TMDB_CONCURRENCY`        | `2`              | Background title matches at once                                                                                       |
 | `SNIFFARR_TMDB_RATE`               | `20`             | TMDB requests a second at most                                                                                         |
 | `SNIFFARR_TMDB_RETRY`              | `168h`           | How long a title key that matched nothing waits before it is looked up again                                           |
