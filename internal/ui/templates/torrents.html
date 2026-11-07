@@ -6,7 +6,7 @@
       hx-trigger="submit, input changed delay:400ms from:#q">
   <label for="q" class="vh">{{.T "torrents.label"}}</label>
   <input id="q" name="q" type="search" value="{{.Q}}" placeholder="{{.T "search.placeholder"}}" autocomplete="off" spellcheck="false">
-  <button type="submit">{{.T "search.submit"}}</button>
+  <button type="submit">{{icon "search"}}{{.T "search.submit"}}</button>
 </form>
 {{template "torrents" .}}
 {{end}}

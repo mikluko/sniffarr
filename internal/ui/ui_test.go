@@ -478,7 +478,7 @@ func TestIcons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"copy", "refresh"} {
+	for _, name := range []string{"copy", "refresh", "search"} {
 		svg, err := r.Icon(name)
 		if err != nil {
 			t.Fatal(err)
