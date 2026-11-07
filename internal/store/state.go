@@ -9,10 +9,10 @@ import (
 	"github.com/mikluko/sniffarr/internal/sketch"
 )
 
-// The settings keys of the peer hash key and the DHT node ID.
+// The state keys of the peer hash key and the DHT node ID.
 const (
-	hashKeySetting = "peer_hash_key"
-	nodeIDSetting  = "dht_node_id"
+	hashKeyState = "peer_hash_key"
+	nodeIDState  = "dht_node_id"
 )
 
 // HashKey returns the key peers are hashed with, generating it on the first
@@ -27,7 +27,7 @@ func (s *Store) HashKey(ctx context.Context) (sketch.Key, error) {
 	if err != nil {
 		return sketch.Key{}, err
 	}
-	raw, err := s.setting(ctx, hashKeySetting, fresh[:])
+	raw, err := s.stateValue(ctx, hashKeyState, fresh[:])
 	if err != nil {
 		return sketch.Key{}, err
 	}
@@ -51,7 +51,7 @@ func (s *Store) NodeID(ctx context.Context) ([20]byte, error) {
 	if _, err := rand.Read(fresh[:]); err != nil {
 		return [20]byte{}, err
 	}
-	raw, err := s.setting(ctx, nodeIDSetting, fresh[:])
+	raw, err := s.stateValue(ctx, nodeIDState, fresh[:])
 	if err != nil {
 		return [20]byte{}, err
 	}
@@ -62,15 +62,15 @@ func (s *Store) NodeID(ctx context.Context) ([20]byte, error) {
 	return s.nodeID, nil
 }
 
-// setting returns the value of the setting key, storing fresh as it when
+// stateValue returns the value of the state key, storing fresh as it when
 // none is stored.
-func (s *Store) setting(ctx context.Context, key string, fresh []byte) ([]byte, error) {
+func (s *Store) stateValue(ctx context.Context, key string, fresh []byte) ([]byte, error) {
 	var raw []byte
 	err := s.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING", key, fresh); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO state (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING", key, fresh); err != nil {
 			return err
 		}
-		return tx.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", key).Scan(&raw)
+		return tx.QueryRowContext(ctx, "SELECT value FROM state WHERE key = ?", key).Scan(&raw)
 	})
 	return raw, err
 }

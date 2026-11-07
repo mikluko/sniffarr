@@ -292,7 +292,7 @@ func TestFillFeaturesAndMarks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"HDRezka"}, r.Audio[0].Studios, "Insert takes the studios it is given")
 	for _, k := range []string{featuresFilled, marksFilled + "ru"} {
-		_, err := db.W.ExecContext(ctx, "DELETE FROM settings WHERE key = ?", k)
+		_, err := db.W.ExecContext(ctx, "DELETE FROM state WHERE key = ?", k)
 		require.NoError(t, err)
 	}
 	require.NoError(t, db.Close())

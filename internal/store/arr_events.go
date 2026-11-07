@@ -216,7 +216,7 @@ func (s *Store) LatestArr(ctx context.Context, app, event string) (time.Time, bo
 	return time.Unix(at.Int64, 0).UTC(), true, nil
 }
 
-// arrImported is the settings key prefix that records, per app, that its
+// arrImported is the state key prefix that records, per app, that its
 // history was imported.
 const arrImported = "arr_history_imported:"
 

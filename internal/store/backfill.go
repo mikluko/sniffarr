@@ -16,39 +16,39 @@ import (
 // backfillBatch is the default of Store.backfillBatch.
 const backfillBatch = 200
 
-// featuresFilled is the settings key that records that the features
+// featuresFilled is the state key that records that the features
 // backfill has run. A new key makes every database recompute the features
 // of releases without a year or a quality once more, which a change to
 // names.Parse needs.
 const featuresFilled = "release_features_letter_o"
 
-// marksFilled is the prefix of the settings key that records, per language,
+// marksFilled is the prefix of the state key that records, per language,
 // that the marks backfill has run. A new prefix makes every database
 // recompute its marks and studios once more, which a change to
 // audio.Language.Mark or audio.Language.StudiosIn needs.
 const marksFilled = "audio_marks_no_subtitles:"
 
-// subtitleMarksFilled is the prefix of the settings key that records, per
+// subtitleMarksFilled is the prefix of the state key that records, per
 // language, that the markers stored from a word in a subtitle file's path
 // alone were cleared.
 const subtitleMarksFilled = "audio_subtitle_marks:"
 
-// codesFilled is the prefix of the settings key that records, per language,
+// codesFilled is the prefix of the state key that records, per language,
 // that the torrents stored before audio.Language.Codes were read got their
 // markers from the codes in their names.
 const codesFilled = "audio_codes:"
 
-// probeStudiosFilled is the prefix of the settings key that records, per
+// probeStudiosFilled is the prefix of the state key that records, per
 // language, that the studios named in probed tracks were added to the
 // studios of releases probed before they were read.
 const probeStudiosFilled = "probe_studios:"
 
-// probeMarkersFilled is the prefix of the settings key that records, per
+// probeMarkersFilled is the prefix of the state key that records, per
 // language, that the markers of releases probed while a marker outranked
 // any probe got the probe's probability.
 const probeMarkersFilled = "probe_markers:"
 
-// probeAttemptsFilled is the settings key that records that the failed
+// probeAttemptsFilled is the state key that records that the failed
 // attempts kept by releases probed before a read cleared them were cleared.
 const probeAttemptsFilled = "probe_attempts"
 
@@ -134,10 +134,10 @@ func (s *Store) backfill(ctx context.Context, name, flag string, progress func(B
 		}
 		if n == 0 {
 			if err := s.tx(ctx, func(tx *sql.Tx) error {
-				if _, err := tx.ExecContext(ctx, "INSERT INTO settings (key, value) VALUES (?, x'01') ON CONFLICT (key) DO NOTHING", flag); err != nil {
+				if _, err := tx.ExecContext(ctx, "INSERT INTO state (key, value) VALUES (?, x'01') ON CONFLICT (key) DO NOTHING", flag); err != nil {
 					return err
 				}
-				_, err := tx.ExecContext(ctx, "DELETE FROM settings WHERE key = ?", positionKey(flag))
+				_, err := tx.ExecContext(ctx, "DELETE FROM state WHERE key = ?", positionKey(flag))
 				return err
 			}); err != nil {
 				return err
@@ -149,7 +149,7 @@ func (s *Store) backfill(ctx context.Context, name, flag string, progress func(B
 			if err := write(tx); err != nil {
 				return err
 			}
-			_, err := tx.ExecContext(ctx, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+			_, err := tx.ExecContext(ctx, "INSERT INTO state (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
 				positionKey(flag), strconv.AppendInt(nil, last, 10))
 			return err
 		}); err != nil {
@@ -161,7 +161,7 @@ func (s *Store) backfill(ctx context.Context, name, flag string, progress func(B
 	}
 }
 
-// positionKey is the settings key of the ID of the last row the backfill
+// positionKey is the state key of the ID of the last row the backfill
 // recorded by flag went through.
 func positionKey(flag string) string {
 	return flag + ":after"
@@ -171,7 +171,7 @@ func positionKey(flag string) string {
 // is.
 func (s *Store) position(ctx context.Context, flag string) (int64, error) {
 	var raw []byte
-	err := s.r.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", positionKey(flag)).Scan(&raw)
+	err := s.r.QueryRowContext(ctx, "SELECT value FROM state WHERE key = ?", positionKey(flag)).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}

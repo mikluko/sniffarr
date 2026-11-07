@@ -77,18 +77,18 @@ func studiosColumn(studios []string) (sql.NullString, error) {
 	return sql.NullString{String: string(b), Valid: true}, err
 }
 
-// flag reports whether the settings key is set.
+// flag reports whether the state key is set.
 func (s *Store) flag(ctx context.Context, key string) (bool, error) {
 	var one int
-	err := s.r.QueryRowContext(ctx, "SELECT 1 FROM settings WHERE key = ?", key).Scan(&one)
+	err := s.r.QueryRowContext(ctx, "SELECT 1 FROM state WHERE key = ?", key).Scan(&one)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	return err == nil, err
 }
 
-// setFlag sets the settings key.
+// setFlag sets the state key.
 func (s *Store) setFlag(ctx context.Context, key string) error {
-	_, err := s.w.ExecContext(ctx, "INSERT INTO settings (key, value) VALUES (?, x'01') ON CONFLICT (key) DO NOTHING", key)
+	_, err := s.w.ExecContext(ctx, "INSERT INTO state (key, value) VALUES (?, x'01') ON CONFLICT (key) DO NOTHING", key)
 	return err
 }

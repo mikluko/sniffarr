@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The table `settings` is named `state`; a migration renames it.
+
 ## [0.44.0-beta.5] - 2026-11-07
 
 ### Changed

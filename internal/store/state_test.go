@@ -41,7 +41,7 @@ func TestNodeIDOutlivesRestart(t *testing.T) {
 	require.NotEqual(t, [20]byte{}, id1)
 	k, err := s.HashKey(ctx)
 	require.NoError(t, err)
-	require.NotEqual(t, k[:], id1[:16], "the ID and the key are separate settings")
+	require.NotEqual(t, k[:], id1[:16], "the ID and the key are separate state keys")
 	require.NoError(t, db.Close())
 
 	s, db = openAt(t, path)
