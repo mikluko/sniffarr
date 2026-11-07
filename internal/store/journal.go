@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -83,9 +84,13 @@ type JournalEntry struct {
 	Detail string
 }
 
+// maxDetailString is the most bytes of a string Detail keeps.
+const maxDetailString = 1 << 10
+
 // Detail builds an entry's particulars from key-value pairs, leaving out a
 // value that is "", 0, nil, empty or the zero time; a time is written in
-// Unix seconds.
+// Unix seconds, and a string of more than maxDetailString bytes is cut at
+// the last rune boundary within them and ends in "…".
 func Detail(kv ...any) map[string]any {
 	d := make(map[string]any, len(kv)/2)
 	for i := 0; i+1 < len(kv); i += 2 {
@@ -97,6 +102,7 @@ func Detail(kv ...any) map[string]any {
 			if x == "" {
 				continue
 			}
+			v = clip(x)
 		case int:
 			if x == 0 {
 				continue
@@ -128,16 +134,34 @@ func Detail(kv ...any) map[string]any {
 	return d
 }
 
+// clip cuts s to at most maxDetailString bytes at a rune boundary, marking
+// the cut with "…".
+func clip(s string) string {
+	if len(s) <= maxDetailString {
+		return s
+	}
+	end := 0
+	for i := range s {
+		if i > maxDetailString {
+			break
+		}
+		end = i
+	}
+	return s[:end] + "…"
+}
+
 // journal writes one entry of the hash inside tx; an empty detail writes
 // NULL.
 func journal(ctx context.Context, tx *sql.Tx, h Hash, at time.Time, kind, outcome string, detail map[string]any) error {
 	var d any
 	if len(detail) > 0 {
-		b, err := json.Marshal(detail)
-		if err != nil {
+		var b strings.Builder
+		enc := json.NewEncoder(&b)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(detail); err != nil {
 			return err
 		}
-		d = string(b)
+		d = strings.TrimSuffix(b.String(), "\n")
 	}
 	_, err := tx.ExecContext(ctx, "INSERT INTO torrent_journal (infohash, at, kind, outcome, detail) VALUES (?, ?, ?, ?, ?)", h[:], at.Unix(), kind, outcome, d)
 	return err

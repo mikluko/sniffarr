@@ -75,6 +75,33 @@ func TestJournalOrderAndLimit(t *testing.T) {
 	require.Empty(t, got)
 }
 
+func TestJournalDetailBounded(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	// reject rejects the hash of the byte with the name and returns its
+	// fetched/rejected detail.
+	reject := func(b byte, name string) string {
+		t.Helper()
+		ok, err := s.Reject(ctx, hash(b), rules.Script, name, 1<<20, t0)
+		require.NoError(t, err)
+		require.True(t, ok)
+		return entry(t, s, hash(b), JournalFetched, "rejected").Detail
+	}
+	nameOf := func(detail string) string {
+		t.Helper()
+		var d struct{ Name string }
+		require.NoError(t, json.Unmarshal([]byte(detail), &d))
+		return d.Name
+	}
+
+	controls := reject(1, strings.Repeat("\x01", 1<<20))
+	require.Less(t, len(controls), 8<<10, "a 1 MiB name of control characters")
+	require.Equal(t, strings.Repeat("\x01", 1<<10)+"…", nameOf(controls))
+	require.Equal(t, "x"+strings.Repeat("ж", 511)+"…", nameOf(reject(2, "x"+strings.Repeat("ж", 1000))), "cut at a rune boundary")
+	short := reject(3, "Tom & Jerry <1940>")
+	require.Contains(t, short, `"name":"Tom & Jerry <1940>"`, "a short name unchanged, not escaped for HTML")
+}
+
 // counters returns what the reader's counters counted, by name, unit and
 // attributes.
 func counters(t *testing.T, reader *sdkmetric.ManualReader) map[string]int64 {

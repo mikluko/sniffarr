@@ -72,7 +72,8 @@ torrents with neither video nor audio files, and torrents whose names have a
 letter outside the allowed scripts, Latin and Cyrillic by default. Only the
 name is judged by script, not file paths; digits, punctuation, symbols, and
 letters of the Common and Inherited scripts always pass. A rejected infohash is
-remembered with its reason only, so it is never queued again.
+remembered with its reason, so it is never queued again, and its journal entry
+keeps the torrent's name and size.
 
 Accepted torrents are classified in layers, cheapest first, and every release
 records which layer decided its kind:
