@@ -513,7 +513,7 @@ func TestJournalProbes(t *testing.T) {
 	final, err = s.ProbeFailed(ctx, h, ProbeNoPeers, 0, t0.Add(time.Hour), 2, time.Hour)
 	require.NoError(t, err)
 	require.True(t, final)
-	require.JSONEq(t, `{"attempt":2,"retry_at":`+unix(t0.Add(3*time.Hour))+`,"final":true,"peers_week":5}`, entry(t, s, h, JournalProbed, ProbeNoPeers).Detail)
+	require.JSONEq(t, `{"attempt":2,"final":true,"peers_week":5}`, entry(t, s, h, JournalProbed, ProbeNoPeers).Detail, "a final failure is due at no time")
 
 	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeTracks, Path: "Alien.1979.1080p.mkv", Format: "matroska", Downloaded: 2 << 20, Tracks: []Track{
 		{Kind: "video", Codec: "V_MPEG4/ISO/AVC"}, {Kind: "audio", Language: "rus", Codec: "A_AC3"}, {Kind: "subtitle", Language: "eng", Codec: "S_TEXT/UTF8"},
@@ -692,6 +692,9 @@ func TestJournalProbeLeasedRequestInFlight(t *testing.T) {
 	for range 2 {
 		_, ok := leaseNext(t, s, t0.Add(3*time.Minute), false)
 		require.True(t, ok)
+	}
+	for _, h := range []Hash{searched, requested} {
+		require.NotContains(t, entry(t, s, h, JournalProbed, ProbeTimeout).Detail, "retry_at", "kept due at once by the request")
 	}
 	require.Equal(t, []string{"search/1", "request/2"}, leasedProbes(t, s, searched), "a request made while the attempt was in flight outlives its failure")
 	require.Equal(t, []string{"request/1", "request/2"}, leasedProbes(t, s, requested), "and so does one made again")

@@ -405,10 +405,14 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, reason string, download
 			id, ProbeFailed, failed, retry.Unix(), at.Unix(), sql.NullInt64{Int64: peers, Valid: final}); err != nil {
 			return err
 		}
-		if err := requeueProbe(ctx, tx, h, final, retry.Unix()); err != nil {
+		requested, err := requeueProbe(ctx, tx, h, final, retry.Unix())
+		if err != nil {
 			return err
 		}
-		d := Detail("attempt", failed, "retry_at", retry, "downloaded", downloaded, "peers_week", peers)
+		d := Detail("attempt", failed, "downloaded", downloaded, "peers_week", peers)
+		if !final && !requested {
+			d["retry_at"] = retry.Unix()
+		}
 		d["final"] = final
 		return journal(ctx, tx, h, at, JournalProbed, reason, d)
 	})
@@ -416,24 +420,25 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, reason string, download
 }
 
 // requeueProbe frees the probe of h, keeping it requested and due at once
-// when it was requested after its last lease began; else it keeps it queued
-// at PriorityArr, due at retry in seconds, when it was queued at PriorityArr
-// or ahead and is not final, and drops it from the queue otherwise.
-func requeueProbe(ctx context.Context, tx *sql.Tx, h Hash, final bool, retry int64) error {
+// when it was requested after its last lease began, which it reports; else
+// it keeps it queued at PriorityArr, due at retry in seconds, when it was
+// queued at PriorityArr or ahead and is not final, and drops it from the
+// queue otherwise.
+func requeueProbe(ctx context.Context, tx *sql.Tx, h Hash, final bool, retry int64) (bool, error) {
 	res, err := tx.ExecContext(ctx, `UPDATE task_queue SET lease_owner = NULL, lease_until = NULL, leases = 0
 		WHERE kind = 'probe' AND infohash = ? AND priority = ? AND queued_at > leased_at`, h[:], PriorityRequest)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if n, err := res.RowsAffected(); err != nil || n > 0 {
-		return err
+		return n > 0, err
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM task_queue WHERE kind = 'probe' AND infohash = ? AND (? OR priority > ?)", h[:], final, PriorityArr); err != nil {
-		return err
+		return false, err
 	}
 	_, err = tx.ExecContext(ctx, "UPDATE task_queue SET priority = ?, not_before = ?, lease_owner = NULL, lease_until = NULL, leases = 0 WHERE kind = 'probe' AND infohash = ?",
 		PriorityArr, retry*1000, h[:])
-	return err
+	return false, err
 }
 
 // probed records the outcome of the probe of release id, h, at the time,
