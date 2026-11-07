@@ -524,6 +524,13 @@ func TestJournalMatched(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"fetched/stored", "matched/none", "matched/error", "matched/none"}, entries(t, s, hash(3)),
 		"no match, or an error, again is not journaled; a change between them is")
+	_, _, err = s.RecordMatch(ctx, "y:heat 1995", Found{Trigger: TriggerRequest}, t0.Add(5*time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, []string{"fetched/stored", "matched/none", "matched/error", "matched/none", "matched/none"}, entries(t, s, hash(3)),
+		"a lookup a person asked for is journaled though it finds nothing again")
+	got, err := s.Journal(ctx, hash(3), 1)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"trigger":"request"}`, got[0].Detail)
 
 	for i := 10; i < 10+journalNoMatch+1; i++ {
 		_, _, err := s.Insert(ctx, titled(byte(i), "Ronin.1998."+strconv.Itoa(i), "y:ronin 1998"))

@@ -144,6 +144,27 @@ func TestTMDB(t *testing.T) {
 	require.Zero(t, matched, "releases let go of a deleted work")
 }
 
+func TestReleaseTitles(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for _, x := range []Torrent{titled(1, "Alien.1979.1080p", "y:alien 1979"), titled(2, "Alien.1979.2160p", "y:alien 1979"),
+		titled(3, "Heat.1995.1080p", "y:heat 1995"), torrent(4, "Untitled")} {
+		_, _, err := s.Insert(ctx, x)
+		require.NoError(t, err)
+	}
+	alien, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &alienHit, Confidence: 1, Layer: LayerTMDB}, t0)
+	require.NoError(t, err)
+
+	got, err := s.ReleaseTitles(ctx, []Hash{hash(1), hash(2), hash(3), hash(4), hash(99)})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"y:alien 1979", "y:heat 1995"}, got.Keys, "each key once, a release without one adds none")
+	require.Equal(t, []int64{alien}, got.Works, "each work once")
+	require.Equal(t, 4, got.Stored, "a hash not stored is not counted")
+	got, err = s.ReleaseTitles(ctx, nil)
+	require.NoError(t, err)
+	require.Zero(t, got)
+}
+
 // alienDetails are the details of Alien in both languages.
 var alienDetails = Details{
 	Type: "movie", OriginalTitle: "Alien", Year: 1979, PosterPath: "/vfrQk5IPloGg1v9Rzbh2Eg3VGyM.jpg", Rating: 8.176, Votes: 16995, Runtime: 117,

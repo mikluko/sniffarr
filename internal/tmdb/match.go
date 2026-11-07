@@ -93,9 +93,18 @@ func (m *Matcher) Unmatched(ctx context.Context, keys []string, limit int) ([]st
 	return m.Store.UnmatchedTitles(ctx, keys, m.now().Add(-retry), limit)
 }
 
+// Matchable returns the keys among keys of movies and series that no work
+// is matched to, whatever their last lookup: those a request looks up.
+func (m *Matcher) Matchable(ctx context.Context, keys []string) ([]store.TitleKey, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	return m.Store.UnmatchedTitles(ctx, keys, m.now().Add(time.Second), len(keys))
+}
+
 // Match looks the key up on TMDB and records what it finds, with the
-// trigger that asked, store.TriggerWorker, store.TriggerSearch or
-// store.TriggerTorznab: the one plausible candidate, under layer tmdb; the
+// trigger that asked, store.TriggerWorker, store.TriggerSearch,
+// store.TriggerTorznab or store.TriggerRequest: the one plausible candidate, under layer tmdb; the
 // Chooser's pick among several, under layer jev; or no match. It records
 // nothing when it fails, except for a request TMDB refuses for good, which
 // is recorded as a failed match. It returns classify.ErrBudget when the

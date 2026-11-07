@@ -51,6 +51,8 @@ type Config struct {
 	Lazy *search.Lazy
 	// TMDB, when set, has BrowseService.SearchTitles search TMDB too.
 	TMDB search.TitleSearch
+	// Matcher, when set, serves BrowseService.RequestMatch.
+	Matcher search.TitleMatcher
 	// TorznabToken, when set, serves the Torznab API at /torznab/api to
 	// requests with it as their apikey.
 	TorznabToken string
@@ -98,7 +100,7 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
-		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Languages: audio.Tags(c.Languages), Counts: c.Counts},
+		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Languages: audio.Tags(c.Languages), Counts: c.Counts},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

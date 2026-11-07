@@ -30,6 +30,7 @@ others out, as the chart's `api.networkPolicy` does.
 | `sniffarr.v1.BrowseService` | `Settings`      |
 | `sniffarr.v1.BrowseService` | `RefreshPeers`  |
 | `sniffarr.v1.BrowseService` | `RequestProbe`  |
+| `sniffarr.v1.BrowseService` | `RequestMatch`  |
 
 - `Sight` is client-streaming: it queues every infohash the server has neither
   stored, rejected nor queued, and returns how many were new and how many
@@ -90,6 +91,7 @@ others out, as the chart's `api.networkPolicy` does.
 | `Settings`      |                                                                                                                                                                                  | the API's audio languages, BCP-47 tags in its order, empty while the audio extension is off; the web UI asks it at start                  |
 | `RefreshPeers`  | `releases`: an `infohash`, or a `work` for every release of it                                                                                                                  | `releases` to be looked up: a fetcher looks for their peers on the DHT, and the peers found count from its next send of sketches            |
 | `RequestProbe`  | `releases`, as for `RefreshPeers`                                                                                                                                                | `releases` to be probed, ahead of searched ones and whatever their last probe, 0 when none has a file a probe reads; see [Probes](probes.md) |
+| `RequestMatch`  | `releases`, as for `RefreshPeers`; `lang`                                                                                                                                        | `titles` looked up on TMDB at once, the title keys of movies and series among the releases' that no work is matched to, whatever their last lookup, ahead of the background matcher and within TMDB's rate and the classifier's budget as a search's; `works` the releases belong to once that is done |
 
 `Stats` and `Home` serve the counts the API computed last, at start and then
 every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
@@ -99,8 +101,10 @@ every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
 `lang` is `ru` or `en`, `en` when empty: the language of `tmdb` texts, and
 of TMDB's search for `SearchTitles`. A work's `id` that is not one fails
 with `INVALID_ARGUMENT`, one of no stored work with `NOT_FOUND`;
-`RefreshPeers` and `RequestProbe` fail with `NOT_FOUND` when they name no
-stored release. An `infohash` that is not 20 bytes fails `Card` and
+`RefreshPeers`, `RequestProbe` and `RequestMatch` fail with `NOT_FOUND`
+when they name no stored release; `RequestMatch` fails with
+`FAILED_PRECONDITION` while TMDB is off, `RESOURCE_EXHAUSTED` once the
+classifier's daily budget is spent, and `UNAVAILABLE` when TMDB fails. An `infohash` that is not 20 bytes fails `Card` and
 `Journal` with `INVALID_ARGUMENT`, as a negative `limit` fails `Journal`;
 one of no stored release fails `Card` with `NOT_FOUND`, while `Journal`
 answers for any infohash, stored, rejected, dropped or deleted, and never

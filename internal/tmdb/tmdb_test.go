@@ -163,6 +163,14 @@ func matcher(f *fakeTMDB, s *store.Store) *Matcher {
 	return &Matcher{Client: f.client(), Store: s, Now: func() time.Time { return now }, Log: slog.New(slog.DiscardHandler)}
 }
 
+func keyNames(keys []store.TitleKey) []string {
+	var out []string
+	for _, k := range keys {
+		out = append(out, k.Key)
+	}
+	return out
+}
+
 // match is the match of the title key of the torrent b.
 func match(t *testing.T, s *store.Store, b byte) store.Match {
 	t.Helper()
@@ -434,6 +442,12 @@ func TestMatchNone(t *testing.T) {
 	keys, err = m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)
 	require.Empty(t, keys)
+	keys, err = m.Matchable(ctx, []string{"y:heat 1995", "y:ronin 1998"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"y:heat 1995"}, keyNames(keys), "a request looks the failed match up again before Retry, the match never")
+	keys, err = m.Matchable(ctx, nil)
+	require.NoError(t, err)
+	require.Empty(t, keys, "no keys name none")
 	at = at.Add(time.Hour + time.Second)
 	keys, err = m.Unmatched(ctx, nil, 10)
 	require.NoError(t, err)

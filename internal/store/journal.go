@@ -75,6 +75,7 @@ const (
 	TriggerSearch  = "search"
 	TriggerTorznab = "torznab"
 	TriggerArr     = "arr"
+	TriggerRequest = "request"
 )
 
 // Probe failures, as the journal names them.

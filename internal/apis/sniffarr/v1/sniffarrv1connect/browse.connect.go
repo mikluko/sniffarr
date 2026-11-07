@@ -61,6 +61,9 @@ const (
 	// BrowseServiceRequestProbeProcedure is the fully-qualified name of the BrowseService's
 	// RequestProbe RPC.
 	BrowseServiceRequestProbeProcedure = "/sniffarr.v1.BrowseService/RequestProbe"
+	// BrowseServiceRequestMatchProcedure is the fully-qualified name of the BrowseService's
+	// RequestMatch RPC.
+	BrowseServiceRequestMatchProcedure = "/sniffarr.v1.BrowseService/RequestMatch"
 )
 
 // BrowseServiceClient is a client for the sniffarr.v1.BrowseService service.
@@ -113,6 +116,14 @@ type BrowseServiceClient interface {
 	// some; one with no file a probe can read is not probed. NOT_FOUND without
 	// a stored release.
 	RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error)
+	// RequestMatch looks the title keys of a release, or of every release of
+	// a work, up on TMDB at once, those of movies and series that no work is
+	// matched to, whatever their last lookup, and answers once the lookups
+	// are done. It spends TMDB's rate and the classifier's daily budget as a
+	// search does. NOT_FOUND without a stored release, RESOURCE_EXHAUSTED
+	// while the classifier's budget is spent, FAILED_PRECONDITION without
+	// TMDB, UNAVAILABLE when TMDB fails.
+	RequestMatch(context.Context, *connect.Request[v1.RequestMatchRequest]) (*connect.Response[v1.RequestMatchResponse], error)
 }
 
 // NewBrowseServiceClient constructs a client for the sniffarr.v1.BrowseService service. By default,
@@ -198,6 +209,12 @@ func NewBrowseServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(browseServiceMethods.ByName("RequestProbe")),
 			connect.WithClientOptions(opts...),
 		),
+		requestMatch: connect.NewClient[v1.RequestMatchRequest, v1.RequestMatchResponse](
+			httpClient,
+			baseURL+BrowseServiceRequestMatchProcedure,
+			connect.WithSchema(browseServiceMethods.ByName("RequestMatch")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -215,6 +232,7 @@ type browseServiceClient struct {
 	settings      *connect.Client[v1.SettingsRequest, v1.SettingsResponse]
 	refreshPeers  *connect.Client[v1.RefreshPeersRequest, v1.RefreshPeersResponse]
 	requestProbe  *connect.Client[v1.RequestProbeRequest, v1.RequestProbeResponse]
+	requestMatch  *connect.Client[v1.RequestMatchRequest, v1.RequestMatchResponse]
 }
 
 // SearchTitles calls sniffarr.v1.BrowseService.SearchTitles.
@@ -277,6 +295,11 @@ func (c *browseServiceClient) RequestProbe(ctx context.Context, req *connect.Req
 	return c.requestProbe.CallUnary(ctx, req)
 }
 
+// RequestMatch calls sniffarr.v1.BrowseService.RequestMatch.
+func (c *browseServiceClient) RequestMatch(ctx context.Context, req *connect.Request[v1.RequestMatchRequest]) (*connect.Response[v1.RequestMatchResponse], error) {
+	return c.requestMatch.CallUnary(ctx, req)
+}
+
 // BrowseServiceHandler is an implementation of the sniffarr.v1.BrowseService service.
 type BrowseServiceHandler interface {
 	// SearchTitles returns the works whose titles, or whose releases' names
@@ -327,6 +350,14 @@ type BrowseServiceHandler interface {
 	// some; one with no file a probe can read is not probed. NOT_FOUND without
 	// a stored release.
 	RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error)
+	// RequestMatch looks the title keys of a release, or of every release of
+	// a work, up on TMDB at once, those of movies and series that no work is
+	// matched to, whatever their last lookup, and answers once the lookups
+	// are done. It spends TMDB's rate and the classifier's daily budget as a
+	// search does. NOT_FOUND without a stored release, RESOURCE_EXHAUSTED
+	// while the classifier's budget is spent, FAILED_PRECONDITION without
+	// TMDB, UNAVAILABLE when TMDB fails.
+	RequestMatch(context.Context, *connect.Request[v1.RequestMatchRequest]) (*connect.Response[v1.RequestMatchResponse], error)
 }
 
 // NewBrowseServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -408,6 +439,12 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(browseServiceMethods.ByName("RequestProbe")),
 		connect.WithHandlerOptions(opts...),
 	)
+	browseServiceRequestMatchHandler := connect.NewUnaryHandler(
+		BrowseServiceRequestMatchProcedure,
+		svc.RequestMatch,
+		connect.WithSchema(browseServiceMethods.ByName("RequestMatch")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sniffarr.v1.BrowseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BrowseServiceSearchTitlesProcedure:
@@ -434,6 +471,8 @@ func NewBrowseServiceHandler(svc BrowseServiceHandler, opts ...connect.HandlerOp
 			browseServiceRefreshPeersHandler.ServeHTTP(w, r)
 		case BrowseServiceRequestProbeProcedure:
 			browseServiceRequestProbeHandler.ServeHTTP(w, r)
+		case BrowseServiceRequestMatchProcedure:
+			browseServiceRequestMatchHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -489,4 +528,8 @@ func (UnimplementedBrowseServiceHandler) RefreshPeers(context.Context, *connect.
 
 func (UnimplementedBrowseServiceHandler) RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.RequestProbe is not implemented"))
+}
+
+func (UnimplementedBrowseServiceHandler) RequestMatch(context.Context, *connect.Request[v1.RequestMatchRequest]) (*connect.Response[v1.RequestMatchResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sniffarr.v1.BrowseService.RequestMatch is not implemented"))
 }

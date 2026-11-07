@@ -38,6 +38,13 @@ type TitleSearch interface {
 	SearchWorks(ctx context.Context, typ, query, lang string) ([]int64, error)
 }
 
+// TitleMatcher looks title keys up on TMDB when asked, recording the
+// trigger; tmdb.Matcher is one.
+type TitleMatcher interface {
+	Matchable(ctx context.Context, keys []string) ([]store.TitleKey, error)
+	Match(ctx context.Context, k store.TitleKey, trigger string) error
+}
+
 // Browser implements sniffarrv1connect.BrowseServiceHandler.
 type Browser struct {
 	Store *store.Store
@@ -45,7 +52,9 @@ type Browser struct {
 	Tasks *store.Tasks
 	// TMDB, when set, has SearchTitles search TMDB as well as the store.
 	TMDB TitleSearch
-	Log  *slog.Logger
+	// Matcher, when set, serves RequestMatch.
+	Matcher TitleMatcher
+	Log     *slog.Logger
 	// DailyTokens is the classifier's daily token limit Stats reports; 0 is
 	// none.
 	DailyTokens int64

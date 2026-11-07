@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/connect"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -29,6 +30,64 @@ func (b *Browser) RequestProbe(ctx context.Context, req *connect.Request[sniffar
 		return nil, err
 	}
 	return connect.NewResponse(&sniffarrv1.RequestProbeResponse{Releases: int32(n)}), nil
+}
+
+func (b *Browser) RequestMatch(ctx context.Context, req *connect.Request[sniffarrv1.RequestMatchRequest]) (*connect.Response[sniffarrv1.RequestMatchResponse], error) {
+	if b.Matcher == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("TMDB is off"))
+	}
+	lang, err := language(req.Msg.GetLang())
+	if err != nil {
+		return nil, err
+	}
+	hashes, err := b.releases(ctx, req.Msg.GetReleases())
+	if err != nil {
+		return nil, err
+	}
+	titles, err := b.Store.ReleaseTitles(ctx, hashes)
+	if err != nil {
+		return nil, b.internal(ctx, "release titles", err)
+	}
+	if titles.Stored == 0 {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("no stored release"))
+	}
+	due, err := b.Matcher.Matchable(ctx, titles.Keys)
+	if err != nil {
+		return nil, b.internal(ctx, "matchable titles", err)
+	}
+	for _, k := range due {
+		if err := b.Matcher.Match(ctx, k, store.TriggerRequest); err != nil {
+			return nil, b.matchFailed(ctx, k.Key, err)
+		}
+	}
+	if titles, err = b.Store.ReleaseTitles(ctx, hashes); err != nil {
+		return nil, b.internal(ctx, "release titles", err)
+	}
+	sums, err := b.Store.Summaries(ctx, titles.Works)
+	if err != nil {
+		return nil, b.internal(ctx, "work summaries", err)
+	}
+	res := &sniffarrv1.RequestMatchResponse{Titles: int32(len(due))}
+	for _, id := range titles.Works {
+		if s, ok := sums[id]; ok {
+			res.Works = append(res.Works, summary(s, lang))
+		}
+	}
+	return connect.NewResponse(res), nil
+}
+
+// matchFailed is the error of RequestMatch for a lookup of key that failed
+// with err: RESOURCE_EXHAUSTED for the classifier's budget, else
+// UNAVAILABLE.
+func (b *Browser) matchFailed(ctx context.Context, key string, err error) error {
+	if errors.Is(err, classify.ErrBudget) {
+		return connect.NewError(connect.CodeResourceExhausted, err)
+	}
+	if ctx.Err() != nil {
+		return connect.NewError(connect.CodeCanceled, ctx.Err())
+	}
+	b.Log.WarnContext(ctx, "requested match", "key", key, "err", err)
+	return connect.NewError(connect.CodeUnavailable, errors.New("TMDB lookup failed"))
 }
 
 // request records a request of op for the stored releases r names, and

@@ -191,11 +191,13 @@ func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logge
 func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts,
 	rec *arr.Recorder, mem *memconn.Listener) error {
 	var titles search.TitleSearch
+	var matcher search.TitleMatcher
 	if c.matcher != nil {
-		titles = c.matcher
+		titles, matcher = c.matcher, c.matcher
 	}
 	handler, err := server.New(server.Config{
 		TMDB:         titles,
+		Matcher:      matcher,
 		Store:        s,
 		Tasks:        q,
 		Lease:        cfg.Lease,

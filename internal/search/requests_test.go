@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/classify"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -105,4 +107,86 @@ func TestBrowserStatsQueue(t *testing.T) {
 	require.InDelta(t, 2.0, res.Msg.GetQueueProbes().GetPerMinute(), 1e-9)
 	require.Equal(t, 30*time.Second, res.Msg.GetQueueProbes().GetLevels()[4].GetEta().AsDuration())
 	require.Zero(t, res.Msg.GetQueueLookups().GetPerMinute())
+}
+
+// fakeMatcher matches a key to the TMDB ID in ids, or to nothing, recording
+// the trigger, or fails with err.
+type fakeMatcher struct {
+	store    *store.Store
+	ids      map[string]int
+	err      error
+	triggers []string
+}
+
+func (f *fakeMatcher) Matchable(ctx context.Context, keys []string) ([]store.TitleKey, error) {
+	return f.store.UnmatchedTitles(ctx, keys, now.Add(time.Second), len(keys))
+}
+
+func (f *fakeMatcher) Match(ctx context.Context, k store.TitleKey, trigger string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.triggers = append(f.triggers, trigger)
+	found := store.Found{Trigger: trigger}
+	if id, ok := f.ids[k.Key]; ok {
+		found.Hit, found.Confidence, found.Layer = &store.Hit{Type: store.TypeOf(k.Kind), TMDBID: id, Lang: "en", Title: k.Key}, 1, store.LayerTMDB
+	}
+	_, _, err := f.store.RecordMatch(ctx, k.Key, found, now)
+	return err
+}
+
+func TestBrowserRequestMatch(t *testing.T) {
+	ctx := context.Background()
+	b := ranked(t)
+	_, err := b.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: byHash(7)}))
+	require.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err), "without TMDB")
+
+	m := &fakeMatcher{store: b.Store}
+	b.Matcher = m
+	res, err := b.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: byHash(7)}))
+	require.NoError(t, err)
+	require.Equal(t, int32(1), res.Msg.GetTitles())
+	require.Empty(t, res.Msg.GetWorks(), "still nothing")
+	res, err = b.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: byHash(7)}))
+	require.NoError(t, err)
+	require.Equal(t, int32(1), res.Msg.GetTitles(), "nothing found is looked up again at once")
+
+	m.ids = map[string]int{"y:unmatched 2020": 4242}
+	res, err = b.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: byHash(7), Lang: "en"}))
+	require.NoError(t, err)
+	require.Equal(t, int32(1), res.Msg.GetTitles())
+	require.Len(t, res.Msg.GetWorks(), 1)
+	require.Equal(t, "m4242", res.Msg.GetWorks()[0].GetId())
+	require.Equal(t, []string{store.TriggerRequest, store.TriggerRequest, store.TriggerRequest}, m.triggers)
+
+	res, err = b.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: byWork("m693134"), Lang: "ru"}))
+	require.NoError(t, err)
+	require.Zero(t, res.Msg.GetTitles(), "a matched key is not looked up")
+	require.Len(t, res.Msg.GetWorks(), 1)
+	require.Equal(t, "Дюна: Часть вторая", res.Msg.GetWorks()[0].GetTmdb().GetTitle())
+
+	_, _, err = b.Store.Insert(ctx, store.Torrent{Hash: hash(43), Name: "Heat.1995.1080p", Size: 1 << 30, Discovery: "sample", SeenAt: now,
+		Kind: "movie", KindLayer: store.LayerRules, TitleKey: "y:heat 1995"})
+	require.NoError(t, err)
+	m.err = classify.ErrBudget
+	_, err = b.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: byHash(43)}))
+	require.Equal(t, connect.CodeResourceExhausted, connect.CodeOf(err))
+	m.err = errors.New("tmdb: 503")
+	_, err = b.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: byHash(43)}))
+	require.Equal(t, connect.CodeUnavailable, connect.CodeOf(err))
+
+	for _, tt := range []struct {
+		name string
+		r    *sniffarrv1.Releases
+		lang string
+		code connect.Code
+	}{
+		{"not stored", byHash(99), "", connect.CodeNotFound},
+		{"no work", byWork("m1"), "", connect.CodeNotFound},
+		{"none", nil, "", connect.CodeInvalidArgument},
+		{"bad lang", byHash(7), "de", connect.CodeInvalidArgument},
+	} {
+		_, err := b.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: tt.r, Lang: tt.lang}))
+		require.Equal(t, tt.code, connect.CodeOf(err), tt.name)
+	}
 }

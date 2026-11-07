@@ -183,8 +183,8 @@ type Found struct {
 	Confidence float64
 	Layer      string
 	Error      string
-	// Trigger names who asked for the match: TriggerWorker, TriggerSearch
-	// or TriggerTorznab; the journal records it.
+	// Trigger names who asked for the match: TriggerWorker, TriggerSearch,
+	// TriggerTorznab or TriggerRequest; the journal records it.
 	Trigger string
 }
 
@@ -260,6 +260,44 @@ func newestOfKeys(n int, due string) string {
 		WHERE ` + due + ` ORDER BY t.id DESC LIMIT ?`
 }
 
+// Titles are the title keys and the works of some stored releases, each
+// once, and how many of the releases are stored.
+type Titles struct {
+	Keys   []string
+	Works  []int64
+	Stored int
+}
+
+// ReleaseTitles returns the Titles of the stored releases among hashes.
+func (s *Store) ReleaseTitles(ctx context.Context, hashes []Hash) (Titles, error) {
+	var out Titles
+	for c := range slices.Chunk(hashes, 500) {
+		args := make([]any, len(c))
+		for i, h := range c {
+			args[i] = h[:]
+		}
+		err := s.each(ctx, func(rows *sql.Rows) error {
+			var key sql.NullString
+			var work sql.NullInt64
+			if err := rows.Scan(&key, &work); err != nil {
+				return err
+			}
+			out.Stored++
+			if key.Valid && !slices.Contains(out.Keys, key.String) {
+				out.Keys = append(out.Keys, key.String)
+			}
+			if work.Valid && !slices.Contains(out.Works, work.Int64) {
+				out.Works = append(out.Works, work.Int64)
+			}
+			return nil
+		}, "SELECT title_key, work FROM torrent_releases WHERE infohash IN ("+placeholders(len(c))+")", args...)
+		if err != nil {
+			return Titles{}, err
+		}
+	}
+	return out, nil
+}
+
 // WithoutDetails returns up to limit works whose details are not fetched
 // yet: those with releases first, then the oldest first.
 func (s *Store) WithoutDetails(ctx context.Context, limit int) ([]Due, error) {
@@ -280,7 +318,9 @@ func (s *Store) WithoutDetails(ctx context.Context, limit int) ([]Due, error) {
 // match before it but one of LayerArr, which only another of LayerArr
 // replaces, and points every release of the key at the work of the match
 // it records, or at none. It stores the work found either way, and returns
-// its ID, 0 for none, and whether its details are fetched.
+// its ID, 0 for none, and whether its details are fetched. A lookup that
+// finds nothing, or fails, as the last one did is journaled only for
+// TriggerRequest.
 func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Time) (work int64, detailed bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var ref any
@@ -316,7 +356,7 @@ func (s *Store) RecordMatch(ctx context.Context, key string, f Found, at time.Ti
 			d["error"] = f.Error
 		}
 		var releases []matchedRelease
-		if f.Hit != nil || outcome != previous {
+		if f.Hit != nil || outcome != previous || f.Trigger == TriggerRequest {
 			if releases, err = matchedReleases(ctx, tx, key, f.Hit != nil, ref); err != nil {
 				return err
 			}

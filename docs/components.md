@@ -62,7 +62,7 @@ lease ends, and done; and its deletion. The queue's events of an infohash
 only ever sampled are left out: the journal of a sampled infohash begins with
 its metadata. What repeats without changing is left out too: a lease of the
 same attempt after one expired, a title lookup that finds nothing or fails as
-the last one did, a search that returns the release within a day of the last,
+the last one did, unless `RequestMatch` asked for it, a search that returns the release within a day of the last,
 a probe requested again before a lease began, and a Radarr or Sonarr event
 that names the work its title key matched already, which raises the match's
 layer to theirs and writes no row. Peer lookups are not journaled, not even
@@ -174,7 +174,8 @@ one or none, shown each fit's titles, year, language, countries, popularity,
 votes and the first sentence of its overview, within the classifier's daily
 budget and its search reserve. Without `TYPESAFE_API_KEY` several fits with no
 such favourite match nothing. A key that matched nothing is looked up again
-after `SNIFFARR_TMDB_RETRY`, and one that matched never is. Without the key
+after `SNIFFARR_TMDB_RETRY`, and one that matched never is; `RequestMatch`,
+the release card's button, looks a key that matched nothing up at once. Without the key
 nothing is matched and releases carry no IDs.
 
 A work is a movie or a series on TMDB, stored once per TMDB type and ID,

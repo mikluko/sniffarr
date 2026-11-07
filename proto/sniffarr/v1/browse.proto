@@ -70,6 +70,14 @@ service BrowseService {
   // some; one with no file a probe can read is not probed. NOT_FOUND without
   // a stored release.
   rpc RequestProbe(RequestProbeRequest) returns (RequestProbeResponse);
+  // RequestMatch looks the title keys of a release, or of every release of
+  // a work, up on TMDB at once, those of movies and series that no work is
+  // matched to, whatever their last lookup, and answers once the lookups
+  // are done. It spends TMDB's rate and the classifier's daily budget as a
+  // search does. NOT_FOUND without a stored release, RESOURCE_EXHAUSTED
+  // while the classifier's budget is spent, FAILED_PRECONDITION without
+  // TMDB, UNAVAILABLE when TMDB fails.
+  rpc RequestMatch(RequestMatchRequest) returns (RequestMatchResponse);
 }
 
 // Releases names a stored release by its infohash, or a work's releases by
@@ -99,6 +107,21 @@ message RequestProbeResponse {
   // How many stored releases are to be probed: 0 when none has a file a
   // probe can read.
   int32 releases = 1;
+}
+
+message RequestMatchRequest {
+  Releases releases = 1;
+  // The language of the works' TMDBWork texts, as CardRequest.lang.
+  string lang = 2;
+}
+
+message RequestMatchResponse {
+  // How many title keys were looked up: 0 when every key of the releases
+  // is matched already or none is a movie's or a series'.
+  int32 titles = 1;
+  // The works the releases belong to once the lookups are done, each once;
+  // empty when none does.
+  repeated WorkSummary works = 2;
 }
 
 message SettingsRequest {}
