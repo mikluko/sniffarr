@@ -50,6 +50,31 @@ capabilities:
 {{- end }}
 {{- end }}
 
+{{- /*
+sniffarr.waitAPI is the init container wait-api, sniffarr -wait-api against url, when
+waitForAPI.enabled, else nothing. It takes root and url.
+*/}}
+{{- define "sniffarr.waitAPI" -}}
+{{- $w := .root.Values.waitForAPI }}
+{{- if $w.enabled }}
+- name: wait-api
+  image: {{ include "sniffarr.image" .root }}
+  imagePullPolicy: {{ .root.Values.image.pullPolicy }}
+  command: [/sniffarr]
+  args:
+    - "-wait-api"
+  env:
+    - name: SNIFFARR_URL
+      value: {{ .url | quote }}
+  {{- with $w.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext:
+    {{- include "sniffarr.securityContext" .root | nindent 4 }}
+{{- end }}
+{{- end }}
+
 {{- /* sniffarr.uiLoopback is "true" when the UI address is reachable only from its own pod. */}}
 {{- define "sniffarr.uiLoopback" -}}
 {{- if or (hasPrefix "127." .) (hasPrefix "localhost" .) (hasPrefix "[::1]" .) }}true{{- end }}
@@ -343,11 +368,20 @@ spec:
       {{- end }}
       securityContext:
         {{- include "sniffarr.podSecurityContext" $root | nindent 8 }}
+      {{- $url := .url | default (printf "http://%s-api:8080" $root.Release.Name) }}
+      {{- $wait := include "sniffarr.waitAPI" (dict "root" $root "url" $url) | trim }}
+      {{- $extra := list }}
       {{- if $probe }}
-      {{- with $probe.extraInitContainers }}
-      initContainers:
-        {{- toYaml . | nindent 8 }}
+      {{- $extra = $probe.extraInitContainers }}
       {{- end }}
+      {{- if or $wait $extra }}
+      initContainers:
+        {{- with $wait }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- with $extra }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
       containers:
         - name: {{ .component }}
@@ -369,7 +403,7 @@ spec:
             {{- end }}
           env:
             - name: SNIFFARR_URL
-              value: {{ .url | default (printf "http://%s-api:8080" $root.Release.Name) | quote }}
+              value: {{ $url | quote }}
             {{- if $probe }}
             - name: POD_NAME
               valueFrom:

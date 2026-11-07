@@ -13,6 +13,17 @@ telemetry:
   # When false, every sniffarr container gets OTEL_SDK_DISABLED=true; when true, the chart sets no OTEL_* variable.
   enabled: false
 
+waitForAPI:
+  # Gives the ui, sniff, fetch and probe pods an init container wait-api, sniffarr -wait-api, which holds the pod until its SNIFFARR_URL answers with this release's version.
+  enabled: true
+  # Resources of the wait-api init containers.
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      memory: 64Mi
+
 api:
   # Secret the container takes its environment from, such as SNIFFARR_CLASSIFY_API_KEY; none when empty.
   existingSecret: ""

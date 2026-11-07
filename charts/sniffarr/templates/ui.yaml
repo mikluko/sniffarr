@@ -1,6 +1,7 @@
 {{- if .Values.ui.enabled }}
 {{- $v := .Values.ui }}
 {{- $name := printf "%s-ui" .Release.Name }}
+{{- $url := $v.url | default (printf "http://%s-api:8080" .Release.Name) }}
 {{- $loopback := include "sniffarr.uiLoopback" $v.addr }}
 {{- if and $loopback (eq (toString $v.service.targetPort) "ui") }}
 {{- fail (printf "ui.addr %q is a loopback address the Service cannot reach: set ui.service.targetPort to a port of ui.extraContainers" $v.addr) }}
@@ -36,6 +37,10 @@ spec:
       {{- end }}
       securityContext:
         {{- include "sniffarr.podSecurityContext" . | nindent 8 }}
+      {{- with include "sniffarr.waitAPI" (dict "root" . "url" $url) | trim }}
+      initContainers:
+        {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: ui
           image: {{ include "sniffarr.image" . }}
@@ -45,7 +50,7 @@ spec:
             - "-ui"
           env:
             - name: SNIFFARR_URL
-              value: {{ $v.url | default (printf "http://%s-api:8080" .Release.Name) | quote }}
+              value: {{ $url | quote }}
             - name: SNIFFARR_UI_ADDR
               value: {{ $v.addr | quote }}
             {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}

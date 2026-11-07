@@ -81,6 +81,15 @@ that port, rendered as `-port`, so the port peers reach the node on is the
 port it uses; `flags.port` must then be unset or equal. `<component>.upnp`
 renders `-upnp`.
 
+With `waitForAPI.enabled`, true by default, the `ui`, `sniff`, `fetch` and
+`probe` pods start with an init container `wait-api` running `sniffarr
+-wait-api` against the pod's `SNIFFARR_URL`: the pod's own container starts
+only once the API there answers with the version of the pod's image. On an
+upgrade under a rolling update, the old pods keep running while the new ones
+wait; a Deployment in the host network, which is `Recreate`, and the probe
+StatefulSet stop the old pod first, so it is down until the new API answers.
+`waitForAPI.resources` are the init container's resources.
+
 ## One process
 
 With `single.enabled`, the chart renders one Deployment, `<release>`, in place
