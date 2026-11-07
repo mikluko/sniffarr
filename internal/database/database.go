@@ -9,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/url"
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/XSAM/otelsql"
 	"go.opentelemetry.io/otel"
@@ -29,6 +31,7 @@ type DB struct {
 	W, R *sql.DB
 	path string
 	regs []metric.Registration
+	log  *slog.Logger
 }
 
 // Options configures Open.
@@ -38,6 +41,8 @@ type Options struct {
 	Meter metric.MeterProvider
 	// Tracer creates the statement spans; the global TracerProvider when nil.
 	Tracer trace.TracerProvider
+	// Log records the migrations Migrate applies; nothing is logged when nil.
+	Log *slog.Logger
 }
 
 // poolKey tells the write pool from the read pool on spans and metrics.
@@ -52,7 +57,10 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 	q := url.Values{"_pragma": {"journal_mode(WAL)", "busy_timeout(10000)", "foreign_keys(1)", "synchronous(NORMAL)",
 		fmt.Sprintf("journal_size_limit(%d)", journalSizeLimit)}}
 	dsn := "file:" + path + "?" + q.Encode()
-	db := &DB{path: path}
+	db := &DB{path: path, log: opts.Log}
+	if db.log == nil {
+		db.log = slog.New(slog.DiscardHandler)
+	}
 	var err error
 	if db.W, err = db.open(dsn+"&_txlock=immediate", "write", opts); err != nil {
 		return nil, err
@@ -143,7 +151,8 @@ func (db *DB) Close() error {
 }
 
 // Migrate applies the *.sql files of migrations that component has not
-// applied yet, in name order, each in a transaction of its own.
+// applied yet, in name order, each in a transaction of its own, logging
+// each one as it begins and as it ends, with how long it took.
 func (db *DB) Migrate(ctx context.Context, component string, migrations fs.FS) error {
 	names, err := fs.Glob(migrations, "*.sql")
 	if err != nil {
@@ -160,6 +169,8 @@ func (db *DB) Migrate(ctx context.Context, component string, migrations fs.FS) e
 		if err != nil {
 			return err
 		}
+		db.log.InfoContext(ctx, "migrating", "component", component, "migration", names[i])
+		start := time.Now()
 		err = db.Tx(ctx, func(tx *sql.Tx) error {
 			if _, err := tx.ExecContext(ctx, string(body)); err != nil {
 				return fmt.Errorf("%s %s: %w", component, names[i], err)
@@ -170,6 +181,7 @@ func (db *DB) Migrate(ctx context.Context, component string, migrations fs.FS) e
 		if err != nil {
 			return err
 		}
+		db.log.InfoContext(ctx, "migrated", "component", component, "migration", names[i], "took", time.Since(start))
 	}
 	return nil
 }

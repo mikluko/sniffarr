@@ -1,7 +1,10 @@
 package database
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"log/slog"
 	"path/filepath"
 	"testing"
 	"testing/fstest"
@@ -29,4 +32,37 @@ func TestMigrate(t *testing.T) {
 	var n int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM a").Scan(&n))
 	require.Equal(t, 1, n)
+}
+
+func TestMigrateLogs(t *testing.T) {
+	ctx := context.Background()
+	var buf bytes.Buffer
+	db, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"), Options{Log: slog.New(slog.NewJSONHandler(&buf, nil))})
+	require.NoError(t, err)
+	defer db.Close()
+	m := fstest.MapFS{
+		"001.sql": {Data: []byte("CREATE TABLE a (x INTEGER)")},
+		"002.sql": {Data: []byte("INSERT INTO a VALUES (1)")},
+	}
+	require.NoError(t, db.Migrate(ctx, "a", m))
+	require.NoError(t, db.Migrate(ctx, "a", m))
+
+	type record struct {
+		Msg, Component, Migration string
+		Took                      *int64
+	}
+	var got []record
+	dec := json.NewDecoder(&buf)
+	for dec.More() {
+		var r record
+		require.NoError(t, dec.Decode(&r))
+		got = append(got, r)
+	}
+	require.Len(t, got, 4, "a migration already applied is not logged")
+	for i, name := range []string{"001.sql", "002.sql"} {
+		require.Equal(t, record{Msg: "migrating", Component: "a", Migration: name}, got[2*i])
+		require.Equal(t, "migrated", got[2*i+1].Msg)
+		require.Equal(t, name, got[2*i+1].Migration)
+		require.NotNil(t, got[2*i+1].Took)
+	}
 }
