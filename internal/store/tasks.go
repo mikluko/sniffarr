@@ -208,8 +208,9 @@ type Trimmed struct {
 // Trim evicts free fetch tasks queued for longer than MaxAge, then the free
 // fetch tasks beyond MaxSize, samples before announced ones and the oldest
 // first, and keeps every evicted hash dead for DeadFor. It drops the peer
-// lookups and probes of releases no longer stored, and forgets the dead
-// hashes whose time is up.
+// lookups of releases no longer stored and the probes of releases no longer
+// stored or that a probe cannot read, and forgets the dead hashes whose time
+// is up.
 func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 	var t Trimmed
 	until := now.Add(q.opts.DeadFor).UnixMilli()
@@ -230,8 +231,12 @@ func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 			}
 			t.Oversize = n
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM task_queue WHERE kind IN ('peers', 'probe')
+		if _, err := tx.ExecContext(ctx, `DELETE FROM task_queue WHERE kind = 'peers'
 			AND NOT EXISTS (SELECT 1 FROM torrent_releases t WHERE t.infohash = task_queue.infohash)`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM task_queue WHERE kind = 'probe'
+			AND NOT EXISTS (SELECT 1 FROM torrent_releases t WHERE t.infohash = task_queue.infohash AND `+probeReadable+`)`, probeArgs()...); err != nil {
 			return err
 		}
 		res, err := tx.ExecContext(ctx, "DELETE FROM task_dead WHERE until <= ?", now.UnixMilli())

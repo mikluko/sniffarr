@@ -77,6 +77,21 @@ func TestTrimDropsTasksOfGoneReleases(t *testing.T) {
 	require.Equal(t, []string{"fetch 9", "peers 2", "probe 2"}, kinds)
 }
 
+func TestTrimDropsProbesNeverLeased(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	q, err := NewTasks(ctx, s.db, TaskOptions{})
+	require.NoError(t, err)
+	readable := insertProbeable(t, s, 1, "Alien.1979.1080p", 0, "Alien.1979.1080p.mkv")
+	avi := insertProbeable(t, s, 2, "Heat.1995.DVDRip", 5, "Heat.1995.DVDRip.avi")
+	_, err = s.RequestProbe(ctx, []Hash{readable, avi}, t0)
+	require.NoError(t, err)
+
+	_, err = q.Trim(ctx, t0)
+	require.NoError(t, err)
+	require.Equal(t, []Hash{readable}, queuedProbes(t, s), "a release without peers waits; one a probe cannot read goes")
+}
+
 func TestMigrateTaskQueue(t *testing.T) {
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})

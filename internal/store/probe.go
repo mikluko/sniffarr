@@ -113,22 +113,23 @@ const probeGrown = `(p.peers_week IS NULL OR t.peers_week >= 2 * p.peers_week AN
 const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND ` + probeGrown
 
 // WantProbe queues a probe at PriorityArr, at the time, for each stored
-// release of the hashes a search returned, unless its probe is done or its
-// failures ran out without its peers growing; a failed one waits out its
-// backoff. A release already queued moves ahead to PriorityArr and to the
-// time.
+// release of the hashes a search returned that a probe can read, unless its
+// probe is done or its failures ran out without its peers growing; a failed
+// one waits out its backoff. A release already queued moves ahead to
+// PriorityArr and to the time.
 func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) error {
 	if len(hashes) == 0 {
 		return nil
 	}
-	args := make([]any, 0, len(hashes)+2)
+	args := make([]any, 0, len(hashes)+2+len(probeExtensions))
 	args = append(args, PriorityArr, at.UnixMilli())
 	for _, h := range hashes {
 		args = append(args, h[:])
 	}
+	args = append(args, probeArgs()...)
 	_, err := s.w.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
 		SELECT 'probe', t.infohash, ?1, ?2, coalesce(p.retry_at * 1000, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
-		WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND (p.outcome IS NULL OR p.outcome = '`+ProbeFailed+`' AND `+probeGrown+`)
+		WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND (p.outcome IS NULL OR p.outcome = '`+ProbeFailed+`' AND `+probeGrown+`) AND `+probeReadable+`
 		ON CONFLICT (kind, infohash) DO UPDATE SET priority = min(task_queue.priority, excluded.priority), queued_at = excluded.queued_at`, args...)
 	return err
 }
@@ -255,13 +256,17 @@ func unqueuedProbe(ctx context.Context, tx *sql.Tx, now time.Time) ([]byte, erro
 	return nil, nil
 }
 
-// probeCond selects releases t a probe can read whose probe row p, when
-// state names it, passes state; its arguments are those of state, then
-// probeArgs.
+// probeCond selects releases t with peers a probe can read whose probe row
+// p, when state names it, passes state; its arguments are those of state,
+// then probeArgs.
 func probeCond(state string) string {
-	return `t.kind IN ('movie', 'series') AND t.peers_week > 0 AND (` + state + `)
-		AND EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = t.id AND (f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ?))`
+	return `t.peers_week > 0 AND (` + state + `) AND ` + probeReadable
 }
+
+// probeReadable selects releases t a probe can read: a movie or a series
+// with a stored file of a format a probe reads. Its arguments are probeArgs.
+const probeReadable = `t.kind IN ('movie', 'series')
+	AND EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = t.id AND (f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ? OR f.path LIKE ?))`
 
 // probeArgs are the arguments probeCond takes after those of its state.
 func probeArgs() []any {

@@ -331,6 +331,37 @@ func TestRequestProbe(t *testing.T) {
 	require.Equal(t, failed, c.Hash, "a failed request stays searched, due once its backoff is out")
 }
 
+// queuedProbes returns the hashes queued for a probe, in hash order.
+func queuedProbes(t *testing.T, s *Store) []Hash {
+	t.Helper()
+	var hs []Hash
+	require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
+		var h []byte
+		if err := rows.Scan(&h); err != nil {
+			return err
+		}
+		hs = append(hs, Hash(h))
+		return nil
+	}, "SELECT infohash FROM task_queue WHERE kind = 'probe' ORDER BY infohash"))
+	return hs
+}
+
+func TestWantProbeReadableOnly(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	readable := insertProbeable(t, s, 1, "Alien.1979.1080p", 0, "Alien.1979.1080p.mkv")
+	avi := insertProbeable(t, s, 2, "Heat.1995.DVDRip", 5, "Heat.1995.DVDRip.avi")
+	disc := insertProbeable(t, s, 4, "Disc.2004.1080p", 5, "Disc/BDMV/STREAM/00001.m2ts")
+	music := torrent(5, "Album 2005", "Album/clip.mkv")
+	music.Kind, music.KindLayer = "music", LayerRules
+	_, _, err := s.Insert(ctx, music)
+	require.NoError(t, err)
+	setPeersWeek(t, s, music.Hash, 5)
+
+	require.NoError(t, s.WantProbe(ctx, []Hash{readable, avi, disc, music.Hash}, t0))
+	require.Equal(t, []Hash{readable}, queuedProbes(t, s), "a release without peers waits; a file or kind a probe cannot read is not queued")
+}
+
 func TestProbeDoneResetsFailures(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
