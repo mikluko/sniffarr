@@ -47,7 +47,8 @@ at once, and a sample once it is forgotten.
 What happens to an infohash is recorded in the store, `torrent_journal`, one
 row per event in the transaction of the change it records: queued, promoted
 or queued again, leased once per attempt and per promotion, failed for no
-peers or a timeout, dropped and evicted, for an infohash sighted by announce,
+peers or a timeout, with the leases the attempt took when it took more than
+one, dropped and evicted, for an infohash sighted by announce,
 a feed or Radarr or Sonarr; metadata fetched and stored, rejected or already
 stored; each classification and title match, with who asked for it; the grabs
 and imports Radarr and Sonarr report; its first listing in each feed,

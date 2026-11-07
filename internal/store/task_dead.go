@@ -50,11 +50,12 @@ func evictionAttr(why string) metric.AddOption {
 }
 
 // evicted is a queued hash that evict moved into the dead set, with the
-// priority and queued_at of its queue row.
+// priority, queued_at and leases of its queue row.
 type evicted struct {
 	hash     Hash
 	priority int
 	queuedAt int64
+	leases   int
 }
 
 // evict moves the queued hashes whose ids selectIDs returns into the dead set
@@ -64,7 +65,7 @@ func evict(ctx context.Context, tx *sql.Tx, selectIDs string, until int64, args 
 		append([]any{until}, args...)...); err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, "DELETE FROM task_queue WHERE id IN ("+selectIDs+") RETURNING infohash, priority, queued_at", args...)
+	rows, err := tx.QueryContext(ctx, "DELETE FROM task_queue WHERE id IN ("+selectIDs+") RETURNING infohash, priority, queued_at, leases", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +74,7 @@ func evict(ctx context.Context, tx *sql.Tx, selectIDs string, until int64, args 
 	for rows.Next() {
 		var e evicted
 		var b []byte
-		if err := rows.Scan(&b, &e.priority, &e.queuedAt); err != nil {
+		if err := rows.Scan(&b, &e.priority, &e.queuedAt, &e.leases); err != nil {
 			return nil, err
 		}
 		e.hash = Hash(b)

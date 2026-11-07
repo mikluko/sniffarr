@@ -397,6 +397,10 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, reason string, download
 		if err != nil {
 			return err
 		}
+		leases, err := probeLeases(ctx, tx, h)
+		if err != nil {
+			return err
+		}
 		failed++
 		final = failed >= attempts
 		retry := at.Add(backoff << min(failed-1, attempts-1))
@@ -409,7 +413,7 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, reason string, download
 		if err != nil {
 			return err
 		}
-		d := Detail("attempt", failed, "downloaded", downloaded, "peers_week", peers)
+		d := Detail("attempt", failed, "downloaded", downloaded, "peers_week", peers, "leases", manyLeases(leases))
 		if !final && !requested {
 			d["retry_at"] = retry.Unix()
 		}
@@ -417,6 +421,14 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, reason string, download
 		return journal(ctx, tx, h, at, JournalProbed, reason, d)
 	})
 	return final, err
+}
+
+// probeLeases returns how many times the probe of h has been leased since
+// its attempt began or it last moved ahead, 0 when it is not queued.
+func probeLeases(ctx context.Context, tx *sql.Tx, h Hash) (int, error) {
+	var n int
+	err := tx.QueryRowContext(ctx, "SELECT leases FROM task_queue WHERE kind = 'probe' AND infohash = ?", h[:]).Scan(&n)
+	return n, ignoreNoRows(err)
 }
 
 // requeueProbe frees the probe of h, keeping it requested and due at once
@@ -469,6 +481,10 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 		if err != nil {
 			return err
 		}
+		leases, err := probeLeases(ctx, tx, h)
+		if err != nil {
+			return err
+		}
 		if err := probed(ctx, tx, id, h, p, at); err != nil {
 			return err
 		}
@@ -482,7 +498,7 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 				return err
 			}
 		}
-		d := Detail("path", p.Path, "format", p.Format, "downloaded", p.Downloaded)
+		d := Detail("path", p.Path, "format", p.Format, "downloaded", p.Downloaded, "leases", manyLeases(leases))
 		if p.Outcome != ProbeTracks {
 			return journal(ctx, tx, h, at, JournalProbed, p.Outcome, d)
 		}

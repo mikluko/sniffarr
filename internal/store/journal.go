@@ -183,6 +183,15 @@ func journalEach(ctx context.Context, tx *sql.Tx, hashes []Hash, limit int, at t
 	return nil
 }
 
+// manyLeases is n, the leases an attempt took, when it took more than one;
+// else 0, which Detail leaves out.
+func manyLeases(n int) int {
+	if n > 1 {
+		return n
+	}
+	return 0
+}
+
 // hashesOf reads the infohash column of every row.
 func hashesOf(rows *sql.Rows, err error) ([]Hash, error) {
 	if err != nil {

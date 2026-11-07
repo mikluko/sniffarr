@@ -420,8 +420,8 @@ func (q *Tasks) Complete(ctx context.Context, kind string, h Hash) error {
 func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, maxAttempts int, backoff time.Duration) (bool, error) {
 	var dropped bool
 	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
-		var attempts, p int
-		err := tx.QueryRowContext(ctx, "SELECT attempts, priority FROM task_queue WHERE kind = 'fetch' AND infohash = ? AND lease_owner = ?", h[:], owner).Scan(&attempts, &p)
+		var attempts, p, leases int
+		err := tx.QueryRowContext(ctx, "SELECT attempts, priority, leases FROM task_queue WHERE kind = 'fetch' AND infohash = ? AND lease_owner = ?", h[:], owner).Scan(&attempts, &p, &leases)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -436,8 +436,8 @@ func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 			if err != nil {
 				return err
 			}
-			return journalEvicted(ctx, tx, rows, now, JournalFetchFailed, "dropped", func(evicted) map[string]any {
-				return Detail("owner", owner, "attempt", attempts, "dead_until", time.UnixMilli(until))
+			return journalEvicted(ctx, tx, rows, now, JournalFetchFailed, "dropped", func(e evicted) map[string]any {
+				return Detail("owner", owner, "attempt", attempts, "dead_until", time.UnixMilli(until), "leases", manyLeases(e.leases))
 			})
 		}
 		retry := now.Add(backoff << (attempts - 1))
@@ -448,7 +448,7 @@ func (q *Tasks) Fail(ctx context.Context, h Hash, owner int64, now time.Time, ma
 		if !journaled(p) {
 			return nil
 		}
-		return journal(ctx, tx, h, now, JournalFetchFailed, "timeout", Detail("owner", owner, "attempt", attempts, "retry_at", retry))
+		return journal(ctx, tx, h, now, JournalFetchFailed, "timeout", Detail("owner", owner, "attempt", attempts, "retry_at", retry, "leases", manyLeases(leases)))
 	})
 	return dropped, err
 }
@@ -465,8 +465,8 @@ func (q *Tasks) NoPeers(ctx context.Context, h Hash, owner int64, now time.Time)
 			return err
 		}
 		n = len(rows)
-		return journalEvicted(ctx, tx, rows, now, JournalFetchFailed, "no_peers", func(evicted) map[string]any {
-			return Detail("owner", owner, "dead_until", time.UnixMilli(until))
+		return journalEvicted(ctx, tx, rows, now, JournalFetchFailed, "no_peers", func(e evicted) map[string]any {
+			return Detail("owner", owner, "dead_until", time.UnixMilli(until), "leases", manyLeases(e.leases))
 		})
 	})
 	if err != nil {
