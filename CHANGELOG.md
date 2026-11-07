@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The movie and series page sets the poster beside the TMDB details, lists the place in the top, peers, releases and dub as a table, and answers "Refresh peers" and "Probe tracks" beside the buttons.
 - A movie's or series' releases are filtered by segments for season, quality, source and dub, with size and episode as fields; "Reset filters" shows only while a filter is set, and on a phone the filters fold behind "Filters · N".
 - The episode filter takes `E05` as well as `5`.
+- The top's "±" reads "new" in bold for a work below 100th in the previous window or absent from it, with its previous place in a tooltip.
+- The top filters by segmented switches, shows audio on one line, "ru explicit 2 of 95 · likely 7 more", with the marks in a tooltip, and a dashed frame for a work with no poster.
+- The web UI answers a path it does not serve, and an unknown movie, series or infohash, with a 404 page naming the path and linking home.
 
 ## [0.44.0-alpha.1] - 2026-11-07
 
