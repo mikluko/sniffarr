@@ -52,7 +52,7 @@
   <label>{{.T "f.layer"}}
     <select name="layer"{{if $f.Layer}} class="set"{{end}}>
       <option value="">{{.T "f.all"}}</option>
-      {{range layers}}<option value="{{.}}"{{if eq . $f.Layer}} selected{{end}}>{{$.T (concat "layer." .)}}</option>{{end}}
+      {{range .LayerOpts}}<option value="{{.}}"{{if eq . $f.Layer}} selected{{end}}>{{$.T (concat "layer." .)}}</option>{{end}}
     </select></label>
   <label>{{.T "f.minsize"}}
     <input name="min" type="text" inputmode="decimal" value="{{$f.MinSizeGB}}" placeholder="{{.T "unit.gb"}}" class="num{{if $f.MinSizeGB}} set{{end}}"></label>
@@ -67,7 +67,7 @@
 {{if .Results.Rows}}
 <table class="t tt2">
   <thead><tr>
-    <th>{{.T "torrents.col_name"}}</th><th class="r">{{.T "col.peers7"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "rel.quality_c"}}</th><th>{{.T "col.kind"}}</th>
+    <th>{{.T "torrents.col_name"}}</th><th class="r">{{.T "col.peers7"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "rel.quality_c"}}</th><th>{{template "tip" (tipArgs (.T "col.kind") (.T "torrents.kind_tip"))}}</th>
     {{if .VoiceLangs}}<th>{{.T "top.audio"}}</th>{{end}}
     <th>{{.T "col.source"}}</th><th class="r"><span class="tipr">{{template "tip" (tipArgs (.T "col.last") (.T "torrents.last_tip"))}}</span></th>
   </tr></thead>
@@ -81,7 +81,7 @@
       <td class="r pe">{{$.Num .Peers}}</td>
       <td class="r">{{$.Size .Size}}</td>
       <td>{{if .Quality}}{{$.T (concat "quality." .Quality)}}{{else}}<span class="mu">—</span>{{end}}</td>
-      <td>{{$.T (concat "kind." .Kind)}} <span class="mu">· {{$r := .}}{{with $.LayerTip $r}}{{template "tip" (tipArgs ($.LayerLabel $r) .)}}{{else}}{{$.LayerLabel $r}}{{end}}</span></td>
+      <td>{{template "tip" (tipArgs ($.T (concat "kind." .Kind)) ($.LayerTip .))}}</td>
       {{if $.VoiceLangs}}<td class="au">{{template "relaudio" (audioArgs $ .Audio)}}</td>{{end}}
       <td>{{$.T (concat "source." .Source)}}</td>
       <td class="r mu"><span class="tipr">{{template "tip" (tipArgs ($.Time .LastSeen) ($.Fmt "torrents.first_tip" ($.Date .FirstSeen)))}}</span></td>

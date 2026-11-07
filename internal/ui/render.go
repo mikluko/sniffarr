@@ -115,7 +115,6 @@ func New() (*Renderer, error) {
 		"icon":        r.Icon,
 		"kinds":       func() []string { return Kinds },
 		"sources":     func() []string { return Sources },
-		"layers":      func() []string { return Layers },
 		"voiceModes":  func() []string { return VoiceModes },
 		"voiceBands":  func() []string { return VoiceBands },
 		"topKinds":    func() []string { return TopKinds },

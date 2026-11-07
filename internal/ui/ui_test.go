@@ -975,9 +975,10 @@ func TestTorrentsMarkup(t *testing.T) {
 	}
 	body := render(SampleTorrents(b, "", Filters{}))
 	for _, want := range []string{
-		tip("классификатор 0,93", "Вид определил классификатор, уверенность 0,93."),
-		tip("правила", "Вид определён правилами по имени и файлам."),
-		tip("повтор по названию", "Вид взят у раздачи с тем же названием."),
+		tip("фильм", "Вид определил классификатор, уверенность 0,93."),
+		tip("фильм", "Вид определён правилами по имени и файлам."),
+		tip("фильм", "Вид взят у раздачи с тем же названием."),
+		tip("Вид", "Кто решил вид и с какой уверенностью, в тултипе у значения."),
 		tip("20.10 14:00", "Впервые: 25.08"),
 		ph("?", "Не сопоставлено с фильмом или сериалом."),
 		ph("—", "Сопоставлено, постера в TMDB нет."),
@@ -989,7 +990,12 @@ func TestTorrentsMarkup(t *testing.T) {
 			t.Errorf("no %s", want)
 		}
 	}
-	for _, not := range []string{`class="set"`, `class="tfreset"`, `<span class="mu"> · `} {
+	undecided := SampleTorrents(b, "", Filters{})
+	undecided.Results.Rows[0].Kind, undecided.Results.Rows[0].Layer = "unknown", "none"
+	if body := render(undecided); !strings.Contains(body, tip("неизвестно", "Вид ещё не определён.")) {
+		t.Error("no tooltip on a kind no layer decided")
+	}
+	for _, not := range []string{`class="set"`, `class="tfreset"`, `<span class="mu"> · `, `· —`} {
 		if strings.Contains(body, not) {
 			t.Errorf("%s without a filter set", not)
 		}
@@ -1006,6 +1012,18 @@ func TestTorrentsMarkup(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("filtered: no %s", want)
 		}
+	}
+
+	opt := `<option value="classifier"`
+	if body := render(SampleTorrents(b, "", Filters{})); strings.Contains(body, opt) {
+		t.Error("the classifier layer offered while it is off")
+	}
+	if body := render(SampleTorrents(b, "", Filters{Layer: "classifier"})); !strings.Contains(body, opt) {
+		t.Error("the selected classifier layer dropped from the filter")
+	}
+	b.Classifier = true
+	if body := render(SampleTorrents(b, "", Filters{})); !strings.Contains(body, opt) {
+		t.Error("no classifier layer while it is on")
 	}
 
 	b.VoiceLangs = nil

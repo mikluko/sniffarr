@@ -110,26 +110,26 @@ type TorrentsPage struct {
 	ResetURL string
 }
 
-// LayerLabel names the layer that decided the row's kind, with the
-// classifier's confidence when it decided.
-func (p TorrentsPage) LayerLabel(r Row) string {
-	s := p.T("layer." + r.Layer)
-	if r.Layer == "classifier" && r.Confidence != nil {
-		s += " " + p.Prob(r.Confidence)
-	}
-	return s
-}
-
-// LayerTip says how the layer decided the row's kind; "" for a layer that
-// did not.
+// LayerTip says who decided the row's kind, with the classifier's
+// confidence; a row no layer decided says it is undetermined.
 func (p TorrentsPage) LayerTip(r Row) string {
 	switch {
 	case r.Layer == "classifier" && r.Confidence != nil:
 		return p.Fmt("torrents.layer_tip.classifier", p.Prob(r.Confidence))
-	case r.Layer == "rules" || r.Layer == "title_repeat":
+	case r.Layer == "classifier":
+		return p.T("torrents.layer_tip.classifier_plain")
+	case slices.Contains(Layers, r.Layer):
 		return p.T("torrents.layer_tip." + r.Layer)
 	}
-	return ""
+	return p.T("torrents.layer_tip.none")
+}
+
+// LayerOpts are the layers the filter offers: the classifier only while it
+// runs or is the one selected.
+func (p TorrentsPage) LayerOpts() []string {
+	return slices.DeleteFunc(slices.Clone(Layers), func(l string) bool {
+		return l == "classifier" && !p.Classifier && p.Filters.Layer != l
+	})
 }
 
 // Filters is the torrents page's filters and sort.
