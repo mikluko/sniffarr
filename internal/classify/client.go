@@ -1,6 +1,6 @@
-// Package classify asks TypeSafe's Jev what a torrent is, whether it carries
-// an audio track in each audio language, and what kind of video copy it is,
-// and records the answers.
+// Package classify asks TypeSafe's Jev, or a model serving its API, what a
+// torrent is, whether it carries an audio track in each audio language, and
+// what kind of video copy it is, and records the answers.
 package classify
 
 import (
@@ -24,8 +24,9 @@ import (
 // DefaultURL is TypeSafe's evaluation endpoint.
 const DefaultURL = "https://api.typesafe.ai/v1/systemone"
 
-// Client calls the TypeSafe evaluation endpoint.
+// Client calls a Jev-compatible evaluation endpoint, TypeSafe's by default.
 type Client struct {
+	// Key is sent as a bearer token; empty sends no Authorization header.
 	Key   string
 	URL   string
 	Model string
@@ -271,7 +272,9 @@ func (c *Client) post(ctx context.Context, body []byte) (response, error) {
 	if err != nil {
 		return response{}, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Key)
+	if c.Key != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Key)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	c.once.Do(func() { c.traced = telemetry.HTTPClient(c.HTTP) })
 	res, err := c.traced.Do(req)

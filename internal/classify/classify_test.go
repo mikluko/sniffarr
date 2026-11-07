@@ -189,6 +189,20 @@ func TestClientWrongKey(t *testing.T) {
 	require.False(t, apiErr.Permanent())
 }
 
+func TestClientNoKey(t *testing.T) {
+	var auth []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Values("Authorization")
+		_, _ = w.Write([]byte(answer200))
+	}))
+	t.Cleanup(srv.Close)
+	c := New("")
+	c.URL = srv.URL
+	_, err := c.Classify(context.Background(), Input{Name: "Heat.1995.1080p.BluRay.REMUX"})
+	require.NoError(t, err)
+	require.Empty(t, auth, "no key, no Authorization header")
+}
+
 func setup(t *testing.T, names ...string) *store.Store {
 	t.Helper()
 	ctx := context.Background()
