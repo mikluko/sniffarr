@@ -318,6 +318,9 @@ func TestJournalClassified(t *testing.T) {
 	}
 	classify(t, s, mustGet(t, s, hash(2)).ID, Classification{Source: "remux", Trigger: TriggerWorker})
 	require.JSONEq(t, `{"source":"remux","trigger":"worker"}`, entry(t, s, hash(2), JournalClassified, LayerJev).Detail, "a kind known already is not asked about")
+	classify(t, s, mustGet(t, s, hash(3)).ID, Classification{Kind: "series", KindConfidence: 0.6, Source: "web", Trigger: TriggerWorker})
+	require.JSONEq(t, `{"source":"web","trigger":"worker"}`, entry(t, s, hash(3), JournalClassified, LayerJev).Detail, "a kind a sibling gave first is not applied")
+	require.Equal(t, "movie", mustGet(t, s, hash(3)).Kind)
 
 	require.NoError(t, s.ClassifyFailed(ctx, mustGet(t, s, hash(3)).ID, "malformed", t0))
 	require.JSONEq(t, `{"error":"malformed"}`, entry(t, s, hash(3), JournalClassified, "failed").Detail)

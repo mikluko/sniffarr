@@ -489,11 +489,16 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 			}
 		}
 		var siblings []Hash
+		var kind string
+		var kindConfidence float64
 		if c.Kind != "" {
 			var key sql.NullString
 			err := tx.QueryRowContext(ctx, `UPDATE torrent_releases SET kind = ?, kind_layer = ?, kind_confidence = ? WHERE id = ? AND kind IS NULL
 				RETURNING title_key`, c.Kind, LayerJev, c.KindConfidence, id).Scan(&key)
-			if err = ignoreNoRows(err); err != nil {
+			switch {
+			case err == nil:
+				kind, kindConfidence = c.Kind, c.KindConfidence
+			case !errors.Is(err, sql.ErrNoRows):
 				return err
 			}
 			if key.Valid {
@@ -503,7 +508,7 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 				copied = len(siblings)
 			}
 		}
-		if err := journal(ctx, tx, h, at, JournalClassified, LayerJev, Detail("kind", c.Kind, "kind_confidence", c.KindConfidence, "source", c.Source,
+		if err := journal(ctx, tx, h, at, JournalClassified, LayerJev, Detail("kind", kind, "kind_confidence", kindConfidence, "source", c.Source,
 			"source_confidence", c.SourceConfidence, "audio", c.Audio, "copied", copied, "trigger", c.Trigger)); err != nil {
 			return err
 		}
