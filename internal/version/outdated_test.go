@@ -49,6 +49,22 @@ func TestTagged(t *testing.T) {
 	require.False(t, Tagged("0.44"))
 }
 
+func TestStable(t *testing.T) {
+	require.True(t, Stable("0.43.0"))
+	require.True(t, Stable("v0.43.0"))
+	require.False(t, Stable("v0.44.0-beta.1"))
+	require.False(t, Stable(Dev))
+}
+
+func TestNewer(t *testing.T) {
+	require.True(t, Newer("0.44.0", "0.43.9"))
+	require.True(t, Newer("v1.0.0", "0.99.0"))
+	require.False(t, Newer("0.43.0", "0.43.0"))
+	require.False(t, Newer("0.42.5", "0.43.0"))
+	require.True(t, Newer("0.43.0", ""), "any tagged version is newer than none")
+	require.False(t, Newer(Dev, "0.43.0"))
+}
+
 func TestPrerelease(t *testing.T) {
 	require.True(t, Prerelease("0.44.0-alpha.4"))
 	require.False(t, Prerelease("0.44.0"))

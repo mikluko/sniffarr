@@ -50,6 +50,28 @@ func Tagged(v string) bool {
 	return ok
 }
 
+// Stable reports whether v is a MAJOR.MINOR.PATCH version without a
+// pre-release, such as "0.43.0" or "v0.43.0".
+func Stable(v string) bool {
+	s, ok := parseSemver(v)
+	return ok && !s.pre
+}
+
+// Newer reports whether a is a later version than b by their numbers; a
+// version that is not Tagged is never newer, and every Tagged one is newer
+// than it.
+func Newer(a, b string) bool {
+	va, okA := parseSemver(a)
+	vb, okB := parseSemver(b)
+	switch {
+	case !okA:
+		return false
+	case !okB:
+		return true
+	}
+	return va.compare(vb) > 0
+}
+
 // Prerelease reports whether v is a MAJOR.MINOR.PATCH version with a
 // pre-release, such as "0.44.0-alpha.4".
 func Prerelease(v string) bool {

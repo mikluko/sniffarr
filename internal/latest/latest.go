@@ -1,20 +1,23 @@
-// Package latest reads sniffarr's latest stable release from the forge it
-// is published on, and keeps the answer between checks.
+// Package latest reads sniffarr's latest stable release from a feed of its
+// releases, and keeps the answer between checks.
 package latest
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
-// URL is the Forgejo endpoint of the project's latest stable release.
-const URL = "https://forge.sarak.sh/api/v1/repos/mikluko/sniffarr/releases/latest"
+// URL is the RSS feed of the project's releases.
+const URL = "https://sarak.sh/mikluko/sniffarr/releases.rss"
 
 // DefaultInterval is the wait between checks that answered; DefaultRetry
 // the wait after one that failed.
@@ -100,17 +103,78 @@ func (c *Checker) Run(ctx context.Context) error {
 	}
 }
 
-// forgejoRelease is the part of a Forgejo release the check reads.
-type forgejoRelease struct {
-	TagName     string    `json:"tag_name"`
-	PublishedAt time.Time `json:"published_at"`
-	HTMLURL     string    `json:"html_url"`
-	Prerelease  bool      `json:"prerelease"`
-	Draft       bool      `json:"draft"`
+// feed is the part of an RSS 2.0 or Atom feed of releases the check reads.
+type feed struct {
+	Items   []feedItem  `xml:"channel>item"`
+	Entries []feedEntry `xml:"entry"`
 }
 
-// fetch reads the latest release; false without error when there is no
-// stable one.
+// feedItem is an RSS item.
+type feedItem struct {
+	Title   string `xml:"title"`
+	Link    string `xml:"link"`
+	PubDate string `xml:"pubDate"`
+}
+
+// feedEntry is an Atom entry.
+type feedEntry struct {
+	Title string `xml:"title"`
+	Links []struct {
+		Href string `xml:"href,attr"`
+		Rel  string `xml:"rel,attr"`
+	} `xml:"link"`
+	Published string `xml:"published"`
+	Updated   string `xml:"updated"`
+}
+
+// releases are the feed's items and entries as releases, those whose
+// version is not Tagged included.
+func (f feed) releases() []Release {
+	var out []Release
+	for _, it := range f.Items {
+		at, _ := time.Parse(time.RFC1123Z, it.PubDate)
+		out = append(out, Release{Version: tagOf(it.Link, it.Title), Published: at.UTC(), URL: it.Link})
+	}
+	for _, e := range f.Entries {
+		link := ""
+		for _, l := range e.Links {
+			if l.Rel == "" || l.Rel == "alternate" {
+				link = l.Href
+				break
+			}
+		}
+		at, err := time.Parse(time.RFC3339, e.Published)
+		if err != nil {
+			at, _ = time.Parse(time.RFC3339, e.Updated)
+		}
+		out = append(out, Release{Version: tagOf(link, e.Title), Published: at.UTC(), URL: link})
+	}
+	return out
+}
+
+// tagOf is a release's version without "v": the last segment of its link,
+// which ends in the tag on Forgejo and GitHub, else its title.
+func tagOf(link, title string) string {
+	if v := path.Base(link); version.Tagged(v) {
+		return strings.TrimPrefix(v, "v")
+	}
+	return strings.TrimPrefix(strings.TrimSpace(title), "v")
+}
+
+// latestStable is the highest stable version among rs; false for none.
+func latestStable(rs []Release) (Release, bool) {
+	var best Release
+	ok := false
+	for _, r := range rs {
+		if version.Stable(r.Version) && (!ok || version.Newer(r.Version, best.Version)) {
+			best, ok = r, true
+		}
+	}
+	return best, ok
+}
+
+// fetch reads the feed's latest stable release; false without error when it
+// lists none.
 func (c *Checker) fetch(ctx context.Context) (Release, bool, error) {
 	url := c.URL
 	if url == "" {
@@ -120,7 +184,7 @@ func (c *Checker) fetch(ctx context.Context) (Release, bool, error) {
 	if err != nil {
 		return Release{}, false, err
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", "application/rss+xml, application/atom+xml, application/xml")
 	client := c.HTTP
 	if client == nil {
 		client = http.DefaultClient
@@ -137,14 +201,12 @@ func (c *Checker) fetch(ctx context.Context) (Release, bool, error) {
 	default:
 		return Release{}, false, fmt.Errorf("%s: %s", url, res.Status)
 	}
-	var fr forgejoRelease
-	if err := json.NewDecoder(res.Body).Decode(&fr); err != nil {
+	var f feed
+	if err := xml.NewDecoder(res.Body).Decode(&f); err != nil {
 		return Release{}, false, fmt.Errorf("%s: %w", url, err)
 	}
-	if fr.Prerelease || fr.Draft || fr.TagName == "" {
-		return Release{}, false, nil
-	}
-	return Release{Version: strings.TrimPrefix(fr.TagName, "v"), Published: fr.PublishedAt.UTC(), URL: fr.HTMLURL}, true, nil
+	r, ok := latestStable(f.releases())
+	return r, ok, nil
 }
 
 func (c *Checker) interval() time.Duration {
