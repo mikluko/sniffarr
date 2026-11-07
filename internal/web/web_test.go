@@ -140,6 +140,10 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 // each under a title of its own and so in a row of its own.
 const feedListings = 7
 
+// longJournal is how many times a feed listed hash(23), a torrent never
+// stored: a page of its journal and 3 more entries, on one day.
+const longJournal = ui.JournalPageSize + 3
+
 // handlerTasks is handlerWith returning the API's queue as well.
 func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Tasks) {
 	t.Helper()
@@ -201,6 +205,9 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 	for i := range feedListings {
 		title := fmt.Sprintf("Listing.%d", i+1)
 		require.NoError(t, st.JournalFeed(ctx, hash(22), now.Add(time.Duration(i-feedListings)*time.Hour), "queued", map[string]any{"source": "rutor", "title": title}))
+	}
+	for i := range longJournal {
+		require.NoError(t, st.JournalFeed(ctx, hash(23), now.Add(time.Duration(i-longJournal)*time.Second), "already_queued", map[string]any{"source": "rutor", "title": "Long"}))
 	}
 	require.NoError(t, st.AddTokens(ctx, now.Format(time.DateOnly), 250))
 	require.NoError(t, st.AddProbeTraffic(ctx, now.Format(time.DateOnly), store.ProbeTraffic{Rx: 61 << 30, Tx: 38 << 30}))
@@ -640,6 +647,36 @@ func TestTorrentJournal(t *testing.T) {
 	require.Equal(t, feedListings, rows(page(t, get(t, h, card+"?journal=all", ""))))
 
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz/journal", "jlist").Code)
+}
+
+func TestTorrentJournalPages(t *testing.T) {
+	h := handler(t, nil)
+	card := "/t/" + hexOf(23)
+	more := regexp.MustCompile(`<div class="jfoot" id="jpage-(\d+)">`)
+
+	body := page(t, get(t, h, card, ""))
+	require.Contains(t, body, "Showing the last 200 of 203 events", "a page of the journal, and how many it holds")
+	m := more.FindStringSubmatch(body)
+	require.NotNil(t, m, "a button for the page before")
+	before := m[1]
+	day := now.Format(time.DateOnly)
+	require.Contains(t, body, `hx-get="/t/`+hexOf(23)+`/journal?before=`+before+`&amp;day=`+day+`" hx-target="#jpage-`+before+`" hx-swap="outerHTML">3 more</a>`)
+
+	frag := page(t, get(t, h, card+"/journal?before="+before+"&day="+day, "jpage-"+before))
+	require.False(t, strings.HasPrefix(frag, "<!doctype html>"), "the rows alone")
+	require.Equal(t, 1, strings.Count(frag, `<details class="jev"`), "the older listings, in a row")
+	require.NotContains(t, frag, `class="jday"`, "the day the rows above end on is not headed again")
+	require.NotContains(t, frag, `class="jfoot"`, "nothing older")
+	frag = page(t, get(t, h, card+"/journal?before="+before+"&day=2026-01-01", "jpage-"+before))
+	require.Contains(t, frag, `class="jday"`, "another day is headed")
+
+	w := get(t, h, card+"/journal?before="+before, "")
+	require.Equal(t, http.StatusSeeOther, w.Code)
+	require.Equal(t, card+"?before="+before+"&journal=all#journal", w.Header().Get("Location"))
+	body = page(t, get(t, h, card+"?before="+before+"&journal=all", ""))
+	require.Contains(t, body, `<details class="jev"`, "without htmx, the card with that page")
+	require.NotContains(t, body, "No torrent", "which is not the newest, so says nothing of the end")
+	require.NotContains(t, body, `class="jfoot"`)
 }
 
 // post serves a POST of the path, as htmx asking for target when it is not

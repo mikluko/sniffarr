@@ -2062,7 +2062,11 @@ type JournalRequest struct {
 	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
 	// How many of the newest entries to return; 200 when 0, at most 1000. A
 	// negative limit is INVALID_ARGUMENT.
-	Limit         int32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Limit int32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	// When set, the entries before the one of this ID in the journal's order:
+	// with the oldest returned, the next page. An ID not of the infohash's
+	// entries returns none.
+	Before        int64 `protobuf:"varint,3,opt,name=before,proto3" json:"before,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2111,12 +2115,21 @@ func (x *JournalRequest) GetLimit() int32 {
 	return 0
 }
 
+func (x *JournalRequest) GetBefore() int64 {
+	if x != nil {
+		return x.Before
+	}
+	return 0
+}
+
 type JournalResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The entries, oldest first.
 	Entries []*JournalEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
 	// How many entries the infohash's journal holds in all.
-	Total         int64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	Total int64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	// How many of them come before the oldest returned.
+	Older         int64 `protobuf:"varint,3,opt,name=older,proto3" json:"older,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2161,6 +2174,13 @@ func (x *JournalResponse) GetEntries() []*JournalEntry {
 func (x *JournalResponse) GetTotal() int64 {
 	if x != nil {
 		return x.Total
+	}
+	return 0
+}
+
+func (x *JournalResponse) GetOlder() int64 {
+	if x != nil {
+		return x.Older
 	}
 	return 0
 }
@@ -3589,13 +3609,15 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x05rules\x18\n" +
 	" \x03(\v2\x14.sniffarr.v1.RuleHitR\x05rules\x123\n" +
 	"\ajournal\x18\v \x03(\v2\x19.sniffarr.v1.JournalEntryR\ajournal\x12#\n" +
-	"\rjournal_total\x18\f \x01(\x03R\fjournalTotalJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\breleasesR\frelease_rank\"B\n" +
+	"\rjournal_total\x18\f \x01(\x03R\fjournalTotalJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\breleasesR\frelease_rank\"Z\n" +
 	"\x0eJournalRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x14\n" +
-	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\\\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06before\x18\x03 \x01(\x03R\x06before\"r\n" +
 	"\x0fJournalResponse\x123\n" +
 	"\aentries\x18\x01 \x03(\v2\x19.sniffarr.v1.JournalEntryR\aentries\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x03R\x05total\"\x90\x01\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x14\n" +
+	"\x05older\x18\x03 \x01(\x03R\x05older\"\x90\x01\n" +
 	"\fJournalEntry\x12*\n" +
 	"\x02at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +

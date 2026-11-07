@@ -674,6 +674,15 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		t.Journal = append(t.Journal, journalEntry(e))
 	}
 	t.JournalTotal, t.JournalAll = c.GetJournalTotal(), req.URL.Query().Get("journal") == "all"
+	t.JournalOlder = t.JournalTotal - int64(len(t.Journal))
+	if before := journalBefore(req); before > 0 {
+		j, err := s.journalOf(req.Context(), raw, before)
+		if err != nil {
+			s.fail(w, req, "journal", err)
+			return
+		}
+		t.Journal, t.JournalTotal, t.JournalOlder = j.Journal, j.JournalTotal, j.JournalOlder
+	}
 	all := req.URL.Query().Get("files") == "all"
 	files := c.GetFiles()
 	t.Files = ui.FileList{InfoHash: h, Stored: len(files), All: all}
@@ -689,7 +698,7 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 // journalOnly renders the card of an infohash the store keeps no torrent
 // of: its journal, or 404 when it has none.
 func (s *server) journalOnly(w http.ResponseWriter, req *http.Request, raw []byte, lang string) {
-	t, err := s.journalOf(req.Context(), raw)
+	t, err := s.journalOf(req.Context(), raw, journalBefore(req))
 	if err != nil {
 		s.fail(w, req, "journal", err)
 		return
@@ -702,36 +711,63 @@ func (s *server) journalOnly(w http.ResponseWriter, req *http.Request, raw []byt
 	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, "torrents"), BackURL: backURL(req), Torrent: t})
 }
 
-// journal serves GET /t/{infohash}/journal: to htmx asking for "jlist",
-// every row of the infohash's newest journal entries; to any other request,
-// a redirect to the card showing them.
+// journal serves GET /t/{infohash}/journal, the page of the infohash's
+// journal before the entry of ID before, or the newest without it: to htmx
+// asking for "jlist", its every row; for "jpage-<id>", its rows under those
+// of the day in day; to any other request, a redirect to the card showing
+// them.
 func (s *server) journal(w http.ResponseWriter, req *http.Request) {
 	raw, err := hex.DecodeString(req.PathValue("infohash"))
 	if err != nil || len(raw) != infohashLen {
 		s.notFound(w, req)
 		return
 	}
-	if req.Header.Get("HX-Request") != "true" || req.Header.Get("HX-Target") != "jlist" {
-		http.Redirect(w, req, "/t/"+hex.EncodeToString(raw)+"?journal=all#journal", http.StatusSeeOther)
+	before, target := journalBefore(req), req.Header.Get("HX-Target")
+	page := strings.HasPrefix(target, "jpage-")
+	if req.Header.Get("HX-Request") != "true" || (target != "jlist" && !page) {
+		q := url.Values{"journal": {"all"}}
+		if before > 0 {
+			q.Set("before", strconv.FormatInt(before, 10))
+		}
+		http.Redirect(w, req, "/t/"+hex.EncodeToString(raw)+"?"+q.Encode()+"#journal", http.StatusSeeOther)
 		return
 	}
-	t, err := s.journalOf(req.Context(), raw)
+	t, err := s.journalOf(req.Context(), raw, before)
 	if err != nil {
 		s.fail(w, req, "journal", err)
 		return
 	}
 	t.JournalAll = true
+	if day := req.URL.Query().Get("day"); page && validDay(day) {
+		t.JournalAfter = day
+	}
 	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, s.lang(w, req), "torrents"), Torrent: t})
 }
 
-// journalOf is the torrent of the infohash as its newest journal entries
-// alone tell it.
-func (s *server) journalOf(ctx context.Context, raw []byte) (ui.Torrent, error) {
-	res, err := s.cfg.Browse.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: raw}))
+// journalBefore is the ID the request's before parameter names, or 0.
+func journalBefore(req *http.Request) int64 {
+	id, err := strconv.ParseInt(req.URL.Query().Get("before"), 10, 64)
+	if err != nil || id < 0 {
+		return 0
+	}
+	return id
+}
+
+// validDay reports whether s is a day as "2006-01-02".
+func validDay(s string) bool {
+	_, err := time.Parse(time.DateOnly, s)
+	return err == nil
+}
+
+// journalOf is the torrent of the infohash as a page of its journal alone
+// tells it: its newest ui.JournalPageSize entries before the entry of ID
+// before, or of all for 0.
+func (s *server) journalOf(ctx context.Context, raw []byte, before int64) (ui.Torrent, error) {
+	res, err := s.cfg.Browse.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: raw, Before: before, Limit: ui.JournalPageSize}))
 	if err != nil {
 		return ui.Torrent{}, err
 	}
-	t := ui.Torrent{InfoHash: hex.EncodeToString(raw), JournalTotal: res.Msg.GetTotal()}
+	t := ui.Torrent{InfoHash: hex.EncodeToString(raw), JournalTotal: res.Msg.GetTotal(), JournalOlder: res.Msg.GetOlder()}
 	for _, e := range res.Msg.GetEntries() {
 		t.Journal = append(t.Journal, journalEntry(e))
 	}

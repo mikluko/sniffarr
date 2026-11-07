@@ -38,6 +38,13 @@ func TestJournalView(t *testing.T) {
 		t.Errorf("the whole journal: %d of %d rows shown", v.Shown, v.Rows)
 	}
 
+	older := TorrentPage{Base: b, Torrent: Torrent{JournalOnly: true, JournalAll: true, Journal: []JournalEntry{sighted, timeout},
+		JournalTotal: 403, JournalOlder: 201, JournalAfter: "2026-10-20"}}
+	v = older.JournalView()
+	if v.Days[0].Label != "" || v.Gone != nil || v.Loaded != 202 || v.Next != JournalPageSize || v.Before != 1 || v.Last != "2026-10-20" {
+		t.Errorf("a page of older entries: label %q, gone %v, %d loaded, next %d before %d, last %s", v.Days[0].Label, v.Gone, v.Loaded, v.Next, v.Before, v.Last)
+	}
+
 	v = page(true, sighted, timeout, rejected)
 	want := JournalGone{Severity: SeverityFinal, Final: true, ID: 3, Lead: "Раздачи нет: отброшена 20.10 13:05", Rest: ", причина: для взрослых.",
 		Note: "Раздача не сохранялась, поэтому от неё остался только журнал. Метаданные: «xxx», 1,0 ГБ."}

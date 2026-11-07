@@ -436,9 +436,14 @@ type Torrent struct {
 	Journal []JournalEntry
 	// JournalTotal is how many entries the journal holds in all.
 	JournalTotal int64
+	// JournalOlder is how many entries are older than Journal's.
+	JournalOlder int64
 	// JournalAll has the card show every row of Journal, not only the newest
 	// JournalCardRows.
 	JournalAll bool
+	// JournalAfter is the day, "2006-01-02" in the zone of Loc, of the oldest
+	// row shown above a page of older entries; "" for the first page.
+	JournalAfter string
 
 	Files FileList
 }

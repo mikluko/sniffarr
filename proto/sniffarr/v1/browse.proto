@@ -391,6 +391,10 @@ message JournalRequest {
   // How many of the newest entries to return; 200 when 0, at most 1000. A
   // negative limit is INVALID_ARGUMENT.
   int32 limit = 2;
+  // When set, the entries before the one of this ID in the journal's order:
+  // with the oldest returned, the next page. An ID not of the infohash's
+  // entries returns none.
+  int64 before = 3;
 }
 
 message JournalResponse {
@@ -398,6 +402,8 @@ message JournalResponse {
   repeated JournalEntry entries = 1;
   // How many entries the infohash's journal holds in all.
   int64 total = 2;
+  // How many of them come before the oldest returned.
+  int64 older = 3;
 }
 
 // JournalEntry is one event of a torrent's life, as the store recorded it.

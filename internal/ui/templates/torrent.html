@@ -106,7 +106,17 @@
 {{- if lt .Shown .Rows}}
 <div class="jfoot"><span class="mu">{{.Fmt "journal.shown" (.Num (int64 .Shown)) (.Count (int64 .Rows) "journal.rows")}}</span>
   <a class="btn" href="/t/{{.InfoHash}}?journal=all#journal" hx-get="/t/{{.InfoHash}}/journal" hx-target="#jlist" hx-swap="morph:keepOpen">{{.T "journal.all"}}</a></div>
+{{- else}}{{template "jmore" .}}
 {{- end}}</div>{{end}}
+
+{{/* A page of older journal entries, the htmx fragment "jpage": its rows in place of
+     the button that asked for them, and the button asking for the next. */}}
+{{define "jpage"}}{{with .JournalView}}{{template "jdays" .}}{{template "jmore" .}}{{end}}{{end}}
+
+{{define "jmore"}}{{if .Older}}
+<div class="jfoot" id="jpage-{{.Before}}"><span class="mu">{{.Fmt "journal.shown" (.Num .Loaded) (.Count .Total "journal.events_gen")}}</span>
+  <a class="btn" href="/t/{{.InfoHash}}?journal=all&amp;before={{.Before}}#journal" hx-get="/t/{{.InfoHash}}/journal?before={{.Before}}&amp;day={{.Last}}" hx-target="#jpage-{{.Before}}" hx-swap="outerHTML">{{.Fmt "journal.more" (.Num .Next)}}</a></div>
+{{- end}}{{end}}
 
 {{define "jdays"}}{{$v := .}}{{range .Days}}
 {{- if .Label}}<div class="jday">{{.Label}}</div>{{end}}

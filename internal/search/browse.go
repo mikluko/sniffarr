@@ -318,9 +318,11 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 		res.Files = append(res.Files, &sniffarrv1.File{Path: f.Path, Size: f.Size})
 	}
 	res.Rules = ruleHits(c.Name, c.Files, b.Languages)
-	if res.Journal, res.JournalTotal, err = b.journal(ctx, store.Hash(h), DefaultJournalLimit); err != nil {
+	j, err := b.journal(ctx, store.Hash(h), 0, DefaultJournalLimit)
+	if err != nil {
 		return nil, err
 	}
+	res.Journal, res.JournalTotal = j.GetEntries(), j.GetTotal()
 	if c.Work != nil {
 		res.Work, res.RankInWork = summary(*c.Work, lang), int32(c.RankInWork)
 		if t := res.GetRelease().GetTmdb(); t != nil {
@@ -342,25 +344,26 @@ func (b *Browser) Journal(ctx context.Context, req *connect.Request[sniffarrv1.J
 	if limit == 0 {
 		limit = DefaultJournalLimit
 	}
-	entries, total, err := b.journal(ctx, store.Hash(h), min(limit, MaxJournalLimit))
+	res, err := b.journal(ctx, store.Hash(h), req.Msg.GetBefore(), min(limit, MaxJournalLimit))
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&sniffarrv1.JournalResponse{Entries: entries, Total: total}), nil
+	return connect.NewResponse(res), nil
 }
 
-// journal returns the newest entries of the hash, up to limit, oldest
-// first, and how many the hash's journal holds.
-func (b *Browser) journal(ctx context.Context, h store.Hash, limit int) ([]*sniffarrv1.JournalEntry, int64, error) {
-	p, err := b.Store.JournalPage(ctx, h, 0, limit)
+// journal returns the newest entries of the hash before the entry of ID
+// before, or of all for 0, up to limit, oldest first, with how many the
+// hash's journal holds and how many are older.
+func (b *Browser) journal(ctx context.Context, h store.Hash, before int64, limit int) (*sniffarrv1.JournalResponse, error) {
+	p, err := b.Store.JournalPage(ctx, h, before, limit)
 	if err != nil {
-		return nil, 0, b.internal(ctx, "journal", err)
+		return nil, b.internal(ctx, "journal", err)
 	}
-	out := make([]*sniffarrv1.JournalEntry, len(p.Entries))
+	res := &sniffarrv1.JournalResponse{Entries: make([]*sniffarrv1.JournalEntry, len(p.Entries)), Total: int64(p.Total), Older: int64(p.Older)}
 	for i, e := range p.Entries {
-		out[i] = &sniffarrv1.JournalEntry{Id: e.ID, At: timestamppb.New(e.At), Kind: e.Kind, Outcome: e.Outcome, Detail: e.Detail}
+		res.Entries[i] = &sniffarrv1.JournalEntry{Id: e.ID, At: timestamppb.New(e.At), Kind: e.Kind, Outcome: e.Outcome, Detail: e.Detail}
 	}
-	return out, int64(p.Total), nil
+	return res, nil
 }
 
 // ruleHits are the features names.Explain finds in name, then the audio

@@ -25,10 +25,16 @@ type JournalView struct {
 	// Retries and Finals count the loaded entries at those levels; Finals
 	// is 0 where Gone states the failure.
 	Retries, Finals int
-	// Total is how many entries the journal holds.
-	Total int64
+	// Total is how many entries the journal holds, Loaded how many of the
+	// newest down to Journal's oldest, and Older how many are older.
+	Total, Loaded, Older int64
+	// Before is the ID of Journal's oldest entry, which the next page
+	// starts before; Next is how many entries that page holds.
+	Before, Next int64
+	// Last is the day of the oldest row shown, "2006-01-02" in Loc.
+	Last string
 	// Gone says what ended a torrent the store keeps no row of; nil for a
-	// stored one.
+	// stored one, and for a page of older entries.
 	Gone *JournalGone
 	// Cut reports, for a torrent the store keeps no row of, that every entry
 	// is loaded and the oldest is within a day of the retention, so older
@@ -38,7 +44,8 @@ type JournalView struct {
 
 // JournalDay is the rows of one day.
 type JournalDay struct {
-	// Key is the day, "2006-01-02" in Loc; Label its heading.
+	// Key is the day, "2006-01-02" in Loc; Label its heading, "" when the
+	// rows above end on the same day.
 	Key, Label string
 	Rows       []JournalRow
 }
@@ -64,26 +71,33 @@ type JournalGone struct {
 // whole journal is asked for.
 const JournalCardRows = 5
 
+// JournalPageSize is how many entries a page of the journal holds.
+const JournalPageSize = 200
+
 // JournalView builds the card's journal block from the torrent's loaded
 // entries: every row with JournalAll, else the newest JournalCardRows.
 func (p TorrentPage) JournalView() JournalView {
 	b, t := p.Base, p.Torrent
 	rows := b.JournalRows(t.Journal)
-	v := JournalView{Base: b, InfoHash: t.InfoHash, Rows: len(rows), Tip: p.JournalTip(), Total: max(t.JournalTotal, int64(len(t.Journal)))}
+	v := JournalView{Base: b, InfoHash: t.InfoHash, Rows: len(rows), Tip: p.JournalTip(), Total: max(t.JournalTotal, int64(len(t.Journal))), Older: t.JournalOlder}
+	v.Loaded, v.Next = v.Total-v.Older, min(v.Older, JournalPageSize)
 	if n := len(t.Journal); n > 0 {
-		v.From, v.To = t.Journal[0].At, t.Journal[n-1].At
+		v.From, v.To, v.Before = t.Journal[0].At, t.Journal[n-1].At, t.Journal[0].ID
 	}
 	v.Retries, v.Finals = failures(rows)
-	if t.JournalOnly && len(rows) > 0 {
+	if t.JournalOnly && len(rows) > 0 && v.Loaded == int64(len(t.Journal)) {
 		v.Gone, v.Finals = b.journalGone(t.Journal, rows[0]), 0
 		cut := b.JournalRetention - 24*time.Hour
-		v.Cut = b.JournalRetention > 0 && v.Total <= int64(len(t.Journal)) && b.Now.Sub(v.From) >= cut
+		v.Cut = b.JournalRetention > 0 && v.Older == 0 && b.Now.Sub(v.From) >= cut
 	}
 	if !t.JournalAll && len(rows) > JournalCardRows {
 		rows = rows[:JournalCardRows]
 	}
 	v.Shown = len(rows)
-	v.Days = b.journalDays(rows)
+	v.Days = b.journalDays(rows, t.JournalAfter)
+	if len(v.Days) > 0 {
+		v.Last = v.Days[len(v.Days)-1].Key
+	}
 	return v
 }
 
@@ -109,13 +123,18 @@ func failures(rows []JournalRow) (retries, finals int) {
 	return retries, finals
 }
 
-// journalDays splits the rows, newest first, by their day in Loc.
-func (b Base) journalDays(rows []JournalRow) []JournalDay {
+// journalDays splits the rows, newest first, by their day in Loc, the first
+// day unlabelled when it is after, the day the rows above end on.
+func (b Base) journalDays(rows []JournalRow, after string) []JournalDay {
 	var out []JournalDay
 	for _, r := range rows {
 		key := r.At.In(b.loc()).Format(time.DateOnly)
 		if len(out) == 0 || out[len(out)-1].Key != key {
-			out = append(out, JournalDay{Key: key, Label: b.DayLabel(r.At)})
+			d := JournalDay{Key: key}
+			if len(out) > 0 || key != after {
+				d.Label = b.DayLabel(r.At)
+			}
+			out = append(out, d)
 		}
 		out[len(out)-1].Rows = append(out[len(out)-1].Rows, r)
 	}

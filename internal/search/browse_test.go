@@ -218,6 +218,19 @@ func TestBrowserJournal(t *testing.T) {
 	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Limit: MaxJournalLimit + 1}))
 	require.NoError(t, err, "a limit above the most is no error")
 	require.Equal(t, MaxJournalLimit, len(res.Msg.GetEntries()), "it returns the most")
+	require.Equal(t, int64(1), res.Msg.GetOlder(), "and how many are older")
+
+	oldest := res.Msg.GetEntries()[0].GetId()
+	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Before: oldest}))
+	require.NoError(t, err)
+	require.Len(t, res.Msg.GetEntries(), 1, "the page before the oldest")
+	require.Less(t, res.Msg.GetEntries()[0].GetId(), oldest)
+	require.Equal(t, int64(MaxJournalLimit+1), res.Msg.GetTotal())
+	require.Zero(t, res.Msg.GetOlder())
+	h = hash(2)
+	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Before: oldest}))
+	require.NoError(t, err)
+	require.Empty(t, res.Msg.GetEntries(), "before an entry of another infohash, none")
 }
 
 func TestBrowserStats(t *testing.T) {
