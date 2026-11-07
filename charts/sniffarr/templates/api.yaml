@@ -129,8 +129,7 @@ spec:
     - metadata:
         name: data
         labels:
-          {{- include "sniffarr.labels" . | nindent 10 }}
-          app.kubernetes.io/component: api
+          {{- include "sniffarr.selector" (dict "root" . "component" "api") | nindent 10 }}
       spec:
         accessModes: [ReadWriteOnce]
         {{- with $p.storageClass }}

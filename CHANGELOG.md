@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The chart's API StatefulSet upgrades: its claim template carries no chart or app version label. A StatefulSet installed by 0.44.0-beta.5 or beta.6 is deleted once with `kubectl delete statefulset <release>-api --cascade=orphan` before the upgrade; its pod and claim stay.
+
 ## [0.44.0-beta.6] - 2026-11-07
 
 ### Added
