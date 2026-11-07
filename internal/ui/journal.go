@@ -2,6 +2,12 @@ package ui
 
 import (
 	"log/slog"
+	"maps"
+	"math"
+	"net/url"
+	"slices"
+	"strings"
+	"time"
 )
 
 // Severity is how an entry's outcome left the torrent.
@@ -161,8 +167,141 @@ func (b Base) JournalSummary(e JournalEntry) []DetailPair {
 	var out []DetailPair
 	for _, k := range journalSpec[e.Kind][e.Outcome].summary {
 		if v, ok := e.Detail[k]; ok {
-			out = append(out, b.journalPair(e, k, v))
+			out = append(out, b.journalPair(e, JournalField{k, e.typed(k, v)}))
 		}
 	}
 	return out
+}
+
+// Bytes is a particular the store writes as a number of bytes.
+type Bytes int64
+
+// Times is how many times an attempt was leased.
+type Times int64
+
+// ID is a particular that identifies a record elsewhere, written ungrouped.
+type ID int64
+
+// Infohash is the hex form of an infohash.
+type Infohash string
+
+// Link is a page and the label it is written by.
+type Link struct {
+	URL, Label string
+}
+
+// Track is a track a probe read, as the store journals it:
+// "kind:language:codec".
+type Track struct {
+	Type, Lang, Codec string
+}
+
+// JournalField is one particular of an entry, its value typed by Fields.
+type JournalField struct {
+	Key   string
+	Value any
+}
+
+// idKeys are the particulars whose numbers are IDs.
+var idKeys = map[string]bool{"tmdb_id": true, "previous": true}
+
+// Fields returns the entry's particulars in the order of their keys, each
+// value typed by its key and form: a moment as time.Time, bytes as Bytes, the
+// leases of an attempt as Times, an identifier as ID, another whole number as
+// int64; the hex form of an infohash as Infohash, a feed item's http or https
+// page as a Link labelled by the entry's source; a track that parses as Track.
+// Lists and objects keep their shape, their elements typed; the audio
+// probabilities stay float64.
+func (e JournalEntry) Fields() []JournalField {
+	out := make([]JournalField, 0, len(e.Detail))
+	for _, k := range slices.Sorted(maps.Keys(e.Detail)) {
+		out = append(out, JournalField{k, e.typed(k, e.Detail[k])})
+	}
+	return out
+}
+
+// Tracks returns the tracks of the entry's particulars that parse.
+func (e JournalEntry) Tracks() []Track {
+	list, _ := e.Detail["tracks"].([]any)
+	var out []Track
+	for _, v := range list {
+		if s, ok := v.(string); ok {
+			if t, ok := parseTrack(s); ok {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
+}
+
+// typed is the decoded JSON value of the key typed as Fields does.
+func (e JournalEntry) typed(key string, v any) any {
+	switch x := v.(type) {
+	case float64:
+		return typedNumber(key, x)
+	case string:
+		return e.typedString(key, x)
+	case []any:
+		out := make([]any, len(x))
+		for i, el := range x {
+			out[i] = e.typed(key, el)
+			if s, ok := el.(string); ok && key == "tracks" {
+				if t, ok := parseTrack(s); ok {
+					out[i] = t
+				}
+			}
+		}
+		return out
+	case map[string]any:
+		if key == "audio" {
+			return x
+		}
+		out := make(map[string]any, len(x))
+		for k, el := range x {
+			out[k] = e.typed(k, el)
+		}
+		return out
+	}
+	return v
+}
+
+// typedNumber is a number of the key typed as Fields does.
+func typedNumber(key string, x float64) any {
+	whole := x == math.Trunc(x) && math.Abs(x) < 1<<53
+	switch {
+	case detailTime(key):
+		return time.Unix(int64(x), 0)
+	case detailSize(key):
+		return Bytes(x)
+	case !whole:
+		return x
+	case key == "leases":
+		return Times(x)
+	case idKeys[key]:
+		return ID(x)
+	}
+	return int64(x)
+}
+
+// typedString is a string of the key typed as Fields does.
+func (e JournalEntry) typedString(key, s string) any {
+	if isInfohash(s) {
+		return Infohash(strings.ToLower(s))
+	}
+	if u, err := url.Parse(s); key == "url" && err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+		label, _ := e.Detail["source"].(string)
+		if label == "" {
+			label = s
+		}
+		return Link{URL: s, Label: label}
+	}
+	return s
+}
+
+// parseTrack parses a track the store journals as "kind:language:codec"; a
+// codec may hold colons of its own.
+func parseTrack(s string) (Track, bool) {
+	kind, rest, _ := strings.Cut(s, ":")
+	lang, codec, ok := strings.Cut(rest, ":")
+	return Track{kind, lang, codec}, ok
 }

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -372,6 +373,29 @@ func TestJournalSummary(t *testing.T) {
 	}
 }
 
+func TestJournalFields(t *testing.T) {
+	e := JournalEntry{Kind: "probed", Detail: map[string]any{
+		"retry_at": 1762500000.0, "downloaded": 4194304.0, "leases": 2.0, "attempt": 3.0, "tmdb_id": 949.0, "share": 0.5,
+		"tracks": []any{"video::hevc", "audio:rus:eac3", "odd"}, "audio": map[string]any{"ru": 1.0},
+	}}
+	want := []JournalField{
+		{"attempt", int64(3)},
+		{"audio", map[string]any{"ru": 1.0}},
+		{"downloaded", Bytes(4194304)},
+		{"leases", Times(2)},
+		{"retry_at", time.Unix(1762500000, 0)},
+		{"share", 0.5},
+		{"tmdb_id", ID(949)},
+		{"tracks", []any{Track{"video", "", "hevc"}, Track{"audio", "rus", "eac3"}, "odd"}},
+	}
+	if got := e.Fields(); !reflect.DeepEqual(got, want) {
+		t.Errorf("%v, want %v", got, want)
+	}
+	if got, want := e.Tracks(), []Track{{"video", "", "hevc"}, {"audio", "rus", "eac3"}}; !slices.Equal(got, want) {
+		t.Errorf("tracks %v, want %v", got, want)
+	}
+}
+
 func TestJournalDetail(t *testing.T) {
 	r, err := New()
 	if err != nil {
@@ -442,6 +466,23 @@ func TestJournalDetail(t *testing.T) {
 			[]DetailPair{{"искали по", "IMDb tt0113277", ""}, {"тип поиска", "фильм", ""}}},
 		{"a search by text", "en", JournalEntry{Kind: "probe_wanted", Detail: map[string]any{"t": "search", "id": "kpid:5"}},
 			[]DetailPair{{"searched by", "kpid:5", ""}, {"search type", "text", ""}}},
+		{"numbers grouped, IDs not", "ru", JournalEntry{Kind: "matched", Detail: map[string]any{"tmdb_id": 693134.0, "previous": 41000.0, "peers_week": 1284.0}},
+			[]DetailPair{{"пиров за 7 дней", "1 284", ""}, {"ID прежнего произведения", "41000", ""}, {"TMDB ID", "693134", ""}}},
+		{"numbers grouped in English", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"files": 1284.0}}, []DetailPair{{"files", "1,284", ""}}},
+		{"a time on the entry's day", "en", JournalEntry{Kind: "leased", At: time.Date(2026, 10, 18, 19, 0, 0, 0, time.UTC),
+			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 18, 19, 1, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "21:01", ""}}},
+		{"a time on the entry's day in the zone, not in UTC", "en", JournalEntry{Kind: "leased", At: time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC),
+			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 19, 1, 0, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "03:00", ""}}},
+		{"a time on the next day in the zone", "en", JournalEntry{Kind: "leased", At: time.Date(2026, 10, 18, 21, 30, 0, 0, time.UTC),
+			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "2026-10-19 00:30", ""}}},
+		{"an infohash under any key", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"sibling": "8F3C2A91D07E4B6C5A1E9F20B37D4C8E6A0F1B52"}},
+			[]DetailPair{{"sibling", "8f3c2a91", "/t/8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"}}},
+		{"a tracker page by its source", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker", "url": "https://rutracker.org/forum/viewtopic.php?t=1"}},
+			[]DetailPair{{"feed", "rutracker", ""}, {"page", "rutracker", "https://rutracker.org/forum/viewtopic.php?t=1"}}},
+		{"a tracker page without a source", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"url": "https://rutor.info/t/1"}},
+			[]DetailPair{{"page", "https://rutor.info/t/1", "https://rutor.info/t/1"}}},
+		{"a page that is no web page", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "x", "url": "javascript:alert(1)"}},
+			[]DetailPair{{"feed", "x", ""}, {"page", "javascript:alert(1)", ""}}},
 	} {
 		got := base(c.lang).JournalDetail(c.e)
 		if !slices.Equal(got, c.want) {

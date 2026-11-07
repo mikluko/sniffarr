@@ -349,28 +349,21 @@ var journalAliases = map[string]string{
 var searchIDProviders = map[string]string{"tmdbid": "TMDB", "imdbid": "IMDb", "tvdbid": "TVDB"}
 
 // JournalDetail returns the entry's particulars in the order of their keys:
-// a key by "journal.key.<kind>.<key>" or else "journal.key.<key>"; a moment
-// by TimeFull, a size by Size, a probability in audio as a percentage, a
-// boolean by "journal.bool.<value>", and a value journalValues maps by its
-// message. A track reads as its kind, language and codec; the leases of an
-// attempt as how many times it was leased; a search's ID as its provider and
-// the ID; the infohash a classification took its kind from as a link to its
-// page. A key or a string value without a message is written as it is.
+// a key by "journal.key.<kind>.<key>" or else "journal.key.<key>", or as it
+// is without a message; a value as journalValue writes its typed form.
 func (b Base) JournalDetail(e JournalEntry) []DetailPair {
 	out := make([]DetailPair, 0, len(e.Detail))
-	for _, k := range slices.Sorted(maps.Keys(e.Detail)) {
-		out = append(out, b.journalPair(e, k, e.Detail[k]))
+	for _, f := range e.Fields() {
+		out = append(out, b.journalPair(e, f))
 	}
 	return out
 }
 
-// journalPair is the particular of the entry under the key, as JournalDetail
+// journalPair is the particular of the entry the field is, as JournalDetail
 // writes it.
-func (b Base) journalPair(e JournalEntry, k string, v any) DetailPair {
-	p := DetailPair{Key: b.journalKey(e.Kind, k), Value: b.journalValue(e.Kind, k, v)}
-	if s, ok := v.(string); ok && e.Kind == "classified" && k == "from" && isInfohash(s) {
-		p.Value, p.Href = s[:8], "/t/"+s
-	}
+func (b Base) journalPair(e JournalEntry, f JournalField) DetailPair {
+	p := DetailPair{Key: b.journalKey(e.Kind, f.Key)}
+	p.Value, p.Href = b.journalValue(e, f.Key, f.Value)
 	return p
 }
 
@@ -390,82 +383,120 @@ func (b Base) journalKey(kind, key string) string {
 	return key
 }
 
-// journalValue formats the decoded JSON value of the key of an entry of the
-// kind, as JournalDetail does; a list by commas, an object as "key value"
-// by commas, a number with the locale's decimal mark.
-func (b Base) journalValue(kind, key string, v any) string {
+// journalValue writes the typed value of the key of the entry and the page
+// it links to, "" for none: a moment by its clock alone on the entry's day in
+// the zone of Loc, else by TimeFull; an Infohash as its first 8 characters
+// linking to its card; a Link by its label; a list by commas, unlinked; an
+// object as "key value" by commas, a probability in audio as a percentage;
+// any other as journalScalar writes it.
+func (b Base) journalValue(e JournalEntry, key string, v any) (string, string) {
+	switch x := v.(type) {
+	case time.Time:
+		return b.journalTime(e.At, x), ""
+	case Infohash:
+		return string(x[:8]), "/t/" + string(x)
+	case Link:
+		return x.Label, x.URL
+	case []any:
+		parts := make([]string, len(x))
+		for i, el := range x {
+			parts[i], _ = b.journalValue(e, key, el)
+		}
+		return strings.Join(parts, ", "), ""
+	case map[string]any:
+		return b.journalObject(e, key, x), ""
+	}
+	return b.journalScalar(e.Kind, key, v), ""
+}
+
+// journalScalar writes a value of the key of an entry of the kind: Bytes by
+// Size; Times as how many times; an ID as it is; an integer grouped by Num; a
+// fraction with the locale's decimal mark; a boolean by
+// "journal.bool.<value>"; a Track by track; a string by journalString.
+func (b Base) journalScalar(kind, key string, v any) string {
 	switch x := v.(type) {
 	case string:
-		if kind == "probe_wanted" && key == "id" {
-			return b.searchID(x)
-		}
-		prefix, ok := journalValues[kind+"."+key]
-		if !ok {
-			prefix, ok = journalValues[key]
-		}
-		if m := prefix + x; ok {
-			if a, aliased := journalAliases[m]; aliased {
-				m = a
-			}
-			if b.has(m) {
-				return b.T(m)
-			}
-		}
-		return x
+		return b.journalString(kind, key, x)
+	case Bytes:
+		return b.Size(int64(x))
+	case Times:
+		return b.times(int64(x))
+	case ID:
+		return strconv.FormatInt(int64(x), 10)
+	case int64:
+		return b.Num(x)
 	case float64:
-		switch {
-		case key == "leases" && x == math.Trunc(x):
-			return b.times(int64(x))
-		case detailTime(key):
-			return b.TimeFull(time.Unix(int64(x), 0))
-		case detailSize(key):
-			return b.Size(int64(x))
-		case x == math.Trunc(x) && math.Abs(x) < 1<<53:
-			return strconv.FormatInt(int64(x), 10)
-		}
 		return b.dec(x, -1)
 	case bool:
 		return b.T("journal.bool." + strconv.FormatBool(x))
-	case []any:
-		parts := make([]string, len(x))
-		for i, e := range x {
-			if s, ok := e.(string); ok && key == "tracks" {
-				parts[i] = b.track(s)
-				continue
-			}
-			parts[i] = b.journalValue(kind, key, e)
-		}
-		return strings.Join(parts, ", ")
-	case map[string]any:
-		parts := make([]string, 0, len(x))
-		for _, k := range slices.Sorted(maps.Keys(x)) {
-			if p, ok := x[k].(float64); ok && key == "audio" {
-				parts = append(parts, b.LangName(k)+" "+strconv.FormatFloat(math.Round(p*100), 'f', 0, 64)+"%")
-				continue
-			}
-			parts = append(parts, k+" "+b.journalValue(kind, k, x[k]))
-		}
-		return strings.Join(parts, ", ")
+	case Track:
+		return b.track(x)
 	case nil:
 		return ""
 	}
 	return fmt.Sprint(v)
 }
 
-// track writes a track the store journals as "kind:language:codec" as its
-// kind in words, its language and its codec, leaving out an empty one; a
-// string of another form is written as it is.
-func (b Base) track(s string) string {
-	kind, rest, _ := strings.Cut(s, ":")
-	lang, codec, ok := strings.Cut(rest, ":")
-	if !ok {
-		return s
+// journalString writes a string of the key of an entry of the kind: a
+// search's ID as its provider and the ID, a value journalValues maps by its
+// message, any other as it is.
+func (b Base) journalString(kind, key, s string) string {
+	if kind == "probe_wanted" && key == "id" {
+		return b.searchID(s)
 	}
+	prefix, ok := journalValues[kind+"."+key]
+	if !ok {
+		prefix, ok = journalValues[key]
+	}
+	if m := prefix + s; ok {
+		if a, aliased := journalAliases[m]; aliased {
+			m = a
+		}
+		if b.has(m) {
+			return b.T(m)
+		}
+	}
+	return s
+}
+
+// journalObject writes an object under the key of the entry, as journalValue
+// does.
+func (b Base) journalObject(e JournalEntry, key string, m map[string]any) string {
+	parts := make([]string, 0, len(m))
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		if p, ok := m[k].(float64); ok && key == "audio" {
+			parts = append(parts, b.LangName(k)+" "+strconv.FormatFloat(math.Round(p*100), 'f', 0, 64)+"%")
+			continue
+		}
+		s, _ := b.journalValue(e, k, m[k])
+		parts = append(parts, k+" "+s)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// journalTime writes a moment of an entry at the time by its clock alone when
+// both fall on one day in the zone of Loc, else by TimeFull.
+func (b Base) journalTime(at, t time.Time) string {
+	loc := b.Loc
+	if loc == nil {
+		loc = time.Local
+	}
+	y, m, d := t.In(loc).Date()
+	if ay, am, ad := at.In(loc).Date(); !at.IsZero() && y == ay && m == am && d == ad {
+		return t.In(loc).Format("15:04")
+	}
+	return b.TimeFull(t)
+}
+
+// track writes a track as its kind in words, its language and its codec,
+// leaving out an empty one.
+func (b Base) track(t Track) string {
+	kind := t.Type
 	if m := "journal.track." + kind; b.has(m) {
 		kind = b.T(m)
 	}
 	words := []string{kind}
-	for _, w := range []string{lang, codec} {
+	for _, w := range []string{t.Lang, t.Codec} {
 		if w != "" {
 			words = append(words, w)
 		}
