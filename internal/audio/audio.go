@@ -5,6 +5,7 @@ package audio
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -186,20 +187,21 @@ func Tags(langs []Language) []string {
 	return out
 }
 
-// Marker reports whether the name or a file path has one of the language's
-// Words, Studios or Codes.
+// Marker reports whether the name or a file path that is not a subtitle has
+// one of the language's Words, Studios or Codes.
 func (l Language) Marker(name string, files []rules.File) bool {
-	return anyName(name, files, func(s string) bool {
+	return slices.ContainsFunc(append([]string{name}, markerPaths(files)...), func(s string) bool {
 		return l.marker != nil && l.marker.MatchString(s) || l.CodesIn(s) != nil
 	})
 }
 
 // Mark returns the first of the language's Studios in the name, or else in a
-// file path, as written there; without a studio, the first of its Words the
-// same way, then the first of its Codes; "" when there is none. A studio
-// names the track more precisely than a word that only names the language.
+// file path that is not a subtitle, as written there; without a studio, the
+// first of its Words the same way, then the first of its Codes; "" when
+// there is none. A studio names the track more precisely than a word that
+// only names the language.
 func (l Language) Mark(name string, files []rules.File) string {
-	texts := append([]string{name}, paths(files)...)
+	texts := append([]string{name}, markerPaths(files)...)
 	for _, re := range []*regexp.Regexp{l.studio, l.marker} {
 		if re == nil {
 			continue
@@ -250,6 +252,27 @@ func (l Language) StudiosInTexts(texts []string) []string {
 		n := l.StudioNames[l.Studios[i]]
 		if !slices.Contains(out, n) && slices.ContainsFunc(texts, re.MatchString) {
 			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// subtitles are the extensions of subtitle files, in lower case.
+var subtitles = []string{".srt", ".ass", ".ssa", ".sub", ".idx", ".sup"}
+
+// Subtitle reports whether p is the path of a subtitle file, by its
+// extension in any case.
+func Subtitle(p string) bool {
+	return slices.Contains(subtitles, strings.ToLower(path.Ext(p)))
+}
+
+// markerPaths are the paths of the files that are not subtitles: a word in
+// a subtitle's path names the subtitle's language, not the audio's.
+func markerPaths(files []rules.File) []string {
+	var out []string
+	for _, f := range files {
+		if !Subtitle(f.Path) {
+			out = append(out, f.Path)
 		}
 	}
 	return out

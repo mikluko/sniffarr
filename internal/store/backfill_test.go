@@ -113,3 +113,40 @@ func TestBackfillAudioCodes(t *testing.T) {
 	require.False(t, a.Marker, "a code alone is no marker")
 	require.Equal(t, 0.03, *a.Probability)
 }
+
+func TestBackfillSubtitleMarks(t *testing.T) {
+	ctx := context.Background()
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	defer db.Close()
+	marked := func(b byte, mark, layer, name string, paths ...string) Torrent {
+		tr := torrent(b, name, paths...)
+		tr.Audio = []Audio{{Language: "ru", Marker: true, Mark: mark, Probability: new(1.0), Layer: layer}}
+		return tr
+	}
+	for _, tr := range []Torrent{
+		marked(1, "Rus", LayerRules, "Alien.1979.DVDRip", "Alien.1979.DVDRip.avi", "Subs [Rus]/Alien.1979.DVDRip.srt"),
+		marked(2, "Rus", LayerRules, "Alien.1979.DVDRip", "Alien.1979.DVDRip.avi", "Rus/Alien.ac3", "Rus/Alien.srt"),
+		marked(3, "Rus", LayerProbe, "Alien.1979.DVDRip", "Alien.1979.DVDRip.avi", "Alien.Rus.srt"),
+		marked(4, "LostFilm", LayerRules, "Alien.1979.DVDRip.Rus", "Alien.1979.DVDRip.avi", "LostFilm/Alien.srt"),
+	} {
+		_, _, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	got := map[string]Backfilled{}
+	require.NoError(t, s.Backfill(ctx, func(b Backfilled) { got[b.Name] = b }))
+	require.True(t, got["subtitle marks ru"].Done)
+	a := mustGet(t, s, hash(1)).Audio[0]
+	require.False(t, a.Marker, "a word in a subtitle path alone")
+	require.Empty(t, a.Mark)
+	require.Nil(t, a.Probability)
+	require.Empty(t, a.Layer)
+	a = mustGet(t, s, hash(2)).Audio[0]
+	require.True(t, a.Marker, "a word in an audio path too")
+	require.Equal(t, 1.0, *a.Probability)
+	a = mustGet(t, s, hash(3)).Audio[0]
+	require.True(t, a.Marker, "a probe layer stays")
+	require.Equal(t, LayerProbe, a.Layer)
+	a = mustGet(t, s, hash(4)).Audio[0]
+	require.True(t, a.Marker)
+	require.Equal(t, "Rus", a.Mark, "the mark of the name over a studio in a subtitle path")
+}

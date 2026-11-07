@@ -44,6 +44,10 @@ func TestMarker(t *testing.T) {
 		{"L.A.Confidential.1997.BDRip", nil, false},
 		{"Movie.2001.p.WEB-DL", nil, false},
 		{"Movie.2001.P.Movie.WEB-DL", nil, false},
+		{"Alien.1979.DVDRip.avi", []rules.File{{Path: "Alien.1979.DVDRip.avi"}, {Path: "Alien.1979.DVDRip.Rus.srt"}}, false},
+		{"Alien 1979 DVDRip", []rules.File{{Path: "Alien.avi"}, {Path: "Subs [Rus]/Alien.ass"}, {Path: "Alien_[rus].SUP"}}, false},
+		{"Alien.1979.DVDRip.Rus", []rules.File{{Path: "Alien.avi"}, {Path: "Alien.Rus.srt"}}, true},
+		{"Alien 1979 DVDRip", []rules.File{{Path: "Alien.avi"}, {Path: "Rus/Alien.ac3"}, {Path: "Rus/Alien.srt"}}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -94,6 +98,8 @@ func TestMark(t *testing.T) {
 	require.Equal(t, "rus", ru.Mark("Silo.S03E06.720p.rus.mkv", nil), "a word when there is no studio")
 	require.Equal(t, "P", ru.Mark("Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", nil), "a code when there is no word")
 	require.Equal(t, "rus", ru.Mark("Movie.2001.P.WEB-DL.rus", nil), "a word over a code")
+	require.Empty(t, ru.Mark("Alien.1979.DVDRip", []rules.File{{Path: "Subs [Rus]/Alien.srt"}}), "a subtitle path is not read")
+	require.Equal(t, "Rus", ru.Mark("Alien.1979.Rus", []rules.File{{Path: "LostFilm/Alien.idx"}}), "a studio in a subtitle path is not read")
 }
 
 func TestCodes(t *testing.T) {

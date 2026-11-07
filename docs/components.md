@@ -93,8 +93,9 @@ the first start that reads them this way.
 Audio is an extension over the layers, off until `SNIFFARR_AUDIO_LANGUAGES`
 names languages; `ru` is the only language built in. For each configured
 language every stored torrent records a marker, a word or studio of the
-language in its name or file paths (`Rus`, `Дубляж`, `LostFilm` for `ru`) or
-a translation code of the language, and a script hint, letters of the
+language in its name or the paths of files other than subtitles (`.srt`,
+`.ass`, `.ssa`, `.sub`, `.idx`, `.sup`), as `Rus`, `Дубляж`, `LostFilm` for
+`ru`, or a translation code of the language, and a script hint, letters of the
 language's script there (Cyrillic for `ru`). The codes of `ru` are those of
 Russian release names: `D` dub, `P` professional many-voice, `P2`
 two-voice, `P1` one-voice, `L`, `L2` and `L1` the same amateur, `A` an
@@ -111,7 +112,9 @@ one, wherever it stands, else a word, else a code, so
 `Silo.S03E10.rus.LostFilm` marks `LostFilm`; stored markers get their marks
 recomputed once, at the first start of a version whose marking changed, and
 torrents stored before codes were read get a marker from a code in their
-name once, at the first start that reads them. While the extension is off, nothing
+name once, at the first start that reads them. A marker the rules stored
+from a subtitle's path alone is cleared once, with its mark and
+probability; a probe's finding stays. While the extension is off, nothing
 about audio is recorded or returned, Jev is asked about kind and source only,
 the background classifier has nothing to select, `BrowseService.Settings`
 returns no languages, and the web UI shows no voice filter, no per-language

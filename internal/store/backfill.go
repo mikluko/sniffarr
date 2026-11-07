@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/names"
+	"github.com/mikluko/sniffarr/internal/rules"
 )
 
 // backfillBatch is the default of Store.backfillBatch.
@@ -24,7 +26,12 @@ const featuresFilled = "release_features_letter_o"
 // that the marks backfill has run. A new prefix makes every database
 // recompute its marks and studios once more, which a change to
 // audio.Language.Mark or audio.Language.StudiosIn needs.
-const marksFilled = "audio_marks_studios_all:"
+const marksFilled = "audio_marks_no_subtitles:"
+
+// subtitleMarksFilled is the prefix of the settings key that records, per
+// language, that the markers stored from a word in a subtitle file's path
+// alone were cleared.
+const subtitleMarksFilled = "audio_subtitle_marks:"
 
 // codesFilled is the prefix of the settings key that records, per language,
 // that the torrents stored before audio.Language.Codes were read got their
@@ -49,7 +56,8 @@ type Backfilled struct {
 // backfills of stored torrents not yet done: the year, season, episode and
 // quality of those without a year or a quality, from their names,
 // and, per language of Options.Languages, a marker for every torrent whose
-// name has the language's audio.Language.Codes, the mark and studios of every
+// name has the language's audio.Language.Codes, no marker of the rules layer
+// that only a subtitle file's path gave, the mark and studios of every
 // stored marker, as audio.Language.Mark and audio.Language.StudiosIn give
 // them from the torrent's name and stored files. Each transaction saves how
 // far its backfill got, so a call after a cancelled one resumes there.
@@ -69,6 +77,12 @@ func (s *Store) Backfill(ctx context.Context, progress func(Backfilled)) error {
 		name := "audio codes " + l.Tag
 		if err := s.backfill(ctx, name, codesFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
 			return s.codesBatch(ctx, l, after)
+		}); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		name = "subtitle marks " + l.Tag
+		if err := s.backfill(ctx, name, subtitleMarksFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
+			return s.subtitleMarksBatch(ctx, l, after)
 		}); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
@@ -241,6 +255,50 @@ func (s *Store) codesBatch(ctx context.Context, l audio.Language, after int64) (
 				studios = coalesce(torrent_audio.studios, ?4), probability = 1,
 				layer = CASE WHEN torrent_audio.layer = ?7 AND torrent_audio.probability = 1 THEN ?7 ELSE ?6 END`,
 				r.id, l.Tag, r.mark, r.studios, r.scriptHint, LayerRules, LayerProbe); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, nil
+}
+
+// subtitleMarksBatch reads the markers in l of the rules layer after the
+// row ID after, and clears the marker, mark, probability and layer of each
+// that only a word in a subtitle file's path gave.
+func (s *Store) subtitleMarksBatch(ctx context.Context, l audio.Language, after int64) (int, int64, func(*sql.Tx) error, error) {
+	type row struct {
+		id   int64
+		name string
+	}
+	var batch []row
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var r row
+		if err := rows.Scan(&r.id, &r.name); err != nil {
+			return err
+		}
+		batch = append(batch, r)
+		return nil
+	}, `SELECT t.id, t.name FROM torrent_audio a JOIN torrent_releases t ON t.id = a.torrent_id
+		WHERE a.language = ? AND a.marker AND a.layer = ? AND a.torrent_id > ? ORDER BY a.torrent_id LIMIT ?`, l.Tag, LayerRules, after, s.backfillBatch); err != nil {
+		return 0, 0, nil, err
+	}
+	if len(batch) == 0 {
+		return 0, 0, nil, nil
+	}
+	var unmarked []int64
+	for _, r := range batch {
+		files, err := s.files(ctx, r.id, s.opts.MaxFiles)
+		if err != nil {
+			return 0, 0, nil, err
+		}
+		if !l.Marker(r.name, files) && slices.ContainsFunc(files, func(f rules.File) bool { return audio.Subtitle(f.Path) && l.Marker(f.Path, nil) }) {
+			unmarked = append(unmarked, r.id)
+		}
+	}
+	return len(batch), batch[len(batch)-1].id, func(tx *sql.Tx) error {
+		for _, id := range unmarked {
+			if _, err := tx.ExecContext(ctx, `UPDATE torrent_audio SET marker = 0, mark = NULL, probability = NULL, layer = NULL
+				WHERE torrent_id = ? AND language = ? AND layer = ?`, id, l.Tag, LayerRules); err != nil {
 				return err
 			}
 		}
