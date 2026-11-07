@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-beta.4] - 2026-11-07
+
 ### Changed
 
 - With `api.persistence.type: pvc` and no `existingClaim`, a new install's `/data` is the StatefulSet's claim `data-<release>-api-0`; a claim `<release>-api` an earlier chart made stays `/data`, and the chart keeps it on uninstall.
@@ -789,7 +791,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.3...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.4...HEAD
+[0.44.0-beta.4]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.3...v0.44.0-beta.4
 [0.44.0-beta.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.2...v0.44.0-beta.3
 [0.44.0-beta.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.1...v0.44.0-beta.2
 [0.44.0-beta.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.4...v0.44.0-beta.1
