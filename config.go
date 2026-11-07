@@ -281,7 +281,7 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if d.Tasks.NoPeersFor, err = duration(getenv, "SNIFFARR_QUEUE_NO_PEERS_FOR", store.DefaultNoPeersFor); err != nil {
 		return a, d, err
 	}
-	if d.Store.MaxFiles, err = positive(getenv, "SNIFFARR_STORE_MAX_FILES", store.DefaultMaxFiles); err != nil {
+	if d.Store, err = loadStore(getenv); err != nil {
 		return a, d, err
 	}
 	if a.Retention, err = duration(getenv, "SNIFFARR_RETENTION", defaultRetention); err != nil {
@@ -332,6 +332,17 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	d.Store.TMDB = a.TMDBKey != ""
 	d.Store.Languages = audio.Tags(a.Languages)
 	return a, d, nil
+}
+
+// loadStore reads the store's settings that the environment sets.
+func loadStore(getenv func(string) string) (store.Options, error) {
+	var o store.Options
+	var err error
+	if o.MaxFiles, err = positive(getenv, "SNIFFARR_STORE_MAX_FILES", store.DefaultMaxFiles); err != nil {
+		return o, err
+	}
+	o.ProbeBatch, err = positive(getenv, "SNIFFARR_PROBE_BATCH", store.DefaultProbeBatch)
+	return o, err
 }
 
 // loadProbe reads the probe tasks' settings.

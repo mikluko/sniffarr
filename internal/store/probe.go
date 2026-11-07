@@ -220,61 +220,12 @@ func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (
 // ProbeLeases returns how many probes are leased and unexpired at now.
 func (s *Store) ProbeLeases(ctx context.Context, now time.Time) (int, error) {
 	var n int
-	err := s.r.QueryRowContext(ctx, "SELECT count(*) FROM task_queue WHERE kind = 'probe' AND lease_until > ?", now.UnixMilli()).Scan(&n)
+	err := s.r.QueryRowContext(ctx, probeLeasesQuery, now.UnixMilli()).Scan(&n)
 	return n, err
 }
 
-// LeaseProbe frees the expired probe leases, then leases to owner until
-// now+d the release to probe next and returns it, or false when there is
-// none. It takes the queued probe with the lowest priority, the newest
-// first, among those at PriorityArr or ahead unless background; then, with
-// background, the release never probed with the most peers over 7 days,
-// else the one due a probe again with the most, which it queues at
-// PrioritySample. Each is a movie or a series with peers and a stored file
-// of a format a probe reads. The first lease of each attempt, and the first
-// after a request or a search moved it ahead, is journaled with maxBytes,
-// the most piece data the probe may download, and when the lease ends; a
-// lease after one expired or was freed is not.
-func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d time.Duration, background bool, maxBytes int64) (c ProbeCandidate, ok bool, err error) {
-	err = s.tx(ctx, func(tx *sql.Tx) error {
-		var leases int
-		c, leases, err = leaseProbe(ctx, tx, owner, now, d, background)
-		ok = leases > 0
-		if err != nil || leases != 1 {
-			return err
-		}
-		return journal(ctx, tx, c.Hash, now, JournalProbeLeased, probeLeaseOutcome(c), Detail("attempt", c.Attempts+1, "max_bytes", maxBytes, "lease_until", now.Add(d)))
-	})
-	if err != nil {
-		return ProbeCandidate{}, false, err
-	}
-	return c, ok, nil
-}
-
-// leaseProbe leases the probe LeaseProbe takes and returns it with how many
-// times its task has been leased since its attempt began or it last moved
-// ahead, or 0 when it leased none.
-func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d time.Duration, background bool) (c ProbeCandidate, leases int, err error) {
-	if _, err := freeExpired(ctx, tx, "kind = 'probe'", now); err != nil {
-		return ProbeCandidate{}, 0, err
-	}
-	until := now.Add(d).UnixMilli()
-	c, id, err := queuedProbe(ctx, tx, now, background)
-	if err == nil {
-		err = tx.QueryRowContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ?, leases = leases + 1 WHERE id = ? RETURNING leases", owner, until, now.UnixMilli(), id).Scan(&leases)
-		return c, leases, err
-	}
-	if !errors.Is(err, sql.ErrNoRows) || !background {
-		return ProbeCandidate{}, 0, ignoreNoRows(err)
-	}
-	h, attempts, err := unqueuedProbe(ctx, tx, now)
-	if err != nil || h == nil {
-		return ProbeCandidate{}, 0, err
-	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at, lease_owner, lease_until, leased_at, leases) VALUES ('probe', ?1, ?2, ?3, ?4, ?5, ?3, 1)",
-		h, PrioritySample, now.UnixMilli(), owner, until)
-	return ProbeCandidate{Hash: Hash(h), Priority: PrioritySample, Attempts: attempts}, 1, err
-}
+// probeLeasesQuery counts the probes leased and unexpired at its argument.
+const probeLeasesQuery = "SELECT count(*) FROM task_queue WHERE kind = 'probe' AND lease_until > ?"
 
 // probeLeaseOutcome is the journal outcome of the lease of c, the first that
 // holds: request for a probe asked for with RequestProbe, retry for a
@@ -290,65 +241,6 @@ func probeLeaseOutcome(c ProbeCandidate) string {
 		return "search"
 	}
 	return "background"
-}
-
-// queuedProbeQuery selects the free queued probe due at its first argument,
-// at the priority of its second or ahead unless its third, with its failed
-// attempts. CROSS JOIN keeps SQLite walking the queued probes rather than
-// every release.
-var queuedProbeQuery = `SELECT q.id, q.infohash, q.priority, coalesce(p.attempts, 0) FROM task_queue q CROSS JOIN torrent_releases t ON t.infohash = q.infohash
-	LEFT JOIN probe_releases p ON p.torrent_id = t.id
-	WHERE q.kind = 'probe' AND q.lease_owner IS NULL AND q.not_before <= ? AND (q.priority <= ? OR ?) AND ` + probeCond("1") + `
-	ORDER BY q.priority, q.queued_at DESC, q.id DESC LIMIT 1`
-
-// unqueued selects releases t not queued for a probe.
-const unqueued = ` AND NOT EXISTS (SELECT 1 FROM task_queue q WHERE q.kind = 'probe' AND q.infohash = t.infohash)`
-
-// backgroundProbeQuery selects the release not queued for a probe never
-// probed with the most peers over 7 days.
-var backgroundProbeQuery = `SELECT t.infohash, 0 FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
-	WHERE ` + probeCond("p.outcome IS NULL") + unqueued + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
-
-// retryProbeQuery selects the release not queued for a probe due a probe
-// again at its first argument with the most peers over 7 days, with its
-// failed attempts.
-var retryProbeQuery = `SELECT t.infohash, p.attempts FROM probe_releases p CROSS JOIN torrent_releases t ON t.id = p.torrent_id
-	WHERE ` + probeCond(probeDue) + unqueued + ` ORDER BY t.peers_week DESC, t.id DESC LIMIT 1`
-
-// queuedProbe returns the free queued probe due at now that LeaseProbe takes
-// first, and the ID of its task, or sql.ErrNoRows.
-func queuedProbe(ctx context.Context, tx *sql.Tx, now time.Time, background bool) (ProbeCandidate, int64, error) {
-	var id int64
-	var prio, attempts int
-	var h []byte
-	if err := tx.QueryRowContext(ctx, queuedProbeQuery, append([]any{now.UnixMilli(), PriorityArr, background}, probeArgs()...)...).Scan(&id, &h, &prio, &attempts); err != nil {
-		return ProbeCandidate{}, 0, err
-	}
-	return ProbeCandidate{Hash: Hash(h), Wanted: prio <= PriorityArr, Priority: prio, Attempts: attempts}, id, nil
-}
-
-// unqueuedProbe returns the infohash of the release not queued for a probe
-// never probed with the most peers over 7 days, else of the one due a probe
-// again at now with the most, with its failed attempts; or nil.
-func unqueuedProbe(ctx context.Context, tx *sql.Tx, now time.Time) ([]byte, int, error) {
-	for _, q := range []struct {
-		query string
-		args  []any
-	}{
-		{backgroundProbeQuery, probeArgs()},
-		{retryProbeQuery, append([]any{now.Unix()}, probeArgs()...)},
-	} {
-		var h []byte
-		var attempts int
-		err := tx.QueryRowContext(ctx, q.query, q.args...).Scan(&h, &attempts)
-		if err == nil {
-			return h, attempts, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return nil, 0, err
-		}
-	}
-	return nil, 0, nil
 }
 
 // probeCond selects releases t with peers a probe can read whose probe row

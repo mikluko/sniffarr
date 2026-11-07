@@ -216,7 +216,7 @@ func TestLoadAPI(t *testing.T) {
 				Probe: defaultProbe},
 			db.Config{Path: "/data/sniffarr.db",
 				Tasks: store.TaskOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor, NoProbes: true},
-				Store: store.Options{MaxFiles: store.DefaultMaxFiles, TMDB: true}}
+				Store: store.Options{MaxFiles: store.DefaultMaxFiles, ProbeBatch: store.DefaultProbeBatch, TMDB: true}}
 	}
 	tests := []struct {
 		name string
@@ -230,7 +230,7 @@ func TestLoadAPI(t *testing.T) {
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
 			"SNIFFARR_PROBE_DAILY_BYTES", "20GiB", "SNIFFARR_PROBE_SEARCH_RESERVE", "10", "SNIFFARR_PROBE_MAX_BYTES", "32MiB",
-			"SNIFFARR_PROBE_LEASE", "5m", "SNIFFARR_PROBE_ATTEMPTS", "2", "SNIFFARR_PROBE_BACKOFF", "12h",
+			"SNIFFARR_PROBE_LEASE", "5m", "SNIFFARR_PROBE_ATTEMPTS", "2", "SNIFFARR_PROBE_BACKOFF", "12h", "SNIFFARR_PROBE_BATCH", "50",
 			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
 			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h", "SNIFFARR_RETENTION_IDLE", "72h", "SNIFFARR_RETENTION_JOURNAL", "168h", "SNIFFARR_STATS_INTERVAL", "1m",
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
@@ -244,7 +244,7 @@ func TestLoadAPI(t *testing.T) {
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian,
 					Probe: ingest.ProbeConfig{DailyBytes: 20 << 30, SearchReserve: 10, MaxBytes: 32 << 20, Lease: 5 * time.Minute, Attempts: 2, Backoff: 12 * time.Hour}}
 				d.Tasks = store.TaskOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour, NoProbes: true}
-				d.Store = store.Options{MaxFiles: 50, Languages: []string{"ru"}, TMDB: true}
+				d.Store = store.Options{MaxFiles: 50, ProbeBatch: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: func(a *api.Config, _ *db.Config) { a.DailyTokens = 0 }},
 		{name: "no reserve", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0"), want: func(a *api.Config, _ *db.Config) { a.SearchReserve = 0 }},
@@ -257,6 +257,7 @@ func TestLoadAPI(t *testing.T) {
 		{name: "audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru"), want: func(a *api.Config, d *db.Config) { a.Languages, d.Store.Languages = russian, []string{"ru"} }},
 		{name: "unknown audio language", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru,xx"), err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},
 		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
+		{name: "probe batch zero", env: with("SNIFFARR_PROBE_BATCH", "0"), err: "SNIFFARR_PROBE_BATCH: want a positive integer"},
 		{name: "nothing set", err: "SNIFFARR_DB is not set"},
 		{name: "concurrency not a number", env: with("SNIFFARR_CLASSIFY_CONCURRENCY", "four"), err: "SNIFFARR_CLASSIFY_CONCURRENCY: want a positive integer"},
 		{name: "zero concurrency", env: with("SNIFFARR_CLASSIFY_CONCURRENCY", "0"), err: "SNIFFARR_CLASSIFY_CONCURRENCY: want a positive integer"},

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+
+	"github.com/mikluko/batcher"
 
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/sketch"
@@ -46,6 +49,13 @@ type Options struct {
 	TMDB bool
 	// Meter records the store's metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
+	// ProbeBatch is the most LeaseProbe calls one search and one write
+	// serve; DefaultProbeBatch. A batch fills only from calls waiting at
+	// once, so more than the probers that may ask at once fills none.
+	ProbeBatch int
+	// Log records the LeaseProbe batches that fail; nothing is logged when
+	// nil.
+	Log *slog.Logger
 }
 
 // Store keeps its tables in a shared database. It is safe for concurrent
@@ -58,6 +68,8 @@ type Store struct {
 	journalDeleted metric.Int64Counter
 	// backfillBatch is the most rows one Backfill transaction updates.
 	backfillBatch int
+	probes        *batcher.Batcher[*probeLease]
+	log           *slog.Logger
 
 	keyMu     sync.Mutex
 	key       sketch.Key
@@ -82,10 +94,16 @@ func migrate(ctx context.Context, db *database.DB) error {
 }
 
 // New returns the Store in db, applying any pending migrations; Backfill
-// does the one-time backfills of stored torrents.
+// does the one-time backfills of stored torrents. Close stops it.
 func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if opts.MaxFiles <= 0 {
 		opts.MaxFiles = DefaultMaxFiles
+	}
+	if opts.ProbeBatch <= 0 {
+		opts.ProbeBatch = DefaultProbeBatch
+	}
+	if opts.Log == nil {
+		opts.Log = slog.New(slog.DiscardHandler)
 	}
 	if opts.Meter == nil {
 		opts.Meter = otel.GetMeterProvider()
@@ -104,7 +122,9 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted, journalDeleted: journalDeleted, backfillBatch: backfillBatch}, nil
+	s := &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted, journalDeleted: journalDeleted, backfillBatch: backfillBatch, log: opts.Log}
+	s.probes = s.newProbes(opts.ProbeBatch)
+	return s, nil
 }
 
 // Swept is what one Sweep deleted.

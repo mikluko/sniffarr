@@ -69,7 +69,6 @@ type Service struct {
 	// nil.
 	Meter metric.MeterProvider
 
-	probeMu     sync.Mutex
 	owners      atomic.Int64
 	wake        notifier
 	metricsOnce sync.Once

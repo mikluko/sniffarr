@@ -101,7 +101,7 @@ func TestTrimNoProbes(t *testing.T) {
 	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
 	_, _, err = s.RequestProbe(ctx, []Hash{a, b}, t0)
 	require.NoError(t, err)
-	_, ok, err := s.LeaseProbe(ctx, 1, t0, time.Minute, false, 1<<20)
+	_, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 1, Now: t0, Lease: time.Minute, MaxBytes: 1 << 20, Admit: admitting(false)})
 	require.NoError(t, err)
 	require.True(t, ok)
 	_, err = s.WantPeers(ctx, []Hash{a}, t0)

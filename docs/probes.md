@@ -88,7 +88,8 @@ backoff stays at its last doubling and the release is probed again only once
 it has twice the peers over 7 days it had at its last probe, and at least two
 more. A task is leased for
 `SNIFFARR_PROBE_LEASE`; leases are kept in the queue, and a restart of the
-API frees them.
+API frees them. Tasks asked for at once, up to `SNIFFARR_PROBE_BATCH`, are
+handed out together in the order asked, from one look-up of the candidates.
 
 ```mermaid
 stateDiagram-v2

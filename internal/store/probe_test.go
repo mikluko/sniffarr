@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -36,18 +37,32 @@ const markedByte = 3
 // it was.
 func nextProbe(t *testing.T, s *Store, now time.Time, background bool) (ProbeCandidate, bool) {
 	t.Helper()
-	tx, err := s.w.BeginTx(context.Background(), nil)
-	require.NoError(t, err)
-	defer func() { require.NoError(t, tx.Rollback()) }()
-	c, leases, err := leaseProbe(context.Background(), tx, 1, now, time.Minute, background)
-	require.NoError(t, err)
-	return c, leases > 0
+	l := &probeLease{ctx: context.Background(), req: ProbeRequest{Owner: 1, Now: now, Lease: time.Minute, Admit: admitting(background)}}
+	require.NoError(t, s.leaseProbes(context.Background(), rolledBack(s), []*probeLease{l}))
+	return l.c, l.ok
+}
+
+// rolledBack runs f in a write transaction of s that it rolls back.
+func rolledBack(s *Store) func(context.Context, func(*sql.Tx) error) error {
+	return func(ctx context.Context, f func(*sql.Tx) error) error {
+		tx, err := s.w.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		return errors.Join(f(tx), tx.Rollback())
+	}
+}
+
+// admitting is a ProbeRequest.Admit that starts any probe, and a
+// background one with background.
+func admitting(background bool) func(int64, int) (bool, bool) {
+	return func(int64, int) (bool, bool) { return true, background }
 }
 
 // leaseNext leases the next probe at now for 1000 hours.
 func leaseNext(t *testing.T, s *Store, now time.Time, background bool) (ProbeCandidate, bool) {
 	t.Helper()
-	c, ok, err := s.LeaseProbe(context.Background(), 1, now, 1000*time.Hour, background, 0)
+	c, ok, err := s.LeaseProbe(context.Background(), ProbeRequest{Owner: 1, Now: now, Lease: 1000 * time.Hour, Admit: admitting(background)})
 	require.NoError(t, err)
 	return c, ok
 }
@@ -265,8 +280,12 @@ func TestProbePlans(t *testing.T) {
 		query, want string
 		args        []any
 	}{
-		{queuedProbeQuery, "SEARCH q USING INDEX sqlite_autoindex_task_queue_1 (kind=?)", append([]any{0, PriorityArr, false}, probeArgs()...)},
-		{backgroundProbeQuery, "SEARCH t USING INDEX torrent_releases_peers_week (peers_week>?)", probeArgs()},
+		{queuedProbeQuery, "SEARCH q USING INDEX sqlite_autoindex_task_queue_1 (kind=?)", append(append([]any{0, 0}, probeArgs()...), 1)},
+		{backgroundProbeQuery, "SEARCH t USING INDEX torrent_releases_peers_week (peers_week>?)", append(probeArgs(), 1)},
+		{retryProbeQuery, "SCAN p", append(append([]any{0}, probeArgs()...), 1)},
+		{claimQueuedQuery, "SEARCH task_queue USING INTEGER PRIMARY KEY (rowid=?)", append([]any{1, 0, 0, 1, 0, PriorityArr, false}, probeArgs()...)},
+		{claimNeverProbedQuery, "SEARCH t USING INDEX sqlite_autoindex_torrent_releases_1 (infohash=?)", append([]any{0, 1, 0, 0, []byte{1}}, probeArgs()...)},
+		{claimRetryQuery, "SEARCH t USING INDEX sqlite_autoindex_torrent_releases_1 (infohash=?)", append([]any{0, 1, 0, 0, []byte{1}, 0}, probeArgs()...)},
 	} {
 		var plan []string
 		require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {

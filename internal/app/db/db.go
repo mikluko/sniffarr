@@ -22,7 +22,7 @@ type Config struct {
 }
 
 // Module provides *database.DB, *store.Store and *store.Tasks from Config;
-// the database closes at stop. Migrations and the freeing of the queue's
+// the store, then the database, close at stop. Migrations and the freeing of the queue's
 // leases run as they are provided, outside the start and its deadline.
 var Module = fx.Module("db", fx.Provide(open, newStore, newQueue))
 
@@ -35,11 +35,16 @@ func open(lc fx.Lifecycle, cfg Config, log *slog.Logger) (*database.DB, error) {
 	return db, nil
 }
 
-func newStore(db *database.DB, cfg Config) (*store.Store, error) {
-	s, err := store.New(context.Background(), db, cfg.Store)
+func newStore(lc fx.Lifecycle, db *database.DB, cfg Config, log *slog.Logger) (*store.Store, error) {
+	opts := cfg.Store
+	if opts.Log == nil {
+		opts.Log = log
+	}
+	s, err := store.New(context.Background(), db, opts)
 	if err != nil {
 		return nil, fmt.Errorf("store: %w", err)
 	}
+	lc.Append(fx.StopHook(s.Close))
 	return s, nil
 }
 

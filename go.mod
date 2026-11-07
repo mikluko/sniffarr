@@ -15,6 +15,7 @@ require (
 	github.com/anacrolix/generics v0.1.1-0.20251125230353-15d98d46693b
 	github.com/anacrolix/torrent v1.61.0
 	github.com/dchest/siphash v1.2.3
+	github.com/mikluko/batcher v0.10.0
 	github.com/pion/stun/v3 v3.0.0
 	github.com/segmentio/go-hll v1.0.1
 	github.com/stretchr/testify v1.12.1

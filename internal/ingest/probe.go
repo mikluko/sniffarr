@@ -74,23 +74,13 @@ func (s *Service) ProbeTask(ctx context.Context, req *connect.Request[sniffarrv1
 	}
 	s.Tasks.ProberSeen(req.Msg.GetProber(), s.now())
 	cfg := s.Probe
-	s.probeMu.Lock()
-	defer s.probeMu.Unlock()
 	now := s.now()
-	leased, err := s.Store.ProbeLeases(ctx, now)
-	if err != nil {
-		return nil, s.internal(ctx, "probe leases", err)
-	}
-	reserved := int64(leased) * cfg.maxBytes()
-	traffic, err := s.Store.ProbeTraffic(ctx, day(now))
-	if err != nil {
-		return nil, s.internal(ctx, "probe traffic", err)
-	}
 	res := connect.NewResponse(&sniffarrv1.ProbeTaskResponse{})
-	if !cfg.admits(traffic.Rx, reserved, true) {
-		return res, nil
-	}
-	c, ok, err := s.Store.LeaseProbe(ctx, s.owners.Add(1), now, or(cfg.Lease, DefaultProbeLease), cfg.admits(traffic.Rx, reserved, false), cfg.maxBytes())
+	c, ok, err := s.Store.LeaseProbe(ctx, store.ProbeRequest{Owner: s.owners.Add(1), Now: now, Lease: or(cfg.Lease, DefaultProbeLease), MaxBytes: cfg.maxBytes(), Day: day(now),
+		Admit: func(used int64, leased int) (bool, bool) {
+			reserved := int64(leased) * cfg.maxBytes()
+			return cfg.admits(used, reserved, true), cfg.admits(used, reserved, false)
+		}})
 	if err != nil {
 		return nil, s.internal(ctx, "lease probe", err)
 	}

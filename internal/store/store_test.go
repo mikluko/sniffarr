@@ -31,6 +31,7 @@ func open(t *testing.T) *Store {
 	t.Helper()
 	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	t.Cleanup(func() { require.NoError(t, s.Close(context.Background())) })
 	checkJournal(t, db)
 	return s
 }

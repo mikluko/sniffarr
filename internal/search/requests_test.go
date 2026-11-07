@@ -63,7 +63,7 @@ func TestBrowserRequestProbe(t *testing.T) {
 	res, err := b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byWork("m693134")}))
 	require.NoError(t, err)
 	require.Equal(t, int32(3), res.Msg.GetReleases())
-	c, ok, err := b.Store.LeaseProbe(ctx, 1, now, time.Minute, false, 0)
+	c, ok, err := b.Store.LeaseProbe(ctx, store.ProbeRequest{Owner: 1, Now: now, Lease: time.Minute, Admit: func(int64, int) (bool, bool) { return true, false }})
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Contains(t, []store.Hash{hash(1), hash(2), hash(4)}, c.Hash, "a probed release too")
@@ -86,7 +86,7 @@ func TestBrowserRequestProbeOff(t *testing.T) {
 	_, err := b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byWork("m693134")}))
 	require.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
 	require.ErrorContains(t, err, "probes are off")
-	_, ok, err := b.Store.LeaseProbe(ctx, 1, now, time.Minute, false, 0)
+	_, ok, err := b.Store.LeaseProbe(ctx, store.ProbeRequest{Owner: 1, Now: now, Lease: time.Minute, Admit: func(int64, int) (bool, bool) { return true, false }})
 	require.NoError(t, err)
 	require.False(t, ok, "nothing queued")
 }
