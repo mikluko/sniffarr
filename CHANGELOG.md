@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-alpha.4] - 2026-11-07
+
 ### Added
 
 - The release card's journal reads in rows by day: a fetch or a probe with all its attempts, or a title's feed listings, form one row that opens on its steps, particulars and tracks; failures are marked amber or red, in words for screen readers too, and the heading's tooltip gives the retention.
@@ -14,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The card of an infohash with no torrent says what ended it, and notes when retention may have cut the start of its journal.
 - A request for peers from the web UI is recorded in the journal.
 - `BrowseService.Journal` takes `before` and returns `total` and `older`; `Card` returns `journal_total`; journal entries carry `id`; `Settings` reports `journal_retention`.
+- `SNIFFARR_PROBE_BATCH` sets how many probe tasks asked for at once are handed out together, 64 by default.
+
+### Fixed
+
+- Fetches no longer slow down while many fetchers ask for probe tasks.
 
 ## [0.44.0-alpha.3] - 2026-11-07
 
@@ -718,7 +725,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.3...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.4...HEAD
+[0.44.0-alpha.4]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.3...v0.44.0-alpha.4
 [0.44.0-alpha.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.2...v0.44.0-alpha.3
 [0.44.0-alpha.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.1...v0.44.0-alpha.2
 [0.44.0-alpha.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.43.0...v0.44.0-alpha.1
