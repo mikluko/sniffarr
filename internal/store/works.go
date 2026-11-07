@@ -262,6 +262,25 @@ func (s *Store) Ranks(ctx context.Context, work int64) ([3]int, error) {
 	return out, err
 }
 
+// Peaks returns the work's best places in the top of its kind among all
+// voices over each of Windows since the top's history began, 0 where it
+// was never in it.
+func (s *Store) Peaks(ctx context.Context, work int64) ([3]int, error) {
+	var out [3]int
+	err := s.each(ctx, func(rows *sql.Rows) error {
+		var w string
+		var r int
+		if err := rows.Scan(&w, &r); err != nil {
+			return err
+		}
+		if i := slices.IndexFunc(Windows, func(x Window) bool { return x.Name == w }); i >= 0 {
+			out[i] = r
+		}
+		return nil
+	}, "SELECT window, peak FROM stat_top_history WHERE work = ? AND voice = ?", work, string(VoiceAny))
+	return out, err
+}
+
 // WorkPeers returns the distinct peers of all the work's releases over each
 // window ending at now.
 func (s *Store) WorkPeers(ctx context.Context, work int64, now time.Time) (PeerCounts, error) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -200,6 +201,109 @@ func TestComputeTopPrevRankBelowTop(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total, "only the last film has peers today")
 	require.Equal(t, TopSize+2, top[0].PrevRank, "its place the day before counts every work, not the previous top")
+}
+
+// The history of a top keeps, per work, its first entry, its time in the
+// top over every stay, its best place, and whether its stay is a return,
+// across computations where works climb, drop out and come back.
+func TestTopHistory(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	k, err := s.HashKey(ctx)
+	require.NoError(t, err)
+	var a, b, c int64
+	for i, w := range []struct {
+		id   *int64
+		name string
+	}{{&a, "Alpha"}, {&b, "Bravo"}, {&c, "Charlie"}} {
+		_, _, err := s.Insert(ctx, named(byte(i+1), w.name+" 2020 1080p WEB-DL", "movie", silent))
+		require.NoError(t, err)
+		*w.id = matchTo(t, s, "y:"+strings.ToLower(w.name)+" 2020", TypeMovie, 100+i, w.name)
+	}
+	peers := func(at time.Time, by map[byte]int) {
+		t.Helper()
+		var ps []PeerSketch
+		for h, n := range by {
+			ps = append(ps, PeerSketch{Hash: hash(h), Hour: at, Sketch: sketchOf(k, 1000*int(h)+at.Hour()*100, n)})
+		}
+		_, _, err := s.MergePeers(ctx, ps)
+		require.NoError(t, err)
+	}
+	type place struct {
+		rank, peak int
+		onChart    time.Duration
+		debut      time.Time
+		reentry    bool
+	}
+	day := func(at time.Time) map[int64]place {
+		t.Helper()
+		require.NoError(t, s.ComputeTop(ctx, at))
+		top, _, _, err := s.Top(ctx, "movie", WindowDay, VoiceAny, "", 10, 0)
+		require.NoError(t, err)
+		out := map[int64]place{}
+		for _, e := range top {
+			out[e.Work.Work.ID] = place{e.Rank, e.Peak, e.OnChart, e.Debut, e.Reentry}
+		}
+		return out
+	}
+
+	since, err := s.TopSince(ctx, "movie", WindowDay, VoiceAny, "")
+	require.NoError(t, err)
+	require.Zero(t, since, "no history before the first computation")
+
+	peers(t0, map[byte]int{1: 100, 2: 50})
+	require.Equal(t, map[int64]place{a: {1, 1, 0, t0, false}, b: {2, 2, 0, t0, false}}, day(t0))
+	since, err = s.TopSince(ctx, "movie", WindowDay, VoiceAny, "")
+	require.NoError(t, err)
+	require.Equal(t, t0, since)
+
+	t1 := t0.Add(time.Hour)
+	peers(t1, map[byte]int{2: 300})
+	require.Equal(t, map[int64]place{a: {2, 1, time.Hour, t0, false}, b: {1, 1, time.Hour, t0, false}}, day(t1),
+		"Alpha keeps its peak below it")
+
+	t2 := t0.Add(30 * time.Hour)
+	peers(t2, map[byte]int{2: 10})
+	require.Equal(t, map[int64]place{b: {1, 1, 30 * time.Hour, t0, false}}, day(t2), "Alpha's peers are older than the day")
+
+	t3 := t0.Add(40 * time.Hour)
+	peers(t3, map[byte]int{1: 20, 3: 5})
+	require.Equal(t, map[int64]place{
+		a: {1, 1, time.Hour, t0, true},
+		b: {2, 1, 40 * time.Hour, t0, false},
+		c: {3, 3, 0, t3, false},
+	}, day(t3), "Alpha's absence does not count")
+
+	t4 := t0.Add(41 * time.Hour)
+	want := map[int64]place{
+		a: {1, 1, 2 * time.Hour, t0, true},
+		b: {2, 1, 41 * time.Hour, t0, false},
+		c: {3, 3, time.Hour, t3, false},
+	}
+	require.Equal(t, want, day(t4))
+	require.Equal(t, want, day(t4), "computing again at the same time changes nothing")
+	since, err = s.TopSince(ctx, "movie", WindowDay, VoiceAny, "")
+	require.NoError(t, err)
+	require.Equal(t, t0, since)
+
+	peaks, err := s.Peaks(ctx, c)
+	require.NoError(t, err)
+	require.Equal(t, [3]int{3, 3, 3}, peaks)
+	peaks, err = s.Peaks(ctx, a)
+	require.NoError(t, err)
+	require.Equal(t, [3]int{1, 1, 1}, peaks)
+	none := matchTo(t, s, "y:nothing 2000", TypeMovie, 1, "Nothing")
+	peaks, err = s.Peaks(ctx, none)
+	require.NoError(t, err)
+	require.Zero(t, peaks, "a work never in a top has no peak")
+
+	_, err = s.w.ExecContext(ctx, "DELETE FROM stat_top_history")
+	require.NoError(t, err)
+	top, _, _, err := s.Top(ctx, "movie", WindowDay, VoiceAny, "", 10, 0)
+	require.NoError(t, err)
+	require.Len(t, top, 3, "a top computed before its history is read without it")
+	require.Zero(t, top[0].Peak)
+	require.Zero(t, top[0].Debut)
 }
 
 func TestTopSummaries(t *testing.T) {

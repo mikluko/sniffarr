@@ -312,7 +312,8 @@ func TestMigrateModules(t *testing.T) {
 	names := schema(t, db)
 	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "task_queue", "task_dead",
 		"ingest_rejected", "ingest_token_usage", "stat_peers_by_hour", "stat_peers_by_day", "stat_top", "tmdb_works", "tmdb_ids", "settings",
-		"torrent_releases_fts_data", "torrent_releases_fts_idx", "torrent_releases_fts_docsize", "torrent_releases_fts_config", "torrent_journal"} {
+		"torrent_releases_fts_data", "torrent_releases_fts_idx", "torrent_releases_fts_docsize", "torrent_releases_fts_config", "torrent_journal",
+		"stat_top_history"} {
 		require.Contains(t, names, "table "+name)
 	}
 	for _, name := range names {
@@ -329,7 +330,7 @@ func TestMigrateModules(t *testing.T) {
 		"task_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id", "tmdb_works_details",
 		"tmdb_matches_work", "torrent_releases_idle", "torrent_releases_counts", "torrent_releases_first_seen", "ingest_rejected_reason",
 		"arr_events_work", "arr_events_infohash", "arr_events_latest", "feed_items_infohash",
-		"torrent_journal_infohash", "torrent_journal_at",
+		"torrent_journal_infohash", "torrent_journal_at", "stat_top_history_work",
 	}
 	var gotIndexes []string
 	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
@@ -349,7 +350,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 25, version)
+	require.Equal(t, 26, version)
 	var queueRows int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations WHERE component = 'queue'").Scan(&queueRows))
 	require.Zero(t, queueRows, "the queue component is gone")

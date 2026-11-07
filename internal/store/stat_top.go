@@ -42,6 +42,14 @@ type TopEntry struct {
 	// under the same kind and voice, among every work with a peer then; 0
 	// when it had none.
 	PrevRank int
+	// Debut, OnChart, Peak and Reentry are the work's history in this top
+	// since TopSince, zero for a top computed before it: when it first
+	// entered, its time in the top over every stay, its best place, and
+	// whether its current stay follows an earlier one.
+	Debut   time.Time
+	OnChart time.Duration
+	Peak    int
+	Reentry bool
 }
 
 // voiceTest returns the SQL condition admitting the torrents of alias t
@@ -85,8 +93,8 @@ type topRow struct {
 
 // ComputeTop recomputes at now the tops of every kind, window, and voice in
 // each of Options.Languages, TopSize works each with their summaries over
-// the releases the voice admits, and the PeersWeek of every torrent and
-// every work.
+// the releases the voice admits, adding them to the tops' history, and the
+// PeersWeek of every torrent and every work.
 func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 	conn, err := s.r.Conn(ctx)
 	if err != nil {
@@ -272,9 +280,14 @@ func summarizeTops(ctx context.Context, conn *sql.Conn, rows []topRow, langs []s
 	return nil
 }
 
-// writeTops replaces stat_top with rows computed at now.
+// writeTops replaces stat_top with rows computed at now and adds them to
+// the history of the tops.
 func (s *Store) writeTops(ctx context.Context, rows []topRow, now time.Time) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
+		var prev sql.NullInt64
+		if err := tx.QueryRowContext(ctx, "SELECT max(computed_at) FROM stat_top").Scan(&prev); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM stat_top"); err != nil {
 			return err
 		}
@@ -297,8 +310,34 @@ func (s *Store) writeTops(ctx context.Context, rows []topRow, now time.Time) err
 				return err
 			}
 		}
-		return nil
+		return addHistory(ctx, tx, now, prev)
 	})
+}
+
+// addHistory adds stat_top, as computed at now, to stat_top_history, where
+// a work in the top computed at prev stays and any other enters. A stay
+// lasts from the computation it entered at to the last one it was in.
+func addHistory(ctx context.Context, tx *sql.Tx, now time.Time, prev sql.NullInt64) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO stat_top_history (kind, window, voice, work, first_at, entered_at, last_at, prior, entries, peak)
+		SELECT kind, window, voice, work, ?1, ?1, ?1, 0, 1, rank FROM stat_top WHERE true
+		ON CONFLICT (kind, window, voice, work) DO UPDATE SET
+			prior = CASE WHEN last_at IS ?2 THEN prior ELSE prior + last_at - entered_at END,
+			entered_at = CASE WHEN last_at IS ?2 THEN entered_at ELSE ?1 END,
+			entries = entries + (last_at IS NOT ?2),
+			last_at = ?1,
+			peak = min(peak, excluded.peak)`, now.Unix(), prev)
+	return err
+}
+
+// TopSince returns when the history of the top of the kind, window and
+// voice in the language began, the zero time while it has none.
+func (s *Store) TopSince(ctx context.Context, kind string, w Window, v Voice, lang string) (time.Time, error) {
+	var since sql.NullInt64
+	if err := s.r.QueryRowContext(ctx, "SELECT min(first_at) FROM stat_top_history WHERE kind = ? AND window = ? AND voice = ?",
+		kind, w.Name, voiceKey(v, lang)).Scan(&since); err != nil || !since.Valid {
+		return time.Time{}, err
+	}
+	return time.Unix(since.Int64, 0).UTC(), nil
 }
 
 // counts returns the pairs of IDs and counts the query selects on conn.
@@ -394,7 +433,10 @@ func (s *Store) Top(ctx context.Context, kind string, w Window, v Voice, lang st
 			unsummed = append(unsummed, e.Work.Work.ID)
 		}
 		return nil
-	}, "SELECT rank, work, peers, coalesce(prev_rank, 0), releases, first_seen, sources, audio FROM stat_top WHERE kind = ? AND window = ? AND voice = ? ORDER BY rank LIMIT ? OFFSET ?",
+	}, `SELECT t.rank, t.work, t.peers, coalesce(t.prev_rank, 0), t.releases, t.first_seen, t.sources, t.audio,
+			coalesce(h.first_at, 0), coalesce(h.prior + h.last_at - h.entered_at, 0), coalesce(h.peak, 0), coalesce(h.entries > 1, false)
+		FROM stat_top t LEFT JOIN stat_top_history h USING (kind, window, voice, work)
+		WHERE t.kind = ? AND t.window = ? AND t.voice = ? ORDER BY t.rank LIMIT ? OFFSET ?`,
 		kind, w.Name, key, limit, offset); err != nil {
 		return nil, 0, time.Time{}, err
 	}
@@ -419,15 +461,23 @@ func (s *Store) Top(ctx context.Context, kind string, w Window, v Voice, lang st
 }
 
 // scanTopEntry scans a row of stat_top's rank, work, peers, prev_rank,
-// releases, first_seen, sources and audio, and reports whether it holds
-// the summary, which a row stored before stat_top had those columns lacks.
+// releases, first_seen, sources and audio, then its history's first entry,
+// time in the top in seconds, peak and re-entry, and reports whether it
+// holds the summary, which a row stored before stat_top had those columns
+// lacks.
 func scanTopEntry(rows *sql.Rows) (TopEntry, bool, error) {
 	var e TopEntry
 	var first sql.NullInt64
+	var debut, onChart int64
 	var sources, audio sql.NullString
-	if err := rows.Scan(&e.Rank, &e.Work.Work.ID, &e.Peers, &e.PrevRank, &e.Work.Releases, &first, &sources, &audio); err != nil {
+	if err := rows.Scan(&e.Rank, &e.Work.Work.ID, &e.Peers, &e.PrevRank, &e.Work.Releases, &first, &sources, &audio,
+		&debut, &onChart, &e.Peak, &e.Reentry); err != nil {
 		return TopEntry{}, false, err
 	}
+	if debut != 0 {
+		e.Debut = time.Unix(debut, 0).UTC()
+	}
+	e.OnChart = time.Duration(onChart) * time.Second
 	if !audio.Valid {
 		return e, false, nil
 	}
