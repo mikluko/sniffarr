@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/hex"
 	"fmt"
 	"maps"
 	"math"
@@ -313,6 +314,8 @@ type JournalEntry struct {
 type DetailPair struct {
 	Key   string
 	Value string
+	// Href is the page Value links to, "" for none.
+	Href string
 }
 
 // journalValues maps a detail key, or an entry's kind and a key joined by
@@ -329,19 +332,46 @@ var journalValues = map[string]string{
 	"classified.source": "source.",
 	"arr.source":        "journal.arrsource.",
 	"arr.app":           "journal.app.",
+	"matched.layer":     "journal.matchlayer.",
+	"probe_wanted.t":    "journal.searchtype.",
 }
+
+// journalAliases maps a message key a value would take to the key of the
+// message the card already has for it: the classifier's names for a video
+// source to the card's own.
+var journalAliases = map[string]string{
+	"source.disc_image": "source.disc",
+	"source.encode":     "source.rip",
+}
+
+// searchIDProviders names the providers of a search's ID parameter.
+var searchIDProviders = map[string]string{"tmdbid": "TMDB", "imdbid": "IMDb", "tvdbid": "TVDB"}
 
 // JournalDetail returns the entry's particulars in the order of their keys:
 // a key by "journal.key.<kind>.<key>" or else "journal.key.<key>"; a moment
-// by TimeFull, a size by Size, a boolean by "journal.bool.<value>", and a
-// value journalValues maps by its message. A key or a string value without
-// a message is written as it is.
+// by TimeFull, a size by Size, a probability in audio as a percentage, a
+// boolean by "journal.bool.<value>", and a value journalValues maps by its
+// message. A track reads as its kind, language and codec; the leases of an
+// attempt as how many times it was leased; a search's ID as its provider and
+// the ID; the infohash a classification took its kind from as a link to its
+// page. A key or a string value without a message is written as it is.
 func (b Base) JournalDetail(e JournalEntry) []DetailPair {
 	out := make([]DetailPair, 0, len(e.Detail))
 	for _, k := range slices.Sorted(maps.Keys(e.Detail)) {
-		out = append(out, DetailPair{Key: b.journalKey(e.Kind, k), Value: b.journalValue(e.Kind, k, e.Detail[k])})
+		v := e.Detail[k]
+		p := DetailPair{Key: b.journalKey(e.Kind, k), Value: b.journalValue(e.Kind, k, v)}
+		if s, ok := v.(string); ok && e.Kind == "classified" && k == "from" && isInfohash(s) {
+			p.Value, p.Href = s[:8], "/t/"+s
+		}
+		out = append(out, p)
 	}
 	return out
+}
+
+// isInfohash reports whether s is the hex form of an infohash.
+func isInfohash(s string) bool {
+	b, err := hex.DecodeString(s)
+	return err == nil && len(b) == 20
 }
 
 // journalKey is the label of the detail key of an entry of the kind.
@@ -360,16 +390,26 @@ func (b Base) journalKey(kind, key string) string {
 func (b Base) journalValue(kind, key string, v any) string {
 	switch x := v.(type) {
 	case string:
+		if kind == "probe_wanted" && key == "id" {
+			return b.searchID(x)
+		}
 		prefix, ok := journalValues[kind+"."+key]
 		if !ok {
 			prefix, ok = journalValues[key]
 		}
-		if ok && b.has(prefix+x) {
-			return b.T(prefix + x)
+		if m := prefix + x; ok {
+			if a, aliased := journalAliases[m]; aliased {
+				m = a
+			}
+			if b.has(m) {
+				return b.T(m)
+			}
 		}
 		return x
 	case float64:
 		switch {
+		case key == "leases" && x == math.Trunc(x):
+			return b.times(int64(x))
 		case detailTime(key):
 			return b.TimeFull(time.Unix(int64(x), 0))
 		case detailSize(key):
@@ -383,12 +423,20 @@ func (b Base) journalValue(kind, key string, v any) string {
 	case []any:
 		parts := make([]string, len(x))
 		for i, e := range x {
+			if s, ok := e.(string); ok && key == "tracks" {
+				parts[i] = b.track(s)
+				continue
+			}
 			parts[i] = b.journalValue(kind, key, e)
 		}
 		return strings.Join(parts, ", ")
 	case map[string]any:
 		parts := make([]string, 0, len(x))
 		for _, k := range slices.Sorted(maps.Keys(x)) {
+			if p, ok := x[k].(float64); ok && key == "audio" {
+				parts = append(parts, b.LangName(k)+" "+strconv.FormatFloat(math.Round(p*100), 'f', 0, 64)+"%")
+				continue
+			}
 			parts = append(parts, k+" "+b.journalValue(kind, k, x[k]))
 		}
 		return strings.Join(parts, ", ")
@@ -396,6 +444,50 @@ func (b Base) journalValue(kind, key string, v any) string {
 		return ""
 	}
 	return fmt.Sprint(v)
+}
+
+// track writes a track the store journals as "kind:language:codec" as its
+// kind in words, its language and its codec, leaving out an empty one; a
+// string of another form is written as it is.
+func (b Base) track(s string) string {
+	kind, rest, _ := strings.Cut(s, ":")
+	lang, codec, ok := strings.Cut(rest, ":")
+	if !ok {
+		return s
+	}
+	if m := "journal.track." + kind; b.has(m) {
+		kind = b.T(m)
+	}
+	words := []string{kind}
+	for _, w := range []string{lang, codec} {
+		if w != "" {
+			words = append(words, w)
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// searchID writes the ID parameter of a Torznab search, "tmdbid:949", as
+// its provider and ID, "TMDB 949"; one of a provider it does not name is
+// written as it is.
+func (b Base) searchID(s string) string {
+	param, id, ok := strings.Cut(s, ":")
+	if name, known := searchIDProviders[param]; ok && known {
+		return name + " " + id
+	}
+	return s
+}
+
+// times writes how many times a lease was taken: "3 times", "3 раза".
+func (b Base) times(n int64) string {
+	form := "many"
+	switch m10, m100 := n%10, n%100; {
+	case !b.ru() && n == 1, b.ru() && m10 == 1 && m100 != 11:
+		form = "one"
+	case b.ru() && m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14):
+		form = "few"
+	}
+	return b.Fmt("journal.times."+form, b.Num(n))
 }
 
 // detailTime reports whether the store writes the key as a moment.

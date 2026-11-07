@@ -243,6 +243,35 @@ func TestStatic(t *testing.T) {
 	}
 }
 
+// The journal's messages are the same in both languages.
+func TestJournalMessages(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := func(lang string) []string {
+		var out []string
+		for k := range r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", nil, time.UTC).msgs {
+			if strings.HasPrefix(k, "journal.") {
+				out = append(out, k)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	en, ru := keys("en"), keys("ru")
+	for _, k := range en {
+		if !slices.Contains(ru, k) {
+			t.Errorf("%s is not in Russian", k)
+		}
+	}
+	for _, k := range ru {
+		if !slices.Contains(en, k) {
+			t.Errorf("%s is not in English", k)
+		}
+	}
+}
+
 func TestJournalDetail(t *testing.T) {
 	r, err := New()
 	if err != nil {
@@ -264,28 +293,55 @@ func TestJournalDetail(t *testing.T) {
 		{"probed", "en", JournalEntry{Kind: "probed", Detail: map[string]any{"retry_at": 1762500000.0, "attempt": 2.0, "final": true, "downloaded": 4194304.0,
 			"tracks": []any{"video::hevc", "audio:rus:eac3"}, "audio": map[string]any{"ru": 0.88, "en": 0.0}, "path": "a.mkv", "novel": "x"}},
 			[]DetailPair{
-				{"attempt", "2"},
-				{"audio", "en 0, ru 0.88"},
-				{"downloaded", "4.0\u00a0MB"},
-				{"attempts ran out", "yes"},
-				{"novel", "x"},
-				{"file", "a.mkv"},
-				{"next try", "2025-11-07 09:20"},
-				{"tracks", "video::hevc, audio:rus:eac3"},
+				{"attempt", "2", ""},
+				{"audio track probability", "English 0%, Russian 88%", ""},
+				{"downloaded", "4.0\u00a0MB", ""},
+				{"attempts ran out", "yes", ""},
+				{"novel", "x", ""},
+				{"file", "a.mkv", ""},
+				{"next try", "2025-11-07 09:20", ""},
+				{"tracks", "video hevc, audio rus eac3", ""},
 			}},
-		{"probed in Russian", "ru", JournalEntry{Kind: "probed", Detail: map[string]any{"final": false, "downloaded": 4194304.0, "audio": map[string]any{"ru": 0.88}}},
-			[]DetailPair{{"звук", "ru 0,88"}, {"скачано", "4,0\u00a0МБ"}, {"попытки исчерпаны", "нет"}}},
-		{"stored", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"kind": "movie", "kind_layer": "reuse", "discovery": "announce", "size": 26629001216.0}},
-			[]DetailPair{{"discovered by", "announce"}, {"kind", "movie"}, {"kind decided by", "title repeat"}, {"size", "24.8\u00a0GB"}}},
+		{"probed in Russian", "ru", JournalEntry{Kind: "probed", Detail: map[string]any{"final": false, "downloaded": 4194304.0, "audio": map[string]any{"ru": 0.88},
+			"tracks": []any{"video::hevc", "audio:rus:eac3", "subtitle:eng:subrip", "other:x:y"}}},
+			[]DetailPair{{"вероятность звуковой дорожки", "русская 88%", ""}, {"скачано", "4,0\u00a0МБ", ""}, {"попытки исчерпаны", "нет", ""},
+				{"дорожки", "видео hevc, звук rus eac3, субтитры eng subrip, other x y", ""}}},
+		{"a codec with colons", "en", JournalEntry{Kind: "probed", Detail: map[string]any{"tracks": []any{"audio:eng:A:B"}}}, []DetailPair{{"tracks", "audio eng A:B", ""}}},
+		{"stored", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"kind": "movie", "kind_layer": "reuse", "discovery": "announce", "size": 26629001216.0, "leases": 3.0}},
+			[]DetailPair{{"discovered by", "announce", ""}, {"kind", "movie", ""}, {"kind decided by", "title repeat", ""}, {"leased", "3 times", ""}, {"size", "24.8\u00a0GB", ""}}},
+		{"leased twice in Russian", "ru", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 2.0}}, []DetailPair{{"выдана", "2 раза", ""}}},
+		{"leased 5 times in Russian", "ru", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 5.0}}, []DetailPair{{"выдана", "5 раз", ""}}},
+		{"leased 12 times in Russian", "ru", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 12.0}}, []DetailPair{{"выдана", "12 раз", ""}}},
+		{"leased 21 times in Russian", "ru", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 21.0}}, []DetailPair{{"выдана", "21 раз", ""}}},
+		{"leased 22 times in Russian", "ru", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 22.0}}, []DetailPair{{"выдана", "22 раза", ""}}},
+		{"leased once", "en", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 1.0}}, []DetailPair{{"leased", "1 time", ""}}},
 		{"an unknown value", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"kind": "opera", "reason": "nomedia"}},
-			[]DetailPair{{"kind", "opera"}, {"reason", "no video or audio files"}}},
+			[]DetailPair{{"kind", "opera", ""}, {"reason", "no video or audio files", ""}}},
+		{"small in the unit the card prints", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"reason": "small", "size": 1048576.0}},
+			[]DetailPair{{"reason", "under 50 MB", ""}, {"size", "1.0\u00a0MB", ""}}},
 		{"classified", "ru", JournalEntry{Kind: "classified", Detail: map[string]any{"source": "web", "source_confidence": 0.8, "trigger": "search"}},
-			[]DetailPair{{"источник", "web"}, {"уверенность в источнике", "0,8"}, {"кто запросил", "поиск"}}},
+			[]DetailPair{{"источник", "web", ""}, {"уверенность в источнике", "0,8", ""}, {"кто запросил", "поиск", ""}}},
+		{"the classifier's disc image", "en", JournalEntry{Kind: "classified", Detail: map[string]any{"source": "disc_image"}}, []DetailPair{{"source", "disc image", ""}}},
+		{"the classifier's encode", "ru", JournalEntry{Kind: "classified", Detail: map[string]any{"source": "encode"}}, []DetailPair{{"источник", "rip", ""}}},
 		{"arr", "en", JournalEntry{Kind: "arr", Detail: map[string]any{"app": "sonarr", "source": "history", "recorded_at": 1762500000.0}},
-			[]DetailPair{{"app", "Sonarr"}, {"recorded", "2025-11-07 09:20"}, {"came by", "history import"}}},
-		{"feed", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker"}}, []DetailPair{{"feed", "rutracker"}}},
-		{"promoted", "ru", JournalEntry{Kind: "sighted", Detail: map[string]any{"from": "sample", "to": "feed"}}, []DetailPair{{"откуда", "sample"}, {"куда", "фид"}}},
-		{"reuse", "en", JournalEntry{Kind: "classified", Detail: map[string]any{"from": "3c1e"}}, []DetailPair{{"kind taken from", "3c1e"}}},
+			[]DetailPair{{"app", "Sonarr", ""}, {"recorded", "2025-11-07 09:20", ""}, {"came by", "history import", ""}}},
+		{"an arr match", "en", JournalEntry{Kind: "matched", Detail: map[string]any{"event_at": 1762500000.0, "trigger": "arr"}},
+			[]DetailPair{{"time of the Radarr/Sonarr event", "2025-11-07 09:20", ""}, {"asked by", "Radarr/Sonarr", ""}}},
+		{"an earlier match", "en", JournalEntry{Kind: "matched", Detail: map[string]any{"layer": "tmdb", "key_matched_at": 1762500000.0}},
+			[]DetailPair{{"match made", "2025-11-07 09:20", ""}, {"matched by", "TMDB search", ""}}},
+		{"an earlier match in Russian", "ru", JournalEntry{Kind: "matched", Detail: map[string]any{"layer": "arr", "key_matched_at": 1762500000.0}},
+			[]DetailPair{{"сопоставлено", "07.11.2025 09:20", ""}, {"чем сопоставлено", "Radarr/Sonarr", ""}}},
+		{"feed", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker"}}, []DetailPair{{"feed", "rutracker", ""}}},
+		{"promoted", "ru", JournalEntry{Kind: "sighted", Detail: map[string]any{"from": "sample", "to": "feed"}}, []DetailPair{{"откуда", "sample", ""}, {"куда", "фид", ""}}},
+		{"reuse", "en", JournalEntry{Kind: "classified", Detail: map[string]any{"from": "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"}},
+			[]DetailPair{{"kind taken from", "8f3c2a91", "/t/8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"}}},
+		{"reuse from what is no infohash", "en", JournalEntry{Kind: "classified", Detail: map[string]any{"from": "3c1e"}}, []DetailPair{{"kind taken from", "3c1e", ""}}},
+		{"a search", "en", JournalEntry{Kind: "probe_wanted", Detail: map[string]any{"t": "tvsearch", "id": "tmdbid:949", "query": "heat"}},
+			[]DetailPair{{"searched by", "TMDB 949", ""}, {"query", "heat", ""}, {"search type", "series", ""}}},
+		{"a search by IMDb and TVDB", "ru", JournalEntry{Kind: "probe_wanted", Detail: map[string]any{"t": "movie", "id": "imdbid:tt0113277"}},
+			[]DetailPair{{"искали по", "IMDb tt0113277", ""}, {"тип поиска", "фильм", ""}}},
+		{"a search by text", "en", JournalEntry{Kind: "probe_wanted", Detail: map[string]any{"t": "search", "id": "kpid:5"}},
+			[]DetailPair{{"searched by", "kpid:5", ""}, {"search type", "text", ""}}},
 	} {
 		got := base(c.lang).JournalDetail(c.e)
 		if !slices.Equal(got, c.want) {

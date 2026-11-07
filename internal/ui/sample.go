@@ -380,21 +380,33 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 	}}
 }
 
-// sampleJournal is a torrent's life from its sighting at the time: numbers
+// sampleJournal is a torrent's life from its metadata at the time: numbers
 // are float64 and moments Unix seconds, as the API's JSON decodes.
 func sampleJournal(at time.Time, name string) []JournalEntry {
 	sec := func(t time.Time) float64 { return float64(t.Unix()) }
+	const sibling = "3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13"
 	return []JournalEntry{
-		{At: at.Add(-2 * time.Minute), Kind: "sighted", Outcome: "queued", Detail: map[string]any{"discovery": "announce"}},
-		{At: at.Add(-time.Minute), Kind: "leased", Outcome: "fetch", Detail: map[string]any{"owner": 3.0, "attempt": 1.0, "lease_until": sec(at)}},
+		{At: at.Add(-8 * time.Minute), Kind: "feed", Outcome: "queued", Detail: map[string]any{"source": "rutracker", "title": name, "url": "https://rutracker.example/t/6543210",
+			"category": "f-1457", "size": 26629001216.0, "published_at": sec(at.Add(-9 * time.Minute))}},
+		{At: at.Add(-7 * time.Minute), Kind: "feed", Outcome: "already_queued", Detail: map[string]any{"source": "rutor", "title": name, "url": "https://rutor.example/torrent/987654",
+			"size": 26629001216.0, "published_at": sec(at.Add(-7 * time.Minute))}},
+		{At: at.Add(-6 * time.Minute), Kind: "sighted", Outcome: "queued", Detail: map[string]any{"discovery": "announce"}},
+		{At: at.Add(-5 * time.Minute), Kind: "leased", Outcome: "fetch", Detail: map[string]any{"attempt": 1.0, "lease_until": sec(at.Add(-4 * time.Minute))}},
+		{At: at.Add(-3 * time.Minute), Kind: "fetch_failed", Outcome: "timeout", Detail: map[string]any{"attempt": 1.0, "retry_at": sec(at.Add(-2 * time.Minute)), "leases": 2.0}},
+		{At: at.Add(-2 * time.Minute), Kind: "leased", Outcome: "fetch", Detail: map[string]any{"attempt": 2.0, "lease_until": sec(at.Add(-time.Minute))}},
 		{At: at, Kind: "fetched", Outcome: "stored", Detail: map[string]any{"name": name, "size": 26629001216.0, "files": 14.0, "discovery": "announce",
-			"queued_at": sec(at.Add(-2 * time.Minute)), "kind": "movie", "kind_layer": "rules"}},
-		{At: at.Add(time.Minute), Kind: "classified", Outcome: "jev", Detail: map[string]any{"kind": "movie", "kind_confidence": 0.93, "source": "web",
-			"source_confidence": 0.8, "audio": map[string]any{"ru": 0.88}, "trigger": "worker"}},
-		{At: at.Add(2 * time.Minute), Kind: "matched", Outcome: "tmdb", Detail: map[string]any{"work": 42.0, "tmdb_id": 318846.0, "type": "movie", "confidence": 0.8, "trigger": "worker"}},
-		{At: at.Add(3 * time.Hour), Kind: "probe_leased", Outcome: "background", Detail: map[string]any{"attempt": 1.0, "max_bytes": 67108864.0}},
-		{At: at.Add(3*time.Hour + 2*time.Minute), Kind: "probed", Outcome: "tracks", Detail: map[string]any{"path": "Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv", "format": "mkv",
-			"downloaded": 4194304.0, "tracks": []any{"video::hevc", "audio:rus:eac3", "audio:eng:eac3", "subtitle:rus:subrip"}, "audio": map[string]any{"ru": 1.0}}},
+			"queued_at": sec(at.Add(-6 * time.Minute)), "leases": 2.0}},
+		{At: at.Add(30 * time.Second), Kind: "classified", Outcome: "reuse", Detail: map[string]any{"kind": "movie", "from": sibling}},
+		{At: at.Add(time.Minute), Kind: "classified", Outcome: "jev", Detail: map[string]any{"source": "web", "source_confidence": 0.8,
+			"audio": map[string]any{"ru": 0.88}, "trigger": "worker"}},
+		{At: at.Add(2 * time.Minute), Kind: "matched", Outcome: "earlier", Detail: map[string]any{"tmdb_id": 318846.0, "type": "movie", "confidence": 0.8,
+			"layer": "tmdb", "key_matched_at": sec(at.Add(-30 * time.Hour))}},
+		{At: at.Add(time.Hour), Kind: "matched", Outcome: "arr", Detail: map[string]any{"tmdb_id": 693134.0, "type": "movie", "trigger": "arr", "previous": 41.0,
+			"event_at": sec(at.Add(-2 * time.Hour))}},
+		{At: at.Add(2 * time.Hour), Kind: "probe_wanted", Outcome: "search", Detail: map[string]any{"t": "movie", "query": "dune part two", "id": "tmdbid:693134"}},
+		{At: at.Add(3 * time.Hour), Kind: "probe_leased", Outcome: "search", Detail: map[string]any{"attempt": 1.0, "max_bytes": 67108864.0, "lease_until": sec(at.Add(3*time.Hour + 10*time.Minute))}},
+		{At: at.Add(3*time.Hour + 2*time.Minute), Kind: "probed", Outcome: "tracks", Detail: map[string]any{"path": "Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv", "format": "matroska",
+			"downloaded": 4194304.0, "tracks": []any{"video::V_MPEGH/ISO/HEVC", "audio:rus:A_EAC3", "audio:eng:A_EAC3", "subtitle:rus:S_TEXT/UTF8"}, "audio": map[string]any{"ru": 1.0}}},
 	}
 }
 

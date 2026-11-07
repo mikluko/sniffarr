@@ -88,7 +88,7 @@
     <thead><tr><th>{{.T "journal.when"}}</th><th>{{.T "journal.event"}}</th><th>{{.T "journal.outcome"}}</th><th>{{.T "journal.detail"}}</th></tr></thead>
     <tbody>
     {{range .Torrent.Journal}}<tr><td>{{$.TimeFull .At}}</td><td>{{$.T (concat "journal.kind." .Kind)}}</td><td>{{$.T (concat "journal.outcome." .Kind "." .Outcome)}}</td>
-      <td class="wrapc"><span class="mono">{{range $i, $p := $.JournalDetail .}}{{if $i}} · {{end}}{{$p.Key}}: {{$p.Value}}{{end}}</span></td></tr>
+      <td class="wrapc"><span class="mono">{{range $i, $p := $.JournalDetail .}}{{if $i}} · {{end}}{{$p.Key}}: {{if $p.Href}}<a href="{{$p.Href}}">{{$p.Value}}</a>{{else}}{{$p.Value}}{{end}}{{end}}</span></td></tr>
     {{end}}
     </tbody>
   </table>
