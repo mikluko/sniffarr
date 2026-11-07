@@ -22,10 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The torrents page shows a torrent's kind alone; which layer decided it, with the classifier's confidence, is in the value's tooltip.
 - The data page shows the store as a grid of three tables, each row with its share as a bar; a table of a feature turned off leaves its cell empty, and the dropped table has no total row.
 - The tooltip of the current hour on the data page says its pace is over the last hour and so far this hour.
+- A movie or series page has a 185 px poster, 96 px on a phone, and a "Peak" row, its best place in each top since the history began.
 
 ### Removed
 
 - The top's audio and sources columns.
+- The source and dub filters and columns of a movie's or series' releases; the torrents page and a release's card keep them.
 
 ### Fixed
 
