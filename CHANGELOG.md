@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-beta.1] - 2026-11-07
+
 ### Added
 
 - `SNIFFARR_CLASSIFY_URL` sets the classifier's System One endpoint; an endpoint other than TypeSafe's turns the classifier on with or without a key.
@@ -763,7 +765,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.4...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.1...HEAD
+[0.44.0-beta.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.4...v0.44.0-beta.1
 [0.44.0-alpha.4]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.3...v0.44.0-alpha.4
 [0.44.0-alpha.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.2...v0.44.0-alpha.3
 [0.44.0-alpha.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.1...v0.44.0-alpha.2
