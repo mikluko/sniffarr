@@ -5,8 +5,10 @@ Russian. The UI touches no database: it reads `BrowseService`, in-process
 when `-api` is on and over the network at
 `SNIFFARR_URL` otherwise. At start it asks `Settings` for the API's audio
 languages and which optional features are on, retrying every 5 seconds until
-the API answers, and listens only then; these are kept for the life of the
-process, so a change of the API's needs the UI restarted. What is off leaves
+the API answers, and listens only then. It asks again every minute and a
+change shows on the next page, so the order the UI and the API start in does
+not matter; an answer that fails or names an audio language the UI does not
+know leaves what it has. What is off leaves
 no trace: without audio languages the voice filters, columns and audio rows
 go; while the API does not probe, the probe button, the probe meter and the
 probe queue card go, and the probe routes answer 404; without the classifier

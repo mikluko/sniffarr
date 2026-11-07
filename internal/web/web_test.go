@@ -136,7 +136,7 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 }
 
 // handlerTasks is handlerWith returning the API's queue as well.
-func handlerTasks(t *testing.T, langs string, cfg Config) (http.Handler, *store.Tasks) {
+func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Tasks) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})

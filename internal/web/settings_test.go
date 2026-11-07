@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -64,4 +66,77 @@ func TestObtainSettings(t *testing.T) {
 	cancel()
 	_, err = ObtainSettings(ctx, &settingsAPI{failures: 1}, time.Hour, log)
 	require.ErrorIs(t, err, context.Canceled, "the first failure's backoff ends with the context")
+}
+
+// switching answers Settings with what was last set, or its error, and
+// counts the calls; every other call goes to the embedded client.
+type switching struct {
+	sniffarrv1connect.BrowseServiceClient
+	mu    sync.Mutex
+	res   *sniffarrv1.SettingsResponse
+	err   error
+	calls int
+}
+
+func (s *switching) set(res *sniffarrv1.SettingsResponse, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.res, s.err = res, err
+}
+
+func (s *switching) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+func (s *switching) Settings(context.Context, *connect.Request[sniffarrv1.SettingsRequest]) (*connect.Response[sniffarrv1.SettingsResponse], error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	if s.err != nil {
+		return nil, s.err
+	}
+	return connect.NewResponse(s.res), nil
+}
+
+func TestWatch(t *testing.T) {
+	h, _ := handlerTasks(t, "ru", Config{})
+	api := &switching{BrowseServiceClient: h.s.cfg.Browse}
+	h.s.cfg.Browse = api
+	api.set(&sniffarrv1.SettingsResponse{AudioLanguages: []string{"ru"}}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.Watch(ctx, time.Millisecond)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	probe := func() bool {
+		return strings.Contains(page(t, get(t, h, "/t/"+hexOf(1), "")), `act-probe`)
+	}
+	voice := func() bool {
+		return strings.Contains(page(t, get(t, h, "/torrents", "")), `name="vl"`)
+	}
+	require.False(t, probe(), "the API the UI started with does not probe")
+	require.True(t, voice())
+
+	api.set(&sniffarrv1.SettingsResponse{AudioLanguages: []string{"ru"}, Probes: true}, nil)
+	require.Eventually(t, probe, 5*time.Second, time.Millisecond, "an API that started later probes")
+
+	failing := api.count()
+	api.set(nil, connect.NewError(connect.CodeUnavailable, errors.New("restarting")))
+	require.Eventually(t, func() bool { return api.count() >= failing+3 }, 5*time.Second, time.Millisecond)
+	require.True(t, probe(), "a failed call leaves the settings")
+
+	api.set(&sniffarrv1.SettingsResponse{AudioLanguages: []string{"ru", "xx"}}, nil)
+	unknown := api.count()
+	require.Eventually(t, func() bool { return api.count() >= unknown+3 }, 5*time.Second, time.Millisecond)
+	require.True(t, probe(), "a language this build does not know leaves the settings")
+
+	api.set(&sniffarrv1.SettingsResponse{}, nil)
+	require.Eventually(t, func() bool { return !probe() && !voice() }, 5*time.Second, time.Millisecond, "probes and languages off")
 }

@@ -35,8 +35,11 @@ type Config struct {
 
 // Module serves the UI on Config.Addr from start to stop. It listens only
 // once the browse API has told it its settings, so a readiness probe on the
-// port waits for the API too.
+// port waits for the API too, and asks again every settingsInterval.
 var Module = fx.Module("ui", fx.Invoke(serve))
+
+// settingsInterval is how often the UI asks the API for its settings again.
+const settingsInterval = time.Minute
 
 // localeTTL is how long a person's locale is kept before the provider is
 // asked again.
@@ -54,9 +57,14 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, brow
 		if cfg.OIDCIssuer != "" {
 			wc.Locales = userinfo.New(cfg.OIDCIssuer, &http.Client{Timeout: 10 * time.Second}, localeTTL)
 		}
-		if srv.Handler, err = web.New(wc); err != nil {
+		h, err := web.New(wc)
+		if err != nil {
 			return err
 		}
+		srv.Handler = h
+		watch, stop := context.WithCancel(ctx)
+		defer stop()
+		go h.Watch(watch, settingsInterval)
 		l, err := net.Listen("tcp", cfg.Addr)
 		if err != nil {
 			return fmt.Errorf("ui: %w", err)

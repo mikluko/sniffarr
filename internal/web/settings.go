@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"time"
 
@@ -41,21 +42,7 @@ func ObtainSettings(ctx context.Context, browse sniffarrv1connect.BrowseServiceC
 	for attempt := 1; ; attempt++ {
 		res, err := browse.Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
 		if err == nil {
-			tags := res.Msg.GetAudioLanguages()
-			langs, err := audio.Parse(strings.Join(tags, ","))
-			if err != nil {
-				return Settings{}, fmt.Errorf("the API's audio languages %q: %w", tags, err)
-			}
-			out := Settings{Languages: langs, Probes: res.Msg.GetProbes()}
-			for _, f := range res.Msg.GetFeatures() {
-				switch f.GetFeature() {
-				case sniffarrv1.Feature_FEATURE_CLASSIFIER:
-					out.Classifier = f.GetOn()
-				case sniffarrv1.Feature_FEATURE_FEEDS:
-					out.Feeds = f.GetOn()
-				}
-			}
-			return out, nil
+			return settingsOf(res.Msg)
 		}
 		if attempt > 1 {
 			log.Warn("settings", "err", err, "attempt", attempt)
@@ -64,6 +51,48 @@ func ObtainSettings(ctx context.Context, browse sniffarrv1connect.BrowseServiceC
 		}
 		if err := sleep(ctx, backoff); err != nil {
 			return Settings{}, err
+		}
+	}
+}
+
+func settingsOf(msg *sniffarrv1.SettingsResponse) (Settings, error) {
+	tags := msg.GetAudioLanguages()
+	langs, err := audio.Parse(strings.Join(tags, ","))
+	if err != nil {
+		return Settings{}, fmt.Errorf("the API's audio languages %q: %w", tags, err)
+	}
+	out := Settings{Languages: langs, Probes: msg.GetProbes()}
+	for _, f := range msg.GetFeatures() {
+		switch f.GetFeature() {
+		case sniffarrv1.Feature_FEATURE_CLASSIFIER:
+			out.Classifier = f.GetOn()
+		case sniffarrv1.Feature_FEATURE_FEEDS:
+			out.Feeds = f.GetOn()
+		}
+	}
+	return out, nil
+}
+
+// Watch asks the browse API for its settings every interval until ctx is
+// done and applies each answer that differs from the one in use. A failed
+// call or an answer this build cannot show is logged and the settings in
+// use stay.
+func (h *Handler) Watch(ctx context.Context, interval time.Duration) {
+	log := h.s.cfg.Log
+	for sleep(ctx, interval) == nil {
+		res, err := h.s.cfg.Browse.Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+		if err != nil {
+			log.WarnContext(ctx, "settings", "err", err)
+			continue
+		}
+		next, err := settingsOf(res.Msg)
+		if err != nil {
+			log.WarnContext(ctx, "settings", "err", err)
+			continue
+		}
+		if !reflect.DeepEqual(next, h.s.settings().Settings) {
+			h.Apply(next)
+			log.InfoContext(ctx, "settings changed", "languages", audio.Tags(next.Languages), "probes", next.Probes, "classifier", next.Classifier, "feeds", next.Feeds)
 		}
 	}
 }
