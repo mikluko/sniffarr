@@ -26,6 +26,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/ui"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // TokenHeader carries the access token of the signed-in person, as
@@ -96,7 +97,8 @@ type server struct {
 	zones sync.Map // zone name → *time.Location, the ones tz cookies named
 }
 
-// New returns the UI's handler.
+// New returns the UI's handler, every response naming the build in its
+// Server header.
 func New(cfg Config) (http.Handler, error) {
 	r, err := ui.New()
 	if err != nil {
@@ -127,7 +129,7 @@ func New(cfg Config) (http.Handler, error) {
 	mux.Handle("POST /movie/{id}/{action}", cop.Handler(s.requestWork("movie")))
 	mux.Handle("POST /tv/{id}/{action}", cop.Handler(s.requestWork("series")))
 	mux.HandleFunc("/", s.notFound)
-	return mux, nil
+	return version.Middleware(mux), nil
 }
 
 // notFound answers 404 with the page naming the path asked for.
