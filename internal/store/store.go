@@ -51,10 +51,11 @@ type Options struct {
 // Store keeps its tables in a shared database. It is safe for concurrent
 // use.
 type Store struct {
-	db      *database.DB
-	w, r    *sql.DB
-	opts    Options
-	deleted metric.Int64Counter
+	db             *database.DB
+	w, r           *sql.DB
+	opts           Options
+	deleted        metric.Int64Counter
+	journalDeleted metric.Int64Counter
 	// backfillBatch is the most rows one Backfill transaction updates.
 	backfillBatch int
 
@@ -92,12 +93,18 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if err := migrate(ctx, db); err != nil {
 		return nil, err
 	}
-	deleted, err := opts.Meter.Meter("github.com/mikluko/sniffarr/internal/store").Int64Counter("sniffarr.store.retention.deletions",
+	m := opts.Meter.Meter("github.com/mikluko/sniffarr/internal/store")
+	deleted, err := m.Int64Counter("sniffarr.store.retention.deletions",
 		metric.WithUnit("{torrent}"), metric.WithDescription("Stored torrents deleted for not being seen within the retention period, by which period."))
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted, backfillBatch: backfillBatch}, nil
+	journalDeleted, err := m.Int64Counter("sniffarr.store.journal.deletions",
+		metric.WithUnit("{entry}"), metric.WithDescription("Journal entries deleted for being older than the journal retention period."))
+	if err != nil {
+		return nil, err
+	}
+	return &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted, journalDeleted: journalDeleted, backfillBatch: backfillBatch}, nil
 }
 
 // Swept is what one Sweep deleted.

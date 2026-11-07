@@ -6,11 +6,16 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
+	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
 )
 
@@ -70,9 +75,35 @@ func TestJournalOrderAndLimit(t *testing.T) {
 	require.Empty(t, got)
 }
 
+// counters returns what the reader's counters counted, by name, unit and
+// attributes.
+func counters(t *testing.T, reader *sdkmetric.ManualReader) map[string]int64 {
+	t.Helper()
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	got := map[string]int64{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				continue
+			}
+			for _, p := range sum.DataPoints {
+				got[strings.TrimSpace(m.Name+" "+m.Unit+" "+p.Attributes.Encoded(attribute.DefaultEncoder()))] += p.Value
+			}
+		}
+	}
+	return got
+}
+
 func TestSweepJournal(t *testing.T) {
 	ctx := context.Background()
-	s := open(t)
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	reader := sdkmetric.NewManualReader()
+	s, err := New(ctx, db, Options{Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
+	require.NoError(t, err)
 	require.NoError(t, s.tx(ctx, func(tx *sql.Tx) error {
 		for i := range 3 {
 			if err := journal(ctx, tx, hash(byte(i+1)), t0, JournalFetched, "stored", nil); err != nil {
@@ -86,6 +117,7 @@ func TestSweepJournal(t *testing.T) {
 	require.Equal(t, 3, n, "the rows at t0, over two batches")
 	require.Equal(t, []string{"deleted/idle"}, entries(t, s, hash(1)))
 	require.Empty(t, entries(t, s, hash(2)))
+	require.Equal(t, map[string]int64{"sniffarr.store.journal.deletions {entry}": 3}, counters(t, reader), "counted apart from the torrents swept")
 }
 
 func TestJournalPlans(t *testing.T) {

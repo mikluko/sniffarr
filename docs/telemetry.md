@@ -33,6 +33,7 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
 | `-api`     | `sniffarr.feed.items`                  | `{item}`     | `sniffarr.feed.source`, `sniffarr.feed.outcome` |
 | `-api`     | `sniffarr.store.retention.deletions`   | `{torrent}`  | `sniffarr.store.retention.class`           |
+| `-api`     | `sniffarr.store.journal.deletions`     | `{entry}`    |                                            |
 | `-api`     | `sniffarr.ingest.results`              | `{result}`   | `sniffarr.fetch.outcome`                   |
 | `-api`     | `sniffarr.ingest.rejections`           | `{torrent}`  | `sniffarr.rules.reason`                    |
 | `-api`     | `sniffarr.ingest.stored`               | `{torrent}`  |                                            |

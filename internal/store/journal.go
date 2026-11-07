@@ -6,9 +6,6 @@ import (
 	"encoding/json"
 	"slices"
 	"time"
-
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 )
 
 // Kinds of journal entries, each with its outcomes.
@@ -217,7 +214,6 @@ const journalSweep = "SELECT id FROM torrent_journal WHERE at < ? ORDER BY at LI
 // SweepJournal deletes the entries older than before, in transactions of
 // at most batch each, and returns how many.
 func (s *Store) SweepJournal(ctx context.Context, before time.Time, batch int) (int, error) {
-	attr := metric.WithAttributes(attribute.String("sniffarr.store.retention.class", "journal"))
 	total := 0
 	for {
 		var n int
@@ -234,7 +230,7 @@ func (s *Store) SweepJournal(ctx context.Context, before time.Time, batch int) (
 			return total, err
 		}
 		total += n
-		s.deleted.Add(ctx, int64(n), attr)
+		s.journalDeleted.Add(ctx, int64(n))
 		if n < batch {
 			return total, nil
 		}
