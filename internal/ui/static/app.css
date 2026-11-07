@@ -174,11 +174,12 @@ h2.tm-title{margin:0;font:600 18px/1.3 var(--mono);text-transform:none;letter-sp
 /* dubs */
 .t td.au{white-space:normal;min-width:220px}
 .t td.au div{max-width:36ch}
-.tip{position:relative;display:inline-block;margin-left:6px;padding:0 4px;border:1px solid var(--border);color:var(--muted-foreground);font:400 11px/14px var(--mono);text-transform:none;letter-spacing:0;cursor:help;vertical-align:1px}
-.tip:hover,.tip:focus{color:var(--foreground);border-color:var(--muted-foreground)}
-.tipb{display:none;position:absolute;z-index:10;top:calc(100% + 4px);left:0;width:max-content;max-width:min(60ch,80vw);padding:8px 12px;background:var(--muted);border:1px solid var(--border);border-left:3px solid var(--ln);color:var(--foreground);font:400 13px/1.5 var(--mono);white-space:normal;text-align:left}
-.tip:hover .tipb,.tip:focus .tipb{display:block}
+.tip{position:relative;text-decoration:underline dotted;text-decoration-color:var(--muted-foreground);text-underline-offset:.25em;cursor:help}
+.tipb{display:none;position:absolute;z-index:50;top:calc(100% + 8px);left:0;width:max-content;max-width:44ch;padding:6px 12px;background:var(--foreground);color:var(--background);font:400 12px/1.5 var(--mono);white-space:normal;text-align:left;text-transform:none;letter-spacing:0}
+.tipb::before{content:"";position:absolute;left:12px;top:-4px;width:8px;height:8px;background:var(--foreground);transform:rotate(45deg)}
+.tip:hover .tipb,.tip:focus .tipb,.tip:focus-within .tipb,.tip.open .tipb{display:block}
 .at .tipb{left:auto;right:0}
+.at .tipb::before{left:auto;right:12px}
 
 /* results */
 .results{display:flex;flex-direction:column;gap:12px}
@@ -204,6 +205,9 @@ a.orig{display:block;font-size:12px}
   .top nav{gap:18px}
   button,select,input,.seg a,.tabs a,.langs>*{min-height:40px}
   .langs>*{padding:0 12px}
+  .tipb{max-width:min(44ch,calc(100vw - 48px))}
+  .at .tipb{left:0;right:auto}
+  .at .tipb::before{left:12px;right:auto}
   /* results collapse to two-line rows: name, then size · kind · dub · source · last seen */
   #releases thead,#torrents thead{display:none}
   #releases .t tr,#torrents .t tr{display:block;padding:6px 0;border-bottom:1px solid var(--border)}

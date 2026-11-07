@@ -44,6 +44,11 @@ type audioArgs struct {
 	A []Audio
 }
 
+// tipArgs are a tooltip's trigger Label and its Text.
+type tipArgs struct {
+	Label, Text string
+}
+
 // actsArgs are the buttons of the card at Path, whose releases have Peers
 // over 7 days.
 type actsArgs struct {
@@ -109,6 +114,7 @@ func New() (*Renderer, error) {
 			return workAudioArgs{B: b, A: a, N: n}
 		},
 		"queueTasks": QueueTasks,
+		"tipArgs":    func(label, text string) tipArgs { return tipArgs{Label: label, Text: text} },
 		"actsArgs": func(b Base, path string, peers int64) actsArgs {
 			return actsArgs{B: b, Path: path, Peers: peers}
 		},

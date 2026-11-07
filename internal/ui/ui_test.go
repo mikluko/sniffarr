@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"html/template"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -418,5 +419,26 @@ func TestFonts(t *testing.T) {
 	r.Static().ServeHTTP(sw, httptest.NewRequest("GET", "/static/fonts/OFL.txt", nil))
 	if sw.Code != 200 {
 		t.Errorf("OFL.txt: %d", sw.Code)
+	}
+}
+
+// A tooltip's trigger is its label, focusable and named by label and text
+// together; the text itself is hidden from assistive technology.
+func TestTip(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	b := r.Base(req, "en", "data", nil, time.UTC)
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "data", SampleData(b)); err != nil {
+		t.Fatal(err)
+	}
+	label, text := b.T("d.queue"), b.T("q.note")
+	want := `<span class="tip" tabindex="0" aria-label="` + template.HTMLEscapeString(label+": "+text) + `">` +
+		label + `<span class="tipb" aria-hidden="true">` + template.HTMLEscapeString(text) + `</span></span>`
+	if !strings.Contains(w.Body.String(), want) {
+		t.Errorf("no tooltip %s", want)
 	}
 }
