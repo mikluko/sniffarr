@@ -298,7 +298,6 @@
   "journal.outcome.feed.stored": "уже сохранена",
   "journal.outcome.feed.queued": "поставлена в очередь",
   "journal.outcome.feed.rejected": "отброшена",
-  "journal.outcome.feed.duplicate": "уже была в фиде",
   "journal.outcome.probe_wanted.search": "запрошена поиском",
   "journal.outcome.probe_wanted.request": "запрошена вручную",
   "journal.outcome.probe_leased.retry": "повторный",

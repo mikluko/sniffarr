@@ -118,12 +118,13 @@ func TestRecord(t *testing.T) {
 
 	journal, err := f.store.Journal(ctx, hash(3), 10)
 	require.NoError(t, err)
-	require.Len(t, journal, 4)
-	require.Equal(t, []string{"sighted/queued", "feed/queued", "feed/duplicate", "feed/queued"},
-		[]string{journal[0].Kind + "/" + journal[0].Outcome, journal[1].Kind + "/" + journal[1].Outcome, journal[2].Kind + "/" + journal[2].Outcome, journal[3].Kind + "/" + journal[3].Outcome})
+	require.Len(t, journal, 3)
+	require.Equal(t, []string{"sighted/queued", "feed/queued", "feed/queued"},
+		[]string{journal[0].Kind + "/" + journal[0].Outcome, journal[1].Kind + "/" + journal[1].Outcome, journal[2].Kind + "/" + journal[2].Outcome},
+		"a listing the source listed before writes no row")
 	published := strconv.FormatInt(f.now.Add(-time.Hour).Unix(), 10)
 	require.JSONEq(t, `{"source":"rutracker","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[1].Detail)
-	require.JSONEq(t, `{"source":"other","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[3].Detail)
+	require.JSONEq(t, `{"source":"other","title":"Title 3","url":"https://example.com/t/3","category":"f-1457","size":1073741824,"published_at":`+published+`}`, journal[2].Detail)
 }
 
 func TestRecordJournalFails(t *testing.T) {

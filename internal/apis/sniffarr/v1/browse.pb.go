@@ -1855,10 +1855,9 @@ func (x *JournalResponse) GetEntries() []*JournalEntry {
 // revived), leased (fetch), fetched (stored, rejected, duplicate),
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
 // classified (jev, reuse, failed), matched (tmdb, jev, arr, none, error),
-// arr (grab, import), feed (stored, queued, rejected, duplicate),
-// probe_wanted (search, request), probe_leased (request, retry, search,
-// background), probed (tracks, unknown, no_peers, timeout), deleted (idle,
-// expired).
+// arr (grab, import), feed (stored, queued, rejected), probe_wanted
+// (search, request), probe_leased (request, retry, search, background),
+// probed (tracks, unknown, no_peers, timeout), deleted (idle, expired).
 type JournalEntry struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	At      *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`

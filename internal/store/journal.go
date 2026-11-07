@@ -30,8 +30,8 @@ const (
 	JournalMatched = "matched"
 	// JournalArr is an event Radarr or Sonarr reported: grab, import.
 	JournalArr = "arr"
-	// JournalFeed is a listing in a tracker feed: stored, queued, rejected,
-	// duplicate.
+	// JournalFeed is a tracker feed's first listing of an item: stored,
+	// queued, rejected.
 	JournalFeed = "feed"
 	// JournalProbeWanted is a probe asked for: search, request.
 	JournalProbeWanted = "probe_wanted"

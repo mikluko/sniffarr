@@ -11,10 +11,10 @@ first. Every release listed is recorded once per feed
 and infohash, with its title, page, category, size and date; the infohash
 of one the store lacks is queued under discovery `feed`, after `arr` and
 ahead of announced infohashes, unless it is rejected. A feed is a window,
-so a release is listed again until it leaves it and recorded once. Each
-listing is journaled on its infohash with the feed's name, the title, page,
-category, size and date, and what it came to: stored already, queued,
-rejected or listed before.
+so a release is listed again until it leaves it and recorded once. The
+first listing is journaled on its infohash with the feed's name, the title,
+page, category, size and date, and what it came to: stored already, queued
+or rejected; a listing again is not.
 
 | Feed        | Reads                                                                                                                                                                                                                                     |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

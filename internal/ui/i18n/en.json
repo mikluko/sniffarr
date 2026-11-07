@@ -298,7 +298,6 @@
   "journal.outcome.feed.stored": "already stored",
   "journal.outcome.feed.queued": "queued",
   "journal.outcome.feed.rejected": "rejected",
-  "journal.outcome.feed.duplicate": "listed before",
   "journal.outcome.probe_wanted.search": "by a search",
   "journal.outcome.probe_wanted.request": "by request",
   "journal.outcome.probe_leased.retry": "once more",

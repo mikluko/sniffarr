@@ -50,8 +50,8 @@ or queued again, leased once per attempt and per promotion, failed for no
 peers or a timeout, dropped and evicted, for an infohash sighted by announce,
 a feed or Radarr or Sonarr; metadata fetched and stored, rejected or already
 stored; each classification and title match, with who asked for it; the grabs
-and imports Radarr and Sonarr report; its listings in feeds, journaled after
-they are recorded, in a transaction of their own; the probes wanted, started
+and imports Radarr and Sonarr report; its first listing in each feed,
+journaled after it is recorded, in a transaction of its own; the probes wanted, started
 and done; and its deletion. The queue's events of an infohash only ever
 sampled are left out: samples are sighted and fetched at millions a day, and
 most of them never fetch, so the journal of a sampled infohash begins with
