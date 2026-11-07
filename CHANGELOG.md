@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Journal` returns every infohash's events when `infohash` is empty, narrows them by `kind` and by `outcome`, and names each event's `infohash`.
+
 ### Changed
 
 - The table `settings` is named `state`; a migration renames it.

@@ -332,7 +332,7 @@ func TestMigrateModules(t *testing.T) {
 		"task_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id", "tmdb_works_details",
 		"tmdb_matches_work", "torrent_releases_idle", "torrent_releases_counts", "torrent_releases_first_seen", "ingest_rejected_reason",
 		"arr_events_work", "arr_events_infohash", "arr_events_latest", "feed_items_infohash",
-		"torrent_journal_infohash", "torrent_journal_at", "stat_top_history_work",
+		"torrent_journal_infohash", "torrent_journal_at", "torrent_journal_kind", "stat_top_history_work",
 	}
 	var gotIndexes []string
 	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
@@ -352,7 +352,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 28, version)
+	require.Equal(t, 29, version)
 	var kept []byte
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT value FROM state WHERE key = 'peer_hash_key'").Scan(&kept))
 	require.Equal(t, []byte{0}, kept, "the settings rows move to state")

@@ -106,26 +106,84 @@ func TestJournalPage(t *testing.T) {
 		}
 		return out
 	}
-	p, err := s.JournalPage(ctx, hash(1), 0, 2)
+	h1, h3 := hash(1), hash(3)
+	p, err := s.JournalPage(ctx, JournalFilter{Hash: &h1}, 0, 2)
 	require.NoError(t, err)
 	require.Equal(t, []int64{4, 5}, ids(p), "the newest, ordered by time, then by writing")
 	require.Equal(t, JournalPage{Entries: p.Entries, Total: 5, Older: 3}, p)
-	p, err = s.JournalPage(ctx, hash(1), 4, 2)
+	p, err = s.JournalPage(ctx, JournalFilter{Hash: &h1}, 4, 2)
 	require.NoError(t, err)
 	require.Equal(t, []int64{1, 2}, ids(p), "those before the entry")
 	require.Equal(t, 5, p.Total)
 	require.Equal(t, 1, p.Older)
-	p, err = s.JournalPage(ctx, hash(1), 1, 2)
+	p, err = s.JournalPage(ctx, JournalFilter{Hash: &h1}, 1, 2)
 	require.NoError(t, err)
 	require.Equal(t, []int64{3}, ids(p), "an entry written later of an earlier time comes before")
 	require.Zero(t, p.Older)
-	p, err = s.JournalPage(ctx, hash(1), 6, 2)
+	p, err = s.JournalPage(ctx, JournalFilter{Hash: &h1}, 6, 2)
 	require.NoError(t, err)
 	require.Empty(t, p.Entries, "before an entry of another hash, none")
 	require.Equal(t, 5, p.Total)
-	p, err = s.JournalPage(ctx, hash(3), 0, 2)
+	p, err = s.JournalPage(ctx, JournalFilter{Hash: &h3}, 0, 2)
 	require.NoError(t, err)
 	require.Equal(t, JournalPage{}, p)
+}
+
+func TestJournalFilter(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	type ev struct {
+		h             byte
+		at            time.Duration
+		kind, outcome string
+	}
+	evs := []ev{
+		{1, 0, JournalProbed, "tracks"},
+		{2, time.Second, JournalProbed, "no_peers"},
+		{1, 2 * time.Second, JournalFetched, "stored"},
+		{2, -time.Hour, JournalProbed, "tracks"},
+		{3, 3 * time.Second, JournalProbed, "timeout"},
+	}
+	require.NoError(t, s.tx(ctx, func(tx *sql.Tx) error {
+		for _, e := range evs {
+			if err := journal(ctx, tx, hash(e.h), t0.Add(e.at), e.kind, e.outcome, nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	ids := func(f JournalFilter, before int64, limit int) []int64 {
+		t.Helper()
+		p, err := s.JournalPage(ctx, f, before, limit)
+		require.NoError(t, err)
+		out := make([]int64, len(p.Entries))
+		for i, e := range p.Entries {
+			out[i] = e.ID
+		}
+		return out
+	}
+	require.Equal(t, []int64{4, 1, 2, 3, 5}, ids(JournalFilter{}, 0, 10), "every hash's, in time order")
+	require.Equal(t, []int64{3, 5}, ids(JournalFilter{}, 0, 2), "the newest")
+	require.Equal(t, []int64{1, 2}, ids(JournalFilter{}, 3, 2), "before an entry of any hash")
+	require.Equal(t, []int64{4, 1, 2, 5}, ids(JournalFilter{Kind: JournalProbed}, 0, 10), "of a kind, its outcomes merged in time order")
+	require.Equal(t, []int64{2, 5}, ids(JournalFilter{Kind: JournalProbed}, 0, 2))
+	require.Equal(t, []int64{4, 1}, ids(JournalFilter{Kind: JournalProbed}, 2, 10))
+	require.Equal(t, []int64{4, 1}, ids(JournalFilter{Kind: JournalProbed, Outcome: "tracks"}, 0, 10))
+	require.Empty(t, ids(JournalFilter{Kind: JournalProbed}, 99, 10), "before an ID not in the journal, none")
+
+	h2 := hash(2)
+	p, err := s.JournalPage(ctx, JournalFilter{Hash: &h2, Kind: JournalProbed, Outcome: "tracks"}, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, p.Entries, 1)
+	require.Equal(t, h2, p.Entries[0].Hash)
+	require.Equal(t, 1, p.Total, "counted within the kind and outcome")
+	p, err = s.JournalPage(ctx, JournalFilter{Hash: &h2}, 0, 1)
+	require.NoError(t, err)
+	require.Equal(t, []int{2, 1}, []int{p.Total, p.Older})
+	p, err = s.JournalPage(ctx, JournalFilter{Kind: JournalProbed}, 0, 1)
+	require.NoError(t, err)
+	require.Equal(t, hash(3), p.Entries[0].Hash, "each entry with its hash")
+	require.Equal(t, []int{0, 0}, []int{p.Total, p.Older}, "not counted without a hash")
 }
 
 func TestJournalDetailBounded(t *testing.T) {
@@ -291,31 +349,63 @@ func TestSweepJournal(t *testing.T) {
 	require.Equal(t, map[string]int64{"sniffarr.store.journal.deletions {entry}": 3}, counters(t, reader), "counted apart from the torrents swept")
 }
 
+// planOf returns the lines of the query plan of query.
+func planOf(t *testing.T, s *Store, query string, args ...any) []string {
+	t.Helper()
+	var plan []string
+	require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
+		var id, parent, unused int
+		var d string
+		if err := rows.Scan(&id, &parent, &unused, &d); err != nil {
+			return err
+		}
+		plan = append(plan, d)
+		return nil
+	}, "EXPLAIN QUERY PLAN "+query, args...))
+	return plan
+}
+
 func TestJournalPlans(t *testing.T) {
 	s := open(t)
+	h := hash(1)
+	byHash, byHashArgs := journalSelect(JournalFilter{Hash: &h}, 2, 1)
+	byOutcome, byOutcomeArgs := journalSelect(JournalFilter{Kind: JournalProbed, Outcome: "tracks"}, 2, 1)
+	all, allArgs := journalSelect(JournalFilter{}, 2, 1)
 	for _, c := range []struct {
 		query string
 		args  []any
 		want  []string
 	}{
 		{journalSweep, []any{0, 1}, []string{"INDEX torrent_journal_at (at<?)"}},
-		{journalQuery, []any{0, 0, 1}, []string{"INDEX torrent_journal_infohash (infohash=?)", "SCALAR SUBQUERY", "INTEGER PRIMARY KEY (rowid=?)"}},
+		{byHash, byHashArgs, []string{"INDEX torrent_journal_infohash (infohash=? AND at<?)", "SCALAR SUBQUERY", "INTEGER PRIMARY KEY (rowid=?)", "REUSE SUBQUERY"}},
+		{byOutcome, byOutcomeArgs, []string{"INDEX torrent_journal_kind (kind=? AND outcome=? AND at<?)", "SCALAR SUBQUERY", "INTEGER PRIMARY KEY (rowid=?)", "REUSE SUBQUERY"}},
+		{all, allArgs, []string{"INDEX torrent_journal_at (at<?)", "SCALAR SUBQUERY", "INTEGER PRIMARY KEY (rowid=?)", "REUSE SUBQUERY"}},
 	} {
-		var plan []string
-		require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
-			var id, parent, unused int
-			var d string
-			if err := rows.Scan(&id, &parent, &unused, &d); err != nil {
-				return err
-			}
-			plan = append(plan, d)
-			return nil
-		}, "EXPLAIN QUERY PLAN "+c.query, c.args...))
+		plan := planOf(t, s, c.query, c.args...)
 		require.Len(t, plan, len(c.want), c.query)
 		for i, w := range c.want {
 			require.Contains(t, plan[i], w)
 		}
 	}
+}
+
+// Of a kind alone, each outcome is read in the index's order, and only the
+// limited rows of each are sorted to merge them.
+func TestJournalKindPlan(t *testing.T) {
+	s := open(t)
+	q, args := journalSelect(JournalFilter{Kind: JournalProbed}, 0, 1)
+	plan := planOf(t, s, q, args...)
+	var searches int
+	for i, line := range plan {
+		if strings.HasPrefix(line, "SEARCH torrent_journal") {
+			searches++
+			require.Contains(t, line, "INDEX torrent_journal_kind (kind=? AND outcome=?)")
+		}
+		if strings.Contains(line, "TEMP B-TREE") {
+			require.Contains(t, plan[i-1], "SCAN (subquery-", "a sort of a subquery's rows, not of the journal's")
+		}
+	}
+	require.Equal(t, len(JournalOutcomes[JournalProbed]), searches, strings.Join(plan, "\n"))
 }
 
 // unix is the time in Unix seconds, as a journal detail writes it.

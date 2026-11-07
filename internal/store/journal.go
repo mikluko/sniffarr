@@ -305,62 +305,129 @@ func wantedSince(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) (bool, e
 	return recent, err
 }
 
-// journalQuery selects, given a hash, the ID of an entry of it or 0, and a
-// limit, the hash's newest entries before the entry, or of all for 0.
-const journalQuery = `SELECT id, at, kind, outcome, detail FROM torrent_journal WHERE infohash = ?1
-	AND (?2 = 0 OR (at, id) < (SELECT at, id FROM torrent_journal WHERE id = ?2 AND infohash = ?1))
-	ORDER BY at DESC, id DESC LIMIT ?3`
+// JournalFilter narrows the journal to the entries of Hash, of Kind and of
+// Outcome, each when set.
+type JournalFilter struct {
+	Hash    *Hash
+	Kind    string
+	Outcome string
+}
+
+// conds returns f's conditions on torrent_journal and their arguments.
+func (f JournalFilter) conds() ([]string, []any) {
+	var conds []string
+	var args []any
+	if f.Hash != nil {
+		conds, args = append(conds, "infohash = ?"), append(args, f.Hash[:])
+	}
+	if f.Kind != "" {
+		conds, args = append(conds, "kind = ?"), append(args, f.Kind)
+	}
+	if f.Outcome != "" {
+		conds, args = append(conds, "outcome = ?"), append(args, f.Outcome)
+	}
+	return conds, args
+}
+
+// index is the index that holds f's entries together in time order.
+func (f JournalFilter) index() string {
+	switch {
+	case f.Hash != nil:
+		return "torrent_journal_infohash"
+	case f.Kind != "":
+		return "torrent_journal_kind"
+	default:
+		return "torrent_journal_at"
+	}
+}
+
+// journalSelect returns the query of the newest entries f admits before the
+// entry of ID before, or of all for 0, up to limit, and its arguments. Of a
+// kind alone it reads each outcome's newest apart, so that the index serves
+// the order.
+func journalSelect(f JournalFilter, before int64, limit int) (string, []any) {
+	if outcomes := JournalOutcomes[f.Kind]; f.Hash == nil && f.Outcome == "" && len(outcomes) > 0 {
+		parts := make([]string, len(outcomes))
+		var args []any
+		for i, o := range outcomes {
+			g := f
+			g.Outcome = o
+			q, a := journalSelect(g, before, limit)
+			parts[i], args = "SELECT * FROM ("+q+")", append(args, a...)
+		}
+		return strings.Join(parts, " UNION ALL ") + " ORDER BY at DESC, id DESC LIMIT ?", append(args, limit)
+	}
+	conds, args := f.conds()
+	if before != 0 {
+		sub := "SELECT at, id FROM torrent_journal WHERE id = ?"
+		args = append(args, before)
+		if f.Hash != nil {
+			sub, args = sub+" AND infohash = ?", append(args, f.Hash[:])
+		}
+		conds = append(conds, "(at, id) < ("+sub+")")
+	}
+	q := "SELECT id, infohash, at, kind, outcome, detail FROM torrent_journal INDEXED BY " + f.index()
+	if len(conds) > 0 {
+		q += " WHERE " + strings.Join(conds, " AND ")
+	}
+	return q + " ORDER BY at DESC, id DESC LIMIT ?", append(args, limit)
+}
 
 // Journal returns the newest entries of the hash, up to limit, oldest
 // first, in the order of their times and, at one time, of their writing.
 func (s *Store) Journal(ctx context.Context, h Hash, limit int) ([]JournalEntry, error) {
-	return s.journalBefore(ctx, h, 0, limit)
+	return s.journalBefore(ctx, JournalFilter{Hash: &h}, 0, limit)
 }
 
-// JournalPage is a page of an infohash's journal.
+// JournalPage is a page of the journal.
 type JournalPage struct {
 	// Entries are the page's, oldest first.
 	Entries []JournalEntry
-	// Total is how many entries the infohash's journal holds.
+	// Total is how many entries the filter admits; 0 without its hash.
 	Total int
-	// Older is how many of them come before the page's oldest.
+	// Older is how many of them come before the page's oldest; 0 without
+	// the filter's hash.
 	Older int
 }
 
-// JournalPage returns the newest entries of the hash before the entry of ID
+// JournalPage returns the newest entries f admits before the entry of ID
 // before, or of all for 0, up to limit, in the order Journal returns them.
-// An ID not of the hash's entries pages to none.
-func (s *Store) JournalPage(ctx context.Context, h Hash, before int64, limit int) (JournalPage, error) {
+// An ID not in the journal, or not of f's hash, pages to none.
+func (s *Store) JournalPage(ctx context.Context, f JournalFilter, before int64, limit int) (JournalPage, error) {
 	var p JournalPage
 	var err error
-	if p.Entries, err = s.journalBefore(ctx, h, before, limit); err != nil {
-		return JournalPage{}, err
+	if p.Entries, err = s.journalBefore(ctx, f, before, limit); err != nil || f.Hash == nil {
+		return p, err
 	}
-	if err := s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_journal WHERE infohash = ?", h[:]).Scan(&p.Total); err != nil {
+	conds, args := f.conds()
+	where := " WHERE " + strings.Join(conds, " AND ")
+	if err := s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_journal"+where, args...).Scan(&p.Total); err != nil {
 		return JournalPage{}, err
 	}
 	if limit > 0 && len(p.Entries) == limit {
 		oldest := p.Entries[0]
-		err = s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_journal WHERE infohash = ? AND (at, id) < (?, ?)",
-			h[:], oldest.At.Unix(), oldest.ID).Scan(&p.Older)
+		err = s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_journal"+where+" AND (at, id) < (?, ?)",
+			append(args, oldest.At.Unix(), oldest.ID)...).Scan(&p.Older)
 	}
 	return p, err
 }
 
 // journalBefore returns the entries JournalPage pages to.
-func (s *Store) journalBefore(ctx context.Context, h Hash, before int64, limit int) ([]JournalEntry, error) {
+func (s *Store) journalBefore(ctx context.Context, f JournalFilter, before int64, limit int) ([]JournalEntry, error) {
 	var out []JournalEntry
+	q, args := journalSelect(f, before, limit)
 	err := s.each(ctx, func(rows *sql.Rows) error {
-		e := JournalEntry{Hash: h}
+		var e JournalEntry
+		var h []byte
 		var at int64
 		var d sql.NullString
-		if err := rows.Scan(&e.ID, &at, &e.Kind, &e.Outcome, &d); err != nil {
+		if err := rows.Scan(&e.ID, &h, &at, &e.Kind, &e.Outcome, &d); err != nil {
 			return err
 		}
-		e.At, e.Detail = time.Unix(at, 0).UTC(), d.String
+		e.Hash, e.At, e.Detail = Hash(h), time.Unix(at, 0).UTC(), d.String
 		out = append(out, e)
 		return nil
-	}, journalQuery, h[:], before, limit)
+	}, q, args...)
 	slices.Reverse(out)
 	return out, err
 }

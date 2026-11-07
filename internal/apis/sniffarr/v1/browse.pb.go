@@ -2197,15 +2197,23 @@ func (x *CardResponse) GetJournalTotal() int64 {
 }
 
 type JournalRequest struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// When set, only the entries of this infohash; every infohash's when
+	// empty. Any other length than 20 bytes is INVALID_ARGUMENT.
+	Infohash []byte `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
 	// How many of the newest entries to return; 200 when 0, at most 1000. A
 	// negative limit is INVALID_ARGUMENT.
 	Limit int32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
 	// When set, the entries before the one of this ID in the journal's order:
-	// with the oldest returned, the next page. An ID not of the infohash's
-	// entries returns none.
-	Before        int64 `protobuf:"varint,3,opt,name=before,proto3" json:"before,omitempty"`
+	// with the oldest returned, the next page. An ID not in the journal, or
+	// not of the infohash's entries, returns none.
+	Before int64 `protobuf:"varint,3,opt,name=before,proto3" json:"before,omitempty"`
+	// When set, only the entries of this kind, one of JournalEntry's; any
+	// other is INVALID_ARGUMENT.
+	Kind string `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`
+	// When set, only the entries of this outcome of kind; without kind, or
+	// not one of its outcomes, INVALID_ARGUMENT.
+	Outcome       string `protobuf:"bytes,5,opt,name=outcome,proto3" json:"outcome,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2261,13 +2269,29 @@ func (x *JournalRequest) GetBefore() int64 {
 	return 0
 }
 
+func (x *JournalRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *JournalRequest) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
 type JournalResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The entries, oldest first.
 	Entries []*JournalEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
-	// How many entries the infohash's journal holds in all.
+	// How many entries the infohash's journal holds in all, of the kind and
+	// outcome asked for; 0 without an infohash.
 	Total int64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	// How many of them come before the oldest returned.
+	// How many of them come before the oldest returned; 0 without an
+	// infohash.
 	Older         int64 `protobuf:"varint,3,opt,name=older,proto3" json:"older,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2345,7 +2369,9 @@ type JournalEntry struct {
 	// escaped for HTML; empty for none.
 	Detail string `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
 	// The entry's ID, unique across the journal.
-	Id            int64 `protobuf:"varint,5,opt,name=id,proto3" json:"id,omitempty"`
+	Id int64 `protobuf:"varint,5,opt,name=id,proto3" json:"id,omitempty"`
+	// The torrent's infohash.
+	Infohash      []byte `protobuf:"bytes,6,opt,name=infohash,proto3" json:"infohash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2413,6 +2439,13 @@ func (x *JournalEntry) GetId() int64 {
 		return x.Id
 	}
 	return 0
+}
+
+func (x *JournalEntry) GetInfohash() []byte {
+	if x != nil {
+		return x.Infohash
+	}
+	return nil
 }
 
 // RuleHit is a rule and the fragment that made it fire.
@@ -3754,21 +3787,24 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x05rules\x18\n" +
 	" \x03(\v2\x14.sniffarr.v1.RuleHitR\x05rules\x123\n" +
 	"\ajournal\x18\v \x03(\v2\x19.sniffarr.v1.JournalEntryR\ajournal\x12#\n" +
-	"\rjournal_total\x18\f \x01(\x03R\fjournalTotalJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\breleasesR\frelease_rank\"Z\n" +
+	"\rjournal_total\x18\f \x01(\x03R\fjournalTotalJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aJ\x04\b\a\x10\bR\breleasesR\frelease_rank\"\x88\x01\n" +
 	"\x0eJournalRequest\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06before\x18\x03 \x01(\x03R\x06before\"r\n" +
+	"\x06before\x18\x03 \x01(\x03R\x06before\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x18\n" +
+	"\aoutcome\x18\x05 \x01(\tR\aoutcome\"r\n" +
 	"\x0fJournalResponse\x123\n" +
 	"\aentries\x18\x01 \x03(\v2\x19.sniffarr.v1.JournalEntryR\aentries\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x03R\x05total\x12\x14\n" +
-	"\x05older\x18\x03 \x01(\x03R\x05older\"\x90\x01\n" +
+	"\x05older\x18\x03 \x01(\x03R\x05older\"\xac\x01\n" +
 	"\fJournalEntry\x12*\n" +
 	"\x02at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
 	"\aoutcome\x18\x03 \x01(\tR\aoutcome\x12\x16\n" +
 	"\x06detail\x18\x04 \x01(\tR\x06detail\x12\x0e\n" +
-	"\x02id\x18\x05 \x01(\x03R\x02id\"3\n" +
+	"\x02id\x18\x05 \x01(\x03R\x02id\x12\x1a\n" +
+	"\binfohash\x18\x06 \x01(\fR\binfohash\"3\n" +
 	"\aRuleHit\x12\x12\n" +
 	"\x04rule\x18\x01 \x01(\tR\x04rule\x12\x14\n" +
 	"\x05match\x18\x02 \x01(\tR\x05match\"H\n" +

@@ -350,7 +350,8 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 		res.Files = append(res.Files, &sniffarrv1.File{Path: f.Path, Size: f.Size})
 	}
 	res.Rules = ruleHits(c.Name, c.Files, b.Languages)
-	j, err := b.journal(ctx, store.Hash(h), 0, DefaultJournalLimit)
+	hash := store.Hash(h)
+	j, err := b.journal(ctx, store.JournalFilter{Hash: &hash}, 0, DefaultJournalLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -365,9 +366,9 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 }
 
 func (b *Browser) Journal(ctx context.Context, req *connect.Request[sniffarrv1.JournalRequest]) (*connect.Response[sniffarrv1.JournalResponse], error) {
-	h := req.Msg.GetInfohash()
-	if len(h) != len(store.Hash{}) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("infohash of %d bytes, want 20", len(h)))
+	f, err := journalFilter(req.Msg)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	limit := int(req.Msg.GetLimit())
 	if limit < 0 {
@@ -376,24 +377,44 @@ func (b *Browser) Journal(ctx context.Context, req *connect.Request[sniffarrv1.J
 	if limit == 0 {
 		limit = DefaultJournalLimit
 	}
-	res, err := b.journal(ctx, store.Hash(h), req.Msg.GetBefore(), min(limit, MaxJournalLimit))
+	res, err := b.journal(ctx, f, req.Msg.GetBefore(), min(limit, MaxJournalLimit))
 	if err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(res), nil
 }
 
-// journal returns the newest entries of the hash before the entry of ID
-// before, or of all for 0, up to limit, oldest first, with how many the
-// hash's journal holds and how many are older.
-func (b *Browser) journal(ctx context.Context, h store.Hash, before int64, limit int) (*sniffarrv1.JournalResponse, error) {
-	p, err := b.Store.JournalPage(ctx, h, before, limit)
+// journalFilter is the part of the journal msg asks for.
+func journalFilter(msg *sniffarrv1.JournalRequest) (store.JournalFilter, error) {
+	f := store.JournalFilter{Kind: msg.GetKind(), Outcome: msg.GetOutcome()}
+	switch h := msg.GetInfohash(); len(h) {
+	case 0:
+	case len(store.Hash{}):
+		f.Hash = (*store.Hash)(h)
+	default:
+		return f, fmt.Errorf("infohash of %d bytes, want 20", len(h))
+	}
+	outcomes, ok := store.JournalOutcomes[f.Kind]
+	switch {
+	case f.Kind != "" && !ok:
+		return f, fmt.Errorf("unknown kind %q", f.Kind)
+	case f.Outcome != "" && !slices.Contains(outcomes, f.Outcome):
+		return f, fmt.Errorf("outcome %q not of kind %q", f.Outcome, f.Kind)
+	}
+	return f, nil
+}
+
+// journal returns the newest entries f admits before the entry of ID
+// before, or of all for 0, up to limit, oldest first, with how many f
+// admits and how many are older when f names a hash.
+func (b *Browser) journal(ctx context.Context, f store.JournalFilter, before int64, limit int) (*sniffarrv1.JournalResponse, error) {
+	p, err := b.Store.JournalPage(ctx, f, before, limit)
 	if err != nil {
 		return nil, b.internal(ctx, "journal", err)
 	}
 	res := &sniffarrv1.JournalResponse{Entries: make([]*sniffarrv1.JournalEntry, len(p.Entries)), Total: int64(p.Total), Older: int64(p.Older)}
 	for i, e := range p.Entries {
-		res.Entries[i] = &sniffarrv1.JournalEntry{Id: e.ID, At: timestamppb.New(e.At), Kind: e.Kind, Outcome: e.Outcome, Detail: e.Detail}
+		res.Entries[i] = &sniffarrv1.JournalEntry{Id: e.ID, Infohash: e.Hash[:], At: timestamppb.New(e.At), Kind: e.Kind, Outcome: e.Outcome, Detail: e.Detail}
 	}
 	return res, nil
 }

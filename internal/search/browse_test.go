@@ -235,6 +235,42 @@ func TestBrowserJournal(t *testing.T) {
 	require.Empty(t, res.Msg.GetEntries(), "before an entry of another infohash, none")
 }
 
+func TestBrowserJournalFiltered(t *testing.T) {
+	b := browser(t)
+	ctx := context.Background()
+	res, err := b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{}))
+	require.NoError(t, err, "no infohash is every infohash's")
+	require.Greater(t, len(res.Msg.GetEntries()), 2)
+	hashes := map[string]bool{}
+	for _, e := range res.Msg.GetEntries() {
+		hashes[string(e.GetInfohash())] = true
+	}
+	require.Greater(t, len(hashes), 1, "each entry names its infohash")
+	require.Zero(t, res.Msg.GetTotal(), "no total without an infohash")
+
+	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Kind: store.JournalClassified}))
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Msg.GetEntries())
+	for _, e := range res.Msg.GetEntries() {
+		require.Equal(t, store.JournalClassified, e.GetKind())
+	}
+	h := hash(2)
+	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Kind: store.JournalFetched, Outcome: "stored"}))
+	require.NoError(t, err)
+	require.Len(t, res.Msg.GetEntries(), 1)
+	require.Equal(t, int64(1), res.Msg.GetTotal(), "the infohash's entries of the kind and outcome")
+	require.Equal(t, h[:], res.Msg.GetEntries()[0].GetInfohash())
+
+	for _, req := range []*sniffarrv1.JournalRequest{
+		{Kind: "nonsense"},
+		{Outcome: "stored"},
+		{Kind: store.JournalFetched, Outcome: "tracks"},
+	} {
+		_, err = b.Journal(ctx, connect.NewRequest(req))
+		require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "%v", req)
+	}
+}
+
 func TestBrowserStats(t *testing.T) {
 	b := browser(t)
 	ctx := context.Background()

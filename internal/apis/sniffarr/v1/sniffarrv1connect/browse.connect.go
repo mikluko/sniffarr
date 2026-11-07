@@ -87,10 +87,11 @@ type BrowseServiceClient interface {
 	// Card returns one release with every stored file, its peers, its work
 	// and the newest 200 entries of its journal, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
-	// Journal returns the newest entries of an infohash's journal, oldest
-	// first: what happened to it, when, and how it ended. Entries are ordered
-	// by at, then by writing. An infohash never seen has an empty journal; the
-	// absence of events is the answer, not NOT_FOUND.
+	// Journal returns the newest entries of the journal, oldest first: what
+	// happened to a torrent, when, and how it ended; of one infohash, of one
+	// kind, or of one outcome of it, as the request narrows it. Entries are
+	// ordered by at, then by writing. An infohash never seen has an empty
+	// journal; the absence of events is the answer, not NOT_FOUND.
 	Journal(context.Context, *connect.Request[v1.JournalRequest]) (*connect.Response[v1.JournalResponse], error)
 	// Stats returns the store's counts as last computed, which the server
 	// recomputes periodically.
@@ -323,10 +324,11 @@ type BrowseServiceHandler interface {
 	// Card returns one release with every stored file, its peers, its work
 	// and the newest 200 entries of its journal, or NOT_FOUND.
 	Card(context.Context, *connect.Request[v1.CardRequest]) (*connect.Response[v1.CardResponse], error)
-	// Journal returns the newest entries of an infohash's journal, oldest
-	// first: what happened to it, when, and how it ended. Entries are ordered
-	// by at, then by writing. An infohash never seen has an empty journal; the
-	// absence of events is the answer, not NOT_FOUND.
+	// Journal returns the newest entries of the journal, oldest first: what
+	// happened to a torrent, when, and how it ended; of one infohash, of one
+	// kind, or of one outcome of it, as the request narrows it. Entries are
+	// ordered by at, then by writing. An infohash never seen has an empty
+	// journal; the absence of events is the answer, not NOT_FOUND.
 	Journal(context.Context, *connect.Request[v1.JournalRequest]) (*connect.Response[v1.JournalResponse], error)
 	// Stats returns the store's counts as last computed, which the server
 	// recomputes periodically.
