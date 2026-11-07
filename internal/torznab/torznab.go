@@ -299,13 +299,12 @@ const russian = 0.9
 // title is the release's name with its year and resolution in digits,
 // followed by markers in brackets for the release-title custom formats of
 // Radarr and Sonarr. With a Russian audio track probed, they are the labels
-// of the Russian tracks' names and RUS, as in " [Dub, MVO, RUS]"; with
-// probed audio tracks all of other languages and no Russian marker, NORUS
-// and the tracks' languages, as in " [NORUS ENG, UKR]"; else, for a Russian
-// marker or a probability of at least russian, the labels of the name's
-// translation codes and RUS, as in
-// " [MVO, RUS]" for P. RUS carries the Russian audio's studios; with no
-// label and no studio the block is " [RUS, -]".
+// of the Russian tracks' names and RUS, as in " [Dub, MVO, RUS]"; else,
+// when saysRussian, the labels of the name's translation codes and RUS, as
+// in " [MVO, RUS]" for P; else, with probed audio tracks all of other
+// languages, NORUS and the tracks' languages, as in " [NORUS ENG, UKR]".
+// RUS carries the Russian audio's studios; with no label and no studio the
+// block is " [RUS, -]".
 func title(r *sniffarrv1.Release) string {
 	name := names.InDigits(r.GetName())
 	var ru *sniffarrv1.Audio
@@ -319,13 +318,25 @@ func title(r *sniffarrv1.Release) string {
 	if labels, ok := russianLabels(tracks); ok {
 		return name + bracket(labels, rus)
 	}
-	if langs := otherLanguages(tracks); langs != "" && !ru.GetMarker() {
-		return name + " [" + langs + "]"
-	}
-	if ru != nil && (ru.GetMarker() || ru.Probability != nil && ru.GetProbability() >= russian) {
+	if saysRussian(ru) {
 		return name + bracket(codeLabels(name), rus)
 	}
+	if langs := otherLanguages(tracks); langs != "" {
+		return name + " [" + langs + "]"
+	}
 	return name
+}
+
+// saysRussian reports whether the Russian audio has a probability of at
+// least russian, or, with none known, a marker.
+func saysRussian(ru *sniffarrv1.Audio) bool {
+	if ru == nil {
+		return false
+	}
+	if ru.Probability == nil {
+		return ru.GetMarker()
+	}
+	return ru.GetProbability() >= russian
 }
 
 // bracket is " [", the labels of voices, rus, and "]", whatever labels the

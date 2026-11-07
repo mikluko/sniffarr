@@ -44,16 +44,18 @@ Radarr and Sonarr:
   stays when the name has it too, as in
   `Coraline.2009.2160p.HIN.DUB [Dub, RUS]`, where the name's `DUB` is not
   the Russian track's.
-- Probed audio tracks all in other languages, every one giving a language,
-  and no Russian marker: `NORUS` and their ISO 639-2 codes in the order of
-  the tracks, `[NORUS FRA, ENG]`. No release name has `NORUS`, and it does
-  not read as Russian.
-- Otherwise a Russian marker, or a probability of at least 0.9 of a Russian
-  track: the labels the name's Russian translation codes say, `Dub` for
-  `D`, `MVO` for `P` and `L`, `DVO` for `P2` and `L2`, `AVO` for `A`, `VO`
-  for `P1` and `L1`, none for `Pm`, then `RUS`:
+- Otherwise a probability of at least 0.9 of a Russian track, or a Russian
+  marker while no probability is known: the labels the name's Russian
+  translation codes say, `Dub` for `D`, `MVO` for `P` and `L`, `DVO` for
+  `P2` and `L2`, `AVO` for `A`, `VO` for `P1` and `L1`, none for `Pm`, then
+  `RUS`:
   `Bad.Apples.2026.P.WEB-DL.1080p.mkv [MVO, RUS]`. The codes are listed
   under [Components](components.md).
+- Otherwise probed audio tracks all in other languages, every one giving a
+  language: `NORUS` and their ISO 639-2 codes in the order of the tracks,
+  `[NORUS FRA, ENG]`. No release name has `NORUS`, and it does not read as
+  Russian. Such a probe sets the probability to 0 over a marker unless the
+  release has an audio file of its own, as [Probes](probes.md) tells.
 
 `RUS` is followed by the Russian studios in the name or stored file paths,
 `[RUS LostFilm]`. A block with no label and no studio is `[RUS, -]`, the

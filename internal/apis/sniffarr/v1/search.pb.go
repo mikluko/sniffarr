@@ -1101,7 +1101,8 @@ type Audio struct {
 	// Probability of an audio track in the language: 1 or 0 when a probe of
 	// the main video file found a track in it or found tracks and none in it,
 	// else 1 when marker is set, else the classifier's answer; absent while
-	// unknown. A probe that found no track in it leaves a marker's 1.
+	// unknown. A probe that found no track in it leaves a marker's 1 only
+	// when the release has an audio file of its own.
 	Probability *float32 `protobuf:"fixed32,2,opt,name=probability,proto3,oneof" json:"probability,omitempty"`
 	// A word or studio of the language is in the release's name or paths.
 	Marker bool `protobuf:"varint,3,opt,name=marker,proto3" json:"marker,omitempty"`

@@ -55,8 +55,11 @@ ones.
 With the audio extension on, a probe that read the tracks sets the
 probability of an audio track in each configured language, under layer
 `probe`: 1 when an audio track is in it; 0 when every audio track gives
-another language, unless a marker in the name decided it, since a release
-may carry that audio in a file of its own. A track that gives no language
+another language, over a marker in the name too, unless the release has an
+audio file of its own (`.mka`, `.ac3`, `.eac3`, `.dts`, `.aac`, `.flac`,
+`.m4a`, `.mp3`, `.opus`, `.wav`), which may carry that audio. The Torznab
+title follows the probability: `[NORUS …]` once the probe set 0, `[RUS]`
+while the marker stands. A track that gives no language
 leaves the probability as it was. Jev does not override a probe. The
 language's studios named in its tracks, as `MVO LostFilm`, join the
 release's studios for the language.

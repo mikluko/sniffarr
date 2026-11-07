@@ -150,3 +150,30 @@ func TestBackfillSubtitleMarks(t *testing.T) {
 	require.True(t, a.Marker)
 	require.Equal(t, "Rus", a.Mark, "the mark of the name over a studio in a subtitle path")
 }
+
+func TestBackfillProbeOverMarkers(t *testing.T) {
+	ctx := context.Background()
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	defer db.Close()
+	only := torrent(1, "Resident.Evil.2026.WEB-DL.2160p.rus.sub", "Resident.Evil.2026.WEB-DL.2160p.mkv")
+	separate := torrent(2, "Alien.1979.1080p.Rus", "Alien.1979.1080p.mkv", "Rus Sound/Alien.1979.Rus.ac3")
+	undetermined := torrent(4, "Heat.1995.1080p.Rus", "Heat.1995.1080p.mkv")
+	for _, tr := range []Torrent{only, separate, undetermined} {
+		tr.Audio = []Audio{{Language: "ru", Marker: true, Mark: "Rus", Probability: new(1.0), Layer: LayerRules}}
+		_, _, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	for _, tr := range []Torrent{only, separate} {
+		require.NoError(t, s.ProbeDone(ctx, tr.Hash, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "audio", Language: "eng"}}}, t0))
+	}
+	require.NoError(t, s.ProbeDone(ctx, undetermined.Hash, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "audio"}}}, t0))
+	_, err := s.w.ExecContext(ctx, "UPDATE torrent_audio SET probability = 1, layer = ?", LayerRules)
+	require.NoError(t, err, "probed while a marker outranked a probe")
+
+	got := map[string]Backfilled{}
+	require.NoError(t, s.Backfill(ctx, func(b Backfilled) { got[b.Name] = b }))
+	require.Equal(t, Backfilled{Name: "probe over markers ru", Rows: 3, Done: true}, got["probe over markers ru"])
+	requireAudio(t, mustGet(t, s, only.Hash), 0, LayerProbe)
+	requireAudio(t, mustGet(t, s, separate.Hash), 1, LayerRules)
+	requireAudio(t, mustGet(t, s, undetermined.Hash), 1, LayerRules)
+}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"golang.org/x/text/language"
@@ -357,7 +358,8 @@ func probed(ctx context.Context, tx *sql.Tx, id int64, h Hash, p Probe, at time.
 // ProbeDone records the probe of the stored release at the time, drops it
 // from the queue, and replaces its tracks. With the tracks read, each audio
 // language of Options gets probability 1 when an audio track is in it, and 0
-// when every audio track gives another language and no marker decided it.
+// when every audio track gives another language, over a marker unless the
+// release stores an audio file of its own.
 func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		var id int64
@@ -423,10 +425,27 @@ func probeAudio(ctx context.Context, tx *sql.Tx, id int64, lang string, tracks [
 	case count > 0 && undetermined == 0:
 		_, err := tx.ExecContext(ctx, `INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer)
 			VALUES (?1, ?2, 0, 0, 0, ?3) ON CONFLICT (torrent_id, language) DO UPDATE SET probability = 0, layer = ?3
-			WHERE torrent_audio.layer IS NOT ?4`, id, lang, LayerProbe, LayerRules)
+			WHERE torrent_audio.layer IS NOT ?4 OR NOT `+separateAudio, append([]any{id, lang, LayerProbe, LayerRules}, separateAudioArgs()...)...)
 		return err
 	}
 	return nil
+}
+
+// audioExtensions are the file extensions of audio a release may carry
+// beside its video file, as SQL LIKE patterns.
+var audioExtensions = []string{"%.mka", "%.ac3", "%.eac3", "%.dts", "%.aac", "%.flac", "%.m4a", "%.mp3", "%.opus", "%.wav"}
+
+// separateAudio selects the release of ID ?1 with a stored audio file of
+// its own. Its arguments after ?1 are separateAudioArgs.
+var separateAudio = `EXISTS (SELECT 1 FROM torrent_files f WHERE f.torrent_id = ?1 AND (f.path LIKE ?` +
+	strings.Repeat(" OR f.path LIKE ?", len(audioExtensions)-1) + `))`
+
+func separateAudioArgs() []any {
+	args := make([]any, len(audioExtensions))
+	for i, e := range audioExtensions {
+		args[i] = e
+	}
+	return args
 }
 
 // mergedStudios is the studios column of the release's audio in lang with

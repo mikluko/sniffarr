@@ -186,7 +186,7 @@ func TestProbeDoneTracksAndAudio(t *testing.T) {
 	require.Equal(t, video, r.Tracks[0])
 	requireAudio(t, r, 1, LayerProbe)
 	requireAudio(t, mustGet(t, s, en), 0, LayerProbe)
-	requireAudio(t, mustGet(t, s, marked), 1, LayerRules)
+	requireAudio(t, mustGet(t, s, marked), 0, LayerProbe)
 	requireAudio(t, mustGet(t, s, und), 0.4, LayerJev)
 
 	_, err = s.Classify(ctx, r.ID, Classification{Audio: map[string]float64{"ru": 0.2}}, t0)
@@ -197,6 +197,18 @@ func TestProbeDoneTracksAndAudio(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rs, 1)
 	require.Len(t, rs[0].Tracks, 3)
+}
+
+func TestProbeLeavesMarkerOfSeparateAudio(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	tr := torrent(1, "Alien.1979.1080p", "Alien.1979.1080p.mkv", "Rus Sound/Alien.1979.Rus.AC3")
+	tr.Kind, tr.KindLayer = "movie", LayerRules
+	tr.Audio = []Audio{{Language: "ru", Marker: true, Mark: "Rus", Probability: new(1.0), Layer: LayerRules}}
+	_, _, err := s.Insert(ctx, tr)
+	require.NoError(t, err)
+	require.NoError(t, s.ProbeDone(ctx, tr.Hash, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "audio", Language: "eng"}}}, t0))
+	requireAudio(t, mustGet(t, s, tr.Hash), 1, LayerRules)
 }
 
 func TestProbeTracksMatchLanguageTags(t *testing.T) {

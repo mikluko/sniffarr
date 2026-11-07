@@ -43,6 +43,11 @@ const codesFilled = "audio_codes:"
 // studios of releases probed before they were read.
 const probeStudiosFilled = "probe_studios:"
 
+// probeMarkersFilled is the prefix of the settings key that records, per
+// language, that the markers of releases probed while a marker outranked
+// any probe got the probe's probability.
+const probeMarkersFilled = "probe_markers:"
+
 // Backfilled is the progress of one backfill within one Backfill call.
 type Backfilled struct {
 	Name string
@@ -59,7 +64,9 @@ type Backfilled struct {
 // name has the language's audio.Language.Codes, no marker of the rules layer
 // that only a subtitle file's path gave, the mark and studios of every
 // stored marker, as audio.Language.Mark and audio.Language.StudiosIn give
-// them from the torrent's name and stored files. Each transaction saves how
+// them from the torrent's name and stored files, the studios probed tracks
+// name, and the probability probed tracks decide over a marker as ProbeDone
+// does. Each transaction saves how
 // far its backfill got, so a call after a cancelled one resumes there.
 // progress, when not nil, is called after every transaction.
 func (s *Store) Backfill(ctx context.Context, progress func(Backfilled)) error {
@@ -74,29 +81,22 @@ func (s *Store) Backfill(ctx context.Context, progress func(Backfilled)) error {
 		if !ok {
 			continue
 		}
-		name := "audio codes " + l.Tag
-		if err := s.backfill(ctx, name, codesFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
-			return s.codesBatch(ctx, l, after)
-		}); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
-		name = "subtitle marks " + l.Tag
-		if err := s.backfill(ctx, name, subtitleMarksFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
-			return s.subtitleMarksBatch(ctx, l, after)
-		}); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
-		name = "audio marks " + l.Tag
-		if err := s.backfill(ctx, name, marksFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
-			return s.marksBatch(ctx, l, after)
-		}); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
-		name = "probe studios " + l.Tag
-		if err := s.backfill(ctx, name, probeStudiosFilled+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
-			return s.probeStudiosBatch(ctx, l, after)
-		}); err != nil {
-			return fmt.Errorf("%s: %w", name, err)
+		for _, b := range []struct {
+			name, flag string
+			batch      func(context.Context, audio.Language, int64) (int, int64, func(*sql.Tx) error, error)
+		}{
+			{"audio codes ", codesFilled, s.codesBatch},
+			{"subtitle marks ", subtitleMarksFilled, s.subtitleMarksBatch},
+			{"audio marks ", marksFilled, s.marksBatch},
+			{"probe studios ", probeStudiosFilled, s.probeStudiosBatch},
+			{"probe over markers ", probeMarkersFilled, s.probeMarkersBatch},
+		} {
+			name := b.name + l.Tag
+			if err := s.backfill(ctx, name, b.flag+l.Tag, progress, func(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
+				return b.batch(ctx, l, after)
+			}); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
 		}
 	}
 	return nil
@@ -395,6 +395,49 @@ func (s *Store) probeStudiosBatch(ctx context.Context, l audio.Language, after i
 				return err
 			}
 			if _, err := tx.ExecContext(ctx, "UPDATE torrent_audio SET studios = ?1 WHERE torrent_id = ?2 AND language = ?3 AND studios IS NOT ?1", studios, id, l.Tag); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, nil
+}
+
+// probeMarkersBatch reads the releases with probed tracks and a marker in l
+// after the row ID after, and sets the probability in l their tracks decide
+// as ProbeDone does.
+func (s *Store) probeMarkersBatch(ctx context.Context, l audio.Language, after int64) (int, int64, func(*sql.Tx) error, error) {
+	var ids []int64
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+		return nil
+	}, `SELECT a.torrent_id FROM torrent_audio a JOIN probe_releases p ON p.torrent_id = a.torrent_id
+		WHERE a.language = ? AND a.layer = ? AND p.outcome = ? AND a.torrent_id > ? ORDER BY a.torrent_id LIMIT ?`,
+		l.Tag, LayerRules, ProbeTracks, after, s.backfillBatch); err != nil {
+		return 0, 0, nil, err
+	}
+	if len(ids) == 0 {
+		return 0, 0, nil, nil
+	}
+	tracks := map[int64][]Track{}
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var id int64
+		var t Track
+		if err := rows.Scan(&id, &t.Kind, &t.Language, &t.LanguageBCP47, &t.Name); err != nil {
+			return err
+		}
+		tracks[id] = append(tracks[id], t)
+		return nil
+	}, "SELECT torrent_id, kind, language, language_bcp47, name FROM probe_tracks WHERE torrent_id IN ("+placeholders(len(ids))+") ORDER BY torrent_id, idx",
+		int64Args(ids)...); err != nil {
+		return 0, 0, nil, err
+	}
+	return len(ids), ids[len(ids)-1], func(tx *sql.Tx) error {
+		for _, id := range ids {
+			if err := probeAudio(ctx, tx, id, l.Tag, tracks[id]); err != nil {
 				return err
 			}
 		}
