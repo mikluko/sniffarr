@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `BrowseService.Settings` names `SNIFFARR_CLASSIFY_API_KEY` as the classifier's setting, `SNIFFARR_CLASSIFY_URL` with another endpoint, and `TYPESAFE_API_KEY` only when that key turned it on.
 - The web UI and the docs name the classifier without Jev.
 - The priority badges in the data page's tables have no border: a square of the priority's colour and the label, with the meaning in the tooltip.
+- The web UI writes dates one way per language, on the charts' axes and tooltips as on the cards: "Nov 7" and "Nov 7, 16:10" in English, "07.11" and "07.11 16:10" in Russian, with the year in full timestamps.
+- The web UI groups the thousands of every count, the release card's releases and files and the pagers included.
+- The web UI writes a place in the top as "#2" in English and "№2" in Russian everywhere.
+- The voice-over filter reads "any / ≥ 0.5 / explicit" ("любая / ≥ 0,5 / явно") on the torrents and top pages alike.
+- A title's releases sort by "peers, 7 days", "first seen" and "size", worded as on the torrents page.
+- In English, the web UI calls dubbing "Voice-over", with the configured language ("Voice-over: ru"), and the title-reuse layer "same title".
+- In English, the data page reads "last 7 days:" under today's count and "books" among dropped torrents.
+- TMDB genres are lower-cased.
+- The top's "Change" tooltip explains "—" as a history not yet built up.
+- On a phone, the top shows a title's first-entry date in its meta line while the history is short.
 
 ### Deprecated
 
