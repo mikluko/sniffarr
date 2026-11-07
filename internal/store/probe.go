@@ -108,6 +108,13 @@ type ProbeCandidate struct {
 	Attempts int
 }
 
+// ProbeBudget is the piece data a probe lease is journaled with, in bytes:
+// MaxBytes the most the probe may download, Used what probes downloaded on
+// the day, Reserved what the unexpired leases held before it.
+type ProbeBudget struct {
+	MaxBytes, Used, Reserved int64
+}
+
 // ProbeWant is the search that returned the releases WantProbe records.
 type ProbeWant struct {
 	// T is the Torznab function: "search", "movie" or "tvsearch".
@@ -216,35 +223,59 @@ func (s *Store) ProbeLeases(ctx context.Context, now time.Time) (int, error) {
 // background, the release never probed with the most peers over 7 days,
 // else the one due a probe again with the most, which it queues at
 // PrioritySample. Each is a movie or a series with peers and a stored file
-// of a format a probe reads.
-func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d time.Duration, background bool) (c ProbeCandidate, ok bool, err error) {
+// of a format a probe reads. The first lease of each attempt is journaled
+// with b; a lease after one expired or was freed is not.
+func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d time.Duration, background bool, b ProbeBudget) (c ProbeCandidate, ok bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
-		c, ok, err = leaseProbe(ctx, tx, owner, now, d, background)
-		return err
+		var leases int
+		c, leases, err = leaseProbe(ctx, tx, owner, now, d, background)
+		ok = leases > 0
+		if err != nil || leases != 1 {
+			return err
+		}
+		return journal(ctx, tx, c.Hash, now, JournalProbeLeased, probeLeaseOutcome(c), Detail("attempt", c.Attempts+1, "max_bytes", b.MaxBytes, "used", b.Used, "reserved", b.Reserved))
 	})
 	return c, ok, err
 }
 
-func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d time.Duration, background bool) (ProbeCandidate, bool, error) {
+// leaseProbe leases the probe LeaseProbe takes and returns it with how many
+// times its task has been leased in this attempt, or 0 when it leased none.
+func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d time.Duration, background bool) (c ProbeCandidate, leases int, err error) {
 	if _, err := freeExpired(ctx, tx, "kind = 'probe'", now); err != nil {
-		return ProbeCandidate{}, false, err
+		return ProbeCandidate{}, 0, err
 	}
 	until := now.Add(d).UnixMilli()
 	c, id, err := queuedProbe(ctx, tx, now, background)
 	if err == nil {
-		_, err = tx.ExecContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ? WHERE id = ?", owner, until, now.UnixMilli(), id)
-		return c, err == nil, err
+		err = tx.QueryRowContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ?, leases = leases + 1 WHERE id = ? RETURNING leases", owner, until, now.UnixMilli(), id).Scan(&leases)
+		return c, leases, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) || !background {
-		return ProbeCandidate{}, false, ignoreNoRows(err)
+		return ProbeCandidate{}, 0, ignoreNoRows(err)
 	}
 	h, attempts, err := unqueuedProbe(ctx, tx, now)
 	if err != nil || h == nil {
-		return ProbeCandidate{}, false, err
+		return ProbeCandidate{}, 0, err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at, lease_owner, lease_until, leased_at) VALUES ('probe', ?1, ?2, ?3, ?4, ?5, ?3)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at, lease_owner, lease_until, leased_at, leases) VALUES ('probe', ?1, ?2, ?3, ?4, ?5, ?3, 1)",
 		h, PrioritySample, now.UnixMilli(), owner, until)
-	return ProbeCandidate{Hash: Hash(h), Priority: PrioritySample, Attempts: attempts}, err == nil, err
+	return ProbeCandidate{Hash: Hash(h), Priority: PrioritySample, Attempts: attempts}, 1, err
+}
+
+// probeLeaseOutcome is the journal outcome of the lease of c, the first that
+// holds: request for a probe asked for with RequestProbe, retry for a
+// release whose probe failed before, search for one a search returned,
+// background for the rest.
+func probeLeaseOutcome(c ProbeCandidate) string {
+	switch {
+	case c.Priority <= PriorityRequest:
+		return "request"
+	case c.Attempts > 0:
+		return "retry"
+	case c.Wanted:
+		return "search"
+	}
+	return "background"
 }
 
 // queuedProbeQuery selects the free queued probe due at its first argument,
@@ -378,7 +409,7 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, reason string, download
 // at PriorityArr, due at retry in seconds, when it was queued at PriorityArr
 // or ahead and is not final, and drops it from the queue otherwise.
 func requeueProbe(ctx context.Context, tx *sql.Tx, h Hash, final bool, retry int64) error {
-	res, err := tx.ExecContext(ctx, `UPDATE task_queue SET lease_owner = NULL, lease_until = NULL
+	res, err := tx.ExecContext(ctx, `UPDATE task_queue SET lease_owner = NULL, lease_until = NULL, leases = 0
 		WHERE kind = 'probe' AND infohash = ? AND priority = ? AND queued_at > leased_at`, h[:], PriorityRequest)
 	if err != nil {
 		return err
@@ -389,7 +420,7 @@ func requeueProbe(ctx context.Context, tx *sql.Tx, h Hash, final bool, retry int
 	if _, err := tx.ExecContext(ctx, "DELETE FROM task_queue WHERE kind = 'probe' AND infohash = ? AND (? OR priority > ?)", h[:], final, PriorityArr); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, "UPDATE task_queue SET priority = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE kind = 'probe' AND infohash = ?",
+	_, err = tx.ExecContext(ctx, "UPDATE task_queue SET priority = ?, not_before = ?, lease_owner = NULL, lease_until = NULL, leases = 0 WHERE kind = 'probe' AND infohash = ?",
 		PriorityArr, retry*1000, h[:])
 	return err
 }

@@ -85,35 +85,17 @@ func (s *Service) ProbeTask(ctx context.Context, _ *connect.Request[sniffarrv1.P
 	if !cfg.admits(traffic.Rx, reserved, true) {
 		return res, nil
 	}
-	c, ok, err := s.Store.LeaseProbe(ctx, s.owners.Add(1), now, or(cfg.Lease, DefaultProbeLease), cfg.admits(traffic.Rx, reserved, false))
+	c, ok, err := s.Store.LeaseProbe(ctx, s.owners.Add(1), now, or(cfg.Lease, DefaultProbeLease), cfg.admits(traffic.Rx, reserved, false),
+		store.ProbeBudget{MaxBytes: cfg.maxBytes(), Used: traffic.Rx, Reserved: reserved})
 	if err != nil {
 		return nil, s.internal(ctx, "lease probe", err)
 	}
 	if !ok {
 		return res, nil
 	}
-	if err := s.Store.JournalProbeLease(ctx, c.Hash, now, probeLeaseOutcome(c), store.Detail("attempt", c.Attempts+1, "max_bytes", cfg.maxBytes(), "used", traffic.Rx, "reserved", reserved)); err != nil {
-		return nil, s.internal(ctx, "journal probe lease", err)
-	}
 	s.metrics().probeTasks.Add(ctx, 1, priorityAttr(c.Wanted))
 	res.Msg.Task = &sniffarrv1.ProbeTask{Infohash: c.Hash[:], MaxBytes: cfg.maxBytes()}
 	return res, nil
-}
-
-// probeLeaseOutcome is the journal outcome of a probe task of the
-// candidate: retry for a release whose probe failed before, request for
-// one asked for, search for one a search returned, background for the
-// rest.
-func probeLeaseOutcome(c store.ProbeCandidate) string {
-	switch {
-	case c.Attempts > 0:
-		return "retry"
-	case c.Priority <= store.PriorityRequest:
-		return "request"
-	case c.Wanted:
-		return "search"
-	}
-	return "background"
 }
 
 func (s *Service) ProbeResult(ctx context.Context, req *connect.Request[sniffarrv1.ProbeResultRequest]) (*connect.Response[sniffarrv1.ProbeResultResponse], error) {

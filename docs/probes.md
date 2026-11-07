@@ -35,8 +35,8 @@ the outcome is stored, the tracks in their own table: read, unknown
 probe cannot read), or failed (fewer than `-min-peers` peers within
 `-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
 before `-probe-timeout`). The release's journal records a request, and once
-a day the search that returned it with the query, each task handed out with
-its attempt and the piece data it may download, and each outcome with the
+a day the search that returned it with the query, the first hand-out of each
+attempt with the piece data it may download, and each outcome with the
 piece data downloaded and, for a failure, whether the attempts have run
 out. A failed probe is repeated after
 `SNIFFARR_PROBE_BACKOFF`, doubled for each failure before; a requested or

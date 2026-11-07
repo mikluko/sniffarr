@@ -1856,7 +1856,7 @@ func (x *JournalResponse) GetEntries() []*JournalEntry {
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
 // classified (jev, reuse, failed), matched (tmdb, jev, arr, none, error),
 // arr (grab, import), feed (stored, queued, rejected, duplicate),
-// probe_wanted (search, request), probe_leased (retry, request, search,
+// probe_wanted (search, request), probe_leased (request, retry, search,
 // background), probed (tracks, unknown, no_peers, timeout), deleted (idle,
 // expired).
 type JournalEntry struct {

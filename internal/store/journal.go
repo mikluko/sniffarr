@@ -37,8 +37,8 @@ const (
 	JournalFeed = "feed"
 	// JournalProbeWanted is a probe asked for: search, request.
 	JournalProbeWanted = "probe_wanted"
-	// JournalProbeLeased is a probe task handed to a fetcher: retry,
-	// request, search, background.
+	// JournalProbeLeased is a probe task handed to a fetcher: request,
+	// retry, search, background.
 	JournalProbeLeased = "probe_leased"
 	// JournalProbed is a probe's result: tracks, unknown, no_peers, timeout.
 	JournalProbed = "probed"
@@ -208,11 +208,6 @@ func (s *Store) Journal(ctx context.Context, h Hash, limit int) ([]JournalEntry,
 // JournalFeed records what a tracker feed's listing of the hash came to.
 func (s *Store) JournalFeed(ctx context.Context, h Hash, at time.Time, outcome string, detail map[string]any) error {
 	return s.tx(ctx, func(tx *sql.Tx) error { return journal(ctx, tx, h, at, JournalFeed, outcome, detail) })
-}
-
-// JournalProbeLease records a probe task of the hash handed to a fetcher.
-func (s *Store) JournalProbeLease(ctx context.Context, h Hash, at time.Time, outcome string, detail map[string]any) error {
-	return s.tx(ctx, func(tx *sql.Tx) error { return journal(ctx, tx, h, at, JournalProbeLeased, outcome, detail) })
 }
 
 // journalSweep selects, given a time and a limit, the oldest entries before
