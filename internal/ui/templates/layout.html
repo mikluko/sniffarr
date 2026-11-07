@@ -35,7 +35,7 @@
 </html>
 
 {{define "langs"}}<span class="langs">
-  {{- range $i, $l := .Langs}}{{if $i}} · {{end}}{{if eq $l $.Lang}}<b>{{$l}}</b>{{else}}<a href="{{$.LangURL $l}}">{{$l}}</a>{{end}}{{end -}}
+  {{- range $l := .Langs}}{{if eq $l $.Lang}}<b>{{$l}}</b>{{else}}<a href="{{$.LangURL $l}}">{{$l}}</a>{{end}}{{end -}}
 </span>{{end}}
 
 
