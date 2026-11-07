@@ -33,6 +33,29 @@ dynamic range: `DV` for a Dolby Vision configuration (Matroska's
 BlockAdditionMapping, MP4's `dvcC`, `dvvC` or `dvwC`), else `HLG` or
 `HDR10` by the transfer characteristics, or `HDR10` for mastering metadata.
 
+```mermaid
+sequenceDiagram
+    participant A as API
+    participant F as Fetcher
+    participant P as Peers
+    F->>A: ProbeTask
+    A-->>F: release, max_bytes
+    F->>P: get_peers
+    P-->>F: -min-peers within -peer-wait
+    F->>P: metadata by BEP 9
+    P-->>F: file list, within -fetch-timeout
+    Note over F: picks the largest video file
+    loop each header read, up to Tracks or moov
+        F->>P: the pieces the read covers
+        P-->>F: pieces, verified by hash
+    end
+    Note over F: stops at max_bytes or -probe-timeout
+    F->>A: ProbeResult: tracks or failure, bytes downloaded
+    loop every minute while seeding
+        F->>A: ProbeUpload: bytes uploaded
+    end
+```
+
 Candidates are stored movies and series with a stored file of those
 formats and at least one distinct peer over the last 7 days. Probes wait in
 the API's task queue beside fetches and peer lookups, by priority and then
@@ -66,6 +89,22 @@ it has twice the peers over 7 days it had at its last probe, and at least two
 more. A task is leased for
 `SNIFFARR_PROBE_LEASE`; leases are kept in the queue, and a restart of the
 API frees them.
+
+```mermaid
+stateDiagram-v2
+    state "Attempts run out" as RunOut
+    [*] --> Queued: requested, searched, or the most peers
+    Queued --> Leased: ProbeTask
+    Leased --> Queued: lease ends, API restarts
+    Leased --> Read: tracks
+    Leased --> Unknown: no video file, beyond max_bytes, over 128 tracks, unreadable
+    Leased --> Failed: too few peers, no metadata, pieces too slow
+    Read --> Queued: RequestProbe
+    Unknown --> Queued: RequestProbe
+    Failed --> Queued: after the backoff, doubled per failure
+    Failed --> RunOut: SNIFFARR_PROBE_ATTEMPTS failed
+    RunOut --> Queued: twice the peers, and two more
+```
 
 The API meters the piece data probes download per UTC day, as it meters
 the classifier's tokens: `SNIFFARR_PROBE_DAILY_BYTES`, 100 GiB by default.
