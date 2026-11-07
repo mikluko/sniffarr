@@ -1,6 +1,7 @@
 package search
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -69,6 +70,9 @@ type Browser struct {
 	Languages []string
 	// Classifier has Settings report the classifier on.
 	Classifier bool
+	// ClassifierSetting is the setting Settings names for the classifier;
+	// TYPESAFE_API_KEY when empty.
+	ClassifierSetting string
 	// Feeds are the names of the feeds read that Settings reports; nil
 	// when none is.
 	Feeds []string
@@ -104,7 +108,7 @@ func (b *Browser) Settings(ctx context.Context, _ *connect.Request[sniffarrv1.Se
 		return &sniffarrv1.FeatureState{Feature: f, On: on, Works: on && works, Setting: setting, Values: slices.Clone(values)}
 	}
 	res := &sniffarrv1.SettingsResponse{AudioLanguages: slices.Clone(b.Languages), Probes: b.Probes, Features: []*sniffarrv1.FeatureState{
-		feature(sniffarrv1.Feature_FEATURE_CLASSIFIER, b.Classifier, !spent, "TYPESAFE_API_KEY", nil),
+		feature(sniffarrv1.Feature_FEATURE_CLASSIFIER, b.Classifier, !spent, cmp.Or(b.ClassifierSetting, "TYPESAFE_API_KEY"), nil),
 		feature(sniffarrv1.Feature_FEATURE_PROBES, b.Probes, b.probers() > 0, "-probe", nil),
 		feature(sniffarrv1.Feature_FEATURE_AUDIO, len(b.Languages) > 0, true, "SNIFFARR_AUDIO_LANGUAGES", b.Languages),
 		feature(sniffarrv1.Feature_FEATURE_FEEDS, len(b.Feeds) > 0, true, "SNIFFARR_FEEDS", b.Feeds),

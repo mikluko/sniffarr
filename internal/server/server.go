@@ -72,8 +72,10 @@ type Config struct {
 	// Probes has the APIs queue and lease probes and Torznab record the
 	// releases of its searches for them; without it no probe is queued.
 	Probes bool
-	// Classifier has BrowseService.Settings report the classifier on.
-	Classifier bool
+	// Classifier has BrowseService.Settings report the classifier on, and
+	// ClassifierSetting is the setting it names for it.
+	Classifier        bool
+	ClassifierSetting string
 	// Feeds are the names of the feeds read that BrowseService.Settings
 	// reports.
 	Feeds []string
@@ -114,7 +116,7 @@ func New(c Config) (http.Handler, error) {
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
 		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts,
-			Classifier: c.Classifier, Feeds: c.Feeds, JournalRetention: c.JournalRetention},
+			Classifier: c.Classifier, ClassifierSetting: c.ClassifierSetting, Feeds: c.Feeds, JournalRetention: c.JournalRetention},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

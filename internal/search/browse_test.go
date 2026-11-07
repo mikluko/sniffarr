@@ -330,6 +330,10 @@ func TestBrowserSettingsFeatures(t *testing.T) {
 	b.DailyTokens = 0
 	on[0].Works = true
 	require.Equal(t, on, features(b), "no limit is never spent")
+
+	b.ClassifierSetting = "SNIFFARR_CLASSIFY_URL"
+	on[0].Setting = "SNIFFARR_CLASSIFY_URL"
+	require.Equal(t, on, features(b), "the setting that turned the classifier on")
 }
 
 func TestBrowserStatsProbers(t *testing.T) {
