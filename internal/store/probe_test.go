@@ -362,6 +362,46 @@ func TestWantProbeReadableOnly(t *testing.T) {
 	require.Equal(t, []Hash{readable}, queuedProbes(t, s), "a release without peers waits; a file or kind a probe cannot read is not queued")
 }
 
+func TestRequestProbeInFlight(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	final := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	require.NoError(t, s.WantProbe(ctx, []Hash{h, final}, t0))
+	for range 2 {
+		_, ok := leaseNext(t, s, t0, false)
+		require.True(t, ok)
+	}
+	_, err := s.RequestProbe(ctx, []Hash{h, final}, t0.Add(time.Minute))
+	require.NoError(t, err)
+	_, err = s.ProbeFailed(ctx, h, t0.Add(2*time.Minute), 3, time.Hour)
+	require.NoError(t, err)
+	last, err := s.ProbeFailed(ctx, final, t0.Add(2*time.Minute), 1, time.Hour)
+	require.NoError(t, err)
+	require.True(t, last)
+
+	got := map[Hash]bool{}
+	for range 2 {
+		c, ok := leaseNext(t, s, t0.Add(3*time.Minute), false)
+		require.True(t, ok, "a request made while an attempt was in flight outlives its failure, final or not")
+		require.True(t, c.Wanted)
+		got[c.Hash] = true
+	}
+	require.Equal(t, map[Hash]bool{h: true, final: true}, got)
+
+	searched := insertProbeable(t, s, 4, "Brazil.1985.1080p", 5, "Brazil.1985.1080p.mkv")
+	_, err = s.RequestProbe(ctx, []Hash{searched}, t0.Add(4*time.Minute))
+	require.NoError(t, err)
+	c, ok := leaseNext(t, s, t0.Add(4*time.Minute), false)
+	require.True(t, ok)
+	require.Equal(t, searched, c.Hash)
+	require.NoError(t, s.WantProbe(ctx, []Hash{searched}, t0.Add(5*time.Minute)))
+	_, err = s.ProbeFailed(ctx, searched, t0.Add(6*time.Minute), 3, time.Hour)
+	require.NoError(t, err)
+	_, ok = nextProbe(t, s, t0.Add(7*time.Minute), false)
+	require.False(t, ok, "a search while in flight is no new request")
+}
+
 func TestProbeDoneResetsFailures(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)

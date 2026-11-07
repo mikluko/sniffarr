@@ -36,7 +36,8 @@ probe cannot read), or failed (fewer than `-min-peers` peers within
 `-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
 before `-probe-timeout`). A failed probe is repeated after
 `SNIFFARR_PROBE_BACKOFF`, doubled for each failure before; a requested or
-searched one stays queued as searched until then. Once
+searched one stays queued as searched until then, unless it was requested
+while the failed attempt was in flight, which keeps the request. Once
 `SNIFFARR_PROBE_ATTEMPTS` have failed since the release was last read, the
 backoff stays at its last doubling and the release is probed again only once
 it has twice the peers over 7 days it had at its last probe, and at least two

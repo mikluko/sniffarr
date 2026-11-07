@@ -269,8 +269,8 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 		if expired, err = freeExpired(ctx, tx, "kind IN ('fetch', 'peers')", now); err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, `UPDATE task_queue SET lease_owner = ?, lease_until = ? WHERE id IN (
-				SELECT id FROM task_queue WHERE kind IN ('fetch', 'peers') AND lease_owner IS NULL AND not_before <= ? ORDER BY priority, id LIMIT ?)
+		rows, err := tx.QueryContext(ctx, `UPDATE task_queue SET lease_owner = ?1, lease_until = ?2, leased_at = ?3 WHERE id IN (
+				SELECT id FROM task_queue WHERE kind IN ('fetch', 'peers') AND lease_owner IS NULL AND not_before <= ?3 ORDER BY priority, id LIMIT ?4)
 			RETURNING kind, infohash, priority, id`,
 			owner, now.Add(d).UnixMilli(), now.UnixMilli(), n)
 		if err != nil {

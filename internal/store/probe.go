@@ -115,8 +115,9 @@ const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND ` + 
 // WantProbe queues a probe at PriorityArr, at the time, for each stored
 // release of the hashes a search returned that a probe can read, unless its
 // probe is done or its failures ran out without its peers growing; a failed
-// one waits out its backoff. A release already queued moves ahead to
-// PriorityArr and to the time.
+// one waits out its backoff. A release already queued at PriorityArr or
+// behind moves to PriorityArr and to the time; a requested one stays as it
+// is.
 func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) error {
 	if len(hashes) == 0 {
 		return nil
@@ -130,7 +131,8 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) erro
 	_, err := s.w.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
 		SELECT 'probe', t.infohash, ?1, ?2, coalesce(p.retry_at * 1000, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
 		WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND (p.outcome IS NULL OR p.outcome = '`+ProbeFailed+`' AND `+probeGrown+`) AND `+probeReadable+`
-		ON CONFLICT (kind, infohash) DO UPDATE SET priority = min(task_queue.priority, excluded.priority), queued_at = excluded.queued_at`, args...)
+		ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at
+		WHERE task_queue.priority >= excluded.priority`, args...)
 	return err
 }
 
@@ -186,7 +188,7 @@ func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d t
 	until := now.Add(d).UnixMilli()
 	c, id, err := queuedProbe(ctx, tx, now, background)
 	if err == nil {
-		_, err = tx.ExecContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ? WHERE id = ?", owner, until, id)
+		_, err = tx.ExecContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ? WHERE id = ?", owner, until, now.UnixMilli(), id)
 		return c, err == nil, err
 	}
 	if !errors.Is(err, sql.ErrNoRows) || !background {
@@ -196,7 +198,7 @@ func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d t
 	if err != nil || h == nil {
 		return ProbeCandidate{}, false, err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at, lease_owner, lease_until) VALUES ('probe', ?, ?, ?, ?, ?)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at, lease_owner, lease_until, leased_at) VALUES ('probe', ?1, ?2, ?3, ?4, ?5, ?3)",
 		h, PrioritySample, now.UnixMilli(), owner, until)
 	return ProbeCandidate{Hash: Hash(h)}, err == nil, err
 }
@@ -288,9 +290,10 @@ func ignoreNoRows(err error) error {
 // release is due again after backoff, doubled for each failure before up to
 // attempts; once attempts probes have failed it is due again only with more
 // peers over 7 days than it had at the last, and ProbeFailed reports whether
-// the attempts have run out. A probe queued at PriorityArr or ahead stays
-// queued at PriorityArr until the backoff is out, while attempts remain;
-// any other leaves the queue.
+// the attempts have run out. A probe requested while the attempt was in
+// flight stays requested and due at once; else one queued at PriorityArr or
+// ahead stays queued at PriorityArr until the backoff is out, while attempts
+// remain, and any other leaves the queue.
 func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts int, backoff time.Duration) (final bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var id, peers int64
@@ -317,14 +320,23 @@ func (s *Store) ProbeFailed(ctx context.Context, h Hash, at time.Time, attempts 
 	return final, err
 }
 
-// requeueProbe keeps the probe of h queued at PriorityArr, due at retry in
-// seconds, when it was queued at PriorityArr or ahead and is not final, and
-// drops it from the queue otherwise.
+// requeueProbe frees the probe of h, keeping it requested and due at once
+// when it was requested after its last lease began; else it keeps it queued
+// at PriorityArr, due at retry in seconds, when it was queued at PriorityArr
+// or ahead and is not final, and drops it from the queue otherwise.
 func requeueProbe(ctx context.Context, tx *sql.Tx, h Hash, final bool, retry int64) error {
+	res, err := tx.ExecContext(ctx, `UPDATE task_queue SET lease_owner = NULL, lease_until = NULL
+		WHERE kind = 'probe' AND infohash = ? AND priority = ? AND queued_at > leased_at`, h[:], PriorityRequest)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil || n > 0 {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM task_queue WHERE kind = 'probe' AND infohash = ? AND (? OR priority > ?)", h[:], final, PriorityArr); err != nil {
 		return err
 	}
-	_, err := tx.ExecContext(ctx, "UPDATE task_queue SET priority = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE kind = 'probe' AND infohash = ?",
+	_, err = tx.ExecContext(ctx, "UPDATE task_queue SET priority = ?, not_before = ?, lease_owner = NULL, lease_until = NULL WHERE kind = 'probe' AND infohash = ?",
 		PriorityArr, retry*1000, h[:])
 	return err
 }
