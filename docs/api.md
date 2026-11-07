@@ -5,7 +5,9 @@ Both API groups are [ConnectRPC](https://connectrpc.com) services, defined in
 without TLS, so Connect, gRPC and gRPC-Web clients all work; `Fetch` streams
 both ways and needs HTTP/2 end to end. The services authenticate no caller:
 whoever reaches the port can call every RPC, so the network has to keep
-others out, as the chart's `api.networkPolicy` does.
+others out, as the chart's `api.networkPolicy` does. Every response, an
+error and a 404 included, carries the header `Server: sniffarr/<version>`
+(`sniffarr/dev` for a build with no version).
 
 | Service                     | RPC             |
 | --------------------------- | --------------- |

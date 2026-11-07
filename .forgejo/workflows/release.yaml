@@ -91,6 +91,9 @@ jobs:
           if [ "$PUBLISH" = true ]; then push=--push; fi
           docker buildx build $push \
             --platform linux/amd64,linux/arm64 \
+            --build-arg "VERSION=$VERSION" \
+            --build-arg "COMMIT=$GITHUB_SHA" \
+            --build-arg "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             --label "org.opencontainers.image.version=$VERSION" \
@@ -146,9 +149,12 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
+          pkg=github.com/mikluko/sniffarr/internal/version
+          built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           for GOARCH in amd64 arm64; do
             export GOARCH
-            CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags=-s -o dist/sniffarr .
+            CGO_ENABLED=0 GOOS=linux go build -trimpath -o dist/sniffarr \
+              -ldflags "-s -X $pkg.version=$VERSION -X $pkg.commit=$GITHUB_SHA -X $pkg.built=$built" .
             "$(go env GOPATH)/bin/nfpm" package --config packaging/nfpm.yaml --packager deb --target dist/
             tar -czf "dist/sniffarr_${VERSION}_linux_${GOARCH}.tar.gz" -C dist sniffarr \
               -C ../packaging sniffarr.service sniffarr.default

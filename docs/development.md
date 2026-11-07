@@ -10,6 +10,25 @@ docker build -t sniffarr .
 docker run -e SNIFFARR_DB=/data/sniffarr.db sniffarr -api -ui
 ```
 
+## Version
+
+A binary knows its version, its commit (7 characters) and its build time
+(UTC) from three variables of `internal/version`, set at link time with
+`-ldflags -X`. The image takes them as the build arguments `VERSION`,
+`COMMIT` and `BUILD_TIME`, and the release workflow passes the version it
+cuts, the commit it builds and the time of the build to the image, and as
+`-X` flags to the archives and packages. Without them a build reads version
+`dev`, and takes the commit and the time from the VCS stamp `go build`
+leaves in a checkout, when there is one.
+
+```shell
+docker build --build-arg VERSION=0.44.0 --build-arg COMMIT=$(git rev-parse HEAD) \
+  --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) -t sniffarr .
+```
+
+The process logs them once at start, and the API and the UI answer every
+request with the `Server` header `sniffarr/<version>`.
+
 ## Generating code
 
 The generated code under `internal/apis` is committed. After changing a `.proto` file,
