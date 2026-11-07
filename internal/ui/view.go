@@ -633,7 +633,7 @@ type Stats struct {
 
 	Classifier ClassifierStats
 	Probe      ProbeStats
-	Queue      []TaskQueue // one per TaskKinds, in its order; none when the API has no queue
+	Queue      []TaskQueue // one per TaskKinds, in its order, the last left out while probes are off; none when the API has no queue
 
 	Hourly Chart // new torrents per clock hour, 48 hours
 	Daily  Chart // new torrents per calendar day, 30 days

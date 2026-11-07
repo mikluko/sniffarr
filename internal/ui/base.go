@@ -20,6 +20,7 @@ type Base struct {
 	Seerr      string   // base URL of a Seerr the cards link titles to; "" links none
 	Radarr     string   // root URL of a Radarr the cards link movies to; "" links none
 	Sonarr     string   // root URL of a Sonarr the cards link series to; "" links none
+	Probes     bool     // whether the API probes releases; false hides the probe button, meter and queue
 	Loc        *time.Location
 	Now        time.Time
 

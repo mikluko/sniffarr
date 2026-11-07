@@ -56,16 +56,16 @@
   {{- end}}
 {{- end}}
 
-{{/* Buttons of a card: look up the peers of its releases, probe them, and, for a release
-     matched to no work, look its title up on TMDB; a probe needs peers. A button is disabled
-     while its request runs; the answer, the fragment "act", takes the line under them and
-     leaves the button disabled. */}}
-{{define "acts"}}{{$b := .B}}
+{{/* Buttons of a card: look up the peers of its releases, probe them while the API probes,
+     and, for a release matched to no work, look its title up on TMDB; a probe needs peers.
+     A button is disabled while its request runs; the answer, the fragment "act", takes the
+     line under them and leaves the button disabled. */}}
+{{define "acts"}}{{$b := .B}}{{$nopeers := and $b.Probes (not .Peers)}}
 <div class="acts">
   {{template "actform" (actArgs $b .Path "peers" false)}}
-  {{template "actform" (actArgs $b .Path "probe" (not .Peers))}}
+  {{if $b.Probes}}{{template "actform" (actArgs $b .Path "probe" (not .Peers))}}{{end}}
   {{if .Match}}{{template "actform" (actArgs $b .Path "match" false)}}{{end}}
-  <div id="act-answer" class="act-ans" role="status">{{if not .Peers}}{{$b.T "act.probe_nopeers"}}{{end}}</div>
+  <div id="act-answer" class="act-ans" role="status">{{if $nopeers}}{{$b.T "act.probe_nopeers"}}{{end}}</div>
 </div>
 {{end}}
 

@@ -52,9 +52,13 @@ type Config struct {
 	// Browse is the API every page is read from, with its token.
 	Browse sniffarrv1connect.BrowseServiceClient
 	// Languages are the API's audio languages in its order, as
-	// ObtainLanguages returns them; none leaves the voice filters, columns
+	// ObtainSettings returns them; none leaves the voice filters, columns
 	// and card rows out of every page.
 	Languages []audio.Language
+	// Probes is whether the API probes releases, as ObtainSettings returns
+	// it; false leaves the probe button, meter and queue out of every page
+	// and answers a request for a probe with 404.
+	Probes bool
 	// Locales tells the locale of the person an access token was issued to;
 	// when nil, the language is only the one picked on the page.
 	Locales Locales
@@ -142,6 +146,7 @@ func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	b.Now = s.cfg.Now()
 	b.Seerr = s.cfg.SeerrURL
 	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
+	b.Probes = s.cfg.Probes
 	return b
 }
 
@@ -716,7 +721,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 		Probe:      ui.ProbeStats{RxDay: st.GetProbeBytesRxDay(), TxDay: st.GetProbeBytesTxDay(), LimitDay: st.GetProbeBytesLimitDay(), PaceDay: dayPace(now, st.GetProbeBytesRxDay())},
 		Hourly:     hourly, Daily: daily, Weekly: weekly,
 	}
-	out.Queue = taskQueues(st)
+	out.Queue = taskQueues(st, s.cfg.Probes)
 	byKind := map[string]int64{}
 	for _, c := range st.GetKinds() {
 		byKind[uiOr(kinds, c.GetKind(), "")] += c.GetCount()
@@ -828,14 +833,18 @@ func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, we
 		ui.NewBarChart(wv, wl, 4, true, pace(wv[nw-1], week, week.AddDate(0, 0, 7)))
 }
 
-// taskQueues returns the queue of st per ui.TaskKinds, or none when st has
-// no queue.
-func taskQueues(st *sniffarrv1.StatsResponse) []ui.TaskQueue {
+// taskQueues returns the queue of st per ui.TaskKinds, that of probes only
+// with probes, or none when st has no queue.
+func taskQueues(st *sniffarrv1.StatsResponse, probes bool) []ui.TaskQueue {
 	if st.GetQueueFetches() == nil && st.GetQueueLookups() == nil && st.GetQueueProbes() == nil {
 		return nil
 	}
+	queues := []*sniffarrv1.TaskQueue{st.GetQueueFetches(), st.GetQueueLookups()}
+	if probes {
+		queues = append(queues, st.GetQueueProbes())
+	}
 	var out []ui.TaskQueue
-	for i, q := range []*sniffarrv1.TaskQueue{st.GetQueueFetches(), st.GetQueueLookups(), st.GetQueueProbes()} {
+	for i, q := range queues {
 		tq := ui.TaskQueue{Kind: ui.TaskKinds[i], Paced: q.GetPerMinute() > 0}
 		for _, l := range q.GetLevels() {
 			tq.Levels = append(tq.Levels, ui.QueueLevel{Priority: int(l.GetPriority()), Tasks: l.GetTasks(), ETA: l.GetEta().AsDuration(), Known: l.GetEta() != nil})
@@ -918,6 +927,10 @@ func (s *server) request(w http.ResponseWriter, req *http.Request, page, path st
 			ans.Releases = int(res.Msg.GetReleases())
 		}
 	case "probe":
+		if !s.cfg.Probes {
+			http.NotFound(w, req)
+			return
+		}
 		var res *connect.Response[sniffarrv1.RequestProbeResponse]
 		if res, err = s.cfg.Browse.RequestProbe(req.Context(), connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: r})); err == nil {
 			ans.Releases = int(res.Msg.GetReleases())

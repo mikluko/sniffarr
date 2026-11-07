@@ -115,18 +115,18 @@ func (f titleSearch) SearchWorks(ctx context.Context, typ, query, lang string) (
 // with peers and the tops computed at now.
 func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
-	return handlerWith(t, "ru", Config{Locales: l})
+	return handlerWith(t, "ru", Config{Locales: l, Probes: true})
 }
 
 // handlerLangs is handler with the audio languages langs, a comma-separated
 // list, in the store and the UI alike; "" leaves the extension off.
 func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
 	t.Helper()
-	return handlerWith(t, langs, Config{Locales: l})
+	return handlerWith(t, langs, Config{Locales: l, Probes: true})
 }
 
-// handlerWith is handlerLangs taking Locales and the Seerr, Radarr and
-// Sonarr URLs from cfg.
+// handlerWith is handlerLangs taking Locales, Probes, and the Seerr, Radarr
+// and Sonarr URLs from cfg; Probes goes to the API too.
 func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 	t.Helper()
 	ctx := context.Background()
@@ -206,17 +206,17 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 		tasks.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
 	}
 	tasks.Finished(store.TaskPeers, now.Add(-time.Minute))
-	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages)), Languages: languages, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, Now: func() time.Time { return now }})
+	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages), cfg.Probes), Languages: languages, Probes: cfg.Probes, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
 }
 
-// browse serves BrowseService over st behind the token "search" in-process,
-// and returns a client holding the token.
-func browse(t *testing.T, st *store.Store, tasks *store.Tasks, tags []string) sniffarrv1connect.BrowseServiceClient {
+// browse serves BrowseService over st, probing with probes, behind the token
+// "search" in-process, and returns a client holding the token.
+func browse(t *testing.T, st *store.Store, tasks *store.Tasks, tags []string, probes bool) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
-	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Languages: tags, Now: func() time.Time { return now },
+	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Probes: probes, Languages: tags, Now: func() time.Time { return now },
 		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }, Interval: 5 * time.Minute}}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b))
 	var p http.Protocols
@@ -579,6 +579,34 @@ func TestRequests(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, post(t, h, "/t/"+hexOf(99)+"/peers", "act-peers").Code)
 	require.Equal(t, http.StatusNotFound, post(t, h, "/t/"+hexOf(1)+"/seed", "act-seed").Code)
 	require.Equal(t, http.StatusNotFound, post(t, h, "/movie/1/peers", "act-peers").Code)
+}
+
+func TestProbesOff(t *testing.T) {
+	h := handlerWith(t, "ru", Config{})
+	for _, path := range []string{"/t/" + hexOf(1), "/t/" + hexOf(7), "/movie/348"} {
+		body := page(t, get(t, h, path, ""))
+		require.Contains(t, body, `<button id="act-peers" type="submit">Refresh peers</button>`, path)
+		require.NotContains(t, body, `act-probe`, "%s: no probe button", path)
+		require.NotContains(t, body, "Cannot probe tracks", "%s: nor a line about probes", path)
+	}
+	require.Equal(t, http.StatusNotFound, post(t, h, "/t/"+hexOf(1)+"/probe", "act-answer").Code)
+	require.Equal(t, http.StatusNotFound, post(t, h, "/movie/348/probe", "act-answer").Code)
+
+	body := page(t, get(t, h, "/", ""))
+	require.NotContains(t, body, "Downloaded on the UTC day", "no probe meter")
+	require.NotContains(t, body, `<h3>Probes`, "nor probe queue")
+	require.Contains(t, body, `<h3>Metadata fetches</h3>`, "the other queues stay")
+
+	st := &sniffarrv1.StatsResponse{QueueFetches: &sniffarrv1.TaskQueue{}, QueueLookups: &sniffarrv1.TaskQueue{},
+		QueueProbes: &sniffarrv1.TaskQueue{Levels: []*sniffarrv1.TaskLevel{{Priority: 1, Tasks: 3}}}}
+	kinds := func(qs []ui.TaskQueue) (out []string) {
+		for _, q := range qs {
+			out = append(out, q.Kind)
+		}
+		return out
+	}
+	require.Equal(t, []string{"fetch", "peers", "probe"}, kinds(taskQueues(st, true)))
+	require.Equal(t, []string{"fetch", "peers"}, kinds(taskQueues(st, false)), "probes queued before they went off are not shown")
 }
 
 func TestRequestMatch(t *testing.T) {

@@ -65,6 +65,7 @@ func TestRenderAll(t *testing.T) {
 		{"torrent-files", "torrent", "/t/x?files=all", "files", func(b Base) any { return SampleTorrent(b, true, "poster") }},
 		{"torrent-journal", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "journal") }},
 		{"torrent-nopeers", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "nopeers") }},
+		{"torrent-noprobes", "torrent", "/t/x", "", func(b Base) any { b.Probes = false; return SampleTorrent(b, false, "nopeers") }},
 		{"act-peers", "torrent", "/t/x/peers", "act-answer", func(b Base) any { return Requested{Base: b, Action: "peers", Releases: 1} }},
 		{"act-probe", "torrent", "/t/x/probe", "act-answer", func(b Base) any { return Requested{Base: b, Action: "probe", Releases: 1} }},
 		{"act-probe-unreadable", "torrent", "/t/x/probe", "act-answer", func(b Base) any { return Requested{Base: b, Action: "probe"} }},
@@ -78,6 +79,7 @@ func TestRenderAll(t *testing.T) {
 		{"data", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
 		{"data-frag", "data", "/", "data", func(b Base) any { return SampleData(b) }},
 		{"data-stale", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleDataStale(b) }},
+		{"data-noprobes", "data", "/", "", func(b Base) any { b.Nav, b.Probes = "data", false; return SampleData(b) }},
 	}
 	dir := os.Getenv("PREVIEW_DIR")
 	for _, lang := range []string{"ru", "en"} {
@@ -88,7 +90,7 @@ func TestRenderAll(t *testing.T) {
 				req.Header.Set("HX-Target", c.target)
 			}
 			b := r.Base(req, lang, "", []string{"ru"}, loc)
-			b.Now = now
+			b.Now, b.Probes = now, true
 			w := httptest.NewRecorder()
 			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
 				t.Fatalf("%s/%s: %v", lang, c.name, err)
@@ -694,7 +696,7 @@ func TestDataMarkup(t *testing.T) {
 	}
 	req := httptest.NewRequest("GET", "/", nil)
 	b := r.Base(req, "en", "data", nil, time.UTC)
-	b.Now = time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
+	b.Now, b.Probes = time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC), true
 	render := func(p DataPage) string {
 		t.Helper()
 		w := httptest.NewRecorder()
@@ -728,5 +730,42 @@ func TestDataMarkup(t *testing.T) {
 	}
 	if !strings.Contains(stale, `<span class="xs dw">updated 12 min ago</span>`) {
 		t.Error("stale data does not show its age")
+	}
+	probe := "Downloaded on the UTC day"
+	if !strings.Contains(fresh, probe) {
+		t.Errorf("no probe meter %q", probe)
+	}
+	b.Probes = false
+	if off := render(SampleData(b)); strings.Contains(off, probe) {
+		t.Error("the probe meter shows while probes are off")
+	}
+}
+
+func TestActsProbes(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/t/x", nil)
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	render := func(b Base) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		if err := r.Render(w, req, "torrent", SampleTorrent(b, false, "nopeers")); err != nil {
+			t.Fatal(err)
+		}
+		return w.Body.String()
+	}
+	b.Probes = true
+	if on := render(b); !strings.Contains(on, `id="act-probe"`) || !strings.Contains(on, b.T("act.probe_nopeers")) {
+		t.Error("no probe button, or no line on why it is disabled, while probes are on")
+	}
+	b.Probes = false
+	off := render(b)
+	if strings.Contains(off, `act-probe`) || strings.Contains(off, b.T("act.probe_nopeers")) {
+		t.Error("the probe button or its line shows while probes are off")
+	}
+	if !strings.Contains(off, `id="act-peers"`) {
+		t.Error("the peers button goes with it")
 	}
 }

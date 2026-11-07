@@ -14,14 +14,23 @@ import (
 	"github.com/mikluko/sniffarr/internal/audio"
 )
 
-// DefaultBackoff is the wait between attempts of ObtainLanguages.
+// DefaultBackoff is the wait between attempts of ObtainSettings.
 const DefaultBackoff = 5 * time.Second
 
-// ObtainLanguages asks the browse API for its audio languages, retrying
-// after backoff until it answers or ctx is done. Every failed attempt after
-// the first is logged as a warning. A tag this build does not know is an
-// error at once: the UI cannot show a language it has no signs for.
-func ObtainLanguages(ctx context.Context, browse sniffarrv1connect.BrowseServiceClient, backoff time.Duration, log *slog.Logger) ([]audio.Language, error) {
+// Settings is what the browse API is configured with that the pages show.
+type Settings struct {
+	// Languages are its audio languages in its order.
+	Languages []audio.Language
+	// Probes is whether it probes releases.
+	Probes bool
+}
+
+// ObtainSettings asks the browse API for its settings, retrying after
+// backoff until it answers or ctx is done. Every failed attempt after the
+// first is logged as a warning. An audio language tag this build does not
+// know is an error at once: the UI cannot show a language it has no signs
+// for.
+func ObtainSettings(ctx context.Context, browse sniffarrv1connect.BrowseServiceClient, backoff time.Duration, log *slog.Logger) (Settings, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
@@ -31,9 +40,9 @@ func ObtainLanguages(ctx context.Context, browse sniffarrv1connect.BrowseService
 			tags := res.Msg.GetAudioLanguages()
 			langs, err := audio.Parse(strings.Join(tags, ","))
 			if err != nil {
-				return nil, fmt.Errorf("the API's audio languages %q: %w", tags, err)
+				return Settings{}, fmt.Errorf("the API's audio languages %q: %w", tags, err)
 			}
-			return langs, nil
+			return Settings{Languages: langs, Probes: res.Msg.GetProbes()}, nil
 		}
 		if attempt > 1 {
 			log.Warn("settings", "err", err, "attempt", attempt)
@@ -41,7 +50,7 @@ func ObtainLanguages(ctx context.Context, browse sniffarrv1connect.BrowseService
 			log.Debug("settings", "err", err, "attempt", attempt)
 		}
 		if err := sleep(ctx, backoff); err != nil {
-			return nil, err
+			return Settings{}, err
 		}
 	}
 }

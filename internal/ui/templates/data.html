@@ -21,11 +21,11 @@
     {{- if .LimitDay}}<b class="big">{{$.Pct .DoneDay .LimitDay}}</b>{{template "dpace" (limitArgs $.Base .DoneDay .PaceDay .LimitDay)}}{{template "meter" (limitArgs $.Base .DoneDay .PaceDay .LimitDay)}}
     {{- else}}<b class="big">{{$.Num .DoneDay}}</b><span class="mu xs">{{$.T "d.nolimit"}}</span>{{end}}</div>
   {{end}}
-  {{with .Probe}}
+  {{if $.Probes}}{{with .Probe}}
   <div class="stat"><span class="mu">{{template "tip" (tipArgs ($.T "d.probes") $.ProbeTip)}}</span>
     {{- if .LimitDay}}<b class="big">{{$.Pct .RxDay .LimitDay}}</b>{{template "dpace" (limitArgs $.Base .RxDay .PaceDay .LimitDay)}}{{template "meter" (limitArgs $.Base .RxDay .PaceDay .LimitDay)}}
     {{- else}}<b class="big">{{$.Size .RxDay}}</b><span class="mu xs">{{$.T "d.nolimit"}}</span>{{end}}</div>
-  {{end}}
+  {{end}}{{end}}
 </div>
 
 {{with .Queue}}

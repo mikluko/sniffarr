@@ -45,11 +45,11 @@ const localeTTL = 10 * time.Minute
 func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, browse sniffarrv1connect.BrowseServiceClient) {
 	srv := &http.Server{ReadHeaderTimeout: 10 * time.Second}
 	app.Go(lc, sd, log, "ui", func(ctx context.Context) error {
-		langs, err := web.ObtainLanguages(ctx, browse, web.DefaultBackoff, log)
+		settings, err := web.ObtainSettings(ctx, browse, web.DefaultBackoff, log)
 		if err != nil {
 			return err
 		}
-		wc := web.Config{Browse: browse, Languages: langs, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Log: log}
+		wc := web.Config{Browse: browse, Languages: settings.Languages, Probes: settings.Probes, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Log: log}
 		if cfg.OIDCIssuer != "" {
 			wc.Locales = userinfo.New(cfg.OIDCIssuer, &http.Client{Timeout: 10 * time.Second}, localeTTL)
 		}
