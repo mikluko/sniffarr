@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The classifier's layer and journal outcome `jev` are `classifier`, in the API, the metrics' `sniffarr.classify.layer` and `sniffarr.tmdb.layer`, and the stored data.
 - `BrowseService.Settings` names `SNIFFARR_CLASSIFY_API_KEY` as the classifier's setting, `SNIFFARR_CLASSIFY_URL` with another endpoint, and `TYPESAFE_API_KEY` only when that key turned it on.
 - The web UI and the docs name the classifier without Jev.
+- The priority badges in the data page's tables have no border: a square of the priority's colour and the label, with the meaning in the tooltip.
 
 ### Deprecated
 

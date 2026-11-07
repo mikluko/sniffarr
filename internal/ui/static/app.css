@@ -127,7 +127,7 @@ button:disabled{cursor:default;opacity:.5;background:var(--background)}
 .q3{background:color-mix(in srgb,var(--ln) 40%,var(--background))}.q4{background:color-mix(in srgb,var(--ln) 26%,var(--background))}
 .qcard .t td{vertical-align:middle}
 .qcard .t tr:last-child td{border-bottom:0}
-#data .badge{display:inline-flex;align-items:center;padding:0 6px;border:1px solid var(--border);font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}
+#data .badge{display:inline-flex;align-items:center;font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}
 #data .sw{display:inline-block;width:8px;height:8px;margin-right:6px}
 .charthead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px;margin-top:8px}
 .chart{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 8px}

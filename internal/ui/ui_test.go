@@ -1213,3 +1213,16 @@ func TestWorkPeakWithoutHistory(t *testing.T) {
 		}
 	}
 }
+
+// A priority badge is a swatch and a label with no border or padding.
+func TestBadgeHasNoBorder(t *testing.T) {
+	css, err := files.ReadFile("static/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range strings.Split(string(css), "}") {
+		if strings.Contains(rule, "#data .badge{") && (strings.Contains(rule, "border") || strings.Contains(rule, "padding")) {
+			t.Errorf("the badge rule draws a box: %s}", rule)
+		}
+	}
+}
