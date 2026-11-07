@@ -57,13 +57,19 @@
 {{- end}}
 
 {{/* Buttons of a card: look up the peers of its releases, probe them; a probe needs peers.
-     The answer to each replaces its form, as the fragment "act". */}}
+     A button is disabled while its request runs; the answer, the fragment "act", takes the
+     line under them and leaves the button disabled. */}}
 {{define "acts"}}{{$b := .B}}
 <div class="acts">
-  <form id="act-peers" method="post" action="{{.Path}}/peers" hx-post="{{.Path}}/peers" hx-target="this" hx-swap="outerHTML"><button type="submit">{{$b.T "act.peers"}}</button></form>
-  <form id="act-probe" method="post" action="{{.Path}}/probe" hx-post="{{.Path}}/probe" hx-target="this" hx-swap="outerHTML"><button type="submit"{{if .Peers}} title="{{$b.T "act.probe_hint"}}"{{else}} disabled title="{{$b.T "act.probe_nopeers"}}"{{end}}>{{$b.T "act.probe"}}</button></form>
+  {{template "actform" (actArgs $b .Path "peers" false)}}
+  {{template "actform" (actArgs $b .Path "probe" (not .Peers))}}
+  <div id="act-answer" class="act-ans" role="status">{{if not .Peers}}{{$b.T "act.probe_nopeers"}}{{end}}</div>
 </div>
 {{end}}
+
+{{define "actform"}}<form method="post" action="{{.Path}}/{{.Action}}" hx-post="{{.Path}}/{{.Action}}" hx-target="#act-answer" hx-swap="outerHTML" hx-disabled-elt="find button">{{template "actbutton" .}}</form>{{end}}
+
+{{define "actbutton"}}<button id="act-{{.Action}}" type="submit"{{if .Off}} disabled{{end}}{{if .OOB}} hx-swap-oob="true"{{end}}>{{.B.T (concat "act." .Action)}}</button>{{end}}
 
 {{/* Label with the tooltip Text, shown on hover and on focus, so a tap opens it too. */}}
 {{define "tip"}}<span class="tip" tabindex="0" aria-label="{{.Label}}: {{.Text}}">{{.Label}}<span class="tipb" aria-hidden="true">{{.Text}}</span></span>{{end}}
@@ -71,4 +77,10 @@
 {{/* An icon button that copies Value; its tooltip names it and, once copied, says so. */}}
 {{define "copy"}}<span class="tip ic"><button type="button" class="ic" data-copy="{{.Value}}" data-done="{{.B.T "card.copied"}}" aria-label="{{.Label}}">{{icon "copy"}}</button><span class="tipb" role="status">{{.Label}}</span></span>{{end}}
 
-{{define "act"}}<span id="act-{{.Action}}" class="mu" role="status">{{if and (eq .Action "probe") (eq .Releases 0)}}{{.T "act.probe_unreadable"}}{{else}}{{.T (concat "act.done." .Action)}}{{end}}{{if gt .Releases 1}}: {{.Releases}} {{.T "top.releases_lc"}}{{end}}</span>{{end}}
+{{define "act"}}<div id="act-answer" class="act-ans" role="status">
+  {{- if and (eq .Action "probe") (eq .Releases 0)}}{{.T "act.probe_unreadable"}}
+  {{- else}}{{if gt .Releases 1}}{{.Fmt (concat "act.done." .Action "_n") (.Count (int64 .Releases) "act.releases")}}{{else}}{{.T (concat "act.done." .Action)}}{{end}} {{template "queue" .Base}}{{end -}}
+</div>
+{{template "actbutton" (actOOB .Base .Action)}}{{end}}
+
+{{define "queue"}}{{.T "act.queue.before"}}<a href="/">{{.T "act.queue.page"}}</a>{{.T "act.queue.after"}}{{end}}

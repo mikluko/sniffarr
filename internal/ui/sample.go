@@ -313,8 +313,9 @@ func filterReleases(all []Release, f ReleaseFilters) []Release {
 	return out
 }
 
-// SampleTorrent cases: "poster", "noposter" (matched titles), "unmatched",
-// "unchecked", "journal" (a torrent the store keeps only the journal of).
+// SampleTorrent cases: "poster", "noposter" (matched titles), "nopeers" (a
+// matched title without peers over 7 days), "unmatched", "unchecked",
+// "journal" (a torrent the store keeps only the journal of).
 func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 	if cs == "journal" {
 		const h = "3c1e0d9a7b2f48e6a5c4d3b2a1f0e9d8c7b6a5f4"
@@ -343,6 +344,10 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 	if work != nil {
 		tmdb = work.TMDB
 	}
+	peers := PeerCounts{Day: 1960, Week: 12480, Month: 41300}
+	if cs == "nopeers" {
+		peers = PeerCounts{}
+	}
 	files := []File{
 		{"Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv", 26411 * mb},
 		{"Sample/Dune.Part.Two.sample.mkv", 118 * mb},
@@ -368,7 +373,7 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 		FirstSeen: b.Now.Add(-41 * time.Hour), LastSeen: b.Now.Add(-3 * time.Minute),
 		DiscoveredVia: "announce", TMDBQuery: query,
 		TMDB:  tmdb,
-		Peers: PeerCounts{Day: 1960, Week: 12480, Month: 41300},
+		Peers: peers,
 		Work:  work, RankInWork: 1,
 		Kind:    Answer{Value: "movie", Layer: "classifier", Confidence: fp(.93)},
 		Source:  Answer{Value: "web", Layer: "rules"},

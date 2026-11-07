@@ -80,7 +80,7 @@ type TMDBWork struct {
 	Language      string   // original_language, ISO 639-1
 
 	// How the match was made.
-	Method     string  // "search" (unique search hit) | "classifier" (picked among candidates)
+	Method     string  // "search" (unique search hit) | "classifier" (picked among candidates) | "arr" (Radarr or Sonarr took a release)
 	Confidence float64 // 0–1
 }
 
@@ -245,7 +245,8 @@ type Release struct {
 // ---------- torrent card ----------
 
 // Requested answers a card's button: Action, "peers" or "probe", was asked
-// for Releases releases. It is the htmx fragment "act".
+// for Releases releases. It is the htmx fragment "act": the line under the
+// buttons, and the pressed button, disabled.
 type Requested struct {
 	Base
 	Action   string

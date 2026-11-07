@@ -64,6 +64,11 @@ func TestRenderAll(t *testing.T) {
 		{"torrent-multilang", "torrent", "/t/x", "", func(b Base) any { multi(&b); return SampleTorrent(b, false, "poster") }},
 		{"torrent-files", "torrent", "/t/x?files=all", "files", func(b Base) any { return SampleTorrent(b, true, "poster") }},
 		{"torrent-journal", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "journal") }},
+		{"torrent-nopeers", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "nopeers") }},
+		{"act-peers", "torrent", "/t/x/peers", "act-answer", func(b Base) any { return Requested{Base: b, Action: "peers", Releases: 1} }},
+		{"act-probe", "torrent", "/t/x/probe", "act-answer", func(b Base) any { return Requested{Base: b, Action: "probe", Releases: 1} }},
+		{"act-probe-unreadable", "torrent", "/t/x/probe", "act-answer", func(b Base) any { return Requested{Base: b, Action: "probe"} }},
+		{"act-peers-work", "work", "/movie/1/peers", "act-answer", func(b Base) any { return Requested{Base: b, Action: "peers", Releases: 95} }},
 		{"data", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
 		{"data-frag", "data", "/", "data", func(b Base) any { return SampleData(b) }},
 		{"data-stale", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleDataStale(b) }},
@@ -90,14 +95,24 @@ func TestRenderAll(t *testing.T) {
 			if c.target != "" && !strings.Contains(body, `id="`+c.target+`"`) {
 				t.Errorf("%s/%s: fragment lacks id=%q", lang, c.name, c.target)
 			}
-			if dir != "" && full {
-				_ = os.WriteFile(filepath.Join(dir, lang+"-"+c.name+".html"), w.Body.Bytes(), 0o644)
-			}
+			writePreview(dir, lang+"-"+c.name, full, w.Body.Bytes())
 		}
 	}
 	if len(missing) > 0 {
 		t.Errorf("untranslated keys: %v", missing)
 	}
+}
+
+// writePreview writes a rendered page into dir as <name>.html, a fragment
+// as frag-<name>.html; nothing without dir.
+func writePreview(dir, name string, full bool, body []byte) {
+	if dir == "" {
+		return
+	}
+	if !full {
+		name = "frag-" + name
+	}
+	_ = os.WriteFile(filepath.Join(dir, name+".html"), body, 0o644)
 }
 
 // Renders every page without audio languages: nothing of the extension in
@@ -131,7 +146,7 @@ func TestRenderNoLanguages(t *testing.T) {
 				t.Fatalf("%s/%s: %v", lang, c.name, err)
 			}
 			body := w.Body.String()
-			for _, s := range []string{`name="vl"`, `name="voice"`, `voice=`, b.T("d.voice"), b.T("top.audio"), b.T("audio.markcol")} {
+			for _, s := range []string{`name="vl"`, `name="voice"`, `voice=`, b.T("d.voice"), b.T("top.audio"), b.T("card.audio_mark")} {
 				if strings.Contains(body, s) {
 					t.Errorf("%s/%s: has %q", lang, c.name, s)
 				}
@@ -145,7 +160,20 @@ func TestFormat(t *testing.T) {
 	ru := Base{Lang: "ru"}
 	c := Base{Lang: "en"}
 	units := Base{Lang: "ru", msgs: map[string]string{"unit.min": "мин", "unit.h": "ч", "unit.d": "д"}}
+	files := map[string]string{"f.one": "файл", "f.few": "файла", "f.many": "файлов"}
+	ruf, enf := Base{Lang: "ru", msgs: files}, Base{Lang: "en", msgs: map[string]string{"f.one": "file", "f.many": "files"}}
+	tips := Base{Lang: "ru", Now: t5, Loc: time.UTC, msgs: map[string]string{"card.match.how.search": "Поиском TMDB",
+		"card.match.tip": "{0}, уверенность {1}, {2}.", "card.match.tip_nodate": "{0}, уверенность {1}."}}
 	for _, x := range []struct{ got, want string }{
+		{ruf.Count(1, "f"), "1 файл"},
+		{ruf.Count(3, "f"), "3 файла"},
+		{ruf.Count(12, "f"), "12 файлов"},
+		{ruf.Count(21, "f"), "21 файл"},
+		{ruf.Count(1014, "f"), "1 014 файлов"},
+		{enf.Count(1, "f"), "1 file"},
+		{enf.Count(3, "f"), "3 files"},
+		{tips.MatchTip(&TMDBWork{Method: "search", Confidence: 1, CheckedAt: t5.AddDate(0, 0, -8)}), "Поиском TMDB, уверенность 1,00, 12.10."},
+		{tips.MatchTip(&TMDBWork{Method: "search", Confidence: .5}), "Поиском TMDB, уверенность 0,50."},
 		{ru.Num(1284311), "1\u00a0284\u00a0311"},
 		{ru.Num(-1284), "-1\u00a0284"},
 		{c.Num(1284311), "1,284,311"},

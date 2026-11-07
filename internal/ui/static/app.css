@@ -262,3 +262,21 @@ a.orig{display:block;font-size:12px}
   .qcard{padding:12px;gap:10px}
   .chart .xax span:not(:first-child):not(:last-child){display:none}
 }
+
+/* release card: a full-width TMDB block, the match's tooltip above its
+ * stretched link, the action's answer on a line under the buttons */
+.tm-card{max-width:none}
+.tm-card .tm-poster,.tm-card.tm-matched .tm-none{width:116px;height:174px}
+.tm-card h2.tm-title{font-size:16px}
+.tm-card .tm-op{position:relative;z-index:1;align-self:flex-start}
+.acts{margin-top:12px;gap:8px 12px}
+.act-ans{flex-basis:100%;font-size:12px;color:var(--muted-foreground)}
+.act-ans:empty{display:none}
+.files-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;padding-top:8px}
+a.btn{display:inline-flex;align-items:center;height:28px;padding:0 10px;border:1px solid var(--border);color:var(--foreground);font-weight:500;white-space:nowrap}
+a.btn:hover{background:var(--muted);text-decoration:none}
+@media (max-width:640px){
+  .tm-card .tm-poster,.tm-card.tm-matched .tm-none{width:72px;height:108px}
+  .t .hm{display:none}
+  a.btn{height:40px}
+}

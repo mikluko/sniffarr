@@ -194,7 +194,8 @@ var (
 		sniffarrv1.Sort_SORT_FIRST_SEEN: "first_seen"}
 	windows     = map[sniffarrv1.Window]string{sniffarrv1.Window_WINDOW_DAY: "24h", sniffarrv1.Window_WINDOW_WEEK: "7d", sniffarrv1.Window_WINDOW_MONTH: "30d"}
 	voices      = map[sniffarrv1.Voice]string{sniffarrv1.Voice_VOICE_UNSPECIFIED: "any", sniffarrv1.Voice_VOICE_LIKELY: "p50", sniffarrv1.Voice_VOICE_MARKER: "explicit"}
-	tmdbMethods = map[sniffarrv1.TMDBLayer]string{sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH: "search", sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER: "classifier"}
+	tmdbMethods = map[sniffarrv1.TMDBLayer]string{sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH: "search", sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER: "classifier",
+		sniffarrv1.TMDBLayer_TMDB_LAYER_ARR: "arr"}
 )
 
 // uiOr returns m's value for k, or def.

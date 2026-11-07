@@ -17,7 +17,7 @@ API's needs the UI restarted.
 | `GET /w/{id}`, `GET /top/w/{id}` | A permanent redirect of the title pages of earlier versions, `id` `m348` or `tv1399`, to `/movie/348` or `/tv/1399`                                                                                                                                                                                                                                                                                                       |
 | `GET /t/{infohash}` | A release: its magnet link, peers over the last day, 7 days and 30 days, its movie or series with its place in the top and the release's place among its releases, or the state of its title's lookup with TMDB and IMDb searches while it is unmatched, classification, audio signs per language with their marks, its journal, the newest 200 events of its life with when, what, how it ended and the particulars, and the first 8 stored files, every one with `files=all`. For an infohash whose torrent is not stored, rejected, dropped, evicted or deleted among them, the infohash and its journal alone; not found when it has no journal either |
 | `POST /t/{infohash}/peers`, `POST /movie/{id}/peers`, `POST /tv/{id}/peers` | Asks `RefreshPeers` to look up the peers of the release, or of every release of the movie or series; the cards' button posts it |
-| `POST /t/{infohash}/probe`, `POST /movie/{id}/probe`, `POST /tv/{id}/probe` | Asks `RequestProbe` to probe the release, or every release of the movie or series; the cards' button posts it, and is disabled without peers over 7 days; its answer says when no release has a file a probe can read |
+| `POST /t/{infohash}/probe`, `POST /movie/{id}/probe`, `POST /tv/{id}/probe` | Asks `RequestProbe` to probe the release, or every release of the movie or series; the cards' button posts it, and is disabled without peers over 7 days, the line under the buttons saying so; its answer says when no release has a file a probe can read |
 | `GET /static/…`     | Stylesheet, scripts, the TMDB logo, and the JetBrains Mono font with its licence, `fonts/OFL.txt`. Each is cached for a year at its URL with a version in `v`, a hash of its content, where the pages link it; at any other URL the browser revalidates it by ETag                                                                                                                                                                 |
 
 A parameter value outside those listed is the default: every kind, quality,
@@ -26,8 +26,10 @@ configured and else the first, `voice=any`, `sort=peers`, `kind=movie` for
 the top, `win=7d`. A fragment of a page is served alone when htmx asks for it
 with `HX-Request: true` and `HX-Target` naming it: `results`, `releases`,
 `torrents`, `top`, `files` or `data`. A `POST` answers htmx with
-`HX-Target` `act-peers` or `act-probe` with the note that replaces its
-button, and any other request with a redirect to the card. A `POST` from
+`HX-Target` `act-answer` with the line under the card's buttons, which says
+what was asked for and at which priority and links the queue on the data
+page, and with the pressed button, which stays disabled; it answers any
+other request with a redirect to the card. A `POST` from
 another origin, by `Sec-Fetch-Site` or `Origin`, is refused with 403.
 
 The UI authenticates nobody: an authenticating proxy, such as oauth2-proxy,

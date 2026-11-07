@@ -70,6 +70,14 @@ type actsArgs struct {
 	Peers int64
 }
 
+// actButton is the button of the card at Path asking for Action, disabled
+// when Off; OOB has an htmx answer put it in place of the one on the page.
+type actButton struct {
+	B            Base
+	Path, Action string
+	Off, OOB     bool
+}
+
 // baseOf accepts a Base or any page model that embeds one.
 func baseOf(v any) Base {
 	switch p := v.(type) {
@@ -138,6 +146,12 @@ func New() (*Renderer, error) {
 		},
 		"actsArgs": func(b Base, path string, peers int64) actsArgs {
 			return actsArgs{B: b, Path: path, Peers: peers}
+		},
+		"actArgs": func(b Base, path, action string, off bool) actButton {
+			return actButton{B: b, Path: path, Action: action, Off: off}
+		},
+		"actOOB": func(b Base, action string) actButton {
+			return actButton{B: b, Action: action, Off: true, OOB: true}
 		},
 		"copyArgs": func(b Base, value, label string) copyArgs {
 			return copyArgs{B: b, Value: value, Label: label}

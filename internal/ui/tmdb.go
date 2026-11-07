@@ -157,6 +157,16 @@ func (b Base) Span(d time.Duration) string {
 	return strconv.Itoa(days) + "\u00a0" + ds + " " + strconv.Itoa(h) + "\u00a0" + hs
 }
 
+// MatchTip is the tooltip of a release's match: how it was made, with what
+// confidence, and when.
+func (b Base) MatchTip(t *TMDBWork) string {
+	how, conf := b.T("card.match.how."+t.Method), b.Prob2(t.Confidence)
+	if t.CheckedAt.IsZero() {
+		return b.Fmt("card.match.tip_nodate", how, conf)
+	}
+	return b.Fmt("card.match.tip", how, conf, b.Date(t.CheckedAt))
+}
+
 // Rating formats a TMDB score with one decimal: "7,9".
 func (b Base) Rating(r float64) string { return b.dec(r, 1) }
 
@@ -202,14 +212,11 @@ func WorkPath(kind string, tmdbID int64) string {
 // Path is the title page of a summary.
 func (w WorkSummary) Path() string { return WorkPath(w.Kind, w.TMDB.ID) }
 
-// Facts is the one-line description under a title: "Фильм · 2015 · 2 ч 10 мин",
-// "Сериал · 2011 · завершён · 8 сез.".
+// Facts is the one-line description under a title, whose year it leaves to
+// the title: "Фильм · 2 ч 10 мин", "Сериал · завершён · 8 сез.".
 func (b Base) Facts(kind string, t *TMDBWork) string {
 	parts := []string{sentence(b.T("kind." + kind))}
 	if t.Matched() {
-		if t.Year > 0 {
-			parts = append(parts, strconv.Itoa(t.Year))
-		}
 		if kind == "series" {
 			if t.Status != "" {
 				parts = append(parts, b.T("tvstatus."+t.Status))

@@ -66,6 +66,24 @@ func (b Base) Num(n int64) string {
 	return string(out)
 }
 
+// Count is n followed by the form of the noun key that agrees with it:
+// key+".one", ".few" or ".many", by Russian rules in Russian; English has
+// no ".few".
+func (b Base) Count(n int64, key string) string {
+	return b.Num(n) + "\u00a0" + b.T(key+"."+b.form(n))
+}
+
+func (b Base) form(n int64) string {
+	n10, n100 := n%10, n%100
+	switch {
+	case !b.ru() && n == 1, b.ru() && n10 == 1 && n100 != 11:
+		return "one"
+	case b.ru() && n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14):
+		return "few"
+	}
+	return "many"
+}
+
 func (b Base) dec(f float64, prec int) string {
 	s := strconv.FormatFloat(f, 'f', prec, 64)
 	if b.ru() {
