@@ -19,6 +19,7 @@ func openQueue(t *testing.T, opts ...TaskOptions) *Tasks {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
+	checkJournal(t, db)
 	var o TaskOptions
 	if len(opts) > 0 {
 		o = opts[0]

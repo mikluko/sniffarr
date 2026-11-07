@@ -359,14 +359,19 @@ var searchIDProviders = map[string]string{"tmdbid": "TMDB", "imdbid": "IMDb", "t
 func (b Base) JournalDetail(e JournalEntry) []DetailPair {
 	out := make([]DetailPair, 0, len(e.Detail))
 	for _, k := range slices.Sorted(maps.Keys(e.Detail)) {
-		v := e.Detail[k]
-		p := DetailPair{Key: b.journalKey(e.Kind, k), Value: b.journalValue(e.Kind, k, v)}
-		if s, ok := v.(string); ok && e.Kind == "classified" && k == "from" && isInfohash(s) {
-			p.Value, p.Href = s[:8], "/t/"+s
-		}
-		out = append(out, p)
+		out = append(out, b.journalPair(e, k, e.Detail[k]))
 	}
 	return out
+}
+
+// journalPair is the particular of the entry under the key, as JournalDetail
+// writes it.
+func (b Base) journalPair(e JournalEntry, k string, v any) DetailPair {
+	p := DetailPair{Key: b.journalKey(e.Kind, k), Value: b.journalValue(e.Kind, k, v)}
+	if s, ok := v.(string); ok && e.Kind == "classified" && k == "from" && isInfohash(s) {
+		p.Value, p.Href = s[:8], "/t/"+s
+	}
+	return p
 }
 
 // isInfohash reports whether s is the hex form of an infohash.

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"html/template"
+	"log/slog"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -280,6 +281,94 @@ func TestJournalMessages(t *testing.T) {
 		if !slices.Contains(en, k) {
 			t.Errorf("%s is not in English", k)
 		}
+	}
+}
+
+// Every kind and outcome journalSpec marks up has its labels and those of its
+// summary keys in both languages.
+func TestJournalSpecMessages(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "ru"} {
+		for _, m := range journalSpecMissing(r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", nil, time.UTC)) {
+			t.Errorf("%s: %s", lang, m)
+		}
+	}
+}
+
+// journalSpecMissing lists the labels of journalSpec the language lacks.
+func journalSpecMissing(b Base) []string {
+	var out []string
+	for kind, outcomes := range journalSpec {
+		if m := "journal.kind." + kind; !b.has(m) {
+			out = append(out, m)
+		}
+		for outcome, o := range outcomes {
+			if m := "journal.outcome." + kind + "." + outcome; !b.has(m) {
+				out = append(out, m)
+			}
+			for _, k := range o.summary {
+				if !b.has("journal.key."+kind+"."+k) && !b.has("journal.key."+k) {
+					out = append(out, "journal.key."+k+" of "+kind+"/"+outcome)
+				}
+			}
+		}
+	}
+	return out
+}
+
+func TestJournalLevel(t *testing.T) {
+	var log strings.Builder
+	defer slog.SetDefault(slog.Default())
+	slog.SetDefault(slog.New(slog.NewTextHandler(&log, nil)))
+
+	for _, c := range []struct {
+		name   string
+		e      JournalEntry
+		want   Severity
+		logged bool
+	}{
+		{"stored", JournalEntry{Kind: "fetched", Outcome: "stored"}, SeverityNormal, false},
+		{"rejected", JournalEntry{Kind: "fetched", Outcome: "rejected"}, SeverityFinal, false},
+		{"timeout", JournalEntry{Kind: "fetch_failed", Outcome: "timeout", Detail: map[string]any{"retry_at": 1.0}}, SeverityRetry, false},
+		{"dropped", JournalEntry{Kind: "fetch_failed", Outcome: "dropped", Detail: map[string]any{"dead_until": 1.0}}, SeverityFinal, false},
+		{"no peers", JournalEntry{Kind: "fetch_failed", Outcome: "no_peers", Detail: map[string]any{"dead_until": 1.0}}, SeverityFinal, false},
+		{"a timeout kept out", JournalEntry{Kind: "fetch_failed", Outcome: "timeout", Detail: map[string]any{"dead_until": 1.0}}, SeverityRetry, true},
+		{"no peers with a retry", JournalEntry{Kind: "fetch_failed", Outcome: "no_peers", Detail: map[string]any{"dead_until": 1.0, "retry_at": 1.0}}, SeverityFinal, true},
+		{"dropped with neither", JournalEntry{Kind: "fetch_failed", Outcome: "dropped"}, SeverityFinal, true},
+		{"classification failed", JournalEntry{Kind: "classified", Outcome: "failed"}, SeverityFinal, false},
+		{"nothing matched", JournalEntry{Kind: "matched", Outcome: "none"}, SeverityRetry, false},
+		{"a match failed", JournalEntry{Kind: "matched", Outcome: "error"}, SeverityRetry, false},
+		{"a final probe", JournalEntry{Kind: "probed", Outcome: "timeout", Detail: map[string]any{"final": true}}, SeverityFinal, false},
+		{"a probe to retry", JournalEntry{Kind: "probed", Outcome: "no_peers", Detail: map[string]any{"final": false}}, SeverityRetry, false},
+		{"a probe without the flag", JournalEntry{Kind: "probed", Outcome: "timeout"}, SeverityFinal, true},
+		{"tracks not read", JournalEntry{Kind: "probed", Outcome: "unknown"}, SeverityFinal, false},
+		{"tracks read", JournalEntry{Kind: "probed", Outcome: "tracks"}, SeverityNormal, false},
+		{"deleted", JournalEntry{Kind: "deleted", Outcome: "idle"}, SeverityFinal, false},
+		{"unknown", JournalEntry{Kind: "fetched", Outcome: "novel"}, SeverityNormal, true},
+	} {
+		log.Reset()
+		if got := c.e.Level(); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+		if logged := log.Len() > 0; logged != c.logged {
+			t.Errorf("%s: logged %q, want a data error logged: %v", c.name, log.String(), c.logged)
+		}
+	}
+}
+
+func TestJournalSummary(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := r.Base(httptest.NewRequest("GET", "/t/x", nil), "en", "", nil, time.UTC)
+	e := JournalEntry{Kind: "fetched", Outcome: "stored", Detail: map[string]any{"name": "x", "size": 26629001216.0, "files": 14.0, "discovery": "announce"}}
+	want := []DetailPair{{"files", "14", ""}, {"size", "24.8 GB", ""}}
+	if got := b.JournalSummary(e); !slices.Equal(got, want) {
+		t.Errorf("%v, want %v", got, want)
 	}
 }
 

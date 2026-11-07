@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -30,7 +31,33 @@ func open(t *testing.T) *Store {
 	t.Helper()
 	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	checkJournal(t, db)
 	return s
+}
+
+// checkJournal fails the test, once it is done, if the database holds a
+// journal entry whose kind and outcome JournalOutcomes does not list.
+func checkJournal(t *testing.T, db *database.DB) {
+	t.Helper()
+	t.Cleanup(func() {
+		require.NoError(t, db.Tx(context.Background(), func(tx *sql.Tx) error {
+			rows, err := tx.Query("SELECT DISTINCT kind, outcome FROM torrent_journal")
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var kind, outcome string
+				if err := rows.Scan(&kind, &outcome); err != nil {
+					return err
+				}
+				if !slices.Contains(JournalOutcomes[kind], outcome) {
+					t.Errorf("journal entry %s/%s is not in JournalOutcomes", kind, outcome)
+				}
+			}
+			return rows.Err()
+		}))
+	})
 }
 
 func hash(b byte) Hash {

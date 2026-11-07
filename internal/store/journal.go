@@ -47,6 +47,24 @@ const (
 	JournalDeleted = "deleted"
 )
 
+// JournalOutcomes maps every kind of journal entry to the outcomes the store
+// writes for it; the store's tests fail on an entry written outside it.
+var JournalOutcomes = map[string][]string{
+	JournalSighted:     {"queued", "promoted", "revived"},
+	JournalLeased:      {"fetch"},
+	JournalFetched:     {"stored", "rejected", "duplicate"},
+	JournalFetchFailed: {"no_peers", "timeout", "dropped"},
+	JournalEvicted:     {"aged", "oversize"},
+	JournalClassified:  {LayerJev, LayerReuse, "failed"},
+	JournalMatched:     {LayerTMDB, LayerJev, LayerArr, MatchEarlier, "none", "error"},
+	JournalArr:         {EventGrab, EventImport},
+	JournalFeed:        {"stored", "queued", "already_queued", "rejected"},
+	JournalProbeWanted: {"search", "request"},
+	JournalProbeLeased: {"request", "retry", "search", "background"},
+	JournalProbed:      {ProbeTracks, ProbeUnknown, ProbeNoPeers, ProbeTimeout},
+	JournalDeleted:     {"idle", "expired"},
+}
+
 // MatchEarlier is the outcome of a matched entry for a release that took the
 // match its title key had when the release was stored.
 const MatchEarlier = "earlier"
