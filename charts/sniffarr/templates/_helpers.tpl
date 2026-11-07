@@ -219,8 +219,9 @@ creates.
 {{- end }}
 {{- end }}
 
-{{- /* sniffarr.probeArgs renders the flags of probe, given as probe. */}}
+{{- /* sniffarr.probeArgs renders -probe and the flags of probe, given as probe. */}}
 {{- define "sniffarr.probeArgs" -}}
+- "-probe"
 - "-probe-dir=/seeds"
 - {{ printf "-probers=%v" .probers | quote }}
 - {{ printf "-probe-timeout=%v" .timeout | quote }}

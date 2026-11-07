@@ -127,6 +127,8 @@ spec:
             {{- end }}
             {{- if $probe }}
             {{- include "sniffarr.probeArgs" .Values.probe | trim | nindent 12 }}
+            {{- else if .Values.probe.enabled }}
+            - "-probe"
             {{- end }}
           env:
             - name: SNIFFARR_DB

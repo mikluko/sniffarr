@@ -50,8 +50,9 @@ replicas and the URL of `sniff` unless its own is set. A
 fetcher's DHT node is passive and the fetcher dials the peers it fetches from,
 so it needs no open port.
 
-With `probe.enabled`, `<release>-probe` is a StatefulSet of `probe.replicas`
-fetchers that probe too, rendering `-probe-dir=/seeds` and `probe`'s
+With `probe.enabled`, the API's container renders `-probe`, and
+`<release>-probe` is a StatefulSet of `probe.replicas`
+fetchers that probe too, rendering `-probe`, `-probe-dir=/seeds` and `probe`'s
 `probers`, `timeout`, `maxSize` and `maxAge` as `-probers`, `-probe-timeout`,
 `-seed-max-size` and `-seed-max-age`; its pod settings are `fetch`'s, and its
 `url` falls back to `fetch.url`, then `sniff.url`. `/seeds` is
@@ -93,7 +94,8 @@ of every enabled component, `ui.addr`, the `flags` and `upnp` of `sniff` and
 `fetch`, `probe` with its claim `<release>-seeds`, their `hostNetwork`, and the `extraContainers` and `extraVolumes` of
 `api` and `ui`. The pod's `resources`, `podAnnotations`, `podLabels`,
 `nodeSelector`, `tolerations` and `affinity` come from the `single` block; the
-components' own are not read. With `sniff.hostNetwork`, every listener binds on
+components' own are not read. With `probe.enabled` the process renders
+`-probe`, and the probe flags and `/seeds` too while `fetch.enabled`. With `sniff.hostNetwork`, every listener binds on
 the host, the API's and the UI's too.
 
 One process has one DHT node, so `sniff.service` or `fetch.service`, not both,

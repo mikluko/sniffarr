@@ -56,6 +56,9 @@ spec:
           command: [/sniffarr]
           args:
             - "-api"
+            {{- if .Values.probe.enabled }}
+            - "-probe"
+            {{- end }}
           env:
             - name: SNIFFARR_DB
               value: /data/sniffarr.db

@@ -201,7 +201,7 @@ fetch:
   affinity: {}
 
 probe:
-  # Deploys <release>-probe, a StatefulSet of sniffarr -fetch -probe-dir=/seeds: fetchers that take probe tasks too, reading the tracks of stored releases from the first pieces of their main video file and seeding those pieces, kept in /seeds.
+  # Renders -probe on the API and deploys <release>-probe, a StatefulSet of sniffarr -fetch -probe -probe-dir=/seeds: fetchers that take probe tasks too, reading the tracks of stored releases from the first pieces of their main video file and seeding those pieces, kept in /seeds.
   enabled: false
   # Replicas of <release>-probe, each with a /seeds of its own.
   replicas: 1
