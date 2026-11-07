@@ -206,10 +206,20 @@ func writeJournalRows(w *strings.Builder, b Base, rows []JournalRow) {
 		}
 		return strings.Join(s, " · ")
 	}
+	summary := func(ps []SummaryPair) string {
+		s := make([]string, len(ps))
+		for i, p := range ps {
+			s[i] = p.Text()
+			if p.Href != "" {
+				s[i] += " <" + p.Href + ">"
+			}
+		}
+		return strings.Join(s, " · ")
+	}
 	for _, r := range rows {
-		fmt.Fprintf(w, "%s +%v %s [%s] %s | %s\n", b.TimeFull(r.At), r.Gap, r.Kind, r.Severity, r.Outcome, pairs(r.Summary))
+		fmt.Fprintf(w, "%s +%v %s [%s/%s] %s | %s\n", b.TimeFull(r.At), r.Gap, r.Kind, r.Severity, r.End, r.Outcome, summary(r.Summary))
 		for _, s := range r.Steps {
-			fmt.Fprintf(w, "  step %s %s/%s [%s] | %s | %s\n", b.TimeFull(s.At), s.Kind, s.Outcome, s.Severity, pairs(s.Summary), pairs(s.Details))
+			fmt.Fprintf(w, "  step %s %s/%s [%s] | %s | %s\n", b.TimeFull(s.At), s.Kind, s.Outcome, s.Severity, summary(s.Summary), pairs(s.Details))
 		}
 		fmt.Fprintf(w, "  details | %s\n", pairs(r.Details))
 		for _, tr := range r.Tracks {

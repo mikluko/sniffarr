@@ -163,23 +163,51 @@ func (e JournalEntry) Level() Severity {
 	return o.level(e)
 }
 
+// SummaryPair is a particular as a collapsed row writes it: its Key and
+// Value apart by a colon, or, when Bare, Key, which may be "", right before
+// Value.
+type SummaryPair struct {
+	DetailPair
+	Bare bool
+	// Name is the particular's key in the entry's detail.
+	Name string
+}
+
 // JournalSummary returns the particulars of the entry a collapsed row shows,
 // those of journalSpec's summary keys it has, in their order, written as
-// JournalDetail writes them, but for the tracks, written as how many the
-// probe read.
-func (b Base) JournalSummary(e JournalEntry) []DetailPair {
-	var out []DetailPair
+// summaryPair writes them; the tracks are how many the probe read.
+func (b Base) JournalSummary(e JournalEntry) []SummaryPair {
+	var out []SummaryPair
 	for _, k := range journalSpec[e.Kind][e.Outcome].summary {
 		v, ok := e.Detail[k]
 		switch {
 		case !ok:
 		case k == "tracks":
-			out = append(out, DetailPair{Key: b.journalKey(e.Kind, k), Value: b.Num(e.trackCount())})
+			out = append(out, b.summaryPair(e, k, e.trackCount()))
 		default:
-			out = append(out, b.journalPair(e, JournalField{k, e.typed(k, v)}))
+			out = append(out, b.summaryPair(e, k, e.typed(k, v)))
 		}
 	}
 	return out
+}
+
+// summaryPair is the particular of the entry under the key, its value
+// typed, as a collapsed row writes it: a whole number of a key with a
+// "journal.count.<key>" noun as the number and the noun; under a key with a
+// "journal.short.<kind>.<key>" or "journal.short.<key>" label, bare by that
+// label; any other as JournalDetail writes it.
+func (b Base) summaryPair(e JournalEntry, key string, v any) SummaryPair {
+	if n, ok := v.(int64); ok && b.has("journal.count."+key+".many") {
+		return SummaryPair{DetailPair{Value: b.Count(n, "journal.count."+key)}, true, key}
+	}
+	p := b.journalPair(e, JournalField{key, v})
+	for _, m := range []string{"journal.short." + e.Kind + "." + key, "journal.short." + key} {
+		if b.has(m) {
+			p.Key = b.T(m)
+			return SummaryPair{p, true, key}
+		}
+	}
+	return SummaryPair{DetailPair: p, Name: key}
 }
 
 // trackCount is how many tracks the probe read: tracks_total where the

@@ -49,3 +49,14 @@ document.addEventListener("htmx:afterSwap", function () {
     if (disclosed[b.getAttribute("aria-controls")]) disclose(b, true);
   });
 });
+
+// keepOpen is the idiomorph config of an outerHTML morph that leaves every
+// <details> open or closed as it was: hx-swap="morph:keepOpen".
+var keepOpen = {
+  morphStyle: "outerHTML",
+  callbacks: {
+    beforeAttributeUpdated: function (name, el) {
+      return !(name === "open" && el.tagName === "DETAILS");
+    }
+  }
+};

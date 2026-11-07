@@ -318,10 +318,10 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 	if cs == "journal" {
 		const h = "3c1e0d9a7b2f48e6a5c4d3b2a1f0e9d8c7b6a5f4"
 		return TorrentPage{Base: b, Torrent: Torrent{InfoHash: h, JournalOnly: true, Journal: []JournalEntry{
-			{At: b.Now.Add(-3 * time.Hour), Kind: "sighted", Outcome: "queued", Detail: map[string]any{"discovery": "announce"}},
-			{At: b.Now.Add(-3*time.Hour + time.Minute), Kind: "leased", Outcome: "fetch", Detail: map[string]any{"owner": 2.0, "attempt": 1.0}},
-			{At: b.Now.Add(-2 * time.Hour), Kind: "fetched", Outcome: "rejected", Detail: map[string]any{"reason": "adult", "name": "xxx", "size": 1073741824.0}},
-		}}}
+			{ID: 801, At: b.Now.Add(-3 * time.Hour), Kind: "sighted", Outcome: "queued", Detail: map[string]any{"discovery": "announce"}},
+			{ID: 802, At: b.Now.Add(-3*time.Hour + time.Minute), Kind: "leased", Outcome: "fetch", Detail: map[string]any{"owner": 2.0, "attempt": 1.0}},
+			{ID: 803, At: b.Now.Add(-2 * time.Hour), Kind: "fetched", Outcome: "rejected", Detail: map[string]any{"reason": "adult", "name": "xxx", "size": 1073741824.0}},
+		}, JournalTotal: 3}}
 	}
 	name, query := "Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv", "Игра на понижение 2015"
 	var work *WorkSummary
@@ -373,21 +373,23 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 		TMDB:  tmdb,
 		Peers: peers,
 		Work:  work, RankInWork: 1,
-		Kind:    Answer{Value: "movie", Layer: "classifier", Confidence: fp(.93)},
-		Source:  Answer{Value: "web", Layer: "rules"},
-		Audio:   []Audio{{Lang: "ru", Script: "cyrillic", Probability: fp(.88)}},
-		Rules:   []RuleHit{{"source.web", "WEB-DL"}, {"quality.1080p", "1080р"}},
-		Journal: sampleJournal(b.Now.Add(-41*time.Hour), name),
-		Files:   FileList{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Files: shown, Stored: len(files), All: all},
+		Kind:         Answer{Value: "movie", Layer: "classifier", Confidence: fp(.93)},
+		Source:       Answer{Value: "web", Layer: "rules"},
+		Audio:        []Audio{{Lang: "ru", Script: "cyrillic", Probability: fp(.88)}},
+		Rules:        []RuleHit{{"source.web", "WEB-DL"}, {"quality.1080p", "1080р"}},
+		Journal:      sampleJournal(b.Now.Add(-41*time.Hour), name),
+		JournalTotal: 14,
+		Files:        FileList{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Files: shown, Stored: len(files), All: all},
 	}}
 }
 
 // sampleJournal is a torrent's life from its metadata at the time: numbers
-// are float64 and moments Unix seconds, as the API's JSON decodes.
+// are float64 and moments Unix seconds, as the API's JSON decodes; IDs
+// count from 1.
 func sampleJournal(at time.Time, name string) []JournalEntry {
 	sec := func(t time.Time) float64 { return float64(t.Unix()) }
 	const sibling = "3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13"
-	return []JournalEntry{
+	es := []JournalEntry{
 		{At: at.Add(-8 * time.Minute), Kind: "feed", Outcome: "queued", Detail: map[string]any{"source": "rutracker", "title": name, "url": "https://rutracker.example/t/6543210",
 			"category": "f-1457", "size": 26629001216.0, "published_at": sec(at.Add(-9 * time.Minute))}},
 		{At: at.Add(-7 * time.Minute), Kind: "feed", Outcome: "already_queued", Detail: map[string]any{"source": "rutor", "title": name, "url": "https://rutor.example/torrent/987654",
@@ -410,6 +412,10 @@ func sampleJournal(at time.Time, name string) []JournalEntry {
 		{At: at.Add(3*time.Hour + 2*time.Minute), Kind: "probed", Outcome: "tracks", Detail: map[string]any{"path": "Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv", "format": "matroska",
 			"downloaded": 4194304.0, "tracks": []any{"video::V_MPEGH/ISO/HEVC", "audio:rus:A_EAC3", "audio:eng:A_EAC3", "subtitle:rus:S_TEXT/UTF8"}, "audio": map[string]any{"ru": 1.0}}},
 	}
+	for i := range es {
+		es[i].ID = int64(i + 1)
+	}
+	return es
 }
 
 func SampleData(b Base) DataPage {

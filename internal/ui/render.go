@@ -60,6 +60,18 @@ type shareArgs struct {
 	N, Total int64
 }
 
+// jtimeArgs are a journal time, At, written in the zone of B.
+type jtimeArgs struct {
+	B  Base
+	At time.Time
+}
+
+// jmarkArgs are a journal row's or step's level, S, marked in B's language.
+type jmarkArgs struct {
+	B Base
+	S Severity
+}
+
 // tipArgs are a tooltip's trigger Label and its Text.
 type tipArgs struct {
 	Label, Text string
@@ -156,6 +168,8 @@ func New() (*Renderer, error) {
 		"copyArgs": func(b Base, value, label string) copyArgs {
 			return copyArgs{B: b, Value: value, Label: label}
 		},
+		"jtimeArgs": func(b Base, at time.Time) jtimeArgs { return jtimeArgs{B: b, At: at} },
+		"jmarkArgs": func(b Base, s Severity) jmarkArgs { return jmarkArgs{B: b, S: s} },
 		"audioArgs": func(b any, a []Audio) audioArgs {
 			return audioArgs{B: baseOf(b), A: a}
 		},

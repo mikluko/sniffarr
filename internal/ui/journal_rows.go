@@ -9,6 +9,8 @@ import (
 // JournalRow is one row of the card's journal: a single entry, a fetch or
 // probe chain of attempts, or the feeds of one title in a row.
 type JournalRow struct {
+	// ID is the ID of the last step, the row's anchor.
+	ID int64
 	// Kind is "fetch", "probe" or "feed" for a group, the entry's kind for a
 	// single entry.
 	Kind string
@@ -16,13 +18,14 @@ type JournalRow struct {
 	At time.Time
 	// Gap is the time since the older row, 0 under JournalGap.
 	Gap time.Duration
-	// Severity is the worst level of the row's entries.
-	Severity Severity
+	// Severity is the worst level of the row's entries; End the last one's.
+	Severity, End Severity
 	// Outcome is the label of how the row ended.
 	Outcome string
 	// Summary is the particulars the collapsed row shows.
-	Summary []DetailPair
-	// Details is every particular of the last step.
+	Summary []SummaryPair
+	// Details is every particular of the last step but the tracks Tracks
+	// lists.
 	Details []DetailPair
 	// Steps is the group's entries, oldest first; none for a single entry.
 	Steps []JournalStep
@@ -35,7 +38,7 @@ type JournalStep struct {
 	At            time.Time
 	Kind, Outcome string
 	Severity      Severity
-	Summary       []DetailPair
+	Summary       []SummaryPair
 	Details       []DetailPair
 }
 
@@ -65,7 +68,10 @@ func (b Base) JournalRows(es []JournalEntry) []JournalRow {
 // journalRow is the row of the group of the entries at the indices.
 func (b Base) journalRow(es []JournalEntry, levels []Severity, g []int) JournalRow {
 	last := es[g[len(g)-1]]
-	r := JournalRow{Kind: last.Kind, At: last.At, Details: b.JournalDetail(last), Tracks: last.Tracks()}
+	r := JournalRow{ID: last.ID, Kind: last.Kind, At: last.At, End: levels[g[len(g)-1]], Details: b.JournalDetail(last), Tracks: last.Tracks()}
+	if len(r.Tracks) > 0 {
+		r.Details = b.journalDetail(last, "tracks")
+	}
 	for _, i := range g {
 		r.Severity = max(r.Severity, levels[i])
 	}
@@ -84,7 +90,7 @@ func (b Base) journalRow(es []JournalEntry, levels []Severity, g []int) JournalR
 		r.Outcome, r.Summary = b.feedOutcome(steps), b.feedSummary(steps)
 		return r
 	}
-	r.Outcome, r.Summary = b.chainOutcome(steps, levels[g[len(g)-1]]), b.JournalSummary(last)
+	r.Outcome, r.Summary = b.chainOutcome(steps, r.End), b.JournalSummary(last)
 	return r
 }
 
@@ -156,11 +162,11 @@ func (b Base) feedOutcome(steps []JournalEntry) string {
 
 // feedSummary is the size the last feed lists and the earliest publication
 // of the feeds.
-func (b Base) feedSummary(steps []JournalEntry) []DetailPair {
+func (b Base) feedSummary(steps []JournalEntry) []SummaryPair {
 	last := steps[len(steps)-1]
-	var out []DetailPair
+	var out []SummaryPair
 	if v, ok := last.Detail["size"]; ok {
-		out = append(out, b.journalPair(last, JournalField{"size", last.typed("size", v)}))
+		out = append(out, b.summaryPair(last, "size", last.typed("size", v)))
 	}
 	var first float64
 	for _, e := range steps {
@@ -169,9 +175,7 @@ func (b Base) feedSummary(steps []JournalEntry) []DetailPair {
 		}
 	}
 	if first != 0 {
-		p := b.journalPair(last, JournalField{"published_at", last.typed("published_at", first)})
-		p.Key = b.T("journal.key.first_published_at")
-		out = append(out, p)
+		out = append(out, b.summaryPair(last, "first_published_at", last.typed("published_at", first)))
 	}
 	return out
 }

@@ -113,6 +113,7 @@ func TestRenderAll(t *testing.T) {
 			b := r.Base(req, lang, "", []string{"ru"}, loc)
 			b.Now, b.Probes, b.Classifier, b.Feeds = now, true, true, true
 			b.Build = sampleBuild
+			b.JournalRetention = 30 * 24 * time.Hour
 			w := httptest.NewRecorder()
 			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
 				t.Fatalf("%s/%s: %v", lang, c.name, err)
@@ -536,22 +537,32 @@ func TestJournalSummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := r.Base(httptest.NewRequest("GET", "/t/x", nil), "en", "", nil, time.UTC)
-	e := JournalEntry{Kind: "fetched", Outcome: "stored", Detail: map[string]any{"name": "x", "size": 26629001216.0, "files": 14.0, "discovery": "announce"}}
-	want := []DetailPair{{"files", "14", ""}, {"size", "24.8 GB", ""}}
-	if got := b.JournalSummary(e); !slices.Equal(got, want) {
-		t.Errorf("%v, want %v", got, want)
-	}
+	en := r.Base(httptest.NewRequest("GET", "/t/x", nil), "en", "", nil, time.UTC)
+	ru := r.Base(httptest.NewRequest("GET", "/t/x", nil), "ru", "", nil, time.UTC)
+	const sibling = "3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13"
 	for _, c := range []struct {
-		detail map[string]any
-		want   string
+		name string
+		b    Base
+		e    JournalEntry
+		want []string
 	}{
-		{map[string]any{"tracks": []any{"video::hevc", "audio:rus:eac3"}}, "2"},
-		{map[string]any{"tracks": []any{"video::hevc"}, "tracks_total": 40.0}, "40"},
+		{"a count, then a value alone", en, JournalEntry{Kind: "fetched", Outcome: "stored", Detail: map[string]any{"name": "x", "size": 26629001216.0, "files": 14.0, "discovery": "announce"}},
+			[]string{"14 files", "24.8 GB"}},
+		{"labels before values, and a key with its colon", en, JournalEntry{Kind: "matched", Outcome: "arr", Detail: map[string]any{"tmdb_id": 693134.0, "type": "movie", "trigger": "arr"}},
+			[]string{"TMDB 693134", "movie", "asked by: Radarr/Sonarr"}},
+		{"a label of the kind's own", ru, JournalEntry{Kind: "classified", Outcome: "reuse", Detail: map[string]any{"kind": "movie", "from": sibling}},
+			[]string{"фильм", "у 3c1e5a07"}},
+		{"tracks read", ru, JournalEntry{Kind: "probed", Outcome: "tracks", Detail: map[string]any{"tracks": []any{"video::hevc", "audio:rus:eac3"}}},
+			[]string{"2 дорожки"}},
+		{"tracks listed in part", ru, JournalEntry{Kind: "probed", Outcome: "tracks", Detail: map[string]any{"tracks": []any{"video::hevc"}, "tracks_total": 40.0}},
+			[]string{"40 дорожек"}},
 	} {
-		got := b.JournalSummary(JournalEntry{Kind: "probed", Outcome: "tracks", Detail: c.detail})
-		if want := []DetailPair{{"tracks", c.want, ""}}; !slices.Equal(got, want) {
-			t.Errorf("tracks %v, want %v", got, want)
+		var got []string
+		for _, p := range c.b.JournalSummary(c.e) {
+			got = append(got, p.Text())
+		}
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
 	}
 }

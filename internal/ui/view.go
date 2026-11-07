@@ -434,6 +434,8 @@ type Torrent struct {
 
 	// Journal is the newest events of the torrent's life, oldest first.
 	Journal []JournalEntry
+	// JournalTotal is how many entries the journal holds in all.
+	JournalTotal int64
 
 	Files FileList
 }
@@ -458,6 +460,8 @@ type RuleHit struct {
 // JournalEntry is one event of a torrent's life; labels come from i18n
 // ("journal.kind.<kind>", "journal.outcome.<kind>.<outcome>").
 type JournalEntry struct {
+	// ID is the entry's own, unique across the journal.
+	ID      int64
 	At      time.Time
 	Kind    string
 	Outcome string
@@ -507,9 +511,16 @@ var searchIDProviders = map[string]string{"tmdbid": "TMDB", "imdbid": "IMDb", "t
 // a key by "journal.key.<kind>.<key>" or else "journal.key.<key>", or as it
 // is without a message; a value as journalValue writes its typed form.
 func (b Base) JournalDetail(e JournalEntry) []DetailPair {
+	return b.journalDetail(e, "")
+}
+
+// journalDetail is JournalDetail without the particular of the key skip.
+func (b Base) journalDetail(e JournalEntry, skip string) []DetailPair {
 	out := make([]DetailPair, 0, len(e.Detail))
 	for _, f := range e.Fields() {
-		out = append(out, b.journalPair(e, f))
+		if f.Key != skip {
+			out = append(out, b.journalPair(e, f))
+		}
 	}
 	return out
 }

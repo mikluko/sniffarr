@@ -5,9 +5,8 @@
 {{if .JournalOnly}}
 <div class="head">
   <a href="{{if $.BackURL}}{{$.BackURL}}{{else}}/torrents{{end}}">← {{$.T "card.back"}}</a>
-  <h1 class="mono">{{.InfoHash}}</h1>
+  <div class="jh1"><h1 class="mono">{{.InfoHash}}</h1>{{template "copy" (copyArgs $.Base .InfoHash ($.T "card.copy_hash"))}}</div>
 </div>
-<p class="mu">{{$.T "card.journalonly"}} {{template "copy" (copyArgs $.Base .InfoHash ($.T "card.copy_hash"))}}</p>
 {{template "journal" $}}
 {{else}}
 <div class="head">
@@ -78,25 +77,59 @@
 {{end}}
 {{end}}
 
-{{define "journal"}}
-<section>
-  <h2>{{.T "card.journal"}}</h2>
-  {{if .Torrent.Journal}}
-  <div class="scroll">
-  <table class="t">
-    <thead><tr><th>{{.T "journal.when"}}</th><th>{{.T "journal.event"}}</th><th>{{.T "journal.outcome"}}</th><th>{{.T "journal.detail"}}</th></tr></thead>
-    <tbody>
-    {{range .Torrent.Journal}}<tr><td>{{$.TimeFull .At}}</td><td>{{$.T (concat "journal.kind." .Kind)}}</td><td>{{$.T (concat "journal.outcome." .Kind "." .Outcome)}}</td>
-      <td class="wrapc"><span class="mono">{{range $i, $p := $.JournalDetail .}}{{if $i}} · {{end}}{{$p.Key}}: {{if $p.Href}}<a href="{{$p.Href}}">{{$p.Value}}</a>{{else}}{{$p.Value}}{{end}}{{end}}</span></td></tr>
-    {{end}}
-    </tbody>
-  </table>
+{{/* The journal: its rows by day, newest first, each a <details> that opens without
+     script; a row's mark of severity has its words for a screen reader. On the card of
+     a torrent the store keeps no row of, what ended it comes first. */}}
+{{define "journal"}}{{with .JournalView}}
+{{with .Gone}}<div class="jgone">
+  <span>{{with .Severity.Mark}}<i class="m {{.}}" aria-hidden="true"></i>{{end}}<b>{{.Lead}}</b>{{if .Final}}{{.Rest}}{{else}} {{$.T "journal.gone.last"}} <a href="#ev-{{.ID}}">{{.Event}}</a>.{{end}}</span>
+  <span class="mu">{{.Note}}</span>
+</div>{{end}}
+<section id="journal" class="jr">
+  <div class="jhd">
+    <h2>{{template "tip" (tipArgs (.T "card.journal") .Tip)}}{{if .Days}} <span class="mu">{{.Count .Total "journal.events"}} · {{.JournalSpan .From .To}}</span>{{end}}</h2>
+    {{- if or .Retries .Finals}}
+    <span class="jsum">{{if .Retries}}<span><i class="m warn" aria-hidden="true"></i>{{.Count (int64 .Retries) "journal.retries"}}</span>{{end}}{{if .Finals}}<span><i class="m bad" aria-hidden="true"></i>{{.Count (int64 .Finals) "journal.finals"}}</span>{{end}}</span>
+    {{- end}}
   </div>
-  {{else}}
-  <p class="mu">{{.T "journal.empty"}}</p>
-  {{end}}
+  {{if .Days}}<div class="jlist">{{template "jdays" .}}</div>
+  {{if .Cut}}<p class="mu jcut">{{.Fmt "journal.cut" (.Retention .JournalRetention true)}}</p>{{end}}
+  {{else}}<p class="mu">{{.T "journal.empty"}}</p>{{end}}
 </section>
-{{end}}
+{{end}}{{end}}
+
+{{define "jdays"}}{{$v := .}}{{range .Days}}
+{{- if .Label}}<div class="jday">{{.Label}}</div>{{end}}
+{{- range .Rows}}{{$r := .}}
+<details class="jev" id="ev-{{.ID}}"{{if and $v.Gone (eq .ID $v.Gone.ID)}} open{{end}}>
+<summary class="jsm">
+  <span class="jt">{{template "jtime" (jtimeArgs $v.Base .At)}}{{if .Gap}}<span class="jgap">{{$v.Gap .Gap}}</span>{{end}}</span>
+  <span class="jw">{{$v.RowTitle .}}</span>
+  <span class="jo{{with .End.Mark}} o-{{.}}{{end}}">{{template "jmark" (jmarkArgs $v.Base .Severity)}}{{.Outcome}}</span>
+  <span class="jk">{{range $i, $p := .Summary}}{{if $i}} · {{end}}{{if $p.Bare}}{{with $p.Key}}{{.}} {{end}}{{else}}{{$p.Key}}: {{end}}{{template "jval" $p.DetailPair}}{{end}}</span>
+  <span class="jc" aria-hidden="true">›</span>
+</summary>
+<div class="jbody">
+  {{- range $i, $s := .Steps}}
+  <div class="jstep">{{template "jtime" (jtimeArgs $v.Base .At)}}<span><b>{{$v.StepTitle $s}}</b> · <span{{with .Severity.Mark}} class="o-{{.}}"{{end}}>{{template "jmark" (jmarkArgs $v.Base .Severity)}}{{$v.T (concat "journal.outcome." .Kind "." .Outcome)}}</span>
+    {{- if and ($r.Inline $i) .Details}}<br><span class="mu">{{range $k, $p := .Details}}{{if $k}} · {{end}}{{$p.Key}}: {{template "jval" $p}}{{end}}</span>{{end}}</span></div>
+  {{- end}}
+  {{- with .KV}}
+  <div class="jkv">{{range .}}<span>{{.Key}}</span><span>{{template "jval" .}}</span>{{end}}</div>
+  {{- end}}
+  {{- with .Tracks}}
+  <table class="jtrk"><tbody>{{range .}}<tr><td class="mu">{{$v.TrackKind .}}</td><td>{{or .Lang "—"}}</td><td class="mu">{{.Codec}}</td></tr>{{end}}</tbody></table>
+  {{- end}}
+</div>
+</details>
+{{- end}}
+{{- end}}{{end}}
+
+{{define "jtime"}}<time datetime="{{.B.ISO .At}}" title="{{.B.Stamp .At}}">{{.B.Clock .At}}</time>{{end}}
+
+{{define "jmark"}}{{with .S.Mark}}<i class="m {{.}}" aria-hidden="true"></i><span class="vh">{{$.B.SeverityText $.S}}: </span>{{end}}{{end}}
+
+{{define "jval"}}{{if .Href}}<a href="{{.Href}}">{{.Value}}</a>{{else}}{{.Value}}{{end}}{{end}}
 
 {{define "files"}}
 {{with .Torrent.Files}}

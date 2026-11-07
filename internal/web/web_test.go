@@ -216,7 +216,7 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 	}
 	tasks.Finished(store.TaskPeers, now.Add(-time.Minute))
 	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds,
-		Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, Now: func() time.Time { return now }})
+		Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, JournalRetention: 30 * 24 * time.Hour, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h, tasks
 }
@@ -559,10 +559,17 @@ func TestTorrent(t *testing.T) {
 	for _, hit := range []string{"year ← «1979»", "kind.movie ← «1080p»", "quality.1080p ← «1080p»", "audio.ru ← «Rus»"} {
 		require.Contains(t, body, hit)
 	}
-	require.Contains(t, body, `<td>2026-10-20 11:00</td><td>metadata fetched</td><td>stored</td>`, "the journal, its kind and outcome translated")
-	require.Contains(t, body, `discovered by: announce · files: 10 · kind: movie · kind decided by: rules · name: `+alien+` · size: 55.0 GB`, "the detail in words")
-	require.Contains(t, body, `<td>title matched</td><td>by Jev</td>`)
-	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1)+"?lang=ru", "")), `<td>метаданные получены</td><td>сохранены</td>`, "in Russian, agreeing with the event")
+	require.Contains(t, body, `<details class="jev" id="ev-1">`, "a row anchored by its entry")
+	require.Contains(t, body, `<time datetime="2026-10-20T11:00:00Z" title="2026-10-20 11:00:00">11:00</time>`, "the time to the second in its title")
+	require.Contains(t, body, "<span class=\"jw\">Metadata fetched</span>\n  <span class=\"jo\">stored</span>\n  <span class=\"jk\">10 files · 55.0 GB</span>",
+		"the journal, its kind, outcome and main particulars in words")
+	require.Contains(t, body, "<span>discovered by</span><span>announce</span><span>files</span><span>10</span>", "every particular under the open row")
+	require.Contains(t, body, `<span class="jw">Title matched</span>`)
+	require.Contains(t, body, "2 events · Oct 20 11:00</span>", "how many, and when")
+	require.Contains(t, body, "Entries are kept for 30 days", "the retention in the heading's tooltip")
+	ru := page(t, get(t, h, "/t/"+hexOf(1)+"?lang=ru", ""))
+	require.Contains(t, ru, "<span class=\"jw\">Метаданные получены</span>\n  <span class=\"jo\">сохранены</span>", "in Russian, agreeing with the event")
+	require.Contains(t, ru, "Записи хранятся 30 дней")
 
 	body = page(t, get(t, h, "/t/"+hexOf(2), ""))
 	require.Contains(t, body, `this one by peers #2`)
@@ -592,10 +599,12 @@ func TestTorrent(t *testing.T) {
 
 	body = page(t, get(t, h, "/t/"+hexOf(20), ""))
 	require.Contains(t, body, `<h1 class="mono">`+hexOf(20)+`</h1>`, "a rejected torrent, not stored: its hash")
-	require.Contains(t, body, `<td>metadata fetched</td><td>rejected</td>`, "and its journal")
-	require.Contains(t, body, "Only the journal of this infohash is kept")
+	require.Contains(t, body, `<i class="m bad" aria-hidden="true"></i><b>No torrent: rejected Oct 20 12:00</b>, reason: under 50 MB.</span>`, "what ended it")
+	require.Contains(t, body, "The torrent was never stored, so only its journal is left. Metadata: “small”, 1.0\u00a0MB.")
+	require.Contains(t, body, `<details class="jev" id="ev-`, "and its journal")
+	require.Contains(t, body, `<span class="jo o-bad"><i class="m bad" aria-hidden="true"></i><span class="vh">final failure: </span>rejected</span>`, "a final failure marked, in words too")
 	require.NotContains(t, body, `id="files"`, "nothing of a stored torrent")
-	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(20)+"?lang=ru", "")), "Хранится только журнал этого infohash")
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(20)+"?lang=ru", "")), "<b>Раздачи нет: отброшена ")
 
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/"+hexOf(99), "").Code, "neither a torrent nor a journal")
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz", "").Code)
@@ -730,8 +739,8 @@ func TestRequestMatch(t *testing.T) {
 	body := page(t, get(t, h, "/t/"+hexOf(7), ""))
 	require.NotContains(t, body, button, "matched now")
 	require.Contains(t, body, `<a class="tm-stretch" href="/movie/949?from=%2Ft%2F`+hexOf(7)+`">Heat</a>`)
-	require.Contains(t, body, `<td>title matched</td>`, "journaled")
-	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(7)+"?lang=ru", "")), "кто запросил: запрос", "with the trigger")
+	require.Contains(t, body, `<span class="jw">Title matched</span>`, "journaled")
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(7)+"?lang=ru", "")), "<span>кто запросил</span><span>запрос</span>", "with the trigger")
 	w := post(t, h, "/t/"+hexOf(6)+"/match", "")
 	require.Equal(t, http.StatusSeeOther, w.Code, "without htmx, back to the card")
 

@@ -486,3 +486,53 @@ a.btn:hover{background:var(--muted);text-decoration:none}
   .g3{grid-template-columns:1fr}
   .g3 .gone{display:none}
 }
+
+/* journal: a row per event, chain of attempts or run of feeds, opened by
+ * its <details>: time, what, how it ended with a square for a failure, the
+ * main particulars; an open row lists its steps, particulars and tracks.
+ * The card of a torrent the store keeps no row of says first what ended it. */
+.jh1{display:flex;gap:8px;align-items:center;min-width:0}
+.jgone{display:flex;flex-direction:column;gap:4px;padding:16px;background:var(--card);border:1px solid var(--border)}
+.jr{display:flex;flex-direction:column;gap:8px}
+.jhd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
+.jhd h2{margin:0}
+.jsum{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline;font-size:12px}
+.m.bad{background:var(--bad)}
+.m.warn{background:var(--warn)}
+.o-bad{color:var(--bad)}
+.o-warn{color:var(--warn)}
+.jlist{display:flex;flex-direction:column}
+.jday{padding:14px 0 4px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted-foreground)}
+.jday:first-child{padding-top:8px}
+.jev{border-bottom:1px solid var(--border)}
+.jsm{display:grid;grid-template-columns:72px minmax(0,24ch) minmax(0,30ch) minmax(0,1fr) 16px;gap:12px;align-items:baseline;padding:6px 0;list-style:none;cursor:pointer}
+.jsm::-webkit-details-marker{display:none}
+.jsm::marker{content:""}
+.jsm:hover{background:color-mix(in oklch,var(--muted) 50%,transparent)}
+.jt,.jk,.jc,.jgap,.jstep time{color:var(--muted-foreground)}
+.jw{font-weight:600;min-width:0}
+.jk{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.jc{text-align:right}
+.jev[open] .jc{transform:rotate(90deg)}
+.jgap{display:block;font-size:11px;white-space:nowrap}
+.jbody{display:flex;flex-direction:column;gap:10px;padding:2px 0 12px 84px}
+.jstep{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;padding:3px 0;font-size:12px}
+.jstep b{font-weight:600}
+.jkv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 16px;font-size:12px}
+.jkv>span{min-width:0;overflow-wrap:anywhere}
+.jkv>span:nth-child(odd){color:var(--muted-foreground)}
+.jtrk{border-collapse:collapse;align-self:flex-start;font-size:12px}
+.jtrk td{padding:1px 16px 1px 0}
+.jcut{margin:0;font-size:12px}
+@media (max-width:640px){
+  .jgone{padding:12px}
+  .jsm{grid-template-columns:44px minmax(0,1fr) 12px;gap:2px 8px}
+  .jw{grid-column:2;grid-row:1}
+  .jo{grid-column:2;grid-row:2}
+  .jk{grid-column:2;grid-row:3;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;white-space:normal}
+  .jc{grid-column:3;grid-row:1}
+  .jbody{padding-left:0}
+  .jstep{grid-template-columns:44px minmax(0,1fr);gap:8px}
+  .jkv{grid-template-columns:minmax(0,1fr)}
+  .jkv>span:nth-child(odd){margin-top:4px}
+}

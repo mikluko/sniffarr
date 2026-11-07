@@ -672,6 +672,7 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	for _, e := range c.GetJournal() {
 		t.Journal = append(t.Journal, journalEntry(e))
 	}
+	t.JournalTotal = c.GetJournalTotal()
 	all := req.URL.Query().Get("files") == "all"
 	files := c.GetFiles()
 	t.Files = ui.FileList{InfoHash: h, Stored: len(files), All: all}
@@ -696,7 +697,7 @@ func (s *server) journalOnly(w http.ResponseWriter, req *http.Request, raw []byt
 		s.notFound(w, req)
 		return
 	}
-	t := ui.Torrent{InfoHash: hex.EncodeToString(raw), JournalOnly: true}
+	t := ui.Torrent{InfoHash: hex.EncodeToString(raw), JournalOnly: true, JournalTotal: res.Msg.GetTotal()}
 	for _, e := range res.Msg.GetEntries() {
 		t.Journal = append(t.Journal, journalEntry(e))
 	}
@@ -706,7 +707,7 @@ func (s *server) journalOnly(w http.ResponseWriter, req *http.Request, raw []byt
 // journalEntry is the UI's view of an entry, its detail decoded; a detail
 // that is not a JSON object is kept whole under "detail".
 func journalEntry(e *sniffarrv1.JournalEntry) ui.JournalEntry {
-	out := ui.JournalEntry{At: e.GetAt().AsTime(), Kind: e.GetKind(), Outcome: e.GetOutcome()}
+	out := ui.JournalEntry{ID: e.GetId(), At: e.GetAt().AsTime(), Kind: e.GetKind(), Outcome: e.GetOutcome()}
 	if d := e.GetDetail(); d != "" {
 		if err := json.Unmarshal([]byte(d), &out.Detail); err != nil {
 			out.Detail = map[string]any{"detail": d}
