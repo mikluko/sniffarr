@@ -13,13 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SNIFFARR_CLASSIFY_API_KEY` sets the key sent to the classifier's endpoint.
 - `-wait-api` polls the API at `SNIFFARR_URL` every 2 seconds and exits once its `Server` header names the binary's own version.
 - The chart gives the ui, sniff, fetch and probe pods an init container `wait-api` that holds each pod until its API serves the same version, on by default and turned off with `waitForAPI.enabled: false`.
-- The web UI's footer version links to the project page, its tooltip saying so beside the build time and commit.
+- The web UI's footer version links to its release notes, or to the project page for a build without a release's version, its tooltip saying which beside the build time and commit; the footer's tooltips open upwards.
 - The API checks the latest stable release on forge.sarak.sh once a day and reports it as `BrowseService.Settings.latest_release`, with `release_notice` saying when to announce it.
 - The web UI's footer announces a newer stable release left of the version, linking its release notes, when the build is behind it by more than one minor version or by a major one, or is a pre-release of that version or an earlier one.
 - `SNIFFARR_RELEASE_CHECK` is `lazy` by default; `eager` announces any newer stable release, and `no` or `off` turns the check off.
 
 ### Changed
 
+- The data page's chart bars show their value in the web UI's own tooltip above the bar, opened by hover or a tap, in place of the browser's.
 - The web UI shows the classifier turned off as "off" rather than "no key".
 - The classifier's layer and journal outcome `jev` are `classifier`, in the API, the metrics' `sniffarr.classify.layer` and `sniffarr.tmdb.layer`, and the stored data.
 - `BrowseService.Settings` names `SNIFFARR_CLASSIFY_API_KEY` as the classifier's setting, `SNIFFARR_CLASSIFY_URL` with another endpoint, and `TYPESAFE_API_KEY` only when that key turned it on.

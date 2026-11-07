@@ -4,16 +4,30 @@ import (
 	"github.com/mikluko/sniffarr/internal/version"
 )
 
-// ProjectURL is the project page the footer's version links to.
-func (Base) ProjectURL() string { return "https://sarak.sh/mikluko/sniffarr" }
+// projectURL is the project page.
+const projectURL = "https://sarak.sh/mikluko/sniffarr"
 
-// VersionTip is the tooltip of the footer's version: "Project page." and,
-// when the build's time and commit are known, BuildTip.
-func (b Base) VersionTip() string {
-	if tip := b.BuildTip(); tip != "" {
-		return b.T("foot.project") + " " + tip
+// VersionURL is where the footer's version links: the release notes of the
+// build's version, or the project page for a build without a release's
+// version, such as dev.
+func (b Base) VersionURL() string {
+	if version.Tagged(b.Build.Version) {
+		return projectURL + "/releases/tag/v" + b.Build.Version
 	}
-	return b.T("foot.project")
+	return projectURL
+}
+
+// VersionTip is the tooltip of the footer's version: what VersionURL opens
+// and, when the build's time and commit are known, BuildTip.
+func (b Base) VersionTip() string {
+	what := b.T("foot.project")
+	if version.Tagged(b.Build.Version) {
+		what = b.T("foot.release")
+	}
+	if tip := b.BuildTip(); tip != "" {
+		return what + " " + tip
+	}
+	return what
 }
 
 // Update is the footer's notice of a newer stable release: its Label, the

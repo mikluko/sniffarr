@@ -167,13 +167,13 @@ func TestRenderFooterVersion(t *testing.T) {
 	}
 	for page, data := range pages {
 		checkBody(t, "ru/"+page, render("ru", sampleBuild, page, data), []string{`class="tip upd"`}, []string{
-			`<span class="ver"><a class="tip vl" href="https://sarak.sh/mikluko/sniffarr" rel="noreferrer" target="_blank" aria-label="sniffarr 0.44.0-alpha.2: Страница проекта. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.">sniffarr 0.44.0-alpha.2<span class="tipb" aria-hidden="true">Страница проекта. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.</span></a></span>`,
+			`<span class="ver"><a class="tip vl" href="https://sarak.sh/mikluko/sniffarr/releases/tag/v0.44.0-alpha.2" rel="noreferrer" target="_blank" aria-label="sniffarr 0.44.0-alpha.2: Заметки к релизу. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.">sniffarr 0.44.0-alpha.2<span class="tipb" aria-hidden="true">Заметки к релизу. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.</span></a></span>`,
 		})
 		checkBody(t, "en/"+page, render("en", sampleBuild, page, data), nil, []string{
-			`aria-label="sniffarr 0.44.0-alpha.2: Project page. Built Nov 7, 2026, 14:02 UTC, commit 1a2b3c4."`,
+			`aria-label="sniffarr 0.44.0-alpha.2: Release notes. Built Nov 7, 2026, 14:02 UTC, commit 1a2b3c4."`,
 		})
 		checkBody(t, "dev/"+page, render("en", version.Info{Version: "dev"}, page, data), nil, []string{
-			`aria-label="sniffarr dev: Project page.">sniffarr dev<span class="tipb" aria-hidden="true">Project page.</span></a></span>`,
+			`<a class="tip vl" href="https://sarak.sh/mikluko/sniffarr" rel="noreferrer" target="_blank" aria-label="sniffarr dev: Project page.">sniffarr dev<span class="tipb" aria-hidden="true">Project page.</span></a></span>`,
 		})
 	}
 }

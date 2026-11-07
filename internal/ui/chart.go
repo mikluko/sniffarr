@@ -2,9 +2,11 @@ package ui
 
 import "math"
 
-// Chart is a server-rendered bar chart. The SVG uses a fixed viewBox with
-// preserveAspectRatio="none", so it stretches to the container width; axis
-// labels live in HTML around it, so text never distorts.
+// chartW and chartH are the units a Chart lays its bars out in.
+const chartW, chartH = 1100, 160
+
+// Chart is a server-rendered bar chart, laid out in chartW × chartH units
+// and drawn in percent of its box, so it stretches to the container width.
 type Chart struct {
 	W, H    int
 	Bars    []Bar
@@ -24,7 +26,7 @@ type XLabel struct {
 
 type Bar struct {
 	X, Y, W, H float64
-	Label      string // shown in the native tooltip (<title>)
+	Label      string // leads the bar's tooltip
 	Value      int64
 	Partial    bool // the period is not over: drawn lighter, out of Max and Min
 	// Projected is what the unfinished period comes to at its pace so far,
@@ -39,7 +41,7 @@ type Bar struct {
 // partial the last bar is the current, unfinished period, outlined up to
 // projected when that is above 0.
 func NewBarChart(values []int64, labels []string, labelEvery int, partial bool, projected int64) Chart {
-	const w, h = 1100, 160
+	const w, h = chartW, chartH
 	c := Chart{W: w, H: h}
 	if len(values) == 0 {
 		return c
@@ -107,6 +109,23 @@ func NewBarChart(values []int64, labels []string, labelEvery int, partial bool, 
 	}
 	return c
 }
+
+// Left is the bar's left edge in percent of the chart's width.
+func (b Bar) Left() float64 { return r1(b.X / chartW * 100) }
+
+// Width is the bar's width in percent of the chart's width.
+func (b Bar) Width() float64 { return r1(b.W / chartW * 100) }
+
+// Height is the bar's height in percent of the chart's height.
+func (b Bar) Height() float64 { return r1(b.H / chartH * 100) }
+
+// ProjHeight is the projected outline's height in percent of the chart's
+// height.
+func (b Bar) ProjHeight() float64 { return r1(b.PH / chartH * 100) }
+
+// RightHalf reports whether the bar starts in the chart's right half, where
+// its tooltip hangs to the left.
+func (b Bar) RightHalf() bool { return b.X > chartW/2 }
 
 // Last is the chart's last bar, the zero Bar when it has none.
 func (c Chart) Last() Bar {

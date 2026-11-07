@@ -132,9 +132,16 @@ button:disabled{cursor:default;opacity:.5;background:var(--background)}
 .charthead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px;margin-top:8px}
 .chart{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 8px}
 .chart .yax{display:flex;flex-direction:column;justify-content:space-between;text-align:right;color:var(--muted-foreground);font:11px var(--mono);height:160px}
-.chart svg{width:100%;height:160px;display:block;fill:var(--ln)}
-.chart svg rect.proj{fill:none;stroke:var(--ln);stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke;pointer-events:none}
-.chart svg rect:hover{fill:var(--foreground)}
+.chart .bars{position:relative;height:160px}
+.chart .col{position:absolute;top:0;bottom:0;text-decoration:none;cursor:default;outline:none}
+.chart .col i{position:absolute;left:0;right:0;bottom:0}
+.chart .bar{background:var(--ln)}
+.chart .proj{border:1px dashed var(--ln);pointer-events:none}
+.chart .col:hover .bar,.chart .col:focus .bar{background:var(--foreground)}
+.chart .col .tipb{top:auto;bottom:calc(100% + 8px)}
+.chart .col .tipb::before{top:auto;bottom:-4px}
+.chart .col.r .tipb{left:auto;right:0}
+.chart .col.r .tipb::before{left:auto;right:12px}
 .chart .xax{position:relative;height:14px;color:var(--muted-foreground);font:11px var(--mono)}
 .chart .xax span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
 .chart .xax span:first-child{transform:none}
@@ -197,8 +204,8 @@ h2.tm-title{margin:0;font-size:18px;line-height:1.3;letter-spacing:-.01em;color:
   .ver a.upd{position:static}
   .ver a.upd .tipb::before{display:none}
 }
-.ver .tipb{left:auto;right:0}
-.ver .tipb::before{left:auto;right:12px}
+.ver .tipb{left:auto;right:0;top:auto;bottom:calc(100% + 8px)}
+.ver .tipb::before{left:auto;right:12px;top:auto;bottom:-4px}
 
 /* dubs */
 .t td.au{white-space:normal;min-width:220px}

@@ -291,6 +291,7 @@
   "tvstatus.Pilot": "pilot",
   "foot.build": "Built {0} UTC, commit {1}.",
   "foot.project": "Project page.",
+  "foot.release": "Release notes.",
   "foot.update": "{0} is out",
   "foot.update_tip": "This version is more than one minor behind the latest release: {0}, the latest {1} of {2}. Links to the release notes.",
   "foot.update_tip_eager": "This version is behind the latest release: {0}, the latest {1} of {2}. Links to the release notes.",

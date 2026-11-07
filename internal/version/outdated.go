@@ -43,6 +43,13 @@ func Outdated(running, latest string, p Policy) bool {
 	}
 }
 
+// Tagged reports whether v is a MAJOR.MINOR.PATCH version with an optional
+// pre-release, the shape a release's tag carries; dev is not.
+func Tagged(v string) bool {
+	_, ok := parseSemver(v)
+	return ok
+}
+
 // Prerelease reports whether v is a MAJOR.MINOR.PATCH version with a
 // pre-release, such as "0.44.0-alpha.4".
 func Prerelease(v string) bool {

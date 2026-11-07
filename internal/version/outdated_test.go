@@ -42,6 +42,13 @@ func TestOutdated(t *testing.T) {
 	}
 }
 
+func TestTagged(t *testing.T) {
+	require.True(t, Tagged("0.44.0"))
+	require.True(t, Tagged("0.44.0-alpha.4"))
+	require.False(t, Tagged(Dev))
+	require.False(t, Tagged("0.44"))
+}
+
 func TestPrerelease(t *testing.T) {
 	require.True(t, Prerelease("0.44.0-alpha.4"))
 	require.False(t, Prerelease("0.44.0"))
