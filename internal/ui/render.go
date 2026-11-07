@@ -25,6 +25,7 @@ var pages = map[string][]string{
 	"work":     {"releases", "act"},
 	"torrent":  {"files", "act"},
 	"data":     {"data"},
+	"notfound": nil,
 }
 
 type chartArgs struct {
@@ -245,6 +246,11 @@ func Lang(w http.ResponseWriter, req *http.Request, userLocale string) string {
 // HX-Request: true + HX-Target: <fragment id> (or <fragment>-<id>) → that block alone.
 // History restores always get the full page.
 func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, page string, data any) error {
+	return r.RenderStatus(w, req, page, http.StatusOK, data)
+}
+
+// RenderStatus is Render answering with the status code.
+func (r *Renderer) RenderStatus(w http.ResponseWriter, req *http.Request, page string, code int, data any) error {
 	t, ok := r.tpl[page]
 	if !ok {
 		return fmt.Errorf("unknown page %q", page)
@@ -266,6 +272,7 @@ func (r *Renderer) Render(w http.ResponseWriter, req *http.Request, page string,
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Add("Vary", "HX-Request, HX-Target")
 	h.Set("Cache-Control", "no-store")
+	w.WriteHeader(code)
 	_, err := buf.WriteTo(w)
 	return err
 }

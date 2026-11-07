@@ -88,6 +88,7 @@ func TestRenderAll(t *testing.T) {
 		{"data-frag", "data", "/", "data", func(b Base) any { return SampleData(b) }},
 		{"data-stale", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleDataStale(b) }},
 		{"data-noprobes", "data", "/", "", func(b Base) any { b.Nav, b.Probes = "data", false; return SampleData(b) }},
+		{"notfound", "notfound", "/stats/old", "", func(b Base) any { return NotFoundPage{Base: b, Asked: "/stats/old"} }},
 	}
 	dir := os.Getenv("PREVIEW_DIR")
 	for _, lang := range []string{"ru", "en"} {

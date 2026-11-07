@@ -232,6 +232,15 @@ type Work struct {
 	FirstSeen   time.Time   // earliest release
 }
 
+// ---------- not found ----------
+
+// NotFoundPage answers a path the UI does not serve; Asked is that path,
+// as the client sent it.
+type NotFoundPage struct {
+	Base
+	Asked string
+}
+
 // ---------- title page (GET /movie/{id}, GET /tv/{id}) ----------
 
 // WorkPage is the page of one movie or series: TMDB on top, our releases below.

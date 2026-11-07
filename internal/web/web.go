@@ -112,14 +112,23 @@ func New(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("GET /tv/{id}", s.work("series"))
 	mux.HandleFunc("GET /torrents", s.torrents)
 	mux.HandleFunc("GET /top", s.top)
-	mux.HandleFunc("GET /w/{id}", redirectWork)
-	mux.HandleFunc("GET /top/w/{id}", redirectWork)
+	mux.HandleFunc("GET /w/{id}", s.redirectWork)
+	mux.HandleFunc("GET /top/w/{id}", s.redirectWork)
 	mux.HandleFunc("GET /t/{infohash}", s.torrent)
 	cop := http.NewCrossOriginProtection()
 	mux.Handle("POST /t/{infohash}/{action}", cop.Handler(http.HandlerFunc(s.requestTorrent)))
 	mux.Handle("POST /movie/{id}/{action}", cop.Handler(s.requestWork("movie")))
 	mux.Handle("POST /tv/{id}/{action}", cop.Handler(s.requestWork("series")))
+	mux.HandleFunc("/", s.notFound)
 	return mux, nil
+}
+
+// notFound answers 404 with the page naming the path asked for.
+func (s *server) notFound(w http.ResponseWriter, req *http.Request) {
+	page := ui.NotFoundPage{Base: s.base(req, s.lang(w, req), ""), Asked: req.URL.Path}
+	if err := s.ui.RenderStatus(w, req, "notfound", http.StatusNotFound, page); err != nil {
+		s.fail(w, req, "render notfound", err)
+	}
 }
 
 // locale is the locale of the person whose access token is in TokenHeader,
@@ -375,10 +384,10 @@ func pager(offset, shown int, total int64, at func(int) string) (prev, next stri
 
 // redirectWork sends GET /w/{id} and GET /top/w/{id}, the title pages of
 // earlier versions, to the page of the title, or 404 for anything else.
-func redirectWork(w http.ResponseWriter, req *http.Request) {
+func (s *server) redirectWork(w http.ResponseWriter, req *http.Request) {
 	kind, tmdbID, ok := ui.ParseWorkID(req.PathValue("id"))
 	if !ok {
-		http.NotFound(w, req)
+		s.notFound(w, req)
 		return
 	}
 	http.Redirect(w, req, ui.WorkPath(kind, tmdbID), http.StatusMovedPermanently)
@@ -390,7 +399,7 @@ func (s *server) work(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		tmdbID, err := strconv.ParseInt(req.PathValue("id"), 10, 64)
 		if err != nil || tmdbID <= 0 {
-			http.NotFound(w, req)
+			s.notFound(w, req)
 			return
 		}
 		s.workPage(w, req, ui.WorkID(kind, tmdbID), ui.WorkPath(kind, tmdbID))
@@ -403,7 +412,7 @@ func (s *server) workPage(w http.ResponseWriter, req *http.Request, id, path str
 	lang := s.lang(w, req)
 	title, err := s.cfg.Browse.Title(req.Context(), connect.NewRequest(&sniffarrv1.TitleRequest{Id: id, Lang: lang}))
 	if c := connect.CodeOf(err); c == connect.CodeNotFound || c == connect.CodeInvalidArgument {
-		http.NotFound(w, req)
+		s.notFound(w, req)
 		return
 	}
 	if err != nil {
@@ -564,7 +573,7 @@ func (s *server) top(w http.ResponseWriter, req *http.Request) {
 func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	raw, err := hex.DecodeString(req.PathValue("infohash"))
 	if err != nil || len(raw) != infohashLen {
-		http.NotFound(w, req)
+		s.notFound(w, req)
 		return
 	}
 	lang := s.lang(w, req)
@@ -642,7 +651,7 @@ func (s *server) journalOnly(w http.ResponseWriter, req *http.Request, raw []byt
 		return
 	}
 	if len(res.Msg.GetEntries()) == 0 {
-		http.NotFound(w, req)
+		s.notFound(w, req)
 		return
 	}
 	t := ui.Torrent{InfoHash: hex.EncodeToString(raw), JournalOnly: true}

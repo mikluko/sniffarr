@@ -22,6 +22,7 @@ queue card, and answers the probe routes with 404.
 | `POST /t/{infohash}/probe`, `POST /movie/{id}/probe`, `POST /tv/{id}/probe` | Asks `RequestProbe` to probe the release, or every release of the movie or series; the cards' button posts it, and is disabled without peers over 7 days, the line under the buttons saying so; its answer says when no release has a file a probe can read |
 | `POST /t/{infohash}/match` | Asks `RequestMatch` to look the release's title up on TMDB now; the card's button posts it, shown for a movie or series matched to no work. Its answer is the work it is matched to, with a link, that TMDB still finds nothing, or why it could not look: the classifier's daily budget spent, TMDB off, or TMDB not answering |
 | `GET /static/…`     | Stylesheet, scripts, the TMDB logo, and the JetBrains Mono font with its licence, `fonts/OFL.txt`. Each is cached for a year at its URL with a version in `v`, a hash of its content, where the pages link it; at any other URL the browser revalidates it by ETag                                                                                                                                                                 |
+| Any other route     | 404, with a page naming the path asked for and a link home; a `GET` of a movie, series or release the API does not know answers the same |
 
 A parameter value outside those listed is the default: every kind, quality,
 source and layer, the audio language of the page's language when it is
