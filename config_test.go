@@ -123,19 +123,41 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, dht.Config{Network: want, STUN: stun.DefaultServer}, c.dht, "a node that does not discover is passive")
 			require.Equal(t, fetch.Config{Workers: 100}, c.fetch)
 		}},
-		{name: "fetch with probes", args: []string{"-fetch", "-probe-dir", "/var/lib/sniffarr", "-probers", "2", "-probe-timeout", "5m", "-seed-max-size", "50GiB", "-seed-max-age", "72h"},
+		{name: "fetch with probes", args: []string{"-fetch", "-probe", "-probe-dir", "/var/lib/sniffarr", "-probers", "2", "-probe-timeout", "5m", "-seed-max-size", "50GiB", "-seed-max-age", "72h"},
 			env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 				require.Equal(t, sniffer.SeederConfig{Dir: "/var/lib/sniffarr", MaxBytes: 50 << 30, MaxAge: 72 * time.Hour}, c.dht.Network.Seed)
+				require.False(t, c.dht.TempSeed)
 				require.Equal(t, fetch.Config{Workers: sniffer.DefaultFetchers, Probe: true, Probers: 2, ProbeTimeout: 5 * time.Minute}, c.fetch)
 			}},
-		{name: "probe defaults", args: []string{"-fetch", "-probe-dir", "/var/lib/sniffarr"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
-			require.Equal(t, sniffer.SeederConfig{Dir: "/var/lib/sniffarr", MaxBytes: sniffer.DefaultSeedMaxBytes, MaxAge: sniffer.DefaultSeedMaxAge}, c.dht.Network.Seed)
+		{name: "probe defaults", args: []string{"-fetch", "-probe"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
+			require.Equal(t, sniffer.SeederConfig{MaxBytes: sniffer.DefaultSeedMaxBytes, MaxAge: sniffer.DefaultSeedMaxAge}, c.dht.Network.Seed)
+			require.True(t, c.dht.TempSeed, "no -probe-dir: a temporary directory")
 			require.Equal(t, fetch.Config{Workers: sniffer.DefaultFetchers, Probe: true, Probers: sniffer.DefaultProbers, ProbeTimeout: sniffer.DefaultProbeTimeout}, c.fetch)
 		}},
-		{name: "probe dir without fetch", args: []string{"-sniff", "-probe-dir", "/var/lib/sniffarr"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-probe-dir: probes are taken by -fetch, which is off"},
-		{name: "seed size in decimal units", args: []string{"-fetch", "-seed-max-size", "10GB"}, err: `invalid value "10GB" for flag -seed-max-size`},
-		{name: "zero probers", args: []string{"-fetch", "-probers", "0"}, err: "-probers: want a positive integer"},
-		{name: "zero seed age", args: []string{"-fetch", "-seed-max-age", "0s"}, err: "-probe-timeout and -seed-max-age: want positive durations"},
+		{name: "probes off", args: []string{"-fetch", "-sniff"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
+			require.Equal(t, sniffer.SeederConfig{}, c.dht.Network.Seed)
+			require.False(t, c.dht.TempSeed)
+			require.False(t, c.fetch.Probe)
+		}},
+		{name: "probe dir without probe", args: []string{"-fetch", "-probe-dir", "/var/lib/sniffarr"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-probe-dir: probes are off without -probe"},
+		{name: "probers without probe", args: []string{"-fetch", "-probers", "2"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-probers: probes are off without -probe"},
+		{name: "seed age without probe", args: []string{"-fetch", "-seed-max-age", "0s"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-seed-max-age: probes are off without -probe"},
+		{name: "probe dir without fetch", args: []string{"-sniff", "-probe", "-probe-dir", "/var/lib/sniffarr"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-probe-dir: probes are taken by -fetch, which is off"},
+		{name: "probe without fetch", args: []string{"-sniff", "-probe"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
+			require.Equal(t, sniffer.SeederConfig{}, c.dht.Network.Seed, "a node that does not fetch seeds nothing")
+			require.False(t, c.dht.TempSeed)
+		}},
+		{name: "seed size in decimal units", args: []string{"-fetch", "-probe", "-seed-max-size", "10GB"}, err: `invalid value "10GB" for flag -seed-max-size`},
+		{name: "zero probers", args: []string{"-fetch", "-probe", "-probers", "0"}, err: "-probers: want a positive integer"},
+		{name: "zero seed age", args: []string{"-fetch", "-probe", "-seed-max-age", "0s"}, err: "-probe-timeout and -seed-max-age: want positive durations"},
+		{name: "api with probes", args: []string{"-api", "-probe"}, env: apiEnv, want: func(t *testing.T, c config) {
+			require.True(t, c.api.Probes)
+			require.False(t, c.db.Tasks.NoProbes)
+		}},
+		{name: "api without probes", args: []string{"-api"}, env: apiEnv, want: func(t *testing.T, c config) {
+			require.False(t, c.api.Probes)
+			require.True(t, c.db.Tasks.NoProbes, "Trim drops the probes queued")
+		}},
 		{name: "sniff with another STUN server", args: []string{"-sniff", "-stun", "stun.example.net:3478"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 			require.Equal(t, dht.Config{Network: defaultNetwork(false), STUN: "stun.example.net:3478"}, c.dht)
 		}},
@@ -193,7 +215,7 @@ func TestLoadAPI(t *testing.T) {
 				Retention: defaultRetention, RetentionIdle: defaultRetentionIdle, RetentionJournal: defaultRetentionJournal, StatsInterval: defaultStatsInterval, Scripts: defaultScripts,
 				Probe: defaultProbe},
 			db.Config{Path: "/data/sniffarr.db",
-				Tasks: store.TaskOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor},
+				Tasks: store.TaskOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor, NoProbes: true},
 				Store: store.Options{MaxFiles: store.DefaultMaxFiles, TMDB: true}}
 	}
 	tests := []struct {
@@ -221,7 +243,7 @@ func TestLoadAPI(t *testing.T) {
 					StatsInterval: time.Minute, LazyMax: 5, LazyWait: 500 * time.Millisecond,
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian,
 					Probe: ingest.ProbeConfig{DailyBytes: 20 << 30, SearchReserve: 10, MaxBytes: 32 << 20, Lease: 5 * time.Minute, Attempts: 2, Backoff: 12 * time.Hour}}
-				d.Tasks = store.TaskOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour}
+				d.Tasks = store.TaskOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour, NoProbes: true}
 				d.Store = store.Options{MaxFiles: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: func(a *api.Config, _ *db.Config) { a.DailyTokens = 0 }},

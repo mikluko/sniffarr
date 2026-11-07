@@ -46,7 +46,9 @@ func (c components) clients() bool { return c.ui || c.sniff || c.fetch }
 func (c components) dht() bool { return c.sniff || c.fetch }
 
 type config struct {
-	on       components
+	on components
+	// probe is -probe: probes run in the components that are on.
+	probe    bool
 	api      api.Config
 	db       db.Config
 	ui       ui.Config
@@ -89,6 +91,7 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	fs.BoolVar(&c.on.ui, "ui", false, "serve the web UI, a client of the browse API")
 	fs.BoolVar(&c.on.sniff, "sniff", false, "walk the DHT and report the infohashes it reveals to the ingest API")
 	fs.BoolVar(&c.on.fetch, "fetch", false, "take fetch tasks from the ingest API and return their metadata")
+	fs.BoolVar(&c.probe, "probe", false, "probe stored releases for their tracks: -api queues probes, -fetch takes them and seeds; off, no component probes")
 	fs.IntVar(&c.dht.Network.Port, "port", sniffer.DefaultPort, "TCP and UDP port for peers and the DHT; 0 picks a free one")
 	fs.BoolVar(&c.dht.Network.UPnP, "upnp", false, "ask the gateways on the local network to forward the listening port, TCP and UDP, by UPnP")
 	fs.StringVar(&c.dht.STUN, "stun", stun.DefaultServer, "STUN server that tells -sniff its public address, which gives its node ID the BEP 42 prefix; empty leaves the ID as stored")
@@ -101,7 +104,7 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	var probeDir string
 	probers, probeTimeout, seedMaxAge := sniffer.DefaultProbers, sniffer.DefaultProbeTimeout, sniffer.DefaultSeedMaxAge
 	seedMaxSize := sizeFlag(sniffer.DefaultSeedMaxBytes)
-	fs.StringVar(&probeDir, "probe-dir", "", "directory where -fetch keeps the pieces it probes and seeds; empty probes nothing")
+	fs.StringVar(&probeDir, "probe-dir", "", "directory where -fetch keeps the pieces it probes and seeds; empty is a fresh temporary directory, removed at stop")
 	fs.IntVar(&probers, "probers", probers, "probes at once")
 	fs.DurationVar(&probeTimeout, "probe-timeout", probeTimeout, "how long one probe may take, from looking for peers to the tracks")
 	fs.Var(&seedMaxSize, "seed-max-size", "piece data kept for seeding, such as 200GiB; the oldest torrents go first beyond it")
@@ -130,14 +133,18 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	c.dht.Network.Passive = !c.on.sniff
 	c.fetch.Workers = c.dht.Network.Fetchers
 	switch {
+	case !c.probe && probeFlag(set) != "":
+		return c, fmt.Errorf("-%s: probes are off without -probe", probeFlag(set))
+	case !c.probe:
 	case probers < 1:
 		return c, errors.New("-probers: want a positive integer")
 	case probeTimeout <= 0, seedMaxAge <= 0:
 		return c, errors.New("-probe-timeout and -seed-max-age: want positive durations")
 	case probeDir != "" && !c.on.fetch:
 		return c, errors.New("-probe-dir: probes are taken by -fetch, which is off")
-	case probeDir != "":
+	case c.on.fetch:
 		c.dht.Network.Seed = sniffer.SeederConfig{Dir: probeDir, MaxBytes: int64(seedMaxSize), MaxAge: seedMaxAge}
+		c.dht.TempSeed = probeDir == ""
 		c.fetch.Probe, c.fetch.Probers, c.fetch.ProbeTimeout = true, probers, probeTimeout
 	}
 
@@ -163,8 +170,22 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 		if c.api, c.db, err = loadAPI(lookup); err != nil {
 			return c, err
 		}
+		c.api.Probes, c.db.Tasks.NoProbes = c.probe, !c.probe
 	}
 	return c, nil
+}
+
+// probeFlags are the flags that tune probes, which need -probe.
+var probeFlags = []string{"probe-dir", "probers", "probe-timeout", "seed-max-size", "seed-max-age"}
+
+// probeFlag returns the first of probeFlags that set holds, or "".
+func probeFlag(set map[string]bool) string {
+	for _, name := range probeFlags {
+		if set[name] {
+			return name
+		}
+	}
+	return ""
 }
 
 // required lists the variables the components that are on need, each once.

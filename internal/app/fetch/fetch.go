@@ -1,6 +1,6 @@
 // Package fetch is the fetching component: it takes tasks from the ingest
-// API, fetches their metadata from peers, and returns it, and, with a seed
-// directory, probes stored releases for their tracks.
+// API, fetches their metadata from peers, and returns it, and, with
+// Config.Probe, probes stored releases for their tracks.
 package fetch
 
 import (
