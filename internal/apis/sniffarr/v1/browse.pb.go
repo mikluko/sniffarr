@@ -484,7 +484,8 @@ func (x *RequestProbeRequest) GetReleases() *Releases {
 
 type RequestProbeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// How many stored releases are to be probed.
+	// How many stored releases are to be probed: 0 when none has a file a
+	// probe can read.
 	Releases      int32 `protobuf:"varint,1,opt,name=releases,proto3" json:"releases,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

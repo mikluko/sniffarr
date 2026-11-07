@@ -56,7 +56,7 @@ func TestTrimDropsTasksOfGoneReleases(t *testing.T) {
 	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
 	_, err = s.WantPeers(ctx, []Hash{a, b}, t0)
 	require.NoError(t, err)
-	_, err = s.RequestProbe(ctx, []Hash{a, b}, t0)
+	_, _, err = s.RequestProbe(ctx, []Hash{a, b}, t0)
 	require.NoError(t, err)
 	enqueue(t, q, Sample, 9)
 	_, err = s.w.ExecContext(ctx, "DELETE FROM torrent_releases WHERE infohash = ?", a[:])
@@ -84,7 +84,7 @@ func TestTrimDropsProbesNeverLeased(t *testing.T) {
 	require.NoError(t, err)
 	readable := insertProbeable(t, s, 1, "Alien.1979.1080p", 0, "Alien.1979.1080p.mkv")
 	avi := insertProbeable(t, s, 2, "Heat.1995.DVDRip", 5, "Heat.1995.DVDRip.avi")
-	_, err = s.RequestProbe(ctx, []Hash{readable, avi}, t0)
+	_, _, err = s.RequestProbe(ctx, []Hash{readable, avi}, t0)
 	require.NoError(t, err)
 
 	_, err = q.Trim(ctx, t0)

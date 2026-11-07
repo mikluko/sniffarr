@@ -138,25 +138,33 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, at time.Time) erro
 }
 
 // RequestProbe queues a probe at PriorityRequest, at the time, for each
-// stored release of the hashes, whatever its last probe and backoff, and
-// returns how many of them are stored.
-func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (int, error) {
+// stored release of the hashes a probe can read, whatever its last probe and
+// backoff, and returns how many it queued and how many of the hashes are
+// stored.
+func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (queued, stored int, err error) {
 	if len(hashes) == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
-	args := make([]any, 0, len(hashes)+2)
+	args := make([]any, 0, len(hashes)+2+len(probeExtensions))
 	args = append(args, PriorityRequest, at.UnixMilli())
 	for _, h := range hashes {
 		args = append(args, h[:])
 	}
-	res, err := s.w.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
-		SELECT 'probe', infohash, ?1, ?2 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
-		ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0`, args...)
-	if err != nil {
-		return 0, err
-	}
-	n, err := res.RowsAffected()
-	return int(n), err
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM torrent_releases WHERE infohash IN ("+placeholders(len(hashes))+")", args[2:]...).Scan(&stored); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
+			SELECT 'probe', t.infohash, ?1, ?2 FROM torrent_releases t WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND `+probeReadable+`
+			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0`, append(args, probeArgs()...)...)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		queued = int(n)
+		return err
+	})
+	return queued, stored, err
 }
 
 // ProbeLeases returns how many probes are leased and unexpired at now.

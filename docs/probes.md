@@ -24,7 +24,8 @@ Candidates are stored movies and series with a stored file of those
 formats and at least one distinct peer over the last 7 days. Probes wait in
 the API's task queue beside fetches and peer lookups, by priority and then
 the most recently queued first. Releases asked for with `RequestProbe`, the
-web UI's probe button, go first, whatever their last probe. Releases a
+web UI's probe button, go first, whatever their last probe; a request for
+a release with no file of those formats queues nothing. Releases a
 Torznab search with a query or an ID returned go next, unless their probe is
 done or its failures ran out without the peers growing. With the queue
 empty, the release never probed with the most peers over 7 days goes, then

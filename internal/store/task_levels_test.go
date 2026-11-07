@@ -16,7 +16,7 @@ func TestQueues(t *testing.T) {
 	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
 	_, err = s.WantPeers(ctx, []Hash{a}, t0)
 	require.NoError(t, err)
-	_, err = s.RequestProbe(ctx, []Hash{a}, t0)
+	_, _, err = s.RequestProbe(ctx, []Hash{a}, t0)
 	require.NoError(t, err)
 	enqueue(t, q, Arr, 11, 12)
 	enqueue(t, q, Sample, 21, 22, 23, 24, 25, 26)

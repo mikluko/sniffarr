@@ -103,7 +103,8 @@ type BrowseServiceClient interface {
 	// RequestProbe asks the prober to probe a release, or every release of a
 	// work, ahead of the releases searches return, whatever its last probe.
 	// A release without peers over the last 7 days is not probed until it has
-	// some. NOT_FOUND without a stored release.
+	// some; one with no file a probe can read is not probed. NOT_FOUND without
+	// a stored release.
 	RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error)
 }
 
@@ -299,7 +300,8 @@ type BrowseServiceHandler interface {
 	// RequestProbe asks the prober to probe a release, or every release of a
 	// work, ahead of the releases searches return, whatever its last probe.
 	// A release without peers over the last 7 days is not probed until it has
-	// some. NOT_FOUND without a stored release.
+	// some; one with no file a probe can read is not probed. NOT_FOUND without
+	// a stored release.
 	RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error)
 }
 

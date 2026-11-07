@@ -508,7 +508,9 @@ func TestRequests(t *testing.T) {
 	frag := fragment(t, post(t, h, "/t/"+hexOf(1)+"/peers", "act-peers"), "act-peers")
 	require.Equal(t, `<span id="act-peers" class="mu" role="status">peer lookup requested</span>`, strings.TrimSpace(frag))
 	frag = fragment(t, post(t, h, "/movie/348/probe", "act-probe"), "act-probe")
-	require.Contains(t, frag, "probe requested: 2 releases", "every release of the title")
+	require.Equal(t, `<span id="act-probe" class="mu" role="status">probe requested</span>`, strings.TrimSpace(frag), "the one release of the title a probe can read")
+	frag = fragment(t, post(t, h, "/t/"+hexOf(2)+"/probe", "act-probe"), "act-probe")
+	require.Equal(t, `<span id="act-probe" class="mu" role="status">no file a probe can read</span>`, strings.TrimSpace(frag))
 	frag = fragment(t, post(t, h, "/tv/95396/peers", "act-peers"), "act-peers")
 	require.Contains(t, frag, "peer lookup requested")
 

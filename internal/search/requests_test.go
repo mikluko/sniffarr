@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -67,6 +68,13 @@ func TestBrowserRequestProbe(t *testing.T) {
 
 	_, err = b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byHash(99)}))
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
+
+	_, _, err = b.Store.Insert(ctx, store.Torrent{Hash: hash(42), Name: "Heat.1995.DVDRip", Size: 1 << 30, Discovery: "sample", SeenAt: now,
+		Files: []rules.File{{Path: "Heat.1995.DVDRip.avi", Size: 1 << 30}}, Kind: "movie", KindLayer: store.LayerRules})
+	require.NoError(t, err)
+	res, err = b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byHash(42)}))
+	require.NoError(t, err, "a stored release a probe cannot read is found")
+	require.Zero(t, res.Msg.GetReleases(), "and not to be probed")
 }
 
 func TestBrowserStatsQueue(t *testing.T) {
