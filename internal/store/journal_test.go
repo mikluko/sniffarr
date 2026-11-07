@@ -146,6 +146,22 @@ func TestJournalProbedTracksBounded(t *testing.T) {
 		"audio:rus:x" + strings.Repeat("ж", (1<<10-len("audio:rus:x"))/2) + "…",
 		"video::h264",
 	}, d.Tracks, "each track cut at 1 KiB on a rune boundary")
+	require.NotContains(t, detail, "tracks_total", "every track kept")
+
+	many := make([]Track, journalTracks+8)
+	for i := range many {
+		many[i] = Track{Kind: "subtitle", Language: "eng", Codec: "S_TEXT/UTF8"}
+	}
+	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeTracks, Tracks: many}, t0.Add(time.Hour)))
+	got, err := s.Journal(ctx, h, 1)
+	require.NoError(t, err)
+	var m struct {
+		Tracks      []string
+		TracksTotal int `json:"tracks_total"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(got[0].Detail), &m))
+	require.Len(t, m.Tracks, journalTracks, "the first ones")
+	require.Equal(t, journalTracks+8, m.TracksTotal, "with how many there were")
 }
 
 // counters returns what the reader's counters counted, by name, unit and

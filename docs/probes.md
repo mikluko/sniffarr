@@ -37,12 +37,14 @@ probe cannot read), or failed (fewer than `-min-peers` peers within
 before `-probe-timeout`). The release's journal records a request, and once
 a day a search that queued or moved its probe, with the query, the first
 hand-out of each attempt and of each move ahead with the piece data it may
-download, and each outcome with the piece data downloaded, the leases the
-attempt took when it took more than one and, for a failure, whether the attempts have run out and, when it waits out a backoff, when it
-is due again. A failed probe is repeated after
-`SNIFFARR_PROBE_BACKOFF`, doubled for each failure before; a requested or
-searched one stays queued as searched until then, unless it was requested
-while the failed attempt was in flight, which keeps the request. Once
+download, and each outcome with the piece data downloaded, the first 32
+tracks read with how many there were when more, the leases the attempt took
+when it took more than one and, for a failure, whether the attempts have run
+out and, when it waits out a backoff, when it is due again. A failed probe
+is repeated after `SNIFFARR_PROBE_BACKOFF`, doubled for each failure
+before; a requested or searched one stays queued as searched until then,
+unless it was requested while the failed attempt was in flight, which keeps
+the request. Once
 `SNIFFARR_PROBE_ATTEMPTS` have failed since the release was last read, the
 backoff stays at its last doubling and the release is probed again only once
 it has twice the peers over 7 days it had at its last probe, and at least two

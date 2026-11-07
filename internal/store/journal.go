@@ -70,6 +70,9 @@ const journalReuse = 50
 // nothing, or failed, is journaled on; a bigger key's is journaled on none.
 const journalNoMatch = 50
 
+// journalTracks is the most tracks a probed/tracks entry lists.
+const journalTracks = 32
+
 // journalWantedFor is how long after a probe_wanted entry a search that
 // returns the release again is not journaled.
 const journalWantedFor = 24 * time.Hour

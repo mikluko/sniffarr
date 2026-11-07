@@ -464,7 +464,8 @@ func probed(ctx context.Context, tx *sql.Tx, id int64, h Hash, p Probe, at time.
 // from the queue, and replaces its tracks. With the tracks read, each audio
 // language of Options gets probability 1 when an audio track is in it, and 0
 // when every audio track gives another language, over a marker unless the
-// release stores an audio file of its own.
+// release stores an audio file of its own. Its journal entry lists the first
+// journalTracks tracks, with tracks_total when there were more.
 func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		var id int64
@@ -501,9 +502,12 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 				return err
 			}
 		}
-		tracks := make([]string, len(p.Tracks))
-		for i, t := range p.Tracks {
+		tracks := make([]string, min(len(p.Tracks), journalTracks))
+		for i, t := range p.Tracks[:len(tracks)] {
 			tracks[i] = t.Kind + ":" + t.Language + ":" + t.Codec
+		}
+		if len(tracks) < len(p.Tracks) {
+			d["tracks_total"] = len(p.Tracks)
 		}
 		audio, err := audioProbabilities(ctx, tx, id)
 		if err != nil {
