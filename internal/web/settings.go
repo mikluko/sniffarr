@@ -24,7 +24,7 @@ type Settings struct {
 	Languages []audio.Language
 	// Probes is whether it probes releases.
 	Probes bool
-	// Classifier is whether it runs the Jev classifier.
+	// Classifier is whether it runs the classifier.
 	Classifier bool
 	// Feeds is whether it reads tracker feeds.
 	Feeds bool

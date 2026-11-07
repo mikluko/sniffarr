@@ -62,7 +62,7 @@ type Config struct {
 	// it; false leaves the probe button, meter and queue out of every page
 	// and answers a request for a probe with 404.
 	Probes bool
-	// Classifier is whether the API runs the Jev classifier, as
+	// Classifier is whether the API runs the classifier, as
 	// ObtainSettings returns it; false leaves its meter and layer out of the
 	// data page.
 	Classifier bool

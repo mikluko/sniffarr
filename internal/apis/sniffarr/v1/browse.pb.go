@@ -28,7 +28,7 @@ type Feature int32
 
 const (
 	Feature_FEATURE_UNSPECIFIED Feature = 0
-	// The Jev classifier, which decides the kind of a release the rules and
+	// The classifier, which decides the kind of a release the rules and
 	// reuse leave unknown.
 	Feature_FEATURE_CLASSIFIER Feature = 1
 	// Probes, which read a release's tracks from its first pieces.

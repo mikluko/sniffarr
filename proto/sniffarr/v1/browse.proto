@@ -146,7 +146,7 @@ message SettingsResponse {
 // Feature is an optional feature of the server, off unless configured.
 enum Feature {
   FEATURE_UNSPECIFIED = 0;
-  // The Jev classifier, which decides the kind of a release the rules and
+  // The classifier, which decides the kind of a release the rules and
   // reuse leave unknown.
   FEATURE_CLASSIFIER = 1;
   // Probes, which read a release's tracks from its first pieces.

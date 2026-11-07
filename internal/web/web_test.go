@@ -575,7 +575,7 @@ func TestTorrent(t *testing.T) {
 	for _, hit := range []string{"year ← «1979»", "kind.movie ← «1080p»", "quality.1080p ← «1080p»", "audio.ru ← «Rus»"} {
 		require.Contains(t, body, hit)
 	}
-	require.Contains(t, body, `<details class="jev" id="ev-1">`, "a row anchored by its entry")
+	require.Contains(t, body, `<details class="jrow" id="ev-1">`, "a row anchored by its entry")
 	require.Contains(t, body, `<time datetime="2026-10-20T11:00:00Z" title="2026-10-20 11:00:00">11:00</time>`, "the time to the second in its title")
 	require.Contains(t, body, "<span class=\"jw\">Metadata fetched</span>\n  <span class=\"jo\">stored</span>\n  <span class=\"jk\">10 files · 55.0 GB</span>",
 		"the journal, its kind, outcome and main particulars in words")
@@ -617,7 +617,7 @@ func TestTorrent(t *testing.T) {
 	require.Contains(t, body, `<h1 class="mono">`+hexOf(20)+`</h1>`, "a rejected torrent, not stored: its hash")
 	require.Contains(t, body, `<i class="m bad" aria-hidden="true"></i><b>No torrent: rejected Oct 20 12:00</b>, reason: under 50 MB.</span>`, "what ended it")
 	require.Contains(t, body, "The torrent was never stored, so only its journal is left. Metadata: “small”, 1.0\u00a0MB.")
-	require.Contains(t, body, `<details class="jev" id="ev-`, "and its journal")
+	require.Contains(t, body, `<details class="jrow" id="ev-`, "and its journal")
 	require.Contains(t, body, `<span class="jo o-bad"><i class="m bad" aria-hidden="true"></i><span class="vh">final failure: </span>rejected</span>`, "a final failure marked, in words too")
 	require.NotContains(t, body, `id="files"`, "nothing of a stored torrent")
 	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(20)+"?lang=ru", "")), "<b>Раздачи нет: отброшена ")
@@ -629,7 +629,7 @@ func TestTorrent(t *testing.T) {
 func TestTorrentJournal(t *testing.T) {
 	h := handler(t, nil)
 	card := "/t/" + hexOf(22)
-	rows := func(body string) int { return strings.Count(body, `<details class="jev"`) }
+	rows := func(body string) int { return strings.Count(body, `<details class="jrow"`) }
 
 	body := page(t, get(t, h, card, ""))
 	require.Equal(t, ui.JournalCardRows, rows(body), "the card's newest rows")
@@ -664,7 +664,7 @@ func TestTorrentJournalPages(t *testing.T) {
 
 	frag := page(t, get(t, h, card+"/journal?before="+before+"&day="+day, "jpage-"+before))
 	require.False(t, strings.HasPrefix(frag, "<!doctype html>"), "the rows alone")
-	require.Equal(t, 1, strings.Count(frag, `<details class="jev"`), "the older listings, in a row")
+	require.Equal(t, 1, strings.Count(frag, `<details class="jrow"`), "the older listings, in a row")
 	require.NotContains(t, frag, `class="jday"`, "the day the rows above end on is not headed again")
 	require.NotContains(t, frag, `class="jfoot"`, "nothing older")
 	frag = page(t, get(t, h, card+"/journal?before="+before+"&day=2026-01-01", "jpage-"+before))
@@ -674,7 +674,7 @@ func TestTorrentJournalPages(t *testing.T) {
 	require.Equal(t, http.StatusSeeOther, w.Code)
 	require.Equal(t, card+"?before="+before+"&journal=all#journal", w.Header().Get("Location"))
 	body = page(t, get(t, h, card+"?before="+before+"&journal=all", ""))
-	require.Contains(t, body, `<details class="jev"`, "without htmx, the card with that page")
+	require.Contains(t, body, `<details class="jrow"`, "without htmx, the card with that page")
 	require.NotContains(t, body, "No torrent", "which is not the newest, so says nothing of the end")
 	require.NotContains(t, body, `class="jfoot"`)
 }
@@ -768,7 +768,7 @@ func TestFeatures(t *testing.T) {
 	h, tasks := handlerTasks(t, "ru", Config{Probes: true, Classifier: true, Feeds: true})
 	body := page(t, get(t, h, "/", ""))
 	for _, want := range []string{
-		`<span>Jev classifier</span>`, `<span>working</span>`, `25.0% of the daily limit`,
+		`<span>Classifier</span>`, `<span>working</span>`, `25.0% of the daily limit`,
 		`<span class="dw"><i class="m"></i>no probers</span>`, "The probe queue grows: 0\u00a0tasks.",
 		`<span>on: ru</span>`, `<span>on: rutor</span>`, `>P2: feeds<`,
 	} {
@@ -781,7 +781,7 @@ func TestFeatures(t *testing.T) {
 
 	body = page(t, get(t, handlerWith(t, "", Config{}), "/", ""))
 	for _, want := range []string{
-		`<span class="mu">no key</span>`, "Turned on by the API key in SNIFFARR_CLASSIFY_API_KEY at start.",
+		`<span class="mu">off</span>`, "Turned on by SNIFFARR_CLASSIFY_API_KEY at start.",
 		"Turned on by the -probe flag at start.", "Turned on at start, by the languages in SNIFFARR_AUDIO_LANGUAGES.",
 		"Turned on at start, by the feeds in SNIFFARR_FEEDS.", `>P2: feeds (off)<`,
 	} {

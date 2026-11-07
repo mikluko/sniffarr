@@ -23,7 +23,7 @@ type Base struct {
 	Radarr     string       // root URL of a Radarr the cards link movies to; "" links none
 	Sonarr     string       // root URL of a Sonarr the cards link series to; "" links none
 	Probes     bool         // whether the API probes releases; false hides the probe button, meter and queue
-	Classifier bool         // whether the API runs the Jev classifier; false hides its meter and layer on the data page
+	Classifier bool         // whether the API runs the classifier; false hides its meter and layer on the data page
 	Feeds      bool         // whether the API reads tracker feeds; false labels P2 as feeds turned off
 	Build      version.Info // the build the footer names
 	Loc        *time.Location

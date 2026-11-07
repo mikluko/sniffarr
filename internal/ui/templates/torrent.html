@@ -121,7 +121,7 @@
 {{define "jdays"}}{{$v := .}}{{range .Days}}
 {{- if .Label}}<div class="jday">{{.Label}}</div>{{end}}
 {{- range .Rows}}{{$r := .}}
-<details class="jev" id="ev-{{.ID}}"{{if and $v.Gone (eq .ID $v.Gone.ID)}} open{{end}}>
+<details class="jrow" id="ev-{{.ID}}"{{if and $v.Gone (eq .ID $v.Gone.ID)}} open{{end}}>
 <summary class="jsm">
   <span class="jt">{{template "jtime" (jtimeArgs $v.Base .At)}}{{if .Gap}}<span class="jgap">{{$v.Gap .Gap}}</span>{{end}}</span>
   <span class="jw">{{$v.RowTitle .}}</span>

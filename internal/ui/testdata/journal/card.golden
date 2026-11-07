@@ -12,7 +12,7 @@
   details | time of the Radarr/Sonarr event: 19:05 · previous work ID: 41 · TMDB ID: 693134 · asked by: Radarr/Sonarr · type: movie
 2026-10-18 21:07 +0s matched [normal/normal] by an earlier match of the title | TMDB 318846 · confidence 0.8 · TMDB search
   details | confidence: 0.8 · match made: 2026-10-17 15:05 · matched by: TMDB search · TMDB ID: 318846 · type: movie
-2026-10-18 21:06 +0s classified [normal/normal] by the Jev model | Russian 88% · source web · confidence 0.8
+2026-10-18 21:06 +0s classified [normal/normal] by the classifier | Russian 88% · source web · confidence 0.8
   details | audio track probability: Russian 88% · source: web · source confidence: 0.8 · asked by: the worker
 2026-10-18 21:05 +0s classified [normal/normal] kind taken from a sibling | movie · from 3c1e5a07 </t/3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13>
   details | kind taken from: 3c1e5a07 </t/3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13> · kind: movie
@@ -42,7 +42,7 @@
   details | время события Radarr/Sonarr: 19:05 · ID прежнего произведения: 41 · TMDB ID: 693134 · кто запросил: Radarr/Sonarr · тип: фильм
 18.10.2026 21:07 +0s matched [normal/normal] по прежнему сопоставлению | TMDB 318846 · уверенность 0,8 · поиск TMDB
   details | уверенность: 0,8 · сопоставлено: 17.10.2026 15:05 · чем сопоставлено: поиск TMDB · TMDB ID: 318846 · тип: фильм
-18.10.2026 21:06 +0s classified [normal/normal] моделью Jev | русская 88% · источник web · уверенность 0,8
+18.10.2026 21:06 +0s classified [normal/normal] классификатором | русская 88% · источник web · уверенность 0,8
   details | вероятность звуковой дорожки: русская 88% · источник: web · уверенность в источнике: 0,8 · кто запросил: фоновая обработка
 18.10.2026 21:05 +0s classified [normal/normal] вид взят у раздачи того же названия | фильм · у 3c1e5a07 </t/3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13>
   details | вид взят у: 3c1e5a07 </t/3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13> · вид: фильм
