@@ -7,7 +7,7 @@
   <a href="{{if $.BackURL}}{{$.BackURL}}{{else}}/torrents{{end}}">← {{$.T "card.back"}}</a>
   <h1 class="mono">{{.InfoHash}}</h1>
 </div>
-<p class="mu">{{$.T "card.journalonly"}} <button type="button" data-copy="{{.InfoHash}}">{{$.T "card.copy"}}</button></p>
+<p class="mu">{{$.T "card.journalonly"}} {{template "copy" (copyArgs $.Base .InfoHash ($.T "card.copy_hash"))}}</p>
 {{template "journal" $}}
 {{else}}
 <div class="head">
