@@ -97,7 +97,8 @@ func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
 	return handlerWith(t, langs, Config{Locales: l})
 }
 
-// handlerWith is handlerLangs taking Locales and SeerrURL from cfg.
+// handlerWith is handlerLangs taking Locales and the Seerr, Radarr and
+// Sonarr URLs from cfg.
 func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 	t.Helper()
 	ctx := context.Background()
@@ -177,7 +178,7 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 		tasks.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
 	}
 	tasks.Finished(store.TaskPeers, now.Add(-time.Minute))
-	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages)), Languages: languages, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, Location: time.UTC, Now: func() time.Time { return now }})
+	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages)), Languages: languages, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
 }
@@ -425,6 +426,14 @@ func TestWork(t *testing.T) {
 		"a Seerr link after the others")
 	require.Contains(t, page(t, get(t, seerr, "/tv/95396", "")), `<a href="https://seerr.example.com/tv/95396" rel="noreferrer" target="_blank">Seerr</a>`, "a series under /tv")
 	require.Contains(t, page(t, get(t, seerr, "/t/"+hexOf(1), "")), `<a href="https://seerr.example.com/movie/348" rel="noreferrer" target="_blank">Seerr</a>`, "the release card too")
+	require.NotContains(t, page(t, get(t, seerr, "/movie/348", "")), "Radarr", "no Radarr configured")
+
+	arr := handlerWith(t, "ru", Config{SeerrURL: "https://seerr.example.com", RadarrURL: "https://radarr.example.com", SonarrURL: "https://sonarr.example.com"})
+	require.Contains(t, page(t, get(t, arr, "/movie/348", "")), `<a href="https://seerr.example.com/movie/348" rel="noreferrer" target="_blank">Seerr</a> · <a href="https://radarr.example.com/add/new?term=tmdb%3A348" rel="noreferrer" target="_blank">Radarr</a>`,
+		"a movie in Radarr, after Seerr")
+	require.NotContains(t, page(t, get(t, arr, "/movie/348", "")), "Sonarr", "a movie is not in Sonarr")
+	require.Contains(t, page(t, get(t, arr, "/tv/95396", "")), `<a href="https://sonarr.example.com/add/new?term=tmdb%3A95396" rel="noreferrer" target="_blank">Sonarr</a>`, "a series in Sonarr")
+	require.Contains(t, page(t, get(t, arr, "/t/"+hexOf(1), "")), `<a href="https://radarr.example.com/add/new?term=tmdb%3A348" rel="noreferrer" target="_blank">Radarr</a>`, "the release card too")
 }
 
 func TestTorrent(t *testing.T) {

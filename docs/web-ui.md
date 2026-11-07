@@ -38,7 +38,10 @@ the access token in the `X-Forwarded-Access-Token` header, which oauth2-proxy
 can pass on; a locale is kept for 10 minutes per token. Adult releases do not
 show in it. With `SNIFFARR_SEERR_URL` set, a matched title's card and release
 cards link it in that Seerr, at `/movie/<tmdb id>` or `/tv/<tmdb id>` under
-it.
+it. With `SNIFFARR_RADARR_URL` or `SNIFFARR_SONARR_URL` set, they link a
+matched movie in that Radarr and a series in that Sonarr, at
+`/add/new?term=tmdb:<tmdb id>` under it: the app's search for the work,
+which leads on to the work's page when the work is in its library.
 
 The chart serves the UI with `ui.enabled`, behind the Service `<release>-ui`;
 see [Helm](helm.md).

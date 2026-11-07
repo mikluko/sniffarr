@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- With `SNIFFARR_RADARR_URL` or `SNIFFARR_SONARR_URL` set for the UI, the title page and the release card link a matched movie in that Radarr and a series in that Sonarr.
+- `SNIFFARR_RADARR_API_URL` and `SNIFFARR_SONARR_API_URL` name the root of the app's v3 API where the API reaches it by another address than the root URL, such as a cluster service; unset, the API uses `/api/v3` under `SNIFFARR_RADARR_URL` or `SNIFFARR_SONARR_URL`, as before.
+
 ### Changed
 
 - The notes under the task queue on the data page and under the top's controls open as a tooltip from a `?` next to them.

@@ -103,8 +103,8 @@ type Feeds struct {
 // feedTimeout bounds one request to a feed.
 const feedTimeout = time.Minute
 
-// ArrHistory is where a Radarr or Sonarr serves its API; a zero one imports
-// no history.
+// ArrHistory is where a Radarr or Sonarr serves its API, URL the root of
+// its v3 API; a zero one imports no history.
 type ArrHistory struct {
 	URL    string
 	APIKey string

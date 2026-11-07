@@ -103,6 +103,12 @@ func TestLoadComponents(t *testing.T) {
 				require.Equal(t, api.Config{}, c.api, "the API's variables are not read, the unknown audio language among them")
 				require.Equal(t, db.Config{}, c.db)
 			}},
+		{name: "ui with Radarr and Sonarr", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_RADARR_URL", "https://radarr.example.com", "SNIFFARR_SONARR_URL", "https://example.com/sonarr/"},
+			want: func(t *testing.T, c config) {
+				require.Equal(t, ui.Config{Addr: defaultUIAddr, RadarrURL: "https://radarr.example.com", SonarrURL: "https://example.com/sonarr/"}, c.ui, "no API key: the UI only links them")
+			}},
+		{name: "ui with a Sonarr that is not a URL", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_SONARR_URL", "sonarr:8989"},
+			err: "SNIFFARR_SONARR_URL: want an http or https URL"},
 		{name: "ui without a URL", args: []string{"-ui"}, err: "SNIFFARR_URL is not set"},
 		{name: "sniff and fetch", args: []string{"-sniff", "-fetch"}, env: []string{"SNIFFARR_URL", "https://api.example.com"}, want: func(t *testing.T, c config) {
 			require.Equal(t, components{sniff: true, fetch: true}, c.on)
@@ -247,11 +253,26 @@ func TestLoadAPI(t *testing.T) {
 			"SNIFFARR_SONARR_URL", "https://example.org/sonarr", "SNIFFARR_SONARR_API_KEY", "sk"),
 			want: func(a *api.Config, _ *db.Config) {
 				a.WebhookToken = "wh"
-				a.Radarr = api.ArrHistory{URL: "http://radarr:7878", APIKey: "rk"}
-				a.Sonarr = api.ArrHistory{URL: "https://example.org/sonarr", APIKey: "sk"}
+				a.Radarr = api.ArrHistory{URL: "http://radarr:7878/api/v3", APIKey: "rk"}
+				a.Sonarr = api.ArrHistory{URL: "https://example.org/sonarr/api/v3", APIKey: "sk"}
 			}},
-		{name: "arr url without key", env: with("SNIFFARR_SONARR_URL", "http://sonarr:8989"), err: "SNIFFARR_SONARR_URL and SNIFFARR_SONARR_API_KEY: set both or neither"},
-		{name: "arr key without url", env: with("SNIFFARR_RADARR_API_KEY", "rk"), err: "SNIFFARR_RADARR_URL and SNIFFARR_RADARR_API_KEY: set both or neither"},
+		{name: "arr API URL over the root", env: with("SNIFFARR_RADARR_URL", "https://radarr.example.com/", "SNIFFARR_RADARR_API_URL", "http://radarr.media:7878/api/v3", "SNIFFARR_RADARR_API_KEY", "rk"),
+			want: func(a *api.Config, _ *db.Config) {
+				a.Radarr = api.ArrHistory{URL: "http://radarr.media:7878/api/v3", APIKey: "rk"}
+			}},
+		{name: "arr API URL alone", env: with("SNIFFARR_SONARR_API_URL", "http://sonarr.media:8989/api/v3", "SNIFFARR_SONARR_API_KEY", "sk"),
+			want: func(a *api.Config, _ *db.Config) {
+				a.Sonarr = api.ArrHistory{URL: "http://sonarr.media:8989/api/v3", APIKey: "sk"}
+			}},
+		{name: "arr root with a slash", env: with("SNIFFARR_RADARR_URL", "https://radarr.example.com/", "SNIFFARR_RADARR_API_KEY", "rk"),
+			want: func(a *api.Config, _ *db.Config) {
+				a.Radarr = api.ArrHistory{URL: "https://radarr.example.com/api/v3", APIKey: "rk"}
+			}},
+		{name: "arr API URL without key", env: with("SNIFFARR_RADARR_API_URL", "http://radarr:7878/api/v3"),
+			err: "SNIFFARR_RADARR_URL or SNIFFARR_RADARR_API_URL, and SNIFFARR_RADARR_API_KEY: set a URL with the key or neither"},
+		{name: "arr API URL not http", env: with("SNIFFARR_SONARR_API_URL", "sonarr:8989/api/v3", "SNIFFARR_SONARR_API_KEY", "sk"), err: "SNIFFARR_SONARR_API_URL: want an http or https URL"},
+		{name: "arr url without key", env: with("SNIFFARR_SONARR_URL", "http://sonarr:8989"), err: "SNIFFARR_SONARR_URL or SNIFFARR_SONARR_API_URL, and SNIFFARR_SONARR_API_KEY: set a URL with the key or neither"},
+		{name: "arr key without url", env: with("SNIFFARR_RADARR_API_KEY", "rk"), err: "SNIFFARR_RADARR_URL or SNIFFARR_RADARR_API_URL, and SNIFFARR_RADARR_API_KEY: set a URL with the key or neither"},
 		{name: "arr url not http", env: with("SNIFFARR_RADARR_URL", "radarr:7878", "SNIFFARR_RADARR_API_KEY", "rk"), err: "SNIFFARR_RADARR_URL: want an http or https URL"},
 	}
 	for _, tt := range tests {

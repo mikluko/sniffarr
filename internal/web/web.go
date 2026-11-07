@@ -60,6 +60,10 @@ type Config struct {
 	// SeerrURL is the base URL of a Seerr the title and release cards link
 	// a matched title to; "" links none.
 	SeerrURL string
+	// RadarrURL and SonarrURL are the root URLs of the Radarr and Sonarr
+	// the title and release cards link a matched movie and series to; ""
+	// links none.
+	RadarrURL, SonarrURL string
 	// Location is the time zone of dates; time.Local when nil.
 	Location *time.Location
 	// Log discards everything when nil.
@@ -136,6 +140,7 @@ func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	b := s.ui.Base(req, lang, nav, s.tags, s.location(req))
 	b.Now = s.cfg.Now()
 	b.Seerr = s.cfg.SeerrURL
+	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
 	return b
 }
 
