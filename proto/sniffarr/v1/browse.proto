@@ -145,6 +145,20 @@ message SettingsResponse {
   // absent while the release check is off, before its first answer, and
   // after a failed one.
   ProjectRelease latest_release = 5;
+  // How far behind latest_release a stable build is before the web UI
+  // announces it; set whenever latest_release is.
+  ReleaseNotice release_notice = 6;
+}
+
+// ReleaseNotice is how far behind the latest stable release a stable build
+// is before it is announced. A pre-release build is announced as soon as a
+// stable release of its base version or later is out.
+enum ReleaseNotice {
+  RELEASE_NOTICE_UNSPECIFIED = 0;
+  // A later major, or a minor more than one ahead.
+  RELEASE_NOTICE_LAZY = 1;
+  // Any later release.
+  RELEASE_NOTICE_EAGER = 2;
 }
 
 // ProjectRelease is a published release of sniffarr.

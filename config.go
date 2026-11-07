@@ -32,6 +32,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/stun"
 	"github.com/mikluko/sniffarr/internal/tmdb"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // components are the flags that switch each component on.
@@ -342,7 +343,7 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Feeds, err = loadFeeds(getenv); err != nil {
 		return a, d, err
 	}
-	if a.ReleaseCheck, err = boolean(getenv, "SNIFFARR_RELEASE_CHECK", true); err != nil {
+	if a.ReleaseCheck, a.ReleaseNotice, err = releaseCheck(getenv("SNIFFARR_RELEASE_CHECK")); err != nil {
 		return a, d, err
 	}
 	if a.TMDBKey = getenv("TMDB_API_KEY"); a.TMDBKey == "" {
@@ -509,16 +510,18 @@ func positive(getenv func(string) string, name string, def int) (int, error) {
 	return n, nil
 }
 
-func boolean(getenv func(string) string, name string, def bool) (bool, error) {
-	v := getenv(name)
-	if v == "" {
-		return def, nil
+// releaseCheck reads SNIFFARR_RELEASE_CHECK: "no" or "off" checks nothing,
+// "lazy", the default, and "eager" check and set the notice's policy.
+func releaseCheck(v string) (bool, version.Policy, error) {
+	switch v {
+	case "", "lazy":
+		return true, version.Lazy, nil
+	case "eager":
+		return true, version.Eager, nil
+	case "no", "off":
+		return false, version.Lazy, nil
 	}
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		return false, fmt.Errorf("%s: want true or false", name)
-	}
-	return b, nil
+	return false, version.Lazy, fmt.Errorf("SNIFFARR_RELEASE_CHECK: want no, off, lazy or eager, got %q", v)
 }
 
 func percent(getenv func(string) string, name string, def int) (int, error) {

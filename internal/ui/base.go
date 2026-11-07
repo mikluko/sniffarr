@@ -35,6 +35,9 @@ type Base struct {
 
 	// Latest is the latest stable release the API knows; zero when none.
 	Latest latest.Release
+	// Notice is how far behind Latest a stable build is before it is
+	// announced.
+	Notice version.Policy
 
 	msgs map[string]string
 }

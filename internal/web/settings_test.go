@@ -18,6 +18,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
 	"github.com/mikluko/sniffarr/internal/latest"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 func TestSettingsOfLatestRelease(t *testing.T) {
@@ -27,6 +28,11 @@ func TestSettingsOfLatestRelease(t *testing.T) {
 		Version: "0.46.0", Published: timestamppb.New(published), Url: url}})
 	require.NoError(t, err)
 	require.Equal(t, latest.Release{Version: "0.46.0", Published: published, URL: url}, got.Latest)
+	require.Equal(t, version.Lazy, got.Notice)
+
+	got, err = settingsOf(&sniffarrv1.SettingsResponse{ReleaseNotice: sniffarrv1.ReleaseNotice_RELEASE_NOTICE_EAGER})
+	require.NoError(t, err)
+	require.Equal(t, version.Eager, got.Notice)
 
 	got, err = settingsOf(&sniffarrv1.SettingsResponse{})
 	require.NoError(t, err)

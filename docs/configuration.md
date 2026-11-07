@@ -75,7 +75,7 @@ the same to each.
 | `SNIFFARR_PROBE_ATTEMPTS`          | `3`              | Failed probes after which a release is probed again only with more peers than at its last probe                       |
 | `SNIFFARR_PROBE_BACKOFF`           | `6h`             | Wait before repeating a failed probe, doubled per failure                                                              |
 | `SNIFFARR_PROBE_BATCH`             | `64`             | Probe tasks one search and one write hand out at most; set it to the probers that may ask at once                     |
-| `SNIFFARR_RELEASE_CHECK`           | `true`           | Whether the API asks `forge.sarak.sh` for the latest stable release once a day, which the UI's footer announces when this build is behind; `false` asks nothing |
+| `SNIFFARR_RELEASE_CHECK`           | `lazy`           | Whether the API asks `forge.sarak.sh` for the latest stable release once a day, and when the UI's footer announces it: `lazy` when this build is a later major or more than one minor behind, `eager` when it is behind at all, `no` or `off` asks nothing; a pre-release build is announced under either as soon as its stable release is out |
 
 The database runs in WAL mode. Before the API listens, its schema migrates,
 each migration logged as it begins and as it ends with how long it took, and

@@ -15,6 +15,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/latest"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 var now = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
@@ -303,6 +304,11 @@ func TestBrowserSettingsLatestRelease(t *testing.T) {
 	require.Equal(t, "0.46.0", got.GetVersion())
 	require.Equal(t, published, got.GetPublished().AsTime())
 	require.Equal(t, r.URL, got.GetUrl())
+	require.Equal(t, sniffarrv1.ReleaseNotice_RELEASE_NOTICE_LAZY, res.Msg.GetReleaseNotice())
+
+	res, err = (&Browser{Releases: knownRelease{r, true}, ReleaseNotice: version.Eager}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+	require.NoError(t, err)
+	require.Equal(t, sniffarrv1.ReleaseNotice_RELEASE_NOTICE_EAGER, res.Msg.GetReleaseNotice())
 
 	res, err = (&Browser{Releases: knownRelease{}}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
 	require.NoError(t, err)

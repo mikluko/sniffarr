@@ -32,6 +32,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/server"
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/tmdb"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // Config is what Module needs.
@@ -99,6 +100,9 @@ type Config struct {
 	// ReleaseCheck has the API ask the forge for the latest stable release
 	// once a day and report it in BrowseService.Settings.
 	ReleaseCheck bool
+	// ReleaseNotice is how far behind that release a stable build is before
+	// the web UI announces it.
+	ReleaseNotice version.Policy
 }
 
 // Feeds is which tracker feeds are read and how.
@@ -275,6 +279,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		Feeds:             cfg.Feeds.Sources,
 		JournalRetention:  cfg.RetentionJournal,
 		Releases:          releases,
+		ReleaseNotice:     cfg.ReleaseNotice,
 	})
 	if err != nil {
 		return err

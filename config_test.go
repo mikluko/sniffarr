@@ -29,6 +29,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/stun"
 	"github.com/mikluko/sniffarr/internal/tmdb"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // env is a lookup over kv pairs.
@@ -273,8 +274,11 @@ func TestLoadAPI(t *testing.T) {
 		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
 		{name: "probe batch zero", env: with("SNIFFARR_PROBE_BATCH", "0"), err: "SNIFFARR_PROBE_BATCH: want a positive integer"},
 		{name: "nothing set", err: "SNIFFARR_DB is not set"},
-		{name: "release check off", env: with("SNIFFARR_RELEASE_CHECK", "false"), want: func(a *api.Config, _ *db.Config) { a.ReleaseCheck = false }},
-		{name: "release check not a boolean", env: with("SNIFFARR_RELEASE_CHECK", "off"), err: "SNIFFARR_RELEASE_CHECK: want true or false"},
+		{name: "release check off", env: with("SNIFFARR_RELEASE_CHECK", "off"), want: func(a *api.Config, _ *db.Config) { a.ReleaseCheck = false }},
+		{name: "release check no", env: with("SNIFFARR_RELEASE_CHECK", "no"), want: func(a *api.Config, _ *db.Config) { a.ReleaseCheck = false }},
+		{name: "release check lazy", env: with("SNIFFARR_RELEASE_CHECK", "lazy"), want: func(*api.Config, *db.Config) {}},
+		{name: "release check eager", env: with("SNIFFARR_RELEASE_CHECK", "eager"), want: func(a *api.Config, _ *db.Config) { a.ReleaseNotice = version.Eager }},
+		{name: "release check unknown", env: with("SNIFFARR_RELEASE_CHECK", "false"), err: `SNIFFARR_RELEASE_CHECK: want no, off, lazy or eager, got "false"`},
 		{name: "concurrency not a number", env: with("SNIFFARR_CLASSIFY_CONCURRENCY", "four"), err: "SNIFFARR_CLASSIFY_CONCURRENCY: want a positive integer"},
 		{name: "zero concurrency", env: with("SNIFFARR_CLASSIFY_CONCURRENCY", "0"), err: "SNIFFARR_CLASSIFY_CONCURRENCY: want a positive integer"},
 		{name: "negative budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "-1"), err: "SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer"},

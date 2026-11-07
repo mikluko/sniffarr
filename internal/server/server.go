@@ -85,6 +85,8 @@ type Config struct {
 	// Releases, when set, has BrowseService.Settings report the latest
 	// stable release it knows.
 	Releases search.LatestRelease
+	// ReleaseNotice is the policy BrowseService.Settings reports beside it.
+	ReleaseNotice version.Policy
 }
 
 // New returns the handler serving the APIs and /healthz, every response
@@ -120,7 +122,7 @@ func New(c Config) (http.Handler, error) {
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
 		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts,
 			Classifier: c.Classifier, ClassifierSetting: c.ClassifierSetting, Feeds: c.Feeds, JournalRetention: c.JournalRetention,
-			Releases: c.Releases},
+			Releases: c.Releases, ReleaseNotice: c.ReleaseNotice},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

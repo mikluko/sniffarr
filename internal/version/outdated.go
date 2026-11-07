@@ -5,14 +5,24 @@ import (
 	"strings"
 )
 
+// Policy is how far a stable build may fall behind the latest stable
+// release before Outdated announces it.
+type Policy int
+
+const (
+	// Lazy announces a later major, or a minor more than one ahead.
+	Lazy Policy = iota
+	// Eager announces any later release.
+	Eager
+)
+
 // Outdated reports whether a build of version running is far enough behind
-// the stable release latest to announce it. A stable build is when latest
-// is a later major, or a minor more than one ahead in the same major; a
-// pre-release build is as soon as latest is its base version or later.
+// the stable release latest, under p, to announce it. A pre-release build
+// is, under either policy, as soon as latest is its base version or later.
 // Dev, a version that is not MAJOR.MINOR.PATCH with an optional
 // pre-release, and a pre-release latest are never outdated. Either may lead
 // with "v".
-func Outdated(running, latest string) bool {
+func Outdated(running, latest string, p Policy) bool {
 	run, ok := parseSemver(running)
 	if !ok {
 		return false
@@ -21,13 +31,16 @@ func Outdated(running, latest string) bool {
 	if !ok || rel.pre {
 		return false
 	}
-	if run.pre {
+	switch {
+	case run.pre:
 		return rel.compare(run) >= 0
-	}
-	if rel.major != run.major {
+	case p == Eager:
+		return rel.compare(run) > 0
+	case rel.major != run.major:
 		return rel.major > run.major
+	default:
+		return rel.minor > run.minor+1
 	}
-	return rel.minor > run.minor+1
 }
 
 // Prerelease reports whether v is a MAJOR.MINOR.PATCH version with a

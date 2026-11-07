@@ -21,6 +21,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // MaxStatsHours is the most clock hours Browser.Stats counts: 3660 days.
@@ -89,6 +90,9 @@ type Browser struct {
 	// Releases, when set, has Settings report the latest stable release
 	// it knows.
 	Releases LatestRelease
+	// ReleaseNotice is how far behind that release a stable build is before
+	// the web UI announces it, which Settings reports beside it.
+	ReleaseNotice version.Policy
 	// Counts, when set, holds the counts Stats and Home serve; nil computes
 	// them at every call.
 	Counts *Counts
@@ -129,9 +133,18 @@ func (b *Browser) Settings(ctx context.Context, _ *connect.Request[sniffarrv1.Se
 	if b.Releases != nil {
 		if r, ok := b.Releases.Latest(); ok {
 			res.LatestRelease = &sniffarrv1.ProjectRelease{Version: r.Version, Published: timestamppb.New(r.Published), Url: r.URL}
+			res.ReleaseNotice = releaseNotice(b.ReleaseNotice)
 		}
 	}
 	return connect.NewResponse(res), nil
+}
+
+// releaseNotice is p as Settings reports it.
+func releaseNotice(p version.Policy) sniffarrv1.ReleaseNotice {
+	if p == version.Eager {
+		return sniffarrv1.ReleaseNotice_RELEASE_NOTICE_EAGER
+	}
+	return sniffarrv1.ReleaseNotice_RELEASE_NOTICE_LAZY
 }
 
 // budgetSpent reports whether the classifier is on and has spent the

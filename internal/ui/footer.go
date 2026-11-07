@@ -23,14 +23,17 @@ type Update struct {
 }
 
 // Update returns the notice of Latest, nil unless version.Outdated holds
-// for the build and Latest.
+// for the build and Latest under Notice.
 func (b Base) Update() *Update {
-	if b.Latest.Version == "" || !version.Outdated(b.Build.Version, b.Latest.Version) {
+	if b.Latest.Version == "" || !version.Outdated(b.Build.Version, b.Latest.Version, b.Notice) {
 		return nil
 	}
 	key := "foot.update_tip"
-	if version.Prerelease(b.Build.Version) {
+	switch {
+	case version.Prerelease(b.Build.Version):
 		key = "foot.update_tip_pre"
+	case b.Notice == version.Eager:
+		key = "foot.update_tip_eager"
 	}
 	return &Update{
 		Label: b.Fmt("foot.update", b.Latest.Version),

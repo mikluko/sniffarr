@@ -188,17 +188,24 @@ func TestRenderFooterUpdate(t *testing.T) {
 	release := func(v string) latest.Release {
 		return latest.Release{Version: v, Published: time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC), URL: "https://sarak.sh/mikluko/sniffarr/releases/tag/v" + v}
 	}
-	render := func(lang, build string, rel latest.Release) string {
+	renderAs := func(p version.Policy, lang, build string, rel latest.Release) string {
 		t.Helper()
 		req := httptest.NewRequest("GET", "/", nil)
 		b := r.Base(req, lang, "", []string{"ru"}, time.FixedZone("CEST", 2*3600))
-		b.Build, b.Latest = version.Info{Version: build}, rel
+		b.Build, b.Latest, b.Notice = version.Info{Version: build}, rel, p
 		w := httptest.NewRecorder()
 		if err := r.Render(w, req, "notfound", NotFoundPage{Base: b, Asked: "/x"}); err != nil {
 			t.Fatal(err)
 		}
 		return w.Body.String()
 	}
+	render := func(lang, build string, rel latest.Release) string {
+		t.Helper()
+		return renderAs(version.Lazy, lang, build, rel)
+	}
+	checkBody(t, "eager, one patch behind", renderAs(version.Eager, "ru", "0.44.0", release("0.44.1")), nil, []string{
+		`<i class="mk" aria-hidden="true"></i>вышла 0.44.1<span class="tipb" aria-hidden="true">Эта версия отстала от последнего релиза: 0.44.0, последний 0.44.1 от 01.12.2026. Ссылка на заметки к релизу.</span>`,
+	})
 	checkBody(t, "stable behind", render("ru", "0.44.0", release("0.46.0")), nil, []string{
 		`<span class="ver"><a class="tip upd" href="https://sarak.sh/mikluko/sniffarr/releases/tag/v0.46.0" rel="noreferrer" target="_blank" aria-label="вышла 0.46.0: Эта версия отстала от последнего релиза больше чем на одну минорную: 0.44.0, последний 0.46.0 от 01.12.2026. Ссылка на заметки к релизу."><i class="mk" aria-hidden="true"></i>вышла 0.46.0<span class="tipb" aria-hidden="true">Эта версия отстала от последнего релиза больше чем на одну минорную: 0.44.0, последний 0.46.0 от 01.12.2026. Ссылка на заметки к релизу.</span></a><a class="tip vl"`,
 	})
