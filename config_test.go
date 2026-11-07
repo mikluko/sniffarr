@@ -223,7 +223,7 @@ func TestLoadAPI(t *testing.T) {
 				LazyTMDB: search.DefaultLazyTMDB, TMDBConcurrency: tmdb.DefaultConcurrency, TMDBRate: tmdb.DefaultRate, TMDBRetry: tmdb.DefaultRetry,
 				Lease: ingest.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff,
 				Retention: defaultRetention, RetentionIdle: defaultRetentionIdle, RetentionJournal: defaultRetentionJournal, StatsInterval: defaultStatsInterval, Scripts: defaultScripts,
-				Probe: defaultProbe},
+				Probe: defaultProbe, ReleaseCheck: true},
 			db.Config{Path: "/data/sniffarr.db",
 				Tasks: store.TaskOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor, NoProbes: true},
 				Store: store.Options{MaxFiles: store.DefaultMaxFiles, ProbeBatch: store.DefaultProbeBatch, TMDB: true}}
@@ -252,7 +252,7 @@ func TestLoadAPI(t *testing.T) {
 					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, RetentionIdle: 72 * time.Hour, RetentionJournal: 168 * time.Hour,
 					StatsInterval: time.Minute, LazyMax: 5, LazyWait: 500 * time.Millisecond,
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian,
-					Probe: ingest.ProbeConfig{DailyBytes: 20 << 30, SearchReserve: 10, MaxBytes: 32 << 20, Lease: 5 * time.Minute, Attempts: 2, Backoff: 12 * time.Hour}}
+					Probe: ingest.ProbeConfig{DailyBytes: 20 << 30, SearchReserve: 10, MaxBytes: 32 << 20, Lease: 5 * time.Minute, Attempts: 2, Backoff: 12 * time.Hour}, ReleaseCheck: true}
 				d.Tasks = store.TaskOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour, NoProbes: true}
 				d.Store = store.Options{MaxFiles: 50, ProbeBatch: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
@@ -273,6 +273,8 @@ func TestLoadAPI(t *testing.T) {
 		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
 		{name: "probe batch zero", env: with("SNIFFARR_PROBE_BATCH", "0"), err: "SNIFFARR_PROBE_BATCH: want a positive integer"},
 		{name: "nothing set", err: "SNIFFARR_DB is not set"},
+		{name: "release check off", env: with("SNIFFARR_RELEASE_CHECK", "false"), want: func(a *api.Config, _ *db.Config) { a.ReleaseCheck = false }},
+		{name: "release check not a boolean", env: with("SNIFFARR_RELEASE_CHECK", "off"), err: "SNIFFARR_RELEASE_CHECK: want true or false"},
 		{name: "concurrency not a number", env: with("SNIFFARR_CLASSIFY_CONCURRENCY", "four"), err: "SNIFFARR_CLASSIFY_CONCURRENCY: want a positive integer"},
 		{name: "zero concurrency", env: with("SNIFFARR_CLASSIFY_CONCURRENCY", "0"), err: "SNIFFARR_CLASSIFY_CONCURRENCY: want a positive integer"},
 		{name: "negative budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "-1"), err: "SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer"},

@@ -2,8 +2,8 @@
 // the Torznab indexer and the Radarr and Sonarr webhook over the store,
 // with the classify and TMDB workers, the imports of the Radarr and Sonarr
 // histories, the store's one-time backfills and maintenance, the WAL's
-// truncation, the rollup of peer sketches, the tops of works and the counts
-// of the browse service.
+// truncation, the rollup of peer sketches, the tops of works, the counts
+// of the browse service and the daily check of the latest release.
 package api
 
 import (
@@ -25,6 +25,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/feed/rutor"
 	"github.com/mikluko/sniffarr/internal/feed/rutracker"
 	"github.com/mikluko/sniffarr/internal/ingest"
+	"github.com/mikluko/sniffarr/internal/latest"
 	"github.com/mikluko/sniffarr/internal/memconn"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/search"
@@ -95,6 +96,9 @@ type Config struct {
 	Probes bool
 	// Feeds are the tracker feeds read, by source name; none reads no feed.
 	Feeds Feeds
+	// ReleaseCheck has the API ask the forge for the latest stable release
+	// once a day and report it in BrowseService.Settings.
+	ReleaseCheck bool
 }
 
 // Feeds is which tracker feeds are read and how.
@@ -127,7 +131,7 @@ const arrTimeout = time.Minute
 // process's own clients, and serves it on Config.Addr from start to stop
 // with its workers.
 var Module = fx.Module("api",
-	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder),
+	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder, newChecker),
 	fx.Invoke(serve, work),
 )
 
@@ -216,6 +220,18 @@ func newCounts(cfg Config, s *store.Store, log *slog.Logger) *search.Counts {
 	return &search.Counts{Store: s, Log: log, Interval: cfg.StatsInterval}
 }
 
+// releaseTimeout bounds one request for the latest release.
+const releaseTimeout = 30 * time.Second
+
+// newChecker returns the release check, nil while Config.ReleaseCheck is
+// off.
+func newChecker(cfg Config, log *slog.Logger) *latest.Checker {
+	if !cfg.ReleaseCheck {
+		return nil
+	}
+	return &latest.Checker{HTTP: &http.Client{Timeout: releaseTimeout}, Log: log}
+}
+
 func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logger) *arr.Recorder {
 	r := &arr.Recorder{Store: s, Tasks: q, Log: log}
 	if c.matcher != nil {
@@ -225,7 +241,11 @@ func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logge
 }
 
 func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts,
-	rec *arr.Recorder, mem *memconn.Listener) error {
+	rec *arr.Recorder, mem *memconn.Listener, chk *latest.Checker) error {
+	var releases search.LatestRelease
+	if chk != nil {
+		releases = chk
+	}
 	var titles search.TitleSearch
 	var matcher search.TitleMatcher
 	if c.matcher != nil {
@@ -254,6 +274,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		ClassifierSetting: c.endpoint.setting,
 		Feeds:             cfg.Feeds.Sources,
 		JournalRetention:  cfg.RetentionJournal,
+		Releases:          releases,
 	})
 	if err != nil {
 		return err
@@ -263,7 +284,10 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 	return nil
 }
 
-func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts, rec *arr.Recorder) {
+func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts, rec *arr.Recorder, chk *latest.Checker) {
+	if chk != nil {
+		app.Go(lc, sd, log, "release check", chk.Run)
+	}
 	app.Go(lc, sd, log, "backfill", func(ctx context.Context) error {
 		backfill(ctx, s, log)
 		return nil

@@ -141,6 +141,19 @@ message SettingsResponse {
   // How long the journal keeps an entry, counted from the entry's at;
   // absent when the server's configuration does not say.
   google.protobuf.Duration journal_retention = 4;
+  // The project's latest stable release as the server last read it;
+  // absent while the release check is off, before its first answer, and
+  // after a failed one.
+  ProjectRelease latest_release = 5;
+}
+
+// ProjectRelease is a published release of sniffarr.
+message ProjectRelease {
+  // The version without a leading "v", such as "0.46.0".
+  string version = 1;
+  google.protobuf.Timestamp published = 2;
+  // The page of its release notes.
+  string url = 3;
 }
 
 // Feature is an optional feature of the server, off unless configured.

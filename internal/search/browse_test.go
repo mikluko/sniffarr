@@ -12,6 +12,7 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/database"
+	"github.com/mikluko/sniffarr/internal/latest"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -281,6 +282,31 @@ func TestBrowserSettings(t *testing.T) {
 	res, err = (&Browser{JournalRetention: 30 * 24 * time.Hour}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
 	require.NoError(t, err)
 	require.Equal(t, 30*24*time.Hour, res.Msg.GetJournalRetention().AsDuration())
+	require.Nil(t, res.Msg.GetLatestRelease(), "no release check, none reported")
+}
+
+// knownRelease is a LatestRelease that knows r when ok.
+type knownRelease struct {
+	r  latest.Release
+	ok bool
+}
+
+func (k knownRelease) Latest() (latest.Release, bool) { return k.r, k.ok }
+
+func TestBrowserSettingsLatestRelease(t *testing.T) {
+	ctx := context.Background()
+	published := time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC)
+	r := latest.Release{Version: "0.46.0", Published: published, URL: "https://sarak.sh/mikluko/sniffarr/releases/tag/v0.46.0"}
+	res, err := (&Browser{Releases: knownRelease{r, true}}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+	require.NoError(t, err)
+	got := res.Msg.GetLatestRelease()
+	require.Equal(t, "0.46.0", got.GetVersion())
+	require.Equal(t, published, got.GetPublished().AsTime())
+	require.Equal(t, r.URL, got.GetUrl())
+
+	res, err = (&Browser{Releases: knownRelease{}}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+	require.NoError(t, err)
+	require.Nil(t, res.Msg.GetLatestRelease(), "a check that knows none reports none")
 }
 
 func TestBrowserSettingsFeatures(t *testing.T) {

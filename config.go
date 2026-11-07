@@ -342,6 +342,9 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Feeds, err = loadFeeds(getenv); err != nil {
 		return a, d, err
 	}
+	if a.ReleaseCheck, err = boolean(getenv, "SNIFFARR_RELEASE_CHECK", true); err != nil {
+		return a, d, err
+	}
 	if a.TMDBKey = getenv("TMDB_API_KEY"); a.TMDBKey == "" {
 		a.TMDBKey = tmdb.DefaultKey
 	}
@@ -504,6 +507,18 @@ func positive(getenv func(string) string, name string, def int) (int, error) {
 		return 0, fmt.Errorf("%s: want a positive integer", name)
 	}
 	return n, nil
+}
+
+func boolean(getenv func(string) string, name string, def bool) (bool, error) {
+	v := getenv(name)
+	if v == "" {
+		return def, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("%s: want true or false", name)
+	}
+	return b, nil
 }
 
 func percent(getenv func(string) string, name string, def int) (int, error) {

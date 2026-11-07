@@ -60,3 +60,9 @@ func TestNewClassifiers(t *testing.T) {
 	require.Zero(t, own.classifier.DailyTokens)
 	require.Same(t, own.classifier, own.lazy.Classifier)
 }
+
+func TestNewChecker(t *testing.T) {
+	log := slog.New(slog.DiscardHandler)
+	require.Nil(t, newChecker(Config{}, log), "the check is off")
+	require.NotNil(t, newChecker(Config{ReleaseCheck: true}, log))
+}

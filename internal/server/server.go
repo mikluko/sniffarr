@@ -82,6 +82,9 @@ type Config struct {
 	// JournalRetention is how long the journal keeps an entry, which
 	// BrowseService.Settings reports.
 	JournalRetention time.Duration
+	// Releases, when set, has BrowseService.Settings report the latest
+	// stable release it knows.
+	Releases search.LatestRelease
 }
 
 // New returns the handler serving the APIs and /healthz, every response
@@ -116,7 +119,8 @@ func New(c Config) (http.Handler, error) {
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
 		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts,
-			Classifier: c.Classifier, ClassifierSetting: c.ClassifierSetting, Feeds: c.Feeds, JournalRetention: c.JournalRetention},
+			Classifier: c.Classifier, ClassifierSetting: c.ClassifierSetting, Feeds: c.Feeds, JournalRetention: c.JournalRetention,
+			Releases: c.Releases},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

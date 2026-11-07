@@ -17,6 +17,7 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/audio"
+	"github.com/mikluko/sniffarr/internal/latest"
 	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -44,6 +45,12 @@ type TitleSearch interface {
 type TitleMatcher interface {
 	Matchable(ctx context.Context, keys []string) ([]store.TitleKey, error)
 	Match(ctx context.Context, k store.TitleKey, trigger string) error
+}
+
+// LatestRelease knows the project's latest stable release;
+// *latest.Checker is one.
+type LatestRelease interface {
+	Latest() (latest.Release, bool)
 }
 
 // Browser implements sniffarrv1connect.BrowseServiceHandler.
@@ -79,6 +86,9 @@ type Browser struct {
 	// JournalRetention is how long the journal keeps an entry, which
 	// Settings reports when above 0.
 	JournalRetention time.Duration
+	// Releases, when set, has Settings report the latest stable release
+	// it knows.
+	Releases LatestRelease
 	// Counts, when set, holds the counts Stats and Home serve; nil computes
 	// them at every call.
 	Counts *Counts
@@ -115,6 +125,11 @@ func (b *Browser) Settings(ctx context.Context, _ *connect.Request[sniffarrv1.Se
 	}}
 	if b.JournalRetention > 0 {
 		res.JournalRetention = durationpb.New(b.JournalRetention)
+	}
+	if b.Releases != nil {
+		if r, ok := b.Releases.Latest(); ok {
+			res.LatestRelease = &sniffarrv1.ProjectRelease{Version: r.Version, Published: timestamppb.New(r.Published), Url: r.URL}
+		}
 	}
 	return connect.NewResponse(res), nil
 }
