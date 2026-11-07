@@ -404,7 +404,7 @@ func TestMigrateClassifierLayer(t *testing.T) {
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	old := fstest.MapFS{}
 	names, err := fs.Glob(migrations, "migrations/*.sql")
 	require.NoError(t, err)
@@ -440,13 +440,13 @@ func TestMigrateClassifierLayer(t *testing.T) {
 		var out []string
 		rows, err := db.R.QueryContext(ctx, query)
 		require.NoError(t, err)
-		defer rows.Close()
 		for rows.Next() {
 			var v string
 			require.NoError(t, rows.Scan(&v))
 			out = append(out, v)
 		}
 		require.NoError(t, rows.Err())
+		require.NoError(t, rows.Close())
 		return out
 	}
 	require.Equal(t, []string{LayerClassifier, LayerRules}, column("SELECT kind_layer FROM torrent_releases ORDER BY id"))
