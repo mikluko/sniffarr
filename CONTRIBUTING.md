@@ -38,5 +38,6 @@ can be a sentence; the case for it is what takes the work:
 
 ## Pull requests
 
-Pull requests are not merged. An idea in one is welcome as an issue, made
-the case for as above.
+A pull request the maintainer has not agreed to in an issue first will most
+likely be closed by AI at the next maintenance pass. An idea in one is
+welcome as an issue, made the case for as above.
