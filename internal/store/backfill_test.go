@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -176,4 +177,32 @@ func TestBackfillProbeOverMarkers(t *testing.T) {
 	requireAudio(t, mustGet(t, s, only.Hash), 0, LayerProbe)
 	requireAudio(t, mustGet(t, s, separate.Hash), 1, LayerRules)
 	requireAudio(t, mustGet(t, s, undetermined.Hash), 1, LayerRules)
+}
+
+func TestBackfillProbeAttempts(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	read := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	unknown := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	failed := insertProbeable(t, s, 4, "Brazil.1985.1080p", 5, "Brazil.1985.1080p.mkv")
+	require.NoError(t, s.ProbeDone(ctx, read, Probe{Outcome: ProbeTracks}, t0))
+	require.NoError(t, s.ProbeDone(ctx, unknown, Probe{Outcome: ProbeUnknown}, t0))
+	for range 2 {
+		_, err := s.ProbeFailed(ctx, failed, ProbeTimeout, 0, t0, 3, time.Hour)
+		require.NoError(t, err)
+	}
+	_, err := s.w.ExecContext(ctx, "UPDATE probe_releases SET attempts = 2 WHERE outcome != ?", ProbeFailed)
+	require.NoError(t, err, "read while a read kept the failed attempts")
+
+	got := map[string]Backfilled{}
+	require.NoError(t, s.Backfill(ctx, func(b Backfilled) { got[b.Name] = b }))
+	require.Equal(t, Backfilled{Name: "probe attempts", Rows: 2, Done: true}, got["probe attempts"])
+	for h, want := range map[Hash]int{read: 0, unknown: 0, failed: 2} {
+		var n int
+		require.NoError(t, s.r.QueryRowContext(ctx, "SELECT p.attempts FROM probe_releases p JOIN torrent_releases t ON t.id = p.torrent_id WHERE t.infohash = ?", h[:]).Scan(&n))
+		require.Equal(t, want, n, "a failed probe keeps its attempts")
+	}
+	final, err := s.ProbeFailed(ctx, read, ProbeTimeout, 0, t0, 3, time.Hour)
+	require.NoError(t, err)
+	require.False(t, final, "the first failure after a read")
 }

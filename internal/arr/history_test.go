@@ -80,7 +80,7 @@ func movieRecord(b byte, tmdbID int, at time.Time) map[string]any {
 }
 
 func (f *fixture) history(app, url string) *History {
-	return &History{App: app, URL: url + "/sub/", APIKey: "key", Recorder: f.rec, PageSize: 2, Log: f.rec.Log}
+	return &History{App: app, URL: url + "/sub/api/v3/", APIKey: "key", Recorder: f.rec, PageSize: 2, Log: f.rec.Log}
 }
 
 func TestHistoryRadarr(t *testing.T) {

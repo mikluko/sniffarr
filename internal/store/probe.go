@@ -181,37 +181,40 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at ti
 }
 
 // RequestProbe queues a probe at PriorityRequest, at the time, for each
-// stored release of the hashes, whatever its last probe and backoff, and
-// returns how many of them are stored; each is journaled as requested,
-// unless it was queued at PriorityRequest already and no lease began since.
-func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (int, error) {
+// stored release of the hashes a probe can read, whatever its last probe and
+// backoff, and returns how many it queued and how many of the hashes are
+// stored; each queued is journaled as requested, unless it was queued at
+// PriorityRequest already and no lease began since.
+func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (queued, stored int, err error) {
 	if len(hashes) == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
-	args := make([]any, 0, len(hashes)+2)
+	args := make([]any, 0, len(hashes)+2+len(probeExtensions))
 	args = append(args, PriorityRequest, at.UnixMilli())
 	for _, h := range hashes {
 		args = append(args, h[:])
 	}
-	var n int
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM torrent_releases WHERE infohash IN ("+placeholders(len(hashes))+")", args[2:]...).Scan(&stored); err != nil {
+			return err
+		}
 		waiting, err := hashesOf(tx.QueryContext(ctx, `SELECT infohash FROM task_queue WHERE kind = 'probe' AND priority = ?1 AND infohash IN (`+placeholders(len(hashes))+`)
 			AND (leased_at IS NULL OR queued_at > leased_at)`, append([]any{PriorityRequest}, args[2:]...)...))
 		if err != nil {
 			return err
 		}
-		queued, err := hashesOf(tx.QueryContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
-			SELECT 'probe', infohash, ?1, ?2 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
+		hs, err := hashesOf(tx.QueryContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
+			SELECT 'probe', t.infohash, ?1, ?2 FROM torrent_releases t WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND `+probeReadable+`
 			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0,
 				leases = `+leasesAfterMove+`
-			RETURNING infohash`, args...))
+			RETURNING infohash`, append(args, probeArgs()...)...))
 		if err != nil {
 			return err
 		}
-		n = len(queued)
-		return journalEach(ctx, tx, slices.DeleteFunc(queued, func(h Hash) bool { return slices.Contains(waiting, h) }), n, at, JournalProbeWanted, "request", nil)
+		queued = len(hs)
+		return journalEach(ctx, tx, slices.DeleteFunc(hs, func(h Hash) bool { return slices.Contains(waiting, h) }), queued, at, JournalProbeWanted, "request", nil)
 	})
-	return n, err
+	return queued, stored, err
 }
 
 // ProbeLeases returns how many probes are leased and unexpired at now.

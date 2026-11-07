@@ -364,7 +364,6 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 	return TorrentPage{Base: b, BackURL: back, Torrent: Torrent{
 		InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52",
 		Name:     name,
-		Magnet:   "magnet:?xt=urn:btih:8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52",
 		Size:     26629001216, FileCount: 14,
 		FirstSeen: b.Now.Add(-41 * time.Hour), LastSeen: b.Now.Add(-3 * time.Minute),
 		DiscoveredVia: "announce", TMDBQuery: query,

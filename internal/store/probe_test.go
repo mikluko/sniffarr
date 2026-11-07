@@ -317,7 +317,7 @@ func TestRequestProbe(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, wanted, c.Hash, "a search queues neither a done probe nor one whose attempts ran out")
 
-	n, err := s.RequestProbe(ctx, []Hash{done, failed, hash(99)}, t0.Add(time.Minute))
+	n, _, err := s.RequestProbe(ctx, []Hash{done, failed, hash(99)}, t0.Add(time.Minute))
 	require.NoError(t, err)
 	require.Equal(t, 2, n, "only stored releases")
 
@@ -374,6 +374,25 @@ func TestWantProbeReadableOnly(t *testing.T) {
 	require.Equal(t, []Hash{readable}, queuedProbes(t, s), "a release without peers waits; a file or kind a probe cannot read is not queued")
 }
 
+func TestRequestProbeReadableOnly(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	readable := insertProbeable(t, s, 1, "Alien.1979.1080p", 0, "Alien.1979.1080p.mkv")
+	avi := insertProbeable(t, s, 2, "Heat.1995.DVDRip", 5, "Heat.1995.DVDRip.avi")
+	disc := insertProbeable(t, s, 4, "Disc.2004.1080p", 5, "Disc/BDMV/STREAM/00001.m2ts")
+
+	queued, stored, err := s.RequestProbe(ctx, []Hash{readable, avi, disc, hash(99)}, t0)
+	require.NoError(t, err)
+	require.Equal(t, 1, queued, "only a release a probe can read")
+	require.Equal(t, 3, stored)
+	require.Equal(t, []Hash{readable}, queuedProbes(t, s))
+
+	queued, stored, err = s.RequestProbe(ctx, []Hash{avi}, t0)
+	require.NoError(t, err)
+	require.Zero(t, queued)
+	require.Equal(t, 1, stored)
+}
+
 func TestRequestProbeInFlight(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
@@ -384,7 +403,7 @@ func TestRequestProbeInFlight(t *testing.T) {
 		_, ok := leaseNext(t, s, t0, false)
 		require.True(t, ok)
 	}
-	_, err := s.RequestProbe(ctx, []Hash{h, final}, t0.Add(time.Minute))
+	_, _, err := s.RequestProbe(ctx, []Hash{h, final}, t0.Add(time.Minute))
 	require.NoError(t, err)
 	_, err = s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(2*time.Minute), 3, time.Hour)
 	require.NoError(t, err)
@@ -402,7 +421,7 @@ func TestRequestProbeInFlight(t *testing.T) {
 	require.Equal(t, map[Hash]bool{h: true, final: true}, got)
 
 	searched := insertProbeable(t, s, 4, "Brazil.1985.1080p", 5, "Brazil.1985.1080p.mkv")
-	_, err = s.RequestProbe(ctx, []Hash{searched}, t0.Add(4*time.Minute))
+	_, _, err = s.RequestProbe(ctx, []Hash{searched}, t0.Add(4*time.Minute))
 	require.NoError(t, err)
 	c, ok := leaseNext(t, s, t0.Add(4*time.Minute), false)
 	require.True(t, ok)

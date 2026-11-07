@@ -637,7 +637,7 @@ func TestJournalProbes(t *testing.T) {
 
 	require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0.Add(25*time.Hour)))
 	require.Len(t, entries(t, s, h), 7, "a search does not want a probe done")
-	n, err := s.RequestProbe(ctx, []Hash{h, hash(9)}, t0.Add(26*time.Hour))
+	n, _, err := s.RequestProbe(ctx, []Hash{h, hash(9)}, t0.Add(26*time.Hour))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 	require.Equal(t, JournalEntry{Hash: h, At: t0.Add(26 * time.Hour), Kind: JournalProbeWanted, Outcome: "request"}, entry(t, s, h, JournalProbeWanted, "request"))
@@ -655,7 +655,7 @@ func TestJournalProbeWanted(t *testing.T) {
 	final, err := s.ProbeFailed(ctx, spent, ProbeTimeout, 0, t0, 1, time.Hour)
 	require.NoError(t, err)
 	require.True(t, final)
-	_, err = s.RequestProbe(ctx, []Hash{requested}, t0)
+	_, _, err = s.RequestProbe(ctx, []Hash{requested}, t0)
 	require.NoError(t, err)
 	search := func(at time.Time) {
 		t.Helper()
@@ -679,7 +679,7 @@ func TestJournalProbeWanted(t *testing.T) {
 	require.Len(t, entries(t, s, spent), 2)
 
 	again := insertProbeable(t, s, 7, "Fargo.1996.2160p", 5, "Fargo.1996.2160p.mkv")
-	_, err = s.RequestProbe(ctx, []Hash{again}, t0)
+	_, _, err = s.RequestProbe(ctx, []Hash{again}, t0)
 	require.NoError(t, err)
 	_, err = s.ProbeFailed(ctx, again, ProbeTimeout, 0, t0.Add(time.Minute), 3, time.Hour)
 	require.NoError(t, err)
@@ -726,7 +726,7 @@ func TestJournalProbeRequestRepeated(t *testing.T) {
 	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
 	request := func(at time.Time) {
 		t.Helper()
-		n, err := s.RequestProbe(ctx, []Hash{h}, at)
+		n, _, err := s.RequestProbe(ctx, []Hash{h}, at)
 		require.NoError(t, err)
 		require.Equal(t, 1, n, "still counted as stored")
 	}
@@ -745,7 +745,7 @@ func TestJournalProbeRequestRepeated(t *testing.T) {
 	s2 := open(t)
 	moved := insertProbeable(t, s2, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
 	require.NoError(t, s2.WantProbe(ctx, []Hash{moved}, ProbeWant{T: "movie", Query: "heat"}, t0))
-	_, err := s2.RequestProbe(ctx, []Hash{moved}, t0.Add(time.Minute))
+	_, _, err := s2.RequestProbe(ctx, []Hash{moved}, t0.Add(time.Minute))
 	require.NoError(t, err)
 	require.Equal(t, 1, requestRows(t, s2, moved), "a request that moves a searched probe ahead is the first")
 }
@@ -806,7 +806,7 @@ func TestJournalProbeLeasedRequest(t *testing.T) {
 	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
 	_, err := s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0, 3, time.Hour)
 	require.NoError(t, err)
-	_, err = s.RequestProbe(ctx, []Hash{h}, t0.Add(time.Minute))
+	_, _, err = s.RequestProbe(ctx, []Hash{h}, t0.Add(time.Minute))
 	require.NoError(t, err)
 	_, ok := leaseNext(t, s, t0.Add(time.Minute), false)
 	require.True(t, ok)
@@ -819,7 +819,7 @@ func TestJournalProbeLeasedRequest(t *testing.T) {
 	require.Equal(t, []string{"request/2", "retry/3"}, leasedProbes(t, s, h), "its failure ends the request")
 
 	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0.Add(4*time.Hour)))
-	_, err = s.RequestProbe(ctx, []Hash{h}, t0.Add(5*time.Hour))
+	_, _, err = s.RequestProbe(ctx, []Hash{h}, t0.Add(5*time.Hour))
 	require.NoError(t, err)
 	c, ok := leaseNext(t, s, t0.Add(5*time.Hour), false)
 	require.True(t, ok)
@@ -833,13 +833,13 @@ func TestJournalProbeLeasedRequestInFlight(t *testing.T) {
 	searched := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
 	requested := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
 	require.NoError(t, s.WantProbe(ctx, []Hash{searched}, ProbeWant{T: "movie", Query: "alien"}, t0))
-	_, err := s.RequestProbe(ctx, []Hash{requested}, t0)
+	_, _, err := s.RequestProbe(ctx, []Hash{requested}, t0)
 	require.NoError(t, err)
 	for range 2 {
 		_, ok := leaseNext(t, s, t0, false)
 		require.True(t, ok)
 	}
-	_, err = s.RequestProbe(ctx, []Hash{searched, requested}, t0.Add(time.Minute))
+	_, _, err = s.RequestProbe(ctx, []Hash{searched, requested}, t0.Add(time.Minute))
 	require.NoError(t, err)
 	for _, h := range []Hash{searched, requested} {
 		_, err = s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(2*time.Minute), 3, time.Hour)
@@ -860,7 +860,7 @@ func TestJournalProbeLeasedAfterMove(t *testing.T) {
 	ctx := context.Background()
 	type move func(*Store, Hash, time.Time) error
 	request := func(s *Store, h Hash, at time.Time) error {
-		_, err := s.RequestProbe(ctx, []Hash{h}, at)
+		_, _, err := s.RequestProbe(ctx, []Hash{h}, at)
 		return err
 	}
 	search := func(s *Store, h Hash, at time.Time) error {

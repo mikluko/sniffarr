@@ -49,9 +49,11 @@ the same to each.
 | `SNIFFARR_SEARCH_TMDB_MAX`         | `5`              | Title keys one search has matched at most                                                                              |
 | `SNIFFARR_TORZNAB_TOKEN`           |                  | API key of the Torznab endpoint; when unset, there is none                                                             |
 | `SNIFFARR_WEBHOOK_TOKEN`           |                  | Basic password of the Radarr and Sonarr webhook; when unset, there is none                                             |
-| `SNIFFARR_RADARR_URL`              |                  | Base URL of the Radarr whose grab history is imported; set with `SNIFFARR_RADARR_API_KEY` or not at all                |
+| `SNIFFARR_RADARR_URL`              |                  | Root URL of the Radarr whose grab history is imported; set with `SNIFFARR_RADARR_API_KEY` or not at all                |
+| `SNIFFARR_RADARR_API_URL`          | `/api/v3` under `SNIFFARR_RADARR_URL` | Root of that Radarr's v3 API, such as `http://radarr:7878/api/v3`, where the API reaches it by another address |
 | `SNIFFARR_RADARR_API_KEY`          |                  | That Radarr's API key                                                                                                  |
-| `SNIFFARR_SONARR_URL`              |                  | Base URL of the Sonarr whose grab history is imported; set with `SNIFFARR_SONARR_API_KEY` or not at all                |
+| `SNIFFARR_SONARR_URL`              |                  | Root URL of the Sonarr whose grab history is imported; set with `SNIFFARR_SONARR_API_KEY` or not at all                |
+| `SNIFFARR_SONARR_API_URL`          | `/api/v3` under `SNIFFARR_SONARR_URL` | Root of that Sonarr's v3 API, such as `http://sonarr:8989/api/v3`, where the API reaches it by another address |
 | `SNIFFARR_SONARR_API_KEY`          |                  | That Sonarr's API key                                                                                                  |
 | `SNIFFARR_FEEDS`                   |                  | Comma-separated tracker feeds read: `rutracker`; empty reads none                                                      |
 | `SNIFFARR_FEED_INTERVAL`           | `1h`             | How often each feed is read                                                                                            |
@@ -98,6 +100,8 @@ recomputes the tops of works and every torrent's peers over the last 7 days.
 | `SNIFFARR_UI_ADDR`         | `:8081` | Listen address                                                                       |
 | `SNIFFARR_OIDC_ISSUER`     |         | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none |
 | `SNIFFARR_SEERR_URL`       |         | Base URL of a Seerr the title and release cards link a matched title to; empty links none |
+| `SNIFFARR_RADARR_URL`      |         | Root URL of a Radarr the title and release cards link a matched movie to; empty links none |
+| `SNIFFARR_SONARR_URL`      |         | Root URL of a Sonarr the title and release cards link a matched series to; empty links none |
 
 ## `-sniff` and `-fetch`
 

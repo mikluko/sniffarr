@@ -65,6 +65,7 @@
   "act.probe": "probe tracks",
   "act.probe_hint": "download the file headers and read the tracks",
   "act.probe_nopeers": "no peers over 7 days",
+  "act.probe_unreadable": "no file a probe can read",
   "act.done.peers": "peer lookup requested",
   "act.done.probe": "probe requested",
   "files.path": "Path",

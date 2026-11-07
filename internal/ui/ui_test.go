@@ -164,6 +164,12 @@ func TestFormat(t *testing.T) {
 		{Base{Seerr: "https://seerr.example.com"}.SeerrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), "https://seerr.example.com/movie/348"},
 		{Base{}.SeerrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), ""},
 		{Base{Seerr: "https://seerr.example.com"}.SeerrURL(nil), ""},
+		{Base{Radarr: "https://radarr.example.com/"}.RadarrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), "https://radarr.example.com/add/new?term=tmdb%3A348"},
+		{Base{Radarr: "https://radarr.example.com"}.RadarrURL(&TMDBWork{State: TMDBMatched, Type: "tv", ID: 1399}), ""},
+		{Base{Sonarr: "https://example.com/sonarr"}.SonarrURL(&TMDBWork{State: TMDBMatched, Type: "tv", ID: 1399}), "https://example.com/sonarr/add/new?term=tmdb%3A1399"},
+		{Base{Sonarr: "https://example.com/sonarr"}.SonarrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), ""},
+		{Base{}.RadarrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), ""},
+		{Base{Radarr: "https://radarr.example.com"}.RadarrURL(&TMDBWork{State: TMDBUnmatched}), ""},
 		{units.Span(30 * time.Second), "<\u00a01\u00a0мин"},
 		{units.Span(42 * time.Minute), "42\u00a0мин"},
 		{units.Span(200 * time.Minute), "3\u00a0ч 20\u00a0мин"},
@@ -350,5 +356,30 @@ func TestJournalDetail(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Errorf("untranslated keys: %v", missing)
+	}
+}
+
+// The magnet link survives html/template's URL filter, with the name escaped.
+func TestTorrentMagnetHref(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/t/x", nil)
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	p := SampleTorrent(b, false, "poster")
+	p.Torrent.InfoHash = "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"
+	p.Torrent.Name = `Чужой (1979) & "Aliens"+<b>#1`
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "torrent", p); err != nil {
+		t.Fatal(err)
+	}
+	body := w.Body.String()
+	want := `href="magnet:?xt=urn:btih:8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52&amp;dn=%D0%A7%D1%83%D0%B6%D0%BE%D0%B9%20%281979%29%20%26%20%22Aliens%22%2B%3Cb%3E%231"`
+	if !strings.Contains(body, want) {
+		t.Errorf("no %s in the page", want)
+	}
+	if strings.Contains(body, "ZgotmplZ") {
+		t.Error("the URL filter blocked a link")
 	}
 }

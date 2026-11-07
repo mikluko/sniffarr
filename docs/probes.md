@@ -13,7 +13,9 @@ and WebM it reads the EBML header and the Segment's top-level element
 headers up to Tracks, reading no body but those of SeekHead and Tracks, and
 follows SeekHead when Tracks comes after the first Cluster; in MP4 and MOV it reads the
 top-level box headers up to `moov`. A probe that would download more than
-the task's `max_bytes` stops there, and the tracks stay unknown. Of each
+the task's `max_bytes` stops there, and the tracks stay unknown, as they do
+for a track list of more than 128 tracks, which the API takes from no
+fetcher either. Of each
 track it records the kind, the language as ISO 639-2 and as BCP-47, the
 name, the codec, an audio track's channels, and a video track's size and
 dynamic range: `DV` for a Dolby Vision configuration (Matroska's
@@ -24,15 +26,16 @@ Candidates are stored movies and series with a stored file of those
 formats and at least one distinct peer over the last 7 days. Probes wait in
 the API's task queue beside fetches and peer lookups, by priority and then
 the most recently queued first. Releases asked for with `RequestProbe`, the
-web UI's probe button, go first, whatever their last probe. Releases a
+web UI's probe button, go first, whatever their last probe; a request for
+a release with no file of those formats queues nothing. Releases a
 Torznab search with a query or an ID returned go next, unless their probe is
 done or its failures ran out without the peers growing. With the queue
 empty, the release never probed with the most peers over 7 days goes, then
 the one due a probe again with the most. A release without peers waits
 until it has some. Each release is probed once, and
 the outcome is stored, the tracks in their own table: read, unknown
-(no file of those formats, a track list beyond `max_bytes`, or a header the
-probe cannot read), or failed (fewer than `-min-peers` peers within
+(no file of those formats, a track list beyond `max_bytes` or of more than
+128 tracks, or a header the probe cannot read), or failed (fewer than `-min-peers` peers within
 `-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
 before `-probe-timeout`). The release's journal records a request, unless its
 probe is queued as requested already and no lease began since, and once a day a search that queued or

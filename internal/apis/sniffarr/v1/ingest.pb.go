@@ -144,8 +144,8 @@ const (
 	// The metadata or the pieces did not arrive in time.
 	ProbeFailure_PROBE_FAILURE_TIMEOUT ProbeFailure = 2
 	// The torrent has no Matroska or MP4 file, the file's format is not one,
-	// its track list lies beyond max_bytes of piece data, or its header is
-	// malformed. A probe that ends so is not repeated.
+	// its track list lies beyond max_bytes of piece data or holds more than
+	// 128 tracks, or its header is malformed. A probe that ends so is not repeated.
 	ProbeFailure_PROBE_FAILURE_UNKNOWN ProbeFailure = 3
 )
 
@@ -1257,7 +1257,9 @@ type ProbedFile struct {
 	// Path inside the torrent, components joined by "/".
 	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
 	// "matroska" or "mp4".
-	Format        string   `protobuf:"bytes,2,opt,name=format,proto3" json:"format,omitempty"`
+	Format string `protobuf:"bytes,2,opt,name=format,proto3" json:"format,omitempty"`
+	// At most 128; a longer list records the probe as
+	// PROBE_FAILURE_UNKNOWN does.
 	Tracks        []*Track `protobuf:"bytes,3,rep,name=tracks,proto3" json:"tracks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

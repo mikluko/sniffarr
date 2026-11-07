@@ -69,6 +69,35 @@ func (b Base) SeerrURL(t *TMDBWork) string {
 	return strings.TrimSuffix(b.Seerr, "/") + "/" + typ + "/" + strconv.FormatInt(t.ID, 10)
 }
 
+// RadarrURL is the search of a matched movie in the Radarr at b.Radarr,
+// "" without one or for a series. Radarr finds the movie by its TMDB id and
+// links on to its page when the movie is in the library.
+func (b Base) RadarrURL(t *TMDBWork) string {
+	if !t.Matched() || t.Type == "tv" {
+		return ""
+	}
+	return arrSearch(b.Radarr, t.ID)
+}
+
+// SonarrURL is the search of a matched series in the Sonarr at b.Sonarr,
+// "" without one or for a movie. Sonarr finds the series by its TMDB id
+// and links on to its page when the series is in the library.
+func (b Base) SonarrURL(t *TMDBWork) string {
+	if !t.Matched() || t.Type != "tv" {
+		return ""
+	}
+	return arrSearch(b.Sonarr, t.ID)
+}
+
+// arrSearch is the add-new search of a Radarr or Sonarr at root for a TMDB
+// id, "" without a root.
+func arrSearch(root string, tmdbID int64) string {
+	if root == "" {
+		return ""
+	}
+	return strings.TrimSuffix(root, "/") + "/add/new?" + url.Values{"term": {"tmdb:" + strconv.FormatInt(tmdbID, 10)}}.Encode()
+}
+
 // TMDBImg builds an image URL; "" when there is no path.
 func TMDBImg(size, path string) string {
 	if path == "" {

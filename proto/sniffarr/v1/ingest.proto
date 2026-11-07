@@ -197,6 +197,8 @@ message ProbedFile {
   string path = 1;
   // "matroska" or "mp4".
   string format = 2;
+  // At most 128; a longer list records the probe as
+  // PROBE_FAILURE_UNKNOWN does.
   repeated Track tracks = 3;
 }
 
@@ -208,8 +210,8 @@ enum ProbeFailure {
   // The metadata or the pieces did not arrive in time.
   PROBE_FAILURE_TIMEOUT = 2;
   // The torrent has no Matroska or MP4 file, the file's format is not one,
-  // its track list lies beyond max_bytes of piece data, or its header is
-  // malformed. A probe that ends so is not repeated.
+  // its track list lies beyond max_bytes of piece data or holds more than
+  // 128 tracks, or its header is malformed. A probe that ends so is not repeated.
   PROBE_FAILURE_UNKNOWN = 3;
 }
 

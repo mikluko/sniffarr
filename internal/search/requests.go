@@ -13,7 +13,10 @@ import (
 )
 
 func (b *Browser) RefreshPeers(ctx context.Context, req *connect.Request[sniffarrv1.RefreshPeersRequest]) (*connect.Response[sniffarrv1.RefreshPeersResponse], error) {
-	n, err := b.request(ctx, req.Msg.GetReleases(), "refresh peers", b.Store.WantPeers)
+	n, err := b.request(ctx, req.Msg.GetReleases(), "refresh peers", func(ctx context.Context, hashes []store.Hash, at time.Time) (int, int, error) {
+		n, err := b.Store.WantPeers(ctx, hashes, at)
+		return n, n, err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -29,17 +32,18 @@ func (b *Browser) RequestProbe(ctx context.Context, req *connect.Request[sniffar
 }
 
 // request records a request of op for the stored releases r names, and
-// returns how many there are, or NOT_FOUND for none.
-func (b *Browser) request(ctx context.Context, r *sniffarrv1.Releases, op string, record func(context.Context, []store.Hash, time.Time) (int, error)) (int, error) {
+// returns how many record took, or NOT_FOUND for no stored release. record
+// returns how many it took and how many of the hashes are stored.
+func (b *Browser) request(ctx context.Context, r *sniffarrv1.Releases, op string, record func(context.Context, []store.Hash, time.Time) (int, int, error)) (int, error) {
 	hashes, err := b.releases(ctx, r)
 	if err != nil {
 		return 0, err
 	}
-	n, err := record(ctx, hashes, b.now())
+	n, stored, err := record(ctx, hashes, b.now())
 	if err != nil {
 		return 0, b.internal(ctx, op, err)
 	}
-	if n == 0 {
+	if stored == 0 {
 		return 0, connect.NewError(connect.CodeNotFound, errors.New("no stored release"))
 	}
 	return n, nil

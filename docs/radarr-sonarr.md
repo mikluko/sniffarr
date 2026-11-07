@@ -45,8 +45,13 @@ With `SNIFFARR_RADARR_URL` and `SNIFFARR_RADARR_API_KEY`, or the
 `/api/v3/history`: the whole history once per database, oldest first, and
 then at start and every 24 hours the grabs since the latest recorded one
 through `/api/v3/history/since`; a round that fails is retried after an
-hour. The URL is the app's base, with its URL base if it has one, such as
-`http://radarr:7878` or `http://nas/sonarr`. A history record and a webhook
+hour. The URL is the app's root, with its URL base if it has one, such as
+`http://radarr:7878` or `http://nas/sonarr`; the API is `/api/v3` under it.
+Where the API reaches the app by another address than a browser does, as a
+cluster's service rather than its ingress, `SNIFFARR_RADARR_API_URL` or
+`SNIFFARR_SONARR_API_URL` names the root of the v3 API itself, such as
+`http://radarr.media:7878/api/v3`, and the root URL is left to the UI's
+links. A history record and a webhook
 event of one download are one event, and the records of a season pack's
 episodes one grab. An event without a download ID is never taken for
 another.

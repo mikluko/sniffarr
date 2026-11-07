@@ -152,6 +152,12 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	}
 	if c.on.ui {
 		c.ui = ui.Config{Addr: or(getenv("SNIFFARR_UI_ADDR"), defaultUIAddr), OIDCIssuer: getenv("SNIFFARR_OIDC_ISSUER"), SeerrURL: getenv("SNIFFARR_SEERR_URL")}
+		if c.ui.RadarrURL, err = rootURL(getenv, "SNIFFARR_RADARR_URL"); err != nil {
+			return c, err
+		}
+		if c.ui.SonarrURL, err = rootURL(getenv, "SNIFFARR_SONARR_URL"); err != nil {
+			return c, err
+		}
 	}
 	if c.on.api {
 		if c.api, c.db, err = loadAPI(lookup); err != nil {
@@ -390,22 +396,40 @@ func numbers(getenv func(string) string, name, def, want string) ([]int, error) 
 	return out, nil
 }
 
-// arrHistory reads SNIFFARR_<app>_URL and SNIFFARR_<app>_API_KEY, which
-// are set together or not at all.
+// arrHistory reads where the app's v3 API is: SNIFFARR_<app>_API_URL, or
+// else /api/v3 under SNIFFARR_<app>_URL, with SNIFFARR_<app>_API_KEY; the
+// key is set with either URL or not at all.
 func arrHistory(getenv func(string) string, app string) (api.ArrHistory, error) {
-	urlName, keyName := "SNIFFARR_"+app+"_URL", "SNIFFARR_"+app+"_API_KEY"
-	h := api.ArrHistory{URL: getenv(urlName), APIKey: getenv(keyName)}
-	switch {
-	case h.URL == "" && h.APIKey == "":
-		return h, nil
-	case h.URL == "" || h.APIKey == "":
-		return h, fmt.Errorf("%s and %s: set both or neither", urlName, keyName)
+	rootName, apiName, keyName := "SNIFFARR_"+app+"_URL", "SNIFFARR_"+app+"_API_URL", "SNIFFARR_"+app+"_API_KEY"
+	root, err := rootURL(getenv, rootName)
+	if err != nil {
+		return api.ArrHistory{}, err
 	}
-	u, err := url.Parse(h.URL)
-	if err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Host == "" {
-		return h, fmt.Errorf("%s: want an http or https URL", urlName)
+	h := api.ArrHistory{APIKey: getenv(keyName)}
+	if h.URL, err = rootURL(getenv, apiName); err != nil {
+		return api.ArrHistory{}, err
+	}
+	if h.URL == "" && root != "" {
+		h.URL = strings.TrimSuffix(root, "/") + "/api/v3"
+	}
+	if (h.URL == "") != (h.APIKey == "") {
+		return api.ArrHistory{}, fmt.Errorf("%s or %s, and %s: set a URL with the key or neither", rootName, apiName, keyName)
 	}
 	return h, nil
+}
+
+// rootURL reads the variable as the root URL of a web app: "" when unset,
+// else an http or https URL with a host.
+func rootURL(getenv func(string) string, name string) (string, error) {
+	raw := getenv(name)
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Host == "" {
+		return "", fmt.Errorf("%s: want an http or https URL", name)
+	}
+	return raw, nil
 }
 
 func positive(getenv func(string) string, name string, def int) (int, error) {

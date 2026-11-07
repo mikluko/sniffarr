@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/connect"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/container"
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
@@ -113,11 +114,8 @@ func (s *Service) ProbeResult(ctx context.Context, req *connect.Request[sniffarr
 	now := s.now()
 	switch o := m.GetOutcome().(type) {
 	case *sniffarrv1.ProbeResultRequest_File:
-		name = "tracks"
-		p := store.Probe{Outcome: store.ProbeTracks, Path: o.File.GetPath(), Format: o.File.GetFormat(), Downloaded: m.GetDownloaded()}
-		for _, t := range o.File.GetTracks() {
-			p.Tracks = append(p.Tracks, trackOf(t))
-		}
+		var p store.Probe
+		p, name = probedFile(o.File, m.GetDownloaded())
 		record = func() error { return s.Store.ProbeDone(ctx, h, p, now) }
 	case *sniffarrv1.ProbeResultRequest_Failure:
 		switch o.Failure {
@@ -168,6 +166,20 @@ func (s *Service) ProbeUpload(ctx context.Context, req *connect.Request[sniffarr
 		s.metrics().probeUploaded.Add(ctx, n)
 	}
 	return connect.NewResponse(&sniffarrv1.ProbeUploadResponse{}), nil
+}
+
+// probedFile is the probe f records, with downloaded bytes, and the name of
+// its outcome; a track list longer than container.TrackLimit is one a probe
+// cannot read, as the fetcher's probe reports it.
+func probedFile(f *sniffarrv1.ProbedFile, downloaded int64) (store.Probe, string) {
+	if len(f.GetTracks()) > container.TrackLimit {
+		return store.Probe{Outcome: store.ProbeUnknown, Downloaded: downloaded}, "unknown"
+	}
+	p := store.Probe{Outcome: store.ProbeTracks, Path: f.GetPath(), Format: f.GetFormat(), Downloaded: downloaded}
+	for _, t := range f.GetTracks() {
+		p.Tracks = append(p.Tracks, trackOf(t))
+	}
+	return p, "tracks"
 }
 
 func trackOf(t *sniffarrv1.Track) store.Track {

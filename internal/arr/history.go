@@ -35,7 +35,8 @@ const grabbed = "1"
 type History struct {
 	// App is store.AppRadarr or store.AppSonarr.
 	App string
-	// URL is the app's base URL, with its URL base if it has one.
+	// URL is the root of the app's v3 API, such as
+	// http://radarr:7878/api/v3.
 	URL    string
 	APIKey string
 	// HTTP sends the requests, each traced as a client span;
@@ -142,7 +143,7 @@ func (h *History) Import(ctx context.Context) (int, error) {
 			TotalRecords int      `json:"totalRecords"`
 			Records      []record `json:"records"`
 		}
-		if err := h.get(ctx, "/api/v3/history", q, &res); err != nil {
+		if err := h.get(ctx, "/history", q, &res); err != nil {
 			return total, err
 		}
 		n, err := h.record(ctx, res.Records)
@@ -159,7 +160,7 @@ func (h *History) Since(ctx context.Context, t time.Time) (int, error) {
 	q := h.query()
 	q.Set("date", t.UTC().Format(time.RFC3339))
 	var res []record
-	if err := h.get(ctx, "/api/v3/history/since", q, &res); err != nil {
+	if err := h.get(ctx, "/history/since", q, &res); err != nil {
 		return 0, err
 	}
 	return h.record(ctx, res)

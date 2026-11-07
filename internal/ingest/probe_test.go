@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/container"
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
 	"github.com/mikluko/sniffarr/internal/store"
@@ -125,7 +126,7 @@ func TestProbeTaskBudget(t *testing.T) {
 	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: c[:], Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_UNKNOWN}})
 	require.Equal(t, b[:], f.task(t).GetInfohash())
 	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: b[:], Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_NO_PEERS}})
-	n, err := f.st.RequestProbe(ctx, []store.Hash{a}, f.now)
+	n, _, err := f.st.RequestProbe(ctx, []store.Hash{a}, f.now)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 	require.Equal(t, a[:], f.task(t).GetInfohash(), "a requested release is probed again, whatever its last probe")
@@ -161,6 +162,39 @@ func TestProbeResultRejectsBadInput(t *testing.T) {
 	_, err = f.s.ProbeResult(context.Background(), connect.NewRequest(&sniffarrv1.ProbeResultRequest{Infohash: infohash(1), Downloaded: -1,
 		Outcome: &sniffarrv1.ProbeResultRequest_Failure{Failure: sniffarrv1.ProbeFailure_PROBE_FAILURE_TIMEOUT}}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "negative bytes")
+}
+
+func TestProbeResultTrackLimit(t *testing.T) {
+	ctx := context.Background()
+	f := newProbeFixture(t, ProbeConfig{})
+	file := func(n int) *sniffarrv1.ProbeResultRequest_File {
+		tracks := make([]*sniffarrv1.Track, n)
+		for i := range tracks {
+			tracks[i] = &sniffarrv1.Track{Kind: sniffarrv1.TrackKind_TRACK_KIND_AUDIO, Language: "rus"}
+		}
+		return &sniffarrv1.ProbeResultRequest_File{File: &sniffarrv1.ProbedFile{Path: "a.mkv", Format: "matroska", Tracks: tracks}}
+	}
+	outcome := func(h store.Hash) string {
+		var o string
+		require.NoError(t, f.db.R.QueryRowContext(ctx, "SELECT p.outcome FROM probe_releases p JOIN torrent_releases t ON t.id = p.torrent_id WHERE t.infohash = ?", h[:]).Scan(&o))
+		return o
+	}
+	within := f.insert(t, 1, "Alien.1979.1080p", 5)
+	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: within[:], Outcome: file(container.TrackLimit)})
+	require.Equal(t, store.ProbeTracks, outcome(within))
+	r, err := f.st.Get(ctx, within)
+	require.NoError(t, err)
+	require.Len(t, r.Tracks, container.TrackLimit)
+
+	over := f.insert(t, 2, "Heat.1995.1080p", 5)
+	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: over[:], Downloaded: 1 << 20, Outcome: file(container.TrackLimit + 1)})
+	require.Equal(t, store.ProbeUnknown, outcome(over), "a track list over the limit is one a probe cannot read")
+	r, err = f.st.Get(ctx, over)
+	require.NoError(t, err)
+	require.Empty(t, r.Tracks)
+	traffic, err := f.st.ProbeTraffic(ctx, "2026-11-01")
+	require.NoError(t, err)
+	require.Equal(t, int64(1<<20), traffic.Rx, "its download still counts")
 }
 
 func TestProbeUpload(t *testing.T) {
