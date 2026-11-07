@@ -48,6 +48,10 @@ const probeStudiosFilled = "probe_studios:"
 // any probe got the probe's probability.
 const probeMarkersFilled = "probe_markers:"
 
+// probeAttemptsFilled is the settings key that records that the failed
+// attempts kept by releases probed before a read cleared them were cleared.
+const probeAttemptsFilled = "probe_attempts"
+
 // Backfilled is the progress of one backfill within one Backfill call.
 type Backfilled struct {
 	Name string
@@ -59,7 +63,8 @@ type Backfilled struct {
 
 // Backfill runs, in transactions of a few hundred rows, the one-time
 // backfills of stored torrents not yet done: the year, season, episode and
-// quality of those without a year or a quality, from their names,
+// quality of those without a year or a quality, from their names, no
+// failed attempts for a release whose last probe read it, as probed records,
 // and, per language of Options.Languages, a marker for every torrent whose
 // name has the language's audio.Language.Codes, no marker of the rules layer
 // that only a subtitle file's path gave, the mark and studios of every
@@ -75,6 +80,9 @@ func (s *Store) Backfill(ctx context.Context, progress func(Backfilled)) error {
 	}
 	if err := s.backfill(ctx, "release features", featuresFilled, progress, s.featuresBatch); err != nil {
 		return fmt.Errorf("release features: %w", err)
+	}
+	if err := s.backfill(ctx, "probe attempts", probeAttemptsFilled, progress, s.probeAttemptsBatch); err != nil {
+		return fmt.Errorf("probe attempts: %w", err)
 	}
 	for _, tag := range s.opts.Languages {
 		l, ok := audio.Lookup(tag)
@@ -206,6 +214,31 @@ func (s *Store) featuresBatch(ctx context.Context, after int64) (int, int64, fun
 			}
 		}
 		return nil
+	}, nil
+}
+
+// probeAttemptsBatch reads the releases after the row ID after whose last
+// probe read them and that keep failed attempts, and clears those as probed
+// does.
+func (s *Store) probeAttemptsBatch(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
+	var ids []int64
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+		return nil
+	}, "SELECT torrent_id FROM probe_releases WHERE torrent_id > ? AND outcome != ? AND attempts > 0 ORDER BY torrent_id LIMIT ?",
+		after, ProbeFailed, s.backfillBatch); err != nil {
+		return 0, 0, nil, err
+	}
+	if len(ids) == 0 {
+		return 0, 0, nil, nil
+	}
+	return len(ids), ids[len(ids)-1], func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE probe_releases SET attempts = 0, retry_at = NULL WHERE torrent_id IN ("+placeholders(len(ids))+")", int64Args(ids)...)
+		return err
 	}, nil
 }
 
