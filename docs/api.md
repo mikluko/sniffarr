@@ -97,7 +97,9 @@ error and a 404 included, carries the header `Server: sniffarr/<version>`
 | `RequestMatch`  | `releases`, as for `RefreshPeers`; `lang`                                                                                                                                        | `titles` looked up on TMDB at once, the title keys of movies and series among the releases' that no work is matched to, whatever their last lookup, ahead of the background matcher and within TMDB's rate and the classifier's budget as a search's; `works` the releases belong to once that is done |
 
 `Stats` and `Home` serve the counts the API computed last, at start and then
-every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
+every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`. The last computation is
+kept in the database: at start the API serves it, and `/readyz` answers, until
+the first computation of its own replaces it. Only `tokens_used_day`,
 `probe_bytes_rx_day`, `probe_bytes_tx_day`, the queue and `probers` are read at the request.
 `Stats` gives that interval as `counts_interval`.
 

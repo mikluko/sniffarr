@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The API keeps its last counts in the database and, after a restart, serves them and answers `/readyz` at once, until its first computation replaces them; the data page marks them stale by their age.
+
 ## [0.44.0-beta.4] - 2026-11-07
 
 ### Changed

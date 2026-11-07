@@ -66,9 +66,24 @@ func (c *Counts) Refresh(ctx context.Context) (*Snapshot, error) {
 	return c.compute(ctx)
 }
 
-// Run refreshes the snapshot at once and then every Interval until ctx is
-// done; a failed refresh is logged and keeps the previous snapshot.
+// Load makes the counts the store kept from its last computation the
+// latest snapshot, at the time they were computed, unless a snapshot
+// exists already; false when the store kept none.
+func (c *Counts) Load(ctx context.Context) (bool, error) {
+	st, at, ok, err := c.Store.LoadCounts(ctx)
+	if err != nil || !ok {
+		return false, err
+	}
+	return c.latest.CompareAndSwap(nil, &Snapshot{At: at, Stats: st}), nil
+}
+
+// Run makes the kept counts the latest, then refreshes the snapshot at once
+// and every Interval until ctx is done; a failed load or refresh is logged
+// and keeps the previous snapshot.
 func (c *Counts) Run(ctx context.Context) error {
+	if _, err := c.Load(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		c.Log.WarnContext(ctx, "load counts", "err", err)
+	}
 	tick := time.NewTicker(c.Interval)
 	defer tick.Stop()
 	for {
@@ -97,6 +112,9 @@ func (c *Counts) compute(ctx context.Context) (*Snapshot, error) {
 	}
 	s := &Snapshot{At: now, Stats: st}
 	c.latest.Store(s)
+	if err := c.Store.SaveCounts(ctx, now, st); err != nil && c.Log != nil {
+		c.Log.WarnContext(ctx, "save counts", "err", err)
+	}
 	return s, nil
 }
 

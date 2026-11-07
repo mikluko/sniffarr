@@ -84,6 +84,36 @@ func TestCountsRun(t *testing.T) {
 	require.True(t, c.latest.Load().At.After(first.At))
 }
 
+// A restart is ready with the counts the last computation kept, at their own
+// time, before it computes anew.
+func TestCountsLoadKept(t *testing.T) {
+	ctx := context.Background()
+	b := browser(t)
+	c := &Counts{Store: b.Store, Now: func() time.Time { return now }}
+	_, err := c.Refresh(ctx)
+	require.NoError(t, err)
+
+	restarted := &Counts{Store: b.Store}
+	require.False(t, restarted.Ready())
+	ok, err := restarted.Load(ctx)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.True(t, restarted.Ready())
+	s, err := restarted.Latest(ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, 5, s.Stats.Total)
+	require.True(t, s.At.Equal(now), "the time they were computed, not of the load")
+
+	ok, err = restarted.Load(ctx)
+	require.NoError(t, err)
+	require.False(t, ok, "a snapshot already there stays")
+
+	empty := &Counts{Store: browser(t).Store}
+	ok, err = empty.Load(ctx)
+	require.NoError(t, err)
+	require.False(t, ok, "nothing kept, nothing loaded")
+}
+
 func TestCountsLatestComputesOnce(t *testing.T) {
 	b := browser(t)
 	c := &Counts{Store: b.Store}
