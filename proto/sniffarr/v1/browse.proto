@@ -42,9 +42,9 @@ service BrowseService {
   // and the newest 200 entries of its journal, or NOT_FOUND.
   rpc Card(CardRequest) returns (CardResponse);
   // Journal returns the newest entries of an infohash's journal, oldest
-  // first: what happened to it, when, and how it ended. An infohash never
-  // seen has an empty journal; the absence of events is the answer, not
-  // NOT_FOUND.
+  // first: what happened to it, when, and how it ended. Entries are ordered
+  // by at, then by writing. An infohash never seen has an empty journal; the
+  // absence of events is the answer, not NOT_FOUND.
   rpc Journal(JournalRequest) returns (JournalResponse);
   // Stats returns the store's counts as last computed, which the server
   // recomputes periodically.
@@ -309,7 +309,8 @@ message CardResponse {
   // recomputed on each call: in the order the name reads, audio markers
   // last.
   repeated RuleHit rules = 10;
-  // The newest 200 entries of the release's journal, oldest first.
+  // The newest 200 entries of the release's journal, oldest first: ordered
+  // by at, then by writing.
   repeated JournalEntry journal = 11;
 }
 
@@ -329,11 +330,14 @@ message JournalResponse {
 // kind and outcome are the store's words: sighted (queued, promoted,
 // revived), leased (fetch), fetched (stored, rejected, duplicate),
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
-// classified (jev, reuse, failed), matched (tmdb, jev, arr, none, error),
-// arr (grab, import), feed (stored, queued, rejected), probe_wanted
+// classified (jev, reuse, failed), matched (tmdb, jev, arr, earlier, none,
+// error), arr (grab, import), feed (stored, queued, already_queued,
+// rejected), probe_wanted
 // (search, request), probe_leased (request, retry, search, background),
 // probed (tracks, unknown, no_peers, timeout), deleted (idle, expired).
 message JournalEntry {
+  // When the event happened; for a grab or an import Radarr or Sonarr
+  // reports, the event's own time.
   google.protobuf.Timestamp at = 1;
   string kind = 2;
   string outcome = 3;

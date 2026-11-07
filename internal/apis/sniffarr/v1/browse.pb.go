@@ -1659,7 +1659,8 @@ type CardResponse struct {
 	// recomputed on each call: in the order the name reads, audio markers
 	// last.
 	Rules []*RuleHit `protobuf:"bytes,10,rep,name=rules,proto3" json:"rules,omitempty"`
-	// The newest 200 entries of the release's journal, oldest first.
+	// The newest 200 entries of the release's journal, oldest first: ordered
+	// by at, then by writing.
 	Journal       []*JournalEntry `protobuf:"bytes,11,rep,name=journal,proto3" json:"journal,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1854,12 +1855,15 @@ func (x *JournalResponse) GetEntries() []*JournalEntry {
 // kind and outcome are the store's words: sighted (queued, promoted,
 // revived), leased (fetch), fetched (stored, rejected, duplicate),
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
-// classified (jev, reuse, failed), matched (tmdb, jev, arr, none, error),
-// arr (grab, import), feed (stored, queued, rejected), probe_wanted
+// classified (jev, reuse, failed), matched (tmdb, jev, arr, earlier, none,
+// error), arr (grab, import), feed (stored, queued, already_queued,
+// rejected), probe_wanted
 // (search, request), probe_leased (request, retry, search, background),
 // probed (tracks, unknown, no_peers, timeout), deleted (idle, expired).
 type JournalEntry struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// When the event happened; for a grab or an import Radarr or Sonarr
+	// reports, the event's own time.
 	At      *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`
 	Kind    string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	Outcome string                 `protobuf:"bytes,3,opt,name=outcome,proto3" json:"outcome,omitempty"`

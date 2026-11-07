@@ -34,10 +34,11 @@ the outcome is stored, the tracks in their own table: read, unknown
 (no file of those formats, a track list beyond `max_bytes`, or a header the
 probe cannot read), or failed (fewer than `-min-peers` peers within
 `-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
-before `-probe-timeout`). The release's journal records a request, and once
-a day a search that queued or moved its probe, with the query, the first
-hand-out of each attempt and of each move ahead with the piece data it may
-download, and each outcome with the piece data downloaded, the first 32
+before `-probe-timeout`). The release's journal records a request, unless its
+probe is queued as requested already and no lease began since, and once a day a search that queued or
+moved its probe, with the query, the first hand-out of each attempt and of
+each move ahead with the piece data it may download and when the lease ends,
+and each outcome with the piece data downloaded, the first 32
 tracks read with how many there were when more, the leases the attempt took
 when it took more than one and, for a failure, whether the attempts have run
 out and, when it waits out a backoff, when it is due again. A failed probe
