@@ -325,11 +325,11 @@ func requeueProbe(ctx context.Context, tx *sql.Tx, h Hash, final bool, retry int
 }
 
 // probed records the outcome of the probe of release id, h, at the time,
-// and drops it from the queue.
+// clears its failures, and drops it from the queue.
 func probed(ctx context.Context, tx *sql.Tx, id int64, h Hash, p Probe, at time.Time) error {
 	if _, err := tx.ExecContext(ctx, `INSERT INTO probe_releases (torrent_id, outcome, attempts, retry_at, probed_at, path, format, downloaded)
 		VALUES (?1, ?2, 0, NULL, ?3, ?4, ?5, ?6) ON CONFLICT (torrent_id) DO UPDATE SET
-		outcome = ?2, retry_at = NULL, probed_at = ?3, path = ?4, format = ?5, downloaded = downloaded + ?6`,
+		outcome = ?2, attempts = 0, retry_at = NULL, probed_at = ?3, path = ?4, format = ?5, downloaded = downloaded + ?6`,
 		id, p.Outcome, at.Unix(), nullString(p.Path), nullString(p.Format), p.Downloaded); err != nil {
 		return err
 	}

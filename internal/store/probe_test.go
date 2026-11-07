@@ -330,3 +330,18 @@ func TestRequestProbe(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, failed, c.Hash, "a failed request stays searched, due once its backoff is out")
 }
+
+func TestProbeDoneResetsFailures(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	for i := range 2 {
+		final, err := s.ProbeFailed(ctx, h, t0.Add(time.Duration(i)*time.Hour), 3, time.Hour)
+		require.NoError(t, err)
+		require.False(t, final)
+	}
+	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0.Add(2*time.Hour)))
+	final, err := s.ProbeFailed(ctx, h, t0.Add(3*time.Hour), 3, time.Hour)
+	require.NoError(t, err)
+	require.False(t, final, "the failures before a read do not count")
+}

@@ -37,9 +37,10 @@ probe cannot read), or failed (fewer than `-min-peers` peers within
 before `-probe-timeout`). A failed probe is repeated after
 `SNIFFARR_PROBE_BACKOFF`, doubled for each failure before; a requested or
 searched one stays queued as searched until then. Once
-`SNIFFARR_PROBE_ATTEMPTS` have failed, the backoff stays at its last doubling
-and the release is probed again only once it has twice the peers over 7 days
-it had at its last probe, and at least two more. A task is leased for
+`SNIFFARR_PROBE_ATTEMPTS` have failed since the release was last read, the
+backoff stays at its last doubling and the release is probed again only once
+it has twice the peers over 7 days it had at its last probe, and at least two
+more. A task is leased for
 `SNIFFARR_PROBE_LEASE`; leases are kept in the queue, and a restart of the
 API frees them.
 
