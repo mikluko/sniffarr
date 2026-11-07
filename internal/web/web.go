@@ -572,7 +572,6 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	t := ui.Torrent{
 		InfoHash:      h,
 		Name:          r.GetName(),
-		Magnet:        "magnet:?xt=urn:btih:" + h,
 		Size:          r.GetSize(),
 		FileCount:     int(r.GetFileCount()),
 		FirstSeen:     r.GetFirstSeen().AsTime(),

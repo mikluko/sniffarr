@@ -1,6 +1,11 @@
 package ui
 
-import "time"
+import (
+	"html/template"
+	"net/url"
+	"strings"
+	"time"
+)
 
 // Enumerations as the UI knows them. Values are stable keys; labels come from i18n
 // ("kind.<v>", "source.<v>", "layer.<v>", "voicemode.<v>", "drop.<v>", "voiceband.<v>",
@@ -250,7 +255,6 @@ type TorrentPage struct {
 type Torrent struct {
 	InfoHash      string
 	Name          string
-	Magnet        string
 	Size          int64
 	FileCount     int // files in the torrent
 	FirstSeen     time.Time
@@ -389,4 +393,12 @@ type ProbeStats struct {
 	TxDay    int64
 	LimitDay int64
 	PaceDay  int64 // what RxDay comes to by the end of the UTC day at its pace so far, 0 for none
+}
+
+// Magnet returns the torrent's magnet link, built from InfoHash and Name with
+// both query-escaped, so marking it template.URL cannot inject markup or
+// parameters.
+func (t Torrent) Magnet() template.URL {
+	dn := strings.ReplaceAll(url.QueryEscape(t.Name), "+", "%20")
+	return template.URL("magnet:?xt=urn:btih:" + url.QueryEscape(t.InfoHash) + "&dn=" + dn)
 }

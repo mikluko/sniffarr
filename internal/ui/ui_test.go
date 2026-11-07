@@ -240,3 +240,28 @@ func TestStatic(t *testing.T) {
 		t.Errorf("missing: %d %q", w.Code, w.Header().Get("Cache-Control"))
 	}
 }
+
+// The magnet link survives html/template's URL filter, with the name escaped.
+func TestTorrentMagnetHref(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/t/x", nil)
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	p := SampleTorrent(b, false, "poster")
+	p.Torrent.InfoHash = "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"
+	p.Torrent.Name = `Чужой (1979) & "Aliens"+<b>#1`
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "torrent", p); err != nil {
+		t.Fatal(err)
+	}
+	body := w.Body.String()
+	want := `href="magnet:?xt=urn:btih:8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52&amp;dn=%D0%A7%D1%83%D0%B6%D0%BE%D0%B9%20%281979%29%20%26%20%22Aliens%22%2B%3Cb%3E%231"`
+	if !strings.Contains(body, want) {
+		t.Errorf("no %s in the page", want)
+	}
+	if strings.Contains(body, "ZgotmplZ") {
+		t.Error("the URL filter blocked a link")
+	}
+}
