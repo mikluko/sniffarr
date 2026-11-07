@@ -5,7 +5,18 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
+
+// sentence returns s with its first letter in upper case.
+func sentence(s string) string {
+	r, n := utf8.DecodeRuneInString(s)
+	if r == utf8.RuneError {
+		return s
+	}
+	return string(unicode.ToUpper(r)) + s[n:]
+}
 
 // TMDBImageBase is the secure_base_url from TMDB /configuration.
 var TMDBImageBase = "https://image.tmdb.org/t/p/"
@@ -191,10 +202,10 @@ func WorkPath(kind string, tmdbID int64) string {
 // Path is the title page of a summary.
 func (w WorkSummary) Path() string { return WorkPath(w.Kind, w.TMDB.ID) }
 
-// Facts is the one-line description under a title: "фильм · 2015 · 2 ч 10 мин",
-// "сериал · 2011 · завершён · 8 сез.".
+// Facts is the one-line description under a title: "Фильм · 2015 · 2 ч 10 мин",
+// "Сериал · 2011 · завершён · 8 сез.".
 func (b Base) Facts(kind string, t *TMDBWork) string {
-	parts := []string{b.T("kind." + kind)}
+	parts := []string{sentence(b.T("kind." + kind))}
 	if t.Matched() {
 		if t.Year > 0 {
 			parts = append(parts, strconv.Itoa(t.Year))

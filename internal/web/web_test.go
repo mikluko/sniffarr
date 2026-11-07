@@ -315,7 +315,7 @@ func TestTop(t *testing.T) {
 	h := handler(t, nil)
 	body := page(t, get(t, h, "/top", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
-	require.Contains(t, body, `aria-current="page">movies</a>`, "movies without a kind")
+	require.Contains(t, body, `aria-current="page">Movies</a>`, "movies without a kind")
 	require.Contains(t, body, `<a href="/movie/348">Alien</a> <span class="mu">1979</span>`, "a row leads to its work")
 	require.Contains(t, body, `<img class="th" src="https://image.tmdb.org/t/p/w92/p.jpg" width="28" height="42"`, "its poster")
 	require.Contains(t, body, `<td class="r mu">1</td>`, "its place")
@@ -325,16 +325,16 @@ func TestTop(t *testing.T) {
 	require.Less(t, strings.Index(body, "/movie/348"), strings.Index(body, "/movie/8195"), "more peers first")
 	require.NotContains(t, body, "Severance")
 	require.NotContains(t, body, narcissist, "an unmatched release is in no top")
-	require.Contains(t, body, ">show all 100</a>", "the first 25 of 100")
+	require.Contains(t, body, ">Show all 100</a>", "the first 25 of 100")
 	require.Contains(t, body, "Oct 20 12:00", "computed at now")
 	require.Contains(t, page(t, get(t, h, "/top?lang=ru", "")), `<a href="/movie/348">Чужой</a>`, "the title in the page's language")
 
 	body = page(t, get(t, h, "/top?kind=series&win=24h&all=1", ""))
-	require.Contains(t, body, `aria-current="page">series</a>`)
+	require.Contains(t, body, `aria-current="page">Series</a>`)
 	require.Contains(t, body, `<a href="/tv/95396">Severance</a>`)
 	require.Contains(t, body, `<td class="r dl">0</td>`, "first the day before too, with more peers then")
 	require.Contains(t, body, "web", "its source")
-	require.NotContains(t, body, ">show all 100</a>", "every work is listed")
+	require.NotContains(t, body, ">Show all 100</a>", "every work is listed")
 
 	body = page(t, get(t, h, "/top?voice=explicit", ""))
 	require.Contains(t, body, "/movie/348")
@@ -348,11 +348,11 @@ func TestTop(t *testing.T) {
 	require.Contains(t, frag, "Severance")
 
 	for _, tt := range []struct{ path, want string }{
-		{"/top?kind=music", `aria-current="page">movies</a>`},
-		{"/top?kind=", `aria-current="page">movies</a>`},
+		{"/top?kind=music", `aria-current="page">Movies</a>`},
+		{"/top?kind=", `aria-current="page">Movies</a>`},
 		{"/top?win=1y", `aria-current="true">7 days</a>`},
 		{"/top?voice=loud", `aria-current="true">any</a>`},
-		{"/top?all=yes", ">show all 100</a>"},
+		{"/top?all=yes", ">Show all 100</a>"},
 	} {
 		require.Contains(t, page(t, get(t, h, tt.path, "")), tt.want, "%s falls back to the default", tt.path)
 	}
@@ -369,10 +369,10 @@ func TestWork(t *testing.T) {
 	h := handler(t, nil)
 	body := page(t, get(t, h, "/movie/348", ""))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
-	require.Contains(t, body, `<a href="/top?kind=movie">← top movies</a>`)
+	require.Contains(t, body, `<a href="/top?kind=movie">← Top movies</a>`)
 	require.Contains(t, body, `<img class="tm-poster" src="https://image.tmdb.org/t/p/w342/p.jpg" width="150" height="225"`)
 	require.Contains(t, body, `<h1 class="tm-title">Alien <span class="mu">1979</span></h1>`)
-	require.Contains(t, body, "movie · 1979 · 1 h 57 min · US · en")
+	require.Contains(t, body, "Movie · 1979 · 1 h 57 min · US · en")
 	require.Contains(t, body, "Horror, Science Fiction")
 	require.Contains(t, body, `TMDB 8.2 <span class="mu">· 16,995 votes</span>`)
 	require.Contains(t, body, `<a href="https://www.themoviedb.org/movie/348" rel="noreferrer" target="_blank">TMDB</a> · <a href="https://www.imdb.com/title/tt0078748/"`)
@@ -404,7 +404,7 @@ func TestWork(t *testing.T) {
 	require.Contains(t, frag, `<a href="/movie/348?sort=size" hx-get="/movie/348?sort=size"`, "the previous page")
 
 	body = page(t, get(t, h, "/tv/95396", ""))
-	require.Contains(t, body, "series · 2022 · returning · 2 seasons")
+	require.Contains(t, body, "Series · 2022 · returning · 2 seasons")
 	require.Contains(t, body, `<select name="season">`)
 	require.Contains(t, body, `<option value="1">1</option><option value="2">2</option>`)
 	require.Contains(t, body, `<td class="mono">S02E05</td>`)
@@ -415,7 +415,7 @@ func TestWork(t *testing.T) {
 	require.Contains(t, frag, `<option value="2" selected>`)
 
 	body = page(t, get(t, h, "/movie/8195", ""))
-	require.Contains(t, body, `<div class="tm-poster tm-none" aria-hidden="true">no poster</div>`)
+	require.Contains(t, body, `<div class="tm-poster tm-none" aria-hidden="true">No poster</div>`)
 
 	require.Equal(t, http.StatusNotFound, get(t, h, "/movie/1", "").Code)
 	require.Equal(t, http.StatusNotFound, get(t, h, "/movie/m348", "").Code, "not a number")
@@ -440,16 +440,16 @@ func TestTorrent(t *testing.T) {
 	h := handler(t, nil)
 	body := page(t, get(t, h, "/t/"+hexOf(1), "", "Referer", "http://example.com/torrents?q=alien"))
 	require.True(t, strings.HasPrefix(body, "<!doctype html>"))
-	require.Contains(t, body, `<a href="/torrents?q=alien">← back to results</a>`, "back where the card was opened from")
+	require.Contains(t, body, `<a href="/torrents?q=alien">← Back to results</a>`, "back where the card was opened from")
 	require.Contains(t, body, "magnet:?xt=urn:btih:"+hexOf(1))
 	require.Contains(t, body, `<td><b>Rus</b></td>`, "the mark")
-	require.Regexp(t, `<th>peers</th><td>\d+ in 7 days <span class="mu">· \d+ in 24 h · \d+ in 30 days</span></td>`, body)
+	require.Regexp(t, `<th>Peers</th><td>\d+ in 7 days <span class="mu">· \d+ in 24 h · \d+ in 30 days</span></td>`, body)
 	require.Contains(t, body, `<section class="tm tm-matched" aria-label="TMDB">`, "the match")
 	require.Contains(t, body, `<img class="tm-poster" src="https://image.tmdb.org/t/p/w342/p.jpg" width="150" height="225"`)
 	require.Contains(t, body, `<a class="tm-stretch" href="/movie/348">Alien</a> <span class="mu">1979</span>`, "the title leads to its work")
 	require.Contains(t, body, `№1 among movies · 2 releases, this one by peers #1`)
-	require.Contains(t, body, `picked by the classifier among candidates · confidence 0.80 · Oct 20`, "how it was matched")
-	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1), "", "Referer", "http://example.com/data")), `<a href="/movie/348">← back to results</a>`,
+	require.Contains(t, body, `Picked by the classifier among candidates · confidence 0.80 · Oct 20`, "how it was matched")
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1), "", "Referer", "http://example.com/data")), `<a href="/movie/348">← Back to results</a>`,
 		"from elsewhere, back to its work")
 
 	require.Contains(t, body, "Rules fired")
@@ -463,22 +463,22 @@ func TestTorrent(t *testing.T) {
 
 	body = page(t, get(t, h, "/t/"+hexOf(2), ""))
 	require.Contains(t, body, `this one by peers #2`)
-	require.Contains(t, body, "matched by TMDB search, unique hit", "the match of its own title key")
+	require.Contains(t, body, "Matched by TMDB search, unique hit", "the match of its own title key")
 	require.Contains(t, body, `<td>Cyrillic</td>`, "the script hint")
 
 	body = page(t, get(t, h, "/t/"+hexOf(5), ""))
-	require.Contains(t, body, `<div class="tm-poster tm-none" aria-hidden="true">no poster</div>`, "matched without a poster")
+	require.Contains(t, body, `<div class="tm-poster tm-none" aria-hidden="true">No poster</div>`, "matched without a poster")
 
 	body = page(t, get(t, h, "/t/"+hexOf(6), ""))
 	require.Contains(t, body, `<section class="tm tm-unmatched" aria-label="TMDB">`, "looked up and not found")
 	require.Contains(t, body, "Not found on TMDB.")
-	require.Contains(t, body, `<a href="https://www.themoviedb.org/search?query=narcissists&#43;playbook&#43;2026" rel="noreferrer" target="_blank">search TMDB</a>`)
-	require.Contains(t, body, "checked Oct 20")
-	require.Contains(t, body, `<a href="/torrents">← back to results</a>`, "back to the torrents")
+	require.Contains(t, body, `<a href="https://www.themoviedb.org/search?query=narcissists&#43;playbook&#43;2026" rel="noreferrer" target="_blank">Search TMDB</a>`)
+	require.Contains(t, body, "Checked Oct 20")
+	require.Contains(t, body, `<a href="/torrents">← Back to results</a>`, "back to the torrents")
 	body = page(t, get(t, h, "/t/"+hexOf(7), ""))
 	require.Contains(t, body, `<section class="tm tm-unchecked" aria-label="TMDB">`, "never looked up")
 	require.Contains(t, body, "Not checked against TMDB yet.")
-	require.NotContains(t, body, "checked Oct")
+	require.NotContains(t, body, "Checked Oct")
 
 	body = page(t, get(t, h, "/t/"+hexOf(1), ""))
 	require.Equal(t, 8, strings.Count(body, `<td class="mono wrapc">`), "the first eight files")
@@ -519,20 +519,20 @@ func TestRequests(t *testing.T) {
 	h := handler(t, nil)
 	body := page(t, get(t, h, "/t/"+hexOf(1), ""))
 	require.Contains(t, body, `<form id="act-peers" method="post" action="/t/`+hexOf(1)+`/peers"`)
-	require.Contains(t, body, `<button type="submit" title="download the file headers and read the tracks">probe tracks</button>`)
+	require.Contains(t, body, `<button type="submit" title="Download the file headers and read the tracks">Probe tracks</button>`)
 	body = page(t, get(t, h, "/t/"+hexOf(7), ""))
-	require.Contains(t, body, `<button type="submit" disabled title="no peers over 7 days">probe tracks</button>`, "no probe without peers")
+	require.Contains(t, body, `<button type="submit" disabled title="No peers over 7 days">Probe tracks</button>`, "no probe without peers")
 	body = page(t, get(t, h, "/movie/348", ""))
 	require.Contains(t, body, `<form id="act-probe" method="post" action="/movie/348/probe"`)
 
 	frag := fragment(t, post(t, h, "/t/"+hexOf(1)+"/peers", "act-peers"), "act-peers")
-	require.Equal(t, `<span id="act-peers" class="mu" role="status">peer lookup requested</span>`, strings.TrimSpace(frag))
+	require.Equal(t, `<span id="act-peers" class="mu" role="status">Peer lookup requested</span>`, strings.TrimSpace(frag))
 	frag = fragment(t, post(t, h, "/movie/348/probe", "act-probe"), "act-probe")
-	require.Equal(t, `<span id="act-probe" class="mu" role="status">probe requested</span>`, strings.TrimSpace(frag), "the one release of the title a probe can read")
+	require.Equal(t, `<span id="act-probe" class="mu" role="status">Probe requested</span>`, strings.TrimSpace(frag), "the one release of the title a probe can read")
 	frag = fragment(t, post(t, h, "/t/"+hexOf(2)+"/probe", "act-probe"), "act-probe")
-	require.Equal(t, `<span id="act-probe" class="mu" role="status">no file a probe can read</span>`, strings.TrimSpace(frag))
+	require.Equal(t, `<span id="act-probe" class="mu" role="status">No file a probe can read</span>`, strings.TrimSpace(frag))
 	frag = fragment(t, post(t, h, "/tv/95396/peers", "act-peers"), "act-peers")
-	require.Contains(t, frag, "peer lookup requested")
+	require.Contains(t, frag, "Peer lookup requested")
 
 	w := post(t, h, "/t/"+hexOf(1)+"/probe", "")
 	require.Equal(t, http.StatusSeeOther, w.Code, "without htmx, back to the card")
@@ -569,9 +569,9 @@ func TestData(t *testing.T) {
 	require.Contains(t, body, "25.0% of the daily limit, on pace for 50.0%", "tokens used of the daily limit, doubled by midnight at noon")
 	require.Contains(t, body, "61.0% of the daily limit, on pace for 122.0%", "the probe bytes outrun the limit")
 	require.Contains(t, body, `<div class="proj" style="width: 100.0%"></div>`, "the outline stops at the limit")
-	require.Contains(t, body, "<td>downloaded, UTC day</td><td class=\"r\">61.0 GB</td>", "piece data probes downloaded today")
-	require.Contains(t, body, "<td>uploaded, UTC day</td><td class=\"r\">38.0 GB</td>", "piece data the fetchers uploaded today")
-	require.Contains(t, body, "<td>daily download limit</td><td class=\"r\">100 GB</td>")
+	require.Contains(t, body, "<td>Downloaded, UTC day</td><td class=\"r\">61.0 GB</td>", "piece data probes downloaded today")
+	require.Contains(t, body, "<td>Uploaded, UTC day</td><td class=\"r\">38.0 GB</td>", "piece data the fetchers uploaded today")
+	require.Contains(t, body, "<td>Daily download limit</td><td class=\"r\">100 GB</td>")
 	require.Contains(t, body, "61.0%", "probe bytes of the daily limit")
 	require.Contains(t, body, `title="2026-10-20 11:53">updated 7 min ago</div>`, "when the API computed the counts")
 	require.Contains(t, body, "New torrents per hour, 48 hours")

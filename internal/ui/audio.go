@@ -21,7 +21,7 @@ func DefaultVoiceLang(voiceLangs []string, uiLang string) string {
 
 func (b Base) has(key string) bool { _, ok := b.msgs[key]; return ok }
 
-// DubLabel names the dub of a language: "русская озвучка" / "Russian dub".
+// DubLabel names the dub of a language: "Русская озвучка" / "Russian dub".
 func (b Base) DubLabel(code string) string {
 	if b.has("dub." + code) {
 		return b.T("dub." + code)

@@ -143,9 +143,13 @@ func TestFormat(t *testing.T) {
 	c := Base{Lang: "en"}
 	units := Base{Lang: "ru", msgs: map[string]string{"unit.min": "мин", "unit.h": "ч", "unit.d": "д"}}
 	for _, x := range []struct{ got, want string }{
-		{ru.Num(1284311), "1 284 311"},
+		{ru.Num(1284311), "1\u00a0284\u00a0311"},
+		{ru.Num(-1284), "-1\u00a0284"},
 		{c.Num(1284311), "1,284,311"},
-		{ru.Size(26629001216), "24,8 ГБ"},
+		{ru.Size(26629001216), "24,8\u00a0ГБ"},
+		{Base{Lang: "ru", msgs: map[string]string{"kind.movie": "фильм"}}.Facts("movie", &TMDBWork{}), "Фильм"},
+		{sentence("сериал"), "Сериал"},
+		{sentence(""), ""},
 		{c.Size(412 << 20), "412 MB"},
 		{ru.Prob(fp(.93)), "0,93"},
 		{ru.Pct(41280, 50000), "82,6%"},
