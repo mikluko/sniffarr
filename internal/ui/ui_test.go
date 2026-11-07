@@ -735,9 +735,20 @@ func TestDataMarkup(t *testing.T) {
 	if !strings.Contains(fresh, probe) {
 		t.Errorf("no probe meter %q", probe)
 	}
+	for _, want := range []string{">P1: Radarr and Sonarr, searches<", ">P4: sampled, background probes<"} {
+		if !strings.Contains(fresh, want) {
+			t.Errorf("no %s while probes are on", want)
+		}
+	}
 	b.Probes = false
-	if off := render(SampleData(b)); strings.Contains(off, probe) {
+	off := render(SampleData(b))
+	if strings.Contains(off, probe) {
 		t.Error("the probe meter shows while probes are off")
+	}
+	for _, want := range []string{">P1: Radarr and Sonarr<", ">P4: sampled<"} {
+		if !strings.Contains(off, want) {
+			t.Errorf("no %s while probes are off", want)
+		}
 	}
 }
 

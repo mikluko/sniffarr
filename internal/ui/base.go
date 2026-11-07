@@ -43,6 +43,15 @@ var onMissing func(lang, key string)
 
 func (b Base) ru() bool { return b.Lang == "ru" }
 
+// Priority is what queues tasks at priority p, naming probes only while the
+// API probes.
+func (b Base) Priority(p int) string {
+	if !b.Probes && (p == 1 || p == 4) {
+		return b.T(fmt.Sprintf("q.p%d_noprobes", p))
+	}
+	return b.T(fmt.Sprintf("q.p%d", p))
+}
+
 // Num formats an integer with locale grouping: 1 284 311 / 1,284,311.
 func (b Base) Num(n int64) string {
 	sep := ","

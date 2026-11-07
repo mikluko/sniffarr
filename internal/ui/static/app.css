@@ -118,7 +118,7 @@ button:disabled{cursor:default;opacity:.5;background:var(--background)}
 .meter{position:relative;height:6px;margin-top:6px;background:var(--muted)}
 .meter i{display:block;height:100%;background:var(--ln)}
 .meter .proj{position:absolute;inset:0 auto 0 0;border:1px dashed var(--ln)}
-.qcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;align-items:start}
+.qcards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
 .qcard{display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;background:var(--card);border:1px solid var(--border)}
 .qcard h3{margin:0 0 2px}
 .qbar{display:flex;gap:2px;height:8px}
@@ -258,6 +258,7 @@ a.orig{display:block;font-size:12px}
 /* data, on a phone */
 @media (max-width:640px){
   .dstats{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+  .qcards{grid-template-columns:1fr}
   .stat .big{font-size:20px}
   .qcard{padding:12px;gap:10px}
   .chart .xax span:not(:first-child):not(:last-child){display:none}

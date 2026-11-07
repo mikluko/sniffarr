@@ -41,7 +41,7 @@
       <table class="t">
         <thead><tr><th>{{$.T "q.priority"}}</th><th class="r">{{$.T "q.tasks"}}</th><th class="r">{{$.T "q.eta"}}</th></tr></thead>
         <tbody>
-        {{range .Levels}}{{$p := printf "P%d" .Priority}}{{$tip := concat $p ": " ($.T (printf "q.p%d" .Priority))}}
+        {{range .Levels}}{{$p := printf "P%d" .Priority}}{{$tip := concat $p ": " ($.Priority .Priority)}}
           <tr><td><span class="tip" tabindex="0" aria-label="{{$tip}}"><span class="badge"><span class="sw q{{.Priority}}"></span>{{$p}}</span><span class="tipb" aria-hidden="true">{{$tip}}</span></span></td>
             <td class="r">{{$.Num .Tasks}}</td>
             <td class="r">{{if not .Known}}{{template "tip" (tipArgs "?" ($.T "q.nopace"))}}{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
