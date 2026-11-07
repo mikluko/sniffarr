@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The release card's journal reads in rows by day: a fetch or a probe with all its attempts, or a title's feed listings, form one row that opens on its steps, particulars and tracks; failures are marked amber or red, in words for screen readers too, and the heading's tooltip gives the retention.
+- The card shows the journal's newest 5 rows and loads the rest in place, older entries 200 at a time.
+- The card of an infohash with no torrent says what ended it, and notes when retention may have cut the start of its journal.
+- A request for peers from the web UI is recorded in the journal.
+- `BrowseService.Journal` takes `before` and returns `total` and `older`; `Card` returns `journal_total`; journal entries carry `id`; `Settings` reports `journal_retention`.
+
 ## [0.44.0-alpha.3] - 2026-11-07
 
 ### Added
