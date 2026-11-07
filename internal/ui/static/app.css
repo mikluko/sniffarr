@@ -185,6 +185,11 @@ h2.tm-title{margin:0;font-size:18px;line-height:1.3;letter-spacing:-.01em;color:
 .warn{color:var(--warn);font-weight:600}
 .attr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:11px;padding-top:8px}
 .attr img{height:12px;width:auto;display:block}
+.attr>span:not(.ver){flex:1 1 200px;min-width:0}
+.attr .ver{margin-left:auto;white-space:nowrap;font-size:12px}
+.ver .tip{text-decoration:none}
+.ver .tipb{left:auto;right:0}
+.ver .tipb::before{left:auto;right:12px}
 
 /* dubs */
 .t td.au{white-space:normal;min-width:220px}

@@ -265,6 +265,7 @@
   "tvstatus.Ended": "ended",
   "tvstatus.Canceled": "canceled",
   "tvstatus.Pilot": "pilot",
+  "foot.build": "Built {0} UTC, commit {1}.",
   "attr.text": "This product uses the TMDB API but is not endorsed or certified by TMDB.",
   "langname.ru": "Russian",
   "dub.ru": "Russian dub",

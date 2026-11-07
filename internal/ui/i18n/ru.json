@@ -269,6 +269,7 @@
   "tvstatus.Ended": "завершён",
   "tvstatus.Canceled": "закрыт",
   "tvstatus.Pilot": "пилот",
+  "foot.build": "Сборка {0} UTC, коммит {1}.",
   "attr.text": "This product uses the TMDB API but is not endorsed or certified by TMDB.",
   "langname.ru": "русская",
   "dub.ru": "Русская озвучка",

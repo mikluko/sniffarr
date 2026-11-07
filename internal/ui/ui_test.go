@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // Renders every page and fragment in both languages, fails on template errors
@@ -109,6 +111,7 @@ func TestRenderAll(t *testing.T) {
 			}
 			b := r.Base(req, lang, "", []string{"ru"}, loc)
 			b.Now, b.Probes, b.Classifier, b.Feeds = now, true, true, true
+			b.Build = sampleBuild
 			w := httptest.NewRecorder()
 			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
 				t.Fatalf("%s/%s: %v", lang, c.name, err)
@@ -126,6 +129,43 @@ func TestRenderAll(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Errorf("untranslated keys: %v", missing)
+	}
+}
+
+var sampleBuild = version.Info{Version: "0.44.0-alpha.2", Commit: "1a2b3c4", Built: time.Date(2026, 11, 7, 14, 2, 0, 0, time.UTC)}
+
+// The footer of every page names the build; its tooltip gives the build time
+// in UTC and the commit, and is left out while either is unknown.
+func TestRenderFooterVersion(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	render := func(lang string, build version.Info, page string, data func(Base) any) string {
+		t.Helper()
+		req := httptest.NewRequest("GET", "/", nil)
+		b := r.Base(req, lang, "", []string{"ru"}, time.FixedZone("CEST", 2*3600))
+		b.Build = build
+		w := httptest.NewRecorder()
+		if err := r.Render(w, req, page, data(b)); err != nil {
+			t.Fatal(err)
+		}
+		return w.Body.String()
+	}
+	pages := map[string]func(Base) any{
+		"torrents": func(b Base) any { return SampleTorrents(b, "", Filters{}) },
+		"notfound": func(b Base) any { return NotFoundPage{Base: b, Asked: "/x"} },
+	}
+	for page, data := range pages {
+		checkBody(t, "ru/"+page, render("ru", sampleBuild, page, data), nil, []string{
+			`<span class="ver"><span class="tip" tabindex="0" aria-label="sniffarr 0.44.0-alpha.2: Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.">sniffarr 0.44.0-alpha.2<span class="tipb" aria-hidden="true">Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.</span></span></span>`,
+		})
+		checkBody(t, "en/"+page, render("en", sampleBuild, page, data), nil, []string{
+			`aria-label="sniffarr 0.44.0-alpha.2: Built 2026-11-07 14:02 UTC, commit 1a2b3c4."`,
+		})
+		checkBody(t, "dev/"+page, render("en", version.Info{Version: "dev"}, page, data), []string{`class="tip" tabindex="0" aria-label="sniffarr dev`}, []string{
+			`<span class="ver">sniffarr dev</span>`,
+		})
 	}
 }
 

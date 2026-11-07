@@ -27,7 +27,8 @@ docker build --build-arg VERSION=0.44.0 --build-arg COMMIT=$(git rev-parse HEAD)
 ```
 
 The process logs them once at start, and the API and the UI answer every
-request with the `Server` header `sniffarr/<version>`.
+request with the `Server` header `sniffarr/<version>`; the UI shows them
+in the footer of every page.
 
 ## Generating code
 
