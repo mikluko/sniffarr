@@ -469,7 +469,7 @@ func TestWork(t *testing.T) {
 	require.Contains(t, body, `<div>horror, science fiction<span class="mu"> · TMDB 8.2 · 16,995 votes</span></div>`, "the rating on the genres' line")
 	require.Contains(t, body, `<a href="https://www.themoviedb.org/movie/348" rel="noreferrer" target="_blank">TMDB</a> · <a href="https://www.imdb.com/title/tt0078748/"`)
 	require.NotContains(t, body, "Seerr", "no Seerr configured")
-	require.Contains(t, body, `<span>Place in the top</span>
+	require.Contains(t, body, `<span>Chart position</span>
     <span>24 h #1 · 7 days <b>#1</b> · 30 days #1</span>`, "its places in the three tops, the 7 days' in bold")
 	require.Contains(t, body, `<span class="tip" tabindex="0" aria-label="Peak: `, "the peak's tooltip on its label")
 	require.Regexp(t, `<span>Peers</span>\s*<span><b>1\d\d</b> in 7 days`, body, "the peers of both title keys")

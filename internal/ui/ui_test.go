@@ -963,7 +963,7 @@ func TestDataMarkup(t *testing.T) {
 	for _, want := range []string{
 		`hx-trigger="every 30s [document.visibilityState=='visible'], tz"`,
 		`<button type="button" class="ic" hx-get="/" hx-target="#data" hx-swap="morph:outerHTML" aria-label="Refresh" aria-describedby="refresh-tip">` + string(svg) + `</button>`,
-		`<span class="tipb" id="refresh-tip" role="tooltip">Refresh. Data as of Oct 20, 14:02, updated 3 min ago. The page refreshes itself every 30 seconds.</span>`,
+		`<span class="tipb" id="refresh-tip" role="tooltip">Refresh. Data as of Oct 20, 14:02, updated 3 min ago. The page refreshes itself every 30 seconds. The server recomputes the data every 5 min.</span>`,
 		`<span class="tip" tabindex="0" aria-label="P0: asked for in the UI"><span class="badge"><span class="sw q0"></span>P0</span><span class="tipb" aria-hidden="true">P0: asked for in the UI</span></span>`,
 		`<div class="qbar" role="img" aria-label="Probes: P0 1; P1 63; P4 2;"><i class="q0" style="flex-grow: 1"></i><i class="q1" style="flex-grow: 63"></i><i class="q4" style="flex-grow: 2"></i></div>`,
 		`<span class="xs dw">≈ 107.2% by 00:00 UTC</span>`,

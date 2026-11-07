@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The release check reads the latest stable release from the releases feed, `https://sarak.sh/mikluko/sniffarr/releases.rss`, the highest stable version among its items; an RSS or Atom feed of releases reads the same.
+- The data page's refresh tooltip says how often the server recomputes the data.
+- In English, the title page's facts say "Chart position".
+
 ## [0.44.0-beta.1] - 2026-11-07
 
 ### Added

@@ -840,9 +840,14 @@ func (p DataPage) Stale() bool {
 }
 
 // RefreshTip is the refresh button's tooltip: when the counts were
-// computed, how long ago, and how often the page refreshes itself.
+// computed, how long ago, how often the API computes them when it says,
+// and how often the page refreshes itself.
 func (p DataPage) RefreshTip() string {
-	return p.Fmt("d.refresh_tip", p.Time(p.Stats.Computed), p.Ago(p.Stats.Computed), strconv.Itoa(p.RefreshSeconds()))
+	tip := p.Fmt("d.refresh_tip", p.Time(p.Stats.Computed), p.Ago(p.Stats.Computed), strconv.Itoa(p.RefreshSeconds()))
+	if p.Stats.Interval > 0 {
+		tip += " " + p.Fmt("d.recompute_tip", p.Span(p.Stats.Interval))
+	}
+	return tip
 }
 
 // ClassifierTip is the tooltip of the classifier's figure: its tokens on
