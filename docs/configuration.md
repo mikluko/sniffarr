@@ -83,9 +83,10 @@ TMDB work, with their peer sketches; a later sighting queues them again.
 Then, in batches of its own, it deletes the journal entries older than the
 journal retention period, counted from each entry's time, so the entry of a
 grab or an import Radarr or Sonarr reports later than that after it
-happened goes at the next sweep; with a journal retention shorter than the
-torrents', as by default, a torrent's trail has lost its beginning by the
-time the torrent is deleted, and only its end remains. Once an hour it
+happened goes at the next sweep. At the defaults the journal outlasts the
+idle retention and not the retention: a torrent deleted as idle keeps its
+whole trail unless it began more than 30 days before, and one deleted as
+expired, unseen for 90 days, has lost the start of its trail. Once an hour it
 unions the hour sketches older than 8 days into day sketches and deletes the
 day sketches older than 65 days, and every 10 minutes, and once at start, it
 recomputes the tops of works and every torrent's peers over the last 7 days.

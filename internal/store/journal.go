@@ -35,7 +35,7 @@ const (
 	JournalFeed = "feed"
 	// JournalProbeWanted is a probe asked for: search, request.
 	JournalProbeWanted = "probe_wanted"
-	// JournalProbeLeased is a probe task handed to a fetcher: request,
+	// JournalProbeLeased is a probe task handed to a prober: request,
 	// retry, search, background.
 	JournalProbeLeased = "probe_leased"
 	// JournalProbed is a probe's result: tracks, unknown, no_peers, timeout.

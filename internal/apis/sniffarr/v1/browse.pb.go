@@ -1863,7 +1863,8 @@ type JournalEntry struct {
 	At      *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`
 	Kind    string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	Outcome string                 `protobuf:"bytes,3,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	// A JSON object of the event's particulars, or empty.
+	// The event's particulars as the text of a JSON object, its strings not
+	// escaped for HTML; empty for none.
 	Detail        string `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

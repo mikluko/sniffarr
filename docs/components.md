@@ -48,14 +48,16 @@ What happens to an infohash is recorded in the store, `torrent_journal`, one
 row per event in the transaction of the change it records: queued, promoted
 or queued again, leased once per attempt and per promotion, failed for no
 peers or a timeout, with the leases the attempt took when it took more than
-one, dropped and evicted, for an infohash sighted by announce,
-a feed or Radarr or Sonarr; metadata fetched and stored, rejected or already
-stored; each classification and title match, with who asked for it; the grabs
-and imports Radarr and Sonarr report; its first listing in each feed,
-journaled after it is recorded, in a transaction of its own; the probes wanted, started
-and done; and its deletion. The queue's events of an infohash only ever
-sampled are left out: samples are sighted and fetched at millions a day, and
-most of them never fetch, so the journal of a sampled infohash begins with
+one, dropped and evicted, for an infohash sighted by announce, a feed or
+Radarr or Sonarr; metadata fetched and stored, rejected or already stored;
+a classification by Jev, with who asked for it, a kind copied from a release
+of the same title key, and a classification that failed; a title lookup's
+match, no match or error, with who asked for it, and the match of its title
+key a release takes as it is stored; the grabs and imports Radarr and Sonarr
+report; its first listing in each feed, journaled after it is recorded, in a
+transaction of its own; the probes wanted, started and done; and its
+deletion. The queue's events of an infohash only ever sampled are left out,
+as discovery rests on samples: the journal of a sampled infohash begins with
 its metadata. What repeats without changing is left out too: a lease of the
 same attempt after one expired, a title lookup that finds nothing or fails as
 the last one did, a search that returns the release within a day of the last.
@@ -64,12 +66,13 @@ copied to more than 50 releases of a title key, a match of more than 500, or
 no match for a key of more than 50, is journaled on none of them. The journal
 is keyed by infohash and outlives the torrent's row, so a rejected, dropped
 or deleted infohash keeps its trail; the release card shows the newest 200
-entries, and entries are kept for `SNIFFARR_RETENTION_JOURNAL`. Entries
-read in the order of their times. An entry's time is when it was recorded,
-except for a grab or an import Radarr or Sonarr reports: its entry is at the
-time the event happened, with the time it was recorded as `recorded_at` when
-that is more than a minute apart, and the matches it applies carry the time
-it happened as `event_at`.
+entries, as does the card of an infohash whose torrent is not stored, and
+entries are kept for `SNIFFARR_RETENTION_JOURNAL`. Entries read in the order
+of their times. An entry's time is when it was recorded, except for a grab
+or an import Radarr or Sonarr reports: its entry is at the time the event
+happened, with the time it was recorded as `recorded_at` when that is more
+than a minute apart, and the matches it applies carry the time it happened
+as `event_at`.
 
 The server passes fetched metadata through a first filter by name and file
 extensions, rejecting what is never worth classifying: adult content,

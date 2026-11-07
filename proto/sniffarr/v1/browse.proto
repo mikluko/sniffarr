@@ -337,7 +337,8 @@ message JournalEntry {
   google.protobuf.Timestamp at = 1;
   string kind = 2;
   string outcome = 3;
-  // A JSON object of the event's particulars, or empty.
+  // The event's particulars as the text of a JSON object, its strings not
+  // escaped for HTML; empty for none.
   string detail = 4;
 }
 
