@@ -25,6 +25,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/rot13"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 func start(t *testing.T, cfg Config, qopts ...store.TaskOptions) (*httptest.Server, *http.Client) {
@@ -500,6 +501,23 @@ func TestReadyAfterCounts(t *testing.T) {
 	require.NoError(t, err)
 	res.Body.Close()
 	require.Equal(t, http.StatusOK, res.StatusCode)
+}
+
+func TestServerHeader(t *testing.T) {
+	srv, hc := start(t, Config{Counts: &search.Counts{}})
+	want := version.Get().Server()
+	for path, code := range map[string]int{
+		"/healthz":                          http.StatusOK,
+		"/readyz":                           http.StatusServiceUnavailable,
+		"/nowhere":                          http.StatusNotFound,
+		"/sniffarr.v1.SearchService/Search": http.StatusMethodNotAllowed,
+	} {
+		res, err := hc.Get(srv.URL + path)
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+		require.Equal(t, code, res.StatusCode, path)
+		require.Equal(t, want, res.Header.Get("Server"), path)
+	}
 }
 
 func TestKindLayers(t *testing.T) {

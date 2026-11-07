@@ -24,6 +24,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/app/sniff"
 	"github.com/mikluko/sniffarr/internal/app/ui"
 	"github.com/mikluko/sniffarr/internal/cli"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 func main() {
@@ -57,6 +58,8 @@ func options(cfg config, log *slog.Logger) []fx.Option {
 // run starts the components and stops them when ctx ends or one of them
 // fails.
 func run(ctx context.Context, cfg config, log *slog.Logger) error {
+	build := version.Get()
+	log.Info("sniffarr", "version", build.Version, "commit", build.Commit, "built", build.Built)
 	a := fx.New(options(cfg, log)...)
 	if err := a.Err(); err != nil {
 		return err

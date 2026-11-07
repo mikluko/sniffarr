@@ -17,6 +17,7 @@ import (
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 func TestGraph(t *testing.T) {
@@ -114,6 +115,13 @@ func TestRunWithTelemetryOff(t *testing.T) {
 	}
 	require.Eventually(t, ok("http://"+addr+"/healthz"), 5*time.Second, 10*time.Millisecond)
 	require.Eventually(t, ok("http://"+uiAddr+"/"), 5*time.Second, 10*time.Millisecond, "the UI reads the API in-process")
+
+	for _, url := range []string{"http://" + addr + "/healthz", "http://" + uiAddr + "/nowhere"} {
+		res, err := http.Get(url)
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+		require.Equal(t, version.Get().Server(), res.Header.Get("Server"), url)
+	}
 
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)

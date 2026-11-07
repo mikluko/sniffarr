@@ -21,6 +21,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/torznab"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // MaxMessage is the largest request message, in bytes, either API accepts.
@@ -78,7 +79,8 @@ type Config struct {
 	Feeds []string
 }
 
-// New returns the handler serving the APIs and /healthz.
+// New returns the handler serving the APIs and /healthz, every response
+// naming the build in its Server header.
 func New(c Config) (http.Handler, error) {
 	var opts []otelconnect.Option
 	if c.Meter != nil {
@@ -134,7 +136,7 @@ func New(c Config) (http.Handler, error) {
 		}
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	return mux, nil
+	return version.Middleware(mux), nil
 }
 
 // Protocols are the protocols the server speaks: HTTP/1.1 and HTTP/2

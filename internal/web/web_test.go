@@ -29,6 +29,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/sketch"
 	"github.com/mikluko/sniffarr/internal/store"
 	"github.com/mikluko/sniffarr/internal/ui"
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 var now = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
@@ -294,6 +295,22 @@ func TestRoot(t *testing.T) {
 	require.Equal(t, http.StatusOK, get(t, h, "/static/vendor/tmdb.svg", "").Code)
 	require.NotContains(t, page(t, get(t, h, "/?q=alien", "")), "wrow", "no search of titles")
 	require.Equal(t, http.StatusNotFound, get(t, h, "/data", "").Code, "the data page lives at / only")
+}
+
+func TestServerHeader(t *testing.T) {
+	h := handler(t, nil)
+	want := version.Get().Server()
+	for path, code := range map[string]int{
+		"/":                       http.StatusOK,
+		"/static/app.css":         http.StatusOK,
+		"/nowhere":                http.StatusNotFound,
+		"/t/" + hexOf(99):         http.StatusNotFound,
+		"/static/no-such-file.js": http.StatusNotFound,
+	} {
+		w := get(t, h, path, "")
+		require.Equal(t, code, w.Code, path)
+		require.Equal(t, want, w.Header().Get("Server"), path)
+	}
 }
 
 func TestTorrents(t *testing.T) {
