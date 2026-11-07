@@ -356,7 +356,7 @@ func TestTorrents(t *testing.T) {
 		want []string
 		not  []string
 	}{
-		{"/torrents?q=alien", []string{alien}, []string{chuzhoy, severance}},
+		{"/torrents?q=alien", []string{alien, chuzhoy}, []string{severance}},
 		{"/torrents?q=" + hexOf(5), []string{ronin}, []string{alien}},
 		{"/torrents?kind=unknown", []string{"Сборник"}, []string{alien, "Moon Safari"}},
 		{"/torrents?kind=other", []string{"Moon Safari"}, []string{alien, "Сборник"}},
