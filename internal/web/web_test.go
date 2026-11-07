@@ -450,7 +450,7 @@ func TestTorrent(t *testing.T) {
 	require.Contains(t, body, `<td>2026-10-20 11:00</td><td>metadata fetched</td><td>stored</td>`, "the journal, its kind and outcome translated")
 	require.Contains(t, body, `discovered by: announce · files: 10 · kind: movie · kind decided by: rules · name: `+alien+` · size: 55.0 GB`, "the detail in words")
 	require.Contains(t, body, `<td>title matched</td><td>by Jev</td>`)
-	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1)+"?lang=ru", "")), `<td>метаданные получены</td><td>сохранена</td>`, "in Russian")
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(1)+"?lang=ru", "")), `<td>метаданные получены</td><td>сохранены</td>`, "in Russian, agreeing with the event")
 
 	body = page(t, get(t, h, "/t/"+hexOf(2), ""))
 	require.Contains(t, body, `this one by peers #2`)
