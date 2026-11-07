@@ -376,6 +376,42 @@ a.btn:hover{background:var(--muted);text-decoration:none}
   #releases .rtab td.au b{color:var(--foreground)}
 }
 
-/* top, handoff v7: the ± column */
+/* top, handoff v7: segmented filters, the ± column, audio on one line, a
+ * dashed frame of the poster's size for a work with none; on a phone a row
+ * is rank, poster, title, peers over ±, then audio, then releases · sources */
+.seg .o.on{background:var(--muted);color:var(--foreground);font-weight:600}
+.topv{gap:20px}
+.topctl{gap:12px 24px}
+.topctl .flt{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px}
+.topctl .seg{margin-right:0}
+.topv .t td{padding-top:6px;padding-bottom:6px}
+.topv .tw{gap:10px}
+.topv .th{width:32px;height:48px}
+.topv .th-none{border:1px dashed var(--border);background:none}
+.topv td.pe{font-weight:600}
+.topv td.au{min-width:0}
+.topv td.au div{max-width:none;white-space:nowrap}
+.topv td.au .tip{text-decoration:underline dotted;text-decoration-color:var(--muted-foreground)}
+.topv .rl .mb{display:none}
 .dl .tipb{left:auto;right:0}
 .dl .tipb::before{left:auto;right:12px}
+.topfoot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
+@media (max-width:640px){
+  .topv .tt tr.wk{display:grid;grid-template-columns:32px auto minmax(0,1fr) auto;gap:2px 0;padding:10px 0}
+  .topv .tt tr.wk td{display:block;padding:0}
+  .topv .tt tr.wk td.fs{display:none}
+  .topv .tt tr.wk td.r:first-child{width:auto;grid-area:1/1;text-align:left}
+  .topv .tt tr.wk td.pe,.topv .tt tr.wk td.dl{padding-left:10px}
+  .topv .tt tr.wk td.nm{grid-area:1/2/3/4;min-width:0}
+  .topv .tt tr.wk td.nm .tw{align-items:flex-start}
+  .topv .tt tr.wk td.pe{grid-area:1/4;margin-left:0}
+  .topv .tt tr.wk td.dl{grid-area:2/4;font-size:12px}
+  .topv .tt tr.wk td.au{grid-area:3/2/4/5;margin:4px 0 0 42px;font-size:12px}
+  .topv .tt tr.wk td.au div{white-space:normal}
+  .topv .tt tr.wk td.rl{grid-area:4/2;margin-left:42px;text-align:left;font-size:12px;color:var(--muted-foreground)}
+  .topv .tt tr.wk td.src{display:block;grid-area:4/3/5/5;font-size:12px}
+  .topv .tt tr.wk td.src::before{content:"\a0· "}
+  .topv .rl .dk{display:none}
+  .topv .rl .mb{display:inline}
+  .topv .t td.pe::after,.topv .t td.rl::after{content:none}
+}

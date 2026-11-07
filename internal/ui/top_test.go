@@ -71,6 +71,26 @@ func TestTopMoved(t *testing.T) {
 	}
 }
 
+// The top's filters are segments of links, a work's audio is one line with
+// its marks in a tooltip, and a work with no poster has an empty frame.
+func TestTopMarkup(t *testing.T) {
+	body := renderTop(t, "en", nil)
+	for _, want := range []string{
+		`<a class="o on" href="/top?kind=movie&amp;win=7d" hx-get="/top?kind=movie&amp;win=7d" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true" aria-current="true">7 days</a>`,
+		`<a class="o" href="/top?kind=movie&amp;voice=explicit&amp;win=7d"`,
+		`<div><span class="mu">ru</span> <b><span class="tip" tabindex="0" aria-label="explicit 2 of 95: Marked in the name: seleZen, ExKinoRay">explicit 2 of 95` +
+			`<span class="tipb" aria-hidden="true">Marked in the name: seleZen, ExKinoRay</span></span></b><span class="mu"> · likely 7 more</span></div>`,
+		`<div><span class="mu">ru</span> <span class="mu">likely 2 of 3</span></div>`,
+		`<div><span class="mu">ru</span> <span class="mu">no signs</span></div>`,
+		`<span class="th th-none" aria-hidden="true"></span>`,
+		"<td class=\"r rl\"><span class=\"dk\">95</span><span class=\"mb\">95\u00a0releases</span></td>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %s", want)
+		}
+	}
+}
+
 func TestPrevPlace(t *testing.T) {
 	b := Base{Lang: "en", msgs: map[string]string{"top.prev_place": "{0}"}}
 	for n, want := range map[int]string{1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 11: "11th", 12: "12th", 13: "13th",
