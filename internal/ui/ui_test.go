@@ -408,6 +408,18 @@ func TestJournalSummary(t *testing.T) {
 	if got := b.JournalSummary(e); !slices.Equal(got, want) {
 		t.Errorf("%v, want %v", got, want)
 	}
+	for _, c := range []struct {
+		detail map[string]any
+		want   string
+	}{
+		{map[string]any{"tracks": []any{"video::hevc", "audio:rus:eac3"}}, "2"},
+		{map[string]any{"tracks": []any{"video::hevc"}, "tracks_total": 40.0}, "40"},
+	} {
+		got := b.JournalSummary(JournalEntry{Kind: "probed", Outcome: "tracks", Detail: c.detail})
+		if want := []DetailPair{{"tracks", c.want, ""}}; !slices.Equal(got, want) {
+			t.Errorf("tracks %v, want %v", got, want)
+		}
+	}
 }
 
 func TestJournalFields(t *testing.T) {

@@ -162,15 +162,31 @@ func (e JournalEntry) Level() Severity {
 
 // JournalSummary returns the particulars of the entry a collapsed row shows,
 // those of journalSpec's summary keys it has, in their order, written as
-// JournalDetail writes them.
+// JournalDetail writes them, but for the tracks, written as how many the
+// probe read.
 func (b Base) JournalSummary(e JournalEntry) []DetailPair {
 	var out []DetailPair
 	for _, k := range journalSpec[e.Kind][e.Outcome].summary {
-		if v, ok := e.Detail[k]; ok {
+		v, ok := e.Detail[k]
+		switch {
+		case !ok:
+		case k == "tracks":
+			out = append(out, DetailPair{Key: b.journalKey(e.Kind, k), Value: b.Num(e.trackCount())})
+		default:
 			out = append(out, b.journalPair(e, JournalField{k, e.typed(k, v)}))
 		}
 	}
 	return out
+}
+
+// trackCount is how many tracks the probe read: tracks_total where the
+// entry lists only the first of them.
+func (e JournalEntry) trackCount() int64 {
+	if n, ok := e.Detail["tracks_total"].(float64); ok {
+		return int64(n)
+	}
+	list, _ := e.Detail["tracks"].([]any)
+	return int64(len(list))
 }
 
 // Bytes is a particular the store writes as a number of bytes.
