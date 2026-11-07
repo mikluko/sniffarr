@@ -2,7 +2,8 @@
 // torrents discovered on the DHT. Its components are switched on by flags:
 // -api serves the store, -ui the web UI, -sniff walks the DHT and -fetch
 // fetches metadata; the clients reach an API in the same process over
-// memconn and one elsewhere at SNIFFARR_URL. It runs until SIGINT or SIGTERM
+// memconn and one elsewhere at SNIFFARR_URL. -wait-api, alone, exits once the
+// API at SNIFFARR_URL serves this release. It runs until SIGINT or SIGTERM
 // and is configured by flags and environment variables; see the README.
 package main
 
@@ -10,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 
 	"go.uber.org/fx"
@@ -25,6 +27,7 @@ import (
 	"github.com/mikluko/sniffarr/internal/app/ui"
 	"github.com/mikluko/sniffarr/internal/cli"
 	"github.com/mikluko/sniffarr/internal/version"
+	"github.com/mikluko/sniffarr/internal/waitapi"
 )
 
 func main() {
@@ -60,6 +63,9 @@ func options(cfg config, log *slog.Logger) []fx.Option {
 func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	build := version.Get()
 	log.Info("sniffarr", "version", build.Version, "commit", build.Commit, "built", build.Built)
+	if cfg.waitAPI {
+		return waitapi.Run(ctx, &http.Client{Timeout: waitapi.Interval}, cfg.client.URL, build.Server(), waitapi.Interval, log)
+	}
 	a := fx.New(options(cfg, log)...)
 	if err := a.Err(); err != nil {
 		return err

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -141,4 +142,12 @@ func TestRunWithTelemetryOff(t *testing.T) {
 	case <-time.After(15 * time.Second):
 		t.Fatal("run did not return after cancel")
 	}
+}
+
+func TestRunWaitsForAPI(t *testing.T) {
+	srv := httptest.NewServer(version.Middleware(http.NotFoundHandler()))
+	t.Cleanup(srv.Close)
+	cfg, err := load([]string{"-wait-api"}, env("SNIFFARR_URL", srv.URL), io.Discard)
+	require.NoError(t, err)
+	require.NoError(t, run(t.Context(), cfg, slog.New(slog.DiscardHandler)), "the API's Server header names this build, on a 404 too")
 }

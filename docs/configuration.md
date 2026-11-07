@@ -13,9 +13,10 @@ the same to each.
 | `-sniff`             | off     | Walk the DHT and report infohashes                                                                                  |
 | `-fetch`             | off     | Take fetch tasks and return metadata                                                                                |
 | `-probe`             | off     | Probe stored releases for their tracks: `-api` queues probes, `-fetch` takes them; see [Probes](probes.md)          |
+| `-wait-api`          | off     | Poll `SNIFFARR_URL` every 2s and exit once its `Server` header names this binary's version; runs alone, without the flags above |
 | `-log-level`         | `info`  | Level to log at: `debug`, `info`, `warn` or `error`                                                                 |
 | `SNIFFARR_LOG_LEVEL` |         | The level when `-log-level` is not given; the flag wins when both are set                                           |
-| `SNIFFARR_URL`       |         | Base URL of the API, such as `http://sniffarr-api:8080`; required by `-ui`, `-sniff` and `-fetch` without `-api`, and must be unset with it |
+| `SNIFFARR_URL`       |         | Base URL of the API, such as `http://sniffarr-api:8080`; required by `-ui`, `-sniff`, `-fetch` and `-wait-api` without `-api`, and must be unset with it |
 
 ## `-api`
 

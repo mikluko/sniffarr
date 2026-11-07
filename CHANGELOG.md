@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `SNIFFARR_CLASSIFY_URL` sets the classifier's System One endpoint; an endpoint other than TypeSafe's turns the classifier on with or without a key.
 - `SNIFFARR_CLASSIFY_API_KEY` sets the key sent to the classifier's endpoint.
+- `-wait-api` polls the API at `SNIFFARR_URL` every 2 seconds and exits once its `Server` header names the binary's own version.
 
 ### Changed
 

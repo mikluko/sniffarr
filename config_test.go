@@ -179,6 +179,16 @@ func TestLoadComponents(t *testing.T) {
 		}},
 		{name: "unknown level in the environment", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_LOG_LEVEL", "loud"), err: "SNIFFARR_LOG_LEVEL: want debug, info, warn or error"},
 		{name: "unknown level flag", args: []string{"-api", "-log-level", "loud"}, env: apiEnv, err: `invalid value "loud" for flag -log-level`},
+		{name: "wait for the API", args: []string{"-wait-api"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
+			require.True(t, c.waitAPI)
+			require.Equal(t, components{}, c.on)
+			require.Equal(t, client.Config{URL: &url.URL{Scheme: "http", Host: "api:8080"}}, c.client)
+		}},
+		{name: "wait for the API without a URL", args: []string{"-wait-api"}, err: "SNIFFARR_URL is not set"},
+		{name: "wait for the API at a bad URL", args: []string{"-wait-api"}, env: []string{"SNIFFARR_URL", "api:8080"}, err: "SNIFFARR_URL: want an http or https URL"},
+		{name: "wait for the API with a component", args: []string{"-wait-api", "-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-wait-api runs alone: drop -api, -ui, -sniff, -fetch and -probe"},
+		{name: "wait for the API with the API", args: []string{"-wait-api", "-api"}, env: apiEnv, err: "-wait-api runs alone"},
+		{name: "wait for the API with probes", args: []string{"-wait-api", "-probe"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-wait-api runs alone"},
 		{name: "unknown flag", args: []string{"-discover"}, err: "flag provided but not defined: -discover"},
 		{name: "not a number", args: []string{"-fetch", "-fetchers", "many"}, err: `invalid value "many" for flag -fetchers`},
 		{name: "zero rate", args: []string{"-fetch", "-rate", "0"}, err: "-fetchers, -rate, -walkers and -min-peers: want positive integers"},

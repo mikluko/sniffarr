@@ -57,6 +57,9 @@ type config struct {
 	sniff    sniff.Config
 	fetch    fetch.Config
 	logLevel slog.Level
+	// waitAPI is -wait-api: wait for the API at client.URL to serve this
+	// release, and run nothing else.
+	waitAPI bool
 }
 
 func (c config) LogLevel() slog.Level { return c.logLevel }
@@ -91,6 +94,7 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	fs.BoolVar(&c.on.ui, "ui", false, "serve the web UI, a client of the browse API")
 	fs.BoolVar(&c.on.sniff, "sniff", false, "walk the DHT and report the infohashes it reveals to the ingest API")
 	fs.BoolVar(&c.on.fetch, "fetch", false, "take fetch tasks from the ingest API and return their metadata")
+	fs.BoolVar(&c.waitAPI, "wait-api", false, "wait until the API at SNIFFARR_URL serves this release, then exit; alone, without the components")
 	fs.BoolVar(&c.probe, "probe", false, "probe stored releases for their tracks: -api queues probes, -fetch takes them and seeds; off, no component probes")
 	fs.IntVar(&c.dht.Network.Port, "port", sniffer.DefaultPort, "TCP and UDP port for peers and the DHT; 0 picks a free one")
 	fs.BoolVar(&c.dht.Network.UPnP, "upnp", false, "ask the gateways on the local network to forward the listening port, TCP and UDP, by UPnP")
@@ -119,6 +123,9 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 		if err := c.logLevel.UnmarshalText([]byte(v)); err != nil {
 			return c, errors.New("SNIFFARR_LOG_LEVEL: want debug, info, warn or error")
 		}
+	}
+	if c.waitAPI {
+		return loadWaitAPI(c, getenv)
 	}
 	switch {
 	case c.on == (components{}):
@@ -173,6 +180,20 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 		c.api.Probes, c.db.Tasks.NoProbes = c.probe, !c.probe
 	}
 	return c, nil
+}
+
+// loadWaitAPI completes c for -wait-api, which runs alone and needs
+// SNIFFARR_URL.
+func loadWaitAPI(c config, getenv func(string) string) (config, error) {
+	if c.on != (components{}) || c.probe {
+		return c, errors.New("-wait-api runs alone: drop -api, -ui, -sniff, -fetch and -probe")
+	}
+	if getenv("SNIFFARR_URL") == "" {
+		return c, errors.New("SNIFFARR_URL is not set")
+	}
+	var err error
+	c.client, err = loadClient(c.on, getenv)
+	return c, err
 }
 
 // probeFlags are the flags that tune probes, which need -probe.
