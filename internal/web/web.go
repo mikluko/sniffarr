@@ -426,7 +426,7 @@ func (s *server) workPage(w http.ResponseWriter, req *http.Request, id, path str
 	}
 	f.VoiceLang, f.Voice = s.voice(qs, lang)
 	if sum.Kind == "series" {
-		f.Season, f.Episode = number(qs.Get("season")), number(qs.Get("episode"))
+		f.Season, f.Episode = number(qs.Get("season")), number(strings.TrimLeft(strings.TrimSpace(qs.Get("episode")), "Ee"))
 	}
 	o := offset(qs)
 	rr := &sniffarrv1.TitleReleasesRequest{Id: id, Quality: key(qualities, f.Quality), Source: key(sources, f.Source),
@@ -445,11 +445,8 @@ func (s *server) workPage(w http.ResponseWriter, req *http.Request, id, path str
 	for _, n := range m.GetSeasons() {
 		tbl.Seasons = append(tbl.Seasons, int(n))
 	}
-	vdef := ui.DefaultVoiceLang(s.tags, lang)
-	tbl.PrevURL, tbl.NextURL = pager(o, tbl.Shown, m.GetMatched(), func(o int) string {
-		return link(path, o, "quality", f.Quality, "", "source", f.Source, "", "min", f.MinGB, "", "max", f.MaxGB, "",
-			"vl", f.VoiceLang, vdef, "voice", f.Voice, "any", "season", f.Season, "", "episode", f.Episode, "", "sort", f.Sort, "peers")
-	})
+	page.Releases = tbl
+	tbl.PrevURL, tbl.NextURL = pager(o, tbl.Shown, m.GetMatched(), page.ReleasePageURL)
 	for _, r := range m.GetReleases() {
 		tbl.Rows = append(tbl.Rows, ui.Release{InfoHash: hex.EncodeToString(r.GetInfohash()), Name: r.GetName(), Peers: r.GetPeersWeek(), Size: r.GetSize(),
 			Quality: qualities[r.GetQuality()], Source: uiOr(sources, r.GetSource(), "none"), Season: int(r.GetSeason()), Episode: int(r.GetEpisode()),

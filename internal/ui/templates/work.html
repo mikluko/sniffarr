@@ -6,119 +6,144 @@
   <a href="/top?kind={{$w.Kind}}">← {{.T (concat "work.back." $w.Kind)}}</a>
 </div>
 
-<section class="tm tm-page" aria-label="TMDB">
+<section class="hero" aria-label="TMDB">
   {{if $m.HasPoster}}
-  <img class="tm-poster" src="{{tmdbImg posterCard $m.PosterPath}}" width="150" height="225" alt="" referrerpolicy="no-referrer">
+  <img class="hero-ph" src="{{tmdbImg posterCard $m.PosterPath}}" width="154" height="231" alt="" referrerpolicy="no-referrer">
   {{else}}
-  <div class="tm-poster tm-none" aria-hidden="true">{{.T "tmdb.noposter"}}</div>
+  <div class="hero-ph hero-none" aria-hidden="true">{{.T "tmdb.noposter"}}</div>
   {{end}}
-  <div class="tm-body">
-    <h1 class="tm-title">{{$m.Title}}{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h1>
-    {{if $m.ShowOriginal}}<div class="tm-orig">{{$m.OriginalTitle}}</div>{{end}}
-    <div class="tm-facts">{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}</div>
-    {{if $m.Genres}}<div class="tm-facts">{{.List $m.Genres}}</div>{{end}}
-    {{if $m.Votes}}<div class="tm-facts">TMDB {{.Rating $m.Rating}} <span class="mu">· {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span></div>{{end}}
-    {{if $m.Overview}}<p class="tm-over tm-over-long">{{$m.Overview}}</p>{{end}}
-    <div class="tm-links">
+  <div class="hero-bd">
+    <h1>{{$m.Title}}{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h1>
+    {{if $m.ShowOriginal}}<div class="mu">{{$m.OriginalTitle}}</div>{{end}}
+    <div>{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}</div>
+    {{if or $m.Genres $m.Votes}}<div>{{.List $m.Genres}}{{if $m.Votes}}<span class="mu">{{if $m.Genres}} · {{end}}TMDB {{.Rating $m.Rating}} · {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span>{{end}}</div>{{end}}
+    {{if $m.Overview}}<p class="hero-desc">{{$m.Overview}}</p>{{end}}
+    <div>
       <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}{{with $.SeerrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Seerr</a>{{end}}{{with $.RadarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Radarr</a>{{end}}{{with $.SonarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Sonarr</a>{{end}}
     </div>
-    <div class="ours">
-      {{if $w.Releases}}
-      <div><span class="mu">{{.T (concat "work.intop." $w.Kind)}}:</span>
-        {{range $i, $win := windows}}{{if $i}} · {{end}}{{$.T (concat "win." $win)}} {{with index $.Ranks $i}}<b>№{{.}}</b>{{else}}<span class="mu">—</span>{{end}}{{end}}</div>
-      <div><span class="mu">{{.T "work.ours"}}:</span> {{$w.Releases}} {{.T "top.releases_lc"}} · {{.Num .Peers.Week}} {{.T "top.peers_lc"}} {{.T "win.7d_lc"}} <span class="mu">· {{.Num .Peers.Day}} {{.T "win.24h_lc"}} · {{.Num .Peers.Month}} {{.T "win.30d_lc"}}</span></div>
-      {{if .VoiceLangs}}<div class="au">{{template "workaudio" (workAudioArgs .Base .Audio $w.Releases)}}</div>{{end}}
-      {{template "acts" (actsArgs .Base $w.Path .Peers.Week)}}
-      {{else}}
-      <div class="tm-state">{{.T "work.noreleases"}}</div>
-      {{end}}
-    </div>
   </div>
+  {{if $w.Releases}}
+  <div class="hero-facts">
+    <span>{{.T "work.f.rank"}}</span>
+    <span>{{range $i, $win := windows}}{{if $i}} · {{end}}{{$.T (concat "win." $win)}} {{with index $.Ranks $i}}{{if eq $win "7d"}}<b>№{{.}}</b>{{else}}№{{.}}{{end}}{{else}}<span class="mu">—</span>{{end}}{{end}}</span>
+    <span>{{.T "work.f.peers"}}</span>
+    <span><b>{{.Num .Peers.Week}}</b> {{.T "win.7d_lc"}} <span class="mu">· {{.Num .Peers.Day}} {{.T "win.24h_lc"}} · {{.Num .Peers.Month}} {{.T "win.30d_lc"}}</span></span>
+    <span>{{.T "work.f.releases"}}</span>
+    <span>{{.Num (int64 $w.Releases)}}</span>
+    {{if .VoiceLangs}}
+    <span>{{.T "work.f.dub"}}</span>
+    <span>{{range .VoiceLangs}}{{template "workdub" ($.Dub .)}}{{end}}</span>
+    {{end}}
+  </div>
+  <div class="hero-acts">{{template "acts" (actsArgs .Base $w.Path .Peers.Week)}}</div>
+  {{else}}
+  <div class="hero-norel tm-state">{{.T "work.noreleases"}}</div>
+  {{end}}
 </section>
 
-{{if $w.Releases}}{{template "releases" .}}{{end}}
+{{if $w.Releases}}
+<input type="checkbox" id="relf" class="vh" aria-controls="releases">
+{{template "releases" .}}
+{{end}}
 {{end}}
 
-{{/* Release table of a title; fragment "releases". The filter form reloads it through htmx. */}}
+{{/* Dub of a title in one language, on a line: how many of its N releases are marked, the marks
+     in the tooltip, and how many more are likely. */}}
+{{define "workdub"}}{{$b := .B}}{{$a := .A}}{{$n := int64 .N}}
+<span class="wdub"><span class="mu">{{$a.Lang}}</span>
+  {{- if $a.Marked}} {{$t := $b.Fmt "work.dub.marked" ($b.Num (int64 $a.Marked)) ($b.Num $n)}}<b>{{if $a.Marks}}{{template "tip" (tipArgs $t ($b.Fmt "work.dub.marks" ($b.List $a.Marks)))}}{{else}}{{$t}}{{end}}</b>
+    {{- if $a.Likely}} <span class="mu">· {{$b.Fmt "work.dub.likely_more" ($b.Num (int64 $a.Likely))}}</span>{{end}}
+  {{- else if $a.Likely}} {{$b.Fmt "work.dub.likely" ($b.Num (int64 $a.Likely)) ($b.Num $n)}}
+  {{- else}} <span class="mu">{{$b.T "audio.none"}}</span>{{end -}}
+</span>
+{{- end}}
+
+{{/* Release table of a title; fragment "releases". The segments are links; the fields and the
+     order submit the form, which carries the segments' values along. On a phone the filters
+     fold behind the #relf checkbox, outside the fragment so that a swap keeps it open. */}}
 {{define "releases"}}
-{{$r := .Releases}}{{$f := .Releases.Filters}}
+{{$r := .Releases}}{{$f := .Releases.Filters}}{{$set := .FiltersSet}}
 <section id="releases" class="rels">
-  <h2>{{.T "work.releases"}} <span class="mu">{{$r.Matched}} {{.T "results.of"}} {{$r.Total}}</span></h2>
-  <form class="filters" action="{{$r.Path}}" method="get"
+  <h2>{{.T "work.releases"}} <span class="mu">{{if $set}}{{$r.Matched}} {{.T "results.of"}} {{$r.Total}}{{else}}{{$r.Total}}{{end}}</span></h2>
+  <form class="rfl" action="{{$r.Path}}" method="get"
         hx-get="{{$r.Path}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true"
         hx-trigger="change, input changed delay:500ms from:input[type=text], submit">
-    <label>{{.T "rel.quality"}}
-      <select name="quality">
-        <option value="">{{.T "f.all"}}</option>
-        {{range qualities}}<option value="{{.}}"{{if eq . $f.Quality}} selected{{end}}>{{$.T (concat "quality." .)}}</option>{{end}}
-      </select></label>
-    <label>{{.T "f.source"}}
-      <select name="source">
-        <option value="">{{.T "f.all"}}</option>
-        {{range relSources}}<option value="{{.}}"{{if eq . $f.Source}} selected{{end}}>{{$.T (concat "source." .)}}</option>{{end}}
-      </select></label>
-    <label>{{.T "rel.size"}}
-      <input name="min" type="text" inputmode="decimal" value="{{$f.MinGB}}" placeholder="{{.T "rel.from"}}" class="num" aria-label="{{.T "rel.size"}} {{.T "rel.from"}}">
-      –
-      <input name="max" type="text" inputmode="decimal" value="{{$f.MaxGB}}" placeholder="{{.T "rel.to"}}" class="num" aria-label="{{.T "rel.size"}} {{.T "rel.to"}}">
-      {{.T "unit.gb"}}</label>
-    {{if .VoiceLangs}}
-    <label>{{if gt (len .VoiceLangs) 1}}{{.T "audio.filter"}}
-      <select name="vl" aria-label="{{.T "f.voice_lang"}}">
-        {{range .VoiceLangs}}<option value="{{.}}"{{if eq . $f.VoiceLang}} selected{{end}}>{{$.LangName .}}</option>{{end}}
-      </select>{{else}}{{.DubLabel (index .VoiceLangs 0)}}<input type="hidden" name="vl" value="{{index .VoiceLangs 0}}">{{end}}
-      <select name="voice" aria-label="{{.T "f.voice_mode"}}">
-        {{range voiceModes}}<option value="{{.}}"{{if eq . $f.Voice}} selected{{end}}>{{$.T (concat "relvoice." .)}}</option>{{end}}
-      </select></label>
-    {{end}}
+    {{with $f.Quality}}<input type="hidden" name="quality" value="{{.}}">{{end}}
+    {{with $f.Source}}<input type="hidden" name="source" value="{{.}}">{{end}}
+    {{if .VoiceLangs}}{{if gt (len .VoiceLangs) 1}}<input type="hidden" name="vl" value="{{$f.VoiceLang}}">{{end}}{{if ne $f.Voice "any"}}<input type="hidden" name="voice" value="{{$f.Voice}}">{{end}}{{end}}
+    {{if and (eq $r.Kind "series") $f.Season}}<input type="hidden" name="season" value="{{$f.Season}}">{{end}}
+    <label for="relf" class="rtog">{{.T "work.filters"}}{{if $set}}<span class="mu"> · {{$set}}</span>{{end}}</label>
     {{if eq $r.Kind "series"}}
-    <label>{{.T "rel.season"}}
-      <select name="season">
-        <option value="">{{.T "f.all"}}</option>
-        {{range $r.Seasons}}<option value="{{.}}"{{if eq (print .) $f.Season}} selected{{end}}>{{.}}</option>{{end}}
-      </select></label>
-    <label>{{.T "rel.episode"}}
-      <input name="episode" type="text" inputmode="numeric" value="{{$f.Episode}}" placeholder="{{.T "f.all"}}" class="num"></label>
+    <div class="fx" role="group" aria-label="{{.T "rel.season"}}"><span>{{.T "rel.season"}}</span><span class="seg">
+      {{- template "relseg" (.Seg "season" "" (.T "f.all") (eq $f.Season ""))}}
+      {{- range $r.Seasons}}{{$s := print .}}{{template "relseg" ($.Seg "season" $s $s (eq $s $f.Season))}}{{end -}}
+    </span></div>
     {{end}}
-    <label>{{.T "f.sort"}}
+    <div class="fx" role="group" aria-label="{{.T "rel.quality"}}"><span>{{.T "rel.quality"}}</span><span class="seg">
+      {{- template "relseg" (.Seg "quality" "" (.T "f.all") (eq $f.Quality ""))}}
+      {{- range qualities}}{{template "relseg" ($.Seg "quality" . ($.T (concat "quality." .)) (eq . $f.Quality))}}{{end -}}
+    </span></div>
+    <div class="fx" role="group" aria-label="{{.T "f.source"}}"><span>{{.T "f.source"}}</span><span class="seg">
+      {{- template "relseg" (.Seg "source" "" (.T "f.all") (eq $f.Source ""))}}
+      {{- range relSources}}{{template "relseg" ($.Seg "source" . ($.T (concat "source." .)) (eq . $f.Source))}}{{end -}}
+    </span></div>
+    {{if .VoiceLangs}}
+    <div class="fx" role="group" aria-label="{{.T "audio.filter"}}"><span>{{.T "audio.filter"}}</span>
+      {{- if gt (len .VoiceLangs) 1}}<span class="seg">{{range .VoiceLangs}}{{template "relseg" ($.Seg "vl" . ($.LangName .) (eq . $f.VoiceLang))}}{{end}}</span>{{end -}}
+      <span class="seg">{{range voiceModes}}{{template "relseg" ($.Seg "voice" . ($.T (concat "relvoice." .)) (eq . $f.Voice))}}{{end}}</span></div>
+    {{end}}
+    <label class="fx">{{.T "rel.size"}}
+      <input name="min" type="text" inputmode="decimal" value="{{$f.MinGB}}" placeholder="{{.T "rel.from"}}" class="num{{if $f.MinGB}} set{{end}}" aria-label="{{.T "rel.size"}} {{.T "rel.from"}}">
+      –
+      <input name="max" type="text" inputmode="decimal" value="{{$f.MaxGB}}" placeholder="{{.T "rel.to"}}" class="num{{if $f.MaxGB}} set{{end}}" aria-label="{{.T "rel.size"}} {{.T "rel.to"}}">
+      {{.T "unit.gb"}}</label>
+    {{if eq $r.Kind "series"}}
+    <label class="fx">{{.T "rel.episode"}}
+      <input name="episode" type="text" inputmode="numeric" value="{{$f.Episode}}" class="ep{{if $f.Episode}} set{{end}}"></label>
+    {{end}}
+    <label class="rsort">{{.T "f.sort"}}
       <select name="sort">
         {{range relSorts}}<option value="{{.}}"{{if eq . $f.Sort}} selected{{end}}>{{$.T (concat "relsort." .)}}</option>{{end}}
       </select></label>
-    <a href="{{$r.Path}}" class="reset">{{.T "f.reset"}}</a>
+    {{if $set}}<a href="{{$r.Path}}" hx-get="{{$r.Path}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true" class="fx">{{.T "work.reset"}}</a>{{end}}
   </form>
   {{if $r.Rows}}
   <div class="scroll">
-  <table class="t rt">
+  <table class="t rtab">
     <thead><tr>
-      <th>{{.T "col.name"}}</th>
+      <th>{{.T "rel.release"}}</th>
       {{if eq $r.Kind "series"}}<th>{{.T "rel.ep"}}</th>{{end}}
       <th class="r">{{.T "col.peers7"}}</th><th class="r">{{.T "col.size"}}</th><th>{{.T "rel.quality_c"}}</th><th>{{.T "col.source"}}</th>
       {{if .VoiceLangs}}<th>{{.T "top.audio"}}</th>{{end}}
-      <th>{{.T "col.first"}}</th>
+      <th class="r">{{.T "col.first"}}</th>
     </tr></thead>
     <tbody>
     {{range $r.Rows}}
       <tr>
         <td class="nm"><a href="/t/{{.InfoHash}}">{{.Name}}</a></td>
-        {{if eq $r.Kind "series"}}<td class="mono">{{$.SE .Season .Episode}}</td>{{end}}
-        <td class="r pe" data-l="{{$.T "top.peers_lc"}}">{{$.Num .Peers}}</td>
-        <td class="r">{{$.Size .Size}}</td>
-        <td>{{if .Quality}}{{$.T (concat "quality." .Quality)}}{{else}}<span class="mu">—</span>{{end}}</td>
+        {{if eq $r.Kind "series"}}<td class="l1">{{$.SE .Season .Episode}}</td>{{end}}
+        <td class="r pe"><b>{{$.Num .Peers}}</b></td>
+        <td class="r{{if ne $r.Kind "series"}} l1{{end}}">{{$.Size .Size}}</td>
+        <td{{if not .Quality}} class="none mu"{{end}}>{{if .Quality}}{{$.T (concat "quality." .Quality)}}{{else}}—{{end}}</td>
         <td>{{$.T (concat "source." .Source)}}</td>
-        {{if $.VoiceLangs}}<td class="au">{{template "relaudio" (audioArgs $ .Audio)}}</td>{{end}}
-        <td class="mu fs">{{$.Date .FirstSeen}}</td>
+        {{if $.VoiceLangs}}<td class="au{{if not .HasAudio}} none{{end}}">{{if eq (len $.VoiceLangs) 1}}<span class="ml mu">{{index $.VoiceLangs 0}} </span>{{end}}{{template "relaudio" (audioArgs $ .Audio)}}</td>{{end}}
+        <td class="r mu fs">{{$.Date .FirstSeen}}</td>
       </tr>
     {{end}}
     </tbody>
   </table>
   </div>
-  <nav class="pager mu">
-    {{if $r.PrevURL}}<a href="{{$r.PrevURL}}" hx-get="{{$r.PrevURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">← {{.T "pager.prev"}}</a>{{end}}
-    <span>{{add $r.Offset 1}}–{{add $r.Offset $r.Shown}} {{.T "results.of"}} {{$r.Matched}}</span>
-    {{if $r.NextURL}}<a href="{{$r.NextURL}}" hx-get="{{$r.NextURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "pager.next"}} →</a>{{end}}
+  <nav class="rpager">
+    <span class="mu">{{add $r.Offset 1}}–{{add $r.Offset $r.Shown}} {{.T "results.of"}} {{$r.Matched}}</span>
+    <span class="rpager-b">
+    {{- if $r.PrevURL}}<a class="btn" href="{{$r.PrevURL}}" hx-get="{{$r.PrevURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">← {{.T "pager.prev"}}</a>{{end}}
+    {{- if $r.NextURL}}<a class="btn" href="{{$r.NextURL}}" hx-get="{{$r.NextURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "pager.next"}} →</a>{{end -}}
+    </span>
   </nav>
   {{else}}
-  <p>{{.T "work.nomatch"}} <a href="{{$r.Path}}">{{.T "f.reset"}}</a></p>
+  <p>{{.T "work.nomatch"}} <a href="{{$r.Path}}" hx-get="{{$r.Path}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "work.reset"}}</a></p>
   {{end}}
 </section>
 {{end}}
+
+{{define "relseg"}}<a href="{{.URL}}" hx-get="{{.URL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true" class="o{{if .On}} on{{end}}"{{if .On}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}

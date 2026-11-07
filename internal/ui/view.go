@@ -244,6 +244,85 @@ type WorkPage struct {
 	Releases ReleaseTable
 }
 
+// ReleaseURL is the title page under the release filters with the query
+// parameter key set to value, from the first release.
+func (p WorkPage) ReleaseURL(key, value string) string {
+	return p.releaseURL(0, key, value)
+}
+
+// ReleasePageURL is the title page under the release filters from the
+// release at offset.
+func (p WorkPage) ReleasePageURL(offset int) string {
+	return p.releaseURL(offset, "", "")
+}
+
+// Segment is one option of a release filter: a link to the page with the
+// option chosen, On when it is.
+type Segment struct {
+	URL, Label string
+	On         bool
+}
+
+// Seg is the option value of the filter key, shown as label.
+func (p WorkPage) Seg(key, value, label string, on bool) Segment {
+	return Segment{URL: p.ReleaseURL(key, value), Label: label, On: on}
+}
+
+// WorkDub is the title's dub in one language among its N releases.
+type WorkDub struct {
+	B Base
+	A WorkAudio
+	N int
+}
+
+// Dub is the title's dub in lang.
+func (p WorkPage) Dub(lang string) WorkDub {
+	return WorkDub{B: p.Base, A: WorkAudioOf(p.Audio, lang), N: p.Work.Releases}
+}
+
+// FiltersSet counts the release filters set; the language of the dub
+// filter and the order are not filters.
+func (p WorkPage) FiltersSet() int {
+	f := p.Releases.Filters
+	n := 0
+	for _, v := range []string{f.Quality, f.Source, f.MinGB, f.MaxGB, f.Season, f.Episode} {
+		if v != "" {
+			n++
+		}
+	}
+	if f.Voice != "" && f.Voice != "any" {
+		n++
+	}
+	return n
+}
+
+// releaseURL leaves out every parameter at its default: the dub language
+// the page starts with, voice "any", sort "peers", offset 0, the rest "".
+func (p WorkPage) releaseURL(offset int, key, value string) string {
+	f := p.Releases.Filters
+	pairs := [][3]string{
+		{"quality", f.Quality, ""}, {"source", f.Source, ""}, {"min", f.MinGB, ""}, {"max", f.MaxGB, ""},
+		{"vl", f.VoiceLang, DefaultVoiceLang(p.VoiceLangs, p.Lang)}, {"voice", f.Voice, "any"},
+		{"season", f.Season, ""}, {"episode", f.Episode, ""}, {"sort", f.Sort, "peers"},
+	}
+	v := url.Values{}
+	for _, x := range pairs {
+		if x[0] == key {
+			x[1] = value
+		}
+		if x[1] != "" && x[1] != x[2] {
+			v.Set(x[0], x[1])
+		}
+	}
+	if offset > 0 {
+		v.Set("o", strconv.Itoa(offset))
+	}
+	if len(v) == 0 {
+		return p.Releases.Path
+	}
+	return p.Releases.Path + "?" + v.Encode()
+}
+
 // ReleaseTable is the filterable table of a title's releases; it is also the
 // htmx fragment "releases".
 type ReleaseTable struct {
@@ -283,6 +362,11 @@ type Release struct {
 	Episode   int    // series: 0 = whole season or unknown
 	Audio     []Audio
 	FirstSeen time.Time
+}
+
+// HasAudio reports a marker or a probability for any language.
+func (r Release) HasAudio() bool {
+	return slices.ContainsFunc(r.Audio, func(a Audio) bool { return a.Marker || a.Probability != nil })
 }
 
 // ---------- torrent card ----------

@@ -202,14 +202,6 @@ button.ic{width:28px;padding:0}
 /* results */
 .results{display:flex;flex-direction:column;gap:12px}
 
-/* title page */
-.tm-page{max-width:none}
-.tm-over-long{-webkit-line-clamp:6}
-.ours{display:flex;flex-direction:column;gap:3px;margin-top:12px}
-.ours .au div{white-space:normal}
-.rels{display:flex;flex-direction:column;gap:8px}
-.rels .filters input.num{width:52px}
-
 /* torrents */
 .th-ph{display:inline-flex;align-items:center;justify-content:center;height:42px;border:1px dashed var(--border);background:none;color:var(--muted-foreground);font-size:12px;box-sizing:border-box}
 a.thl{flex:none;line-height:0}
@@ -320,4 +312,66 @@ a.btn:hover{background:var(--muted);text-decoration:none}
   .trow>.thl,.trow>.th-ph{grid-row:span 3}
   .trow .orig,.trow .tmeta{grid-column:2 / 4;font-size:12px}
   .tmeta b{color:var(--foreground)}
+}
+
+/* work page: a head without a border, the poster beside the TMDB text, the
+ * facts as a table and the actions' answer beside the buttons; the release
+ * filters as segments and fields, on a phone folded behind "Filters", whose
+ * checkbox #relf stands before #releases so that a swap leaves it alone */
+.hero{display:grid;grid-template-columns:154px minmax(0,1fr);grid-template-rows:auto auto 1fr;gap:0 20px;align-items:start}
+.hero-ph{grid-row:1 / 4;width:154px;height:231px;object-fit:cover;background:var(--muted)}
+.hero-none{display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted-foreground);border:1px dashed var(--border);background:none;font-size:12px}
+.hero-bd{display:flex;flex-direction:column;gap:4px;min-width:0}
+.hero h1{font-size:20px}
+.hero h1 .mu{font-weight:400}
+.hero-desc{margin:6px 0;max-width:80ch;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.hero-facts{grid-column:2;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 16px;margin-top:12px}
+.hero-facts>span:nth-child(odd){color:var(--muted-foreground)}
+.hero-norel{grid-column:2;margin-top:12px}
+.wdub{display:block}
+.hero-acts{grid-column:2}
+.hero .acts{margin-top:10px}
+.hero .act-ans{flex:1 1 24ch}
+.rels{display:flex;flex-direction:column;gap:12px}
+.rels h2{margin:0}
+.rfl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;color:var(--muted-foreground)}
+.rfl .fx,.rfl label{display:inline-flex;align-items:center;gap:6px}
+.rfl .seg{margin-right:0}
+.rfl input.num{width:52px}
+.rfl input.ep{width:64px}
+.rfl .rtog{display:none}
+.rtab td.nm{min-width:0;max-width:48ch}
+.rtab td.nm a{color:var(--foreground)}
+.rtab .ml{display:none}
+.rpager{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
+.rpager-b{display:flex;gap:8px}
+@media (max-width:640px){
+  .hero{grid-template-columns:96px minmax(0,1fr);grid-template-rows:auto;gap:0 12px}
+  .hero-ph{grid-row:auto;width:96px;height:144px}
+  .hero-desc{-webkit-line-clamp:4}
+  .hero-facts,.hero-acts,.hero-norel{grid-column:1 / -1}
+  .hero-facts{grid-template-columns:minmax(0,1fr);gap:0;margin-top:16px}
+  .hero-facts>span:nth-child(odd):not(:first-child){margin-top:6px}
+  .hero .acts{margin-top:16px}
+  .hero .act-ans{flex-basis:100%}
+  .rfl .rtog{display:inline-flex;align-items:center;order:-2;height:40px;padding:0 12px;border:1px solid var(--input);color:var(--foreground);font-weight:500;cursor:pointer}
+  .rsort{order:-1}
+  .rfl .fx{display:none}
+  #relf:checked~#releases .rfl .fx{display:inline-flex;flex-wrap:wrap}
+  #relf:checked~#releases .rtog{border-color:var(--foreground)}
+  #relf:focus-visible~#releases .rtog{outline:2px solid var(--ln);outline-offset:2px}
+  /* a release on two lines: name and peers, then episode · size · quality · source · dub */
+  #releases .rtab,#releases .rtab tbody{display:block}
+  #releases .rtab thead{display:none}
+  #releases .rtab tr{display:flex;flex-wrap:wrap;align-items:baseline;row-gap:2px;padding:10px 0;border-bottom:1px solid var(--border)}
+  #releases .rtab tr::before{content:"";order:-1;flex-basis:100%}
+  #releases .rtab td{display:block;padding:0;border:0;font-size:12px;color:var(--muted-foreground);white-space:nowrap}
+  #releases .rtab td.nm{order:-3;flex:1 1 0;min-width:0;padding:0 10px 0 0;font-size:13px;white-space:normal;overflow-wrap:anywhere}
+  #releases .rtab td.au{min-width:0}
+  #releases .rtab td.pe{order:-2;font-size:13px;color:var(--foreground)}
+  #releases .rtab td.pe::after{content:none}
+  #releases .rtab td:not(.nm):not(.pe):not(.l1)::before{content:"\a0·\a0"}
+  #releases .rtab td.none,#releases .rtab td.fs{display:none}
+  #releases .rtab .ml{display:inline}
+  #releases .rtab td.au b{color:var(--foreground)}
 }

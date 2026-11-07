@@ -58,6 +58,10 @@ func TestRenderAll(t *testing.T) {
 			return SampleWork(b, SampleSpiderID, ReleaseFilters{Quality: "sd", Source: "remux"})
 		}},
 		{"work-series", "work", "/tv/106379", "", func(b Base) any { return SampleWork(b, SampleFalloutID, ReleaseFilters{Season: "2"}) }},
+		{"work-series-filtered", "work", "/tv/106379?season=2&episode=4", "", func(b Base) any {
+			return SampleWork(b, SampleFalloutID, ReleaseFilters{Season: "2", Episode: "4"})
+		}},
+		{"work-noprobes", "work", "/movie/900001", "", func(b Base) any { b.Probes = false; return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
 		{"work-series-multi", "work", "/tv/106379", "", func(b Base) any { multi(&b); return SampleWork(b, SampleFalloutID, ReleaseFilters{}) }},
 		{"work-tmdbonly", "work", "/movie/1930", "", func(b Base) any { return SampleWork(b, SampleTMDBOnlyID, ReleaseFilters{}) }},
 		{"work-nolangs", "work", "/movie/900001", "", func(b Base) any { b.VoiceLangs = nil; return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
@@ -881,5 +885,73 @@ func TestTorrentsMarkup(t *testing.T) {
 	b.VoiceLangs = nil
 	if body := render(SampleTorrents(b, "", Filters{})); strings.Contains(body, " · ru ") {
 		t.Error("a dub in the phone's list without dub languages")
+	}
+}
+
+// A release filter's URL keeps the others, drops defaults and the offset.
+func TestReleaseURL(t *testing.T) {
+	p := WorkPage{Base: Base{Lang: "en", VoiceLangs: []string{"ru", "uk"}}, Releases: ReleaseTable{Path: "/tv/1",
+		Filters: ReleaseFilters{Quality: "1080p", VoiceLang: "ru", Voice: "any", Season: "2", Sort: "peers"}}}
+	for _, c := range []struct{ got, want string }{
+		{p.ReleaseURL("source", "web"), "/tv/1?quality=1080p&season=2&source=web"},
+		{p.ReleaseURL("quality", ""), "/tv/1?season=2"},
+		{p.ReleaseURL("vl", "uk"), "/tv/1?quality=1080p&season=2&vl=uk"},
+		{p.ReleaseURL("voice", "any"), "/tv/1?quality=1080p&season=2"},
+		{p.ReleasePageURL(50), "/tv/1?o=50&quality=1080p&season=2"},
+	} {
+		if c.got != c.want {
+			t.Errorf("got %s, want %s", c.got, c.want)
+		}
+	}
+	if n := p.FiltersSet(); n != 2 {
+		t.Errorf("FiltersSet = %d, want 2", n)
+	}
+	p.Releases.Filters.Voice, p.Releases.Filters.MinGB = "explicit", "4"
+	if n := p.FiltersSet(); n != 4 {
+		t.Errorf("FiltersSet = %d, want 4", n)
+	}
+}
+
+// The work page hides the probe button while probes are off and every dub
+// fact, filter and column without languages; the reset shows only with a
+// filter set.
+func TestWorkMarkup(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/movie/900001", nil)
+	render := func(b Base, f ReleaseFilters) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		if err := r.Render(w, req, "work", SampleWork(b, SampleSpiderID, f)); err != nil {
+			t.Fatal(err)
+		}
+		return w.Body.String()
+	}
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	b.Probes = true
+	on := render(b, ReleaseFilters{})
+	for _, want := range []string{`id="act-probe"`, `<span>Dub</span>`, `role="group" aria-label="Dub"`, `<th>Languages</th>`, `Releases <span class="mu">95</span>`} {
+		if !strings.Contains(on, want) {
+			t.Errorf("no %s", want)
+		}
+	}
+	if strings.Contains(on, "Reset filters") {
+		t.Error("a reset with no filter set")
+	}
+	if set := render(b, ReleaseFilters{Quality: "sd"}); !strings.Contains(set, ">Reset filters</a>") || !strings.Contains(set, `<span class="mu"> · 1</span>`) {
+		t.Error("no reset or count with a filter set")
+	}
+	b.Probes = false
+	if off := render(b, ReleaseFilters{}); strings.Contains(off, "act-probe") {
+		t.Error("the probe button shows while probes are off")
+	}
+	b.VoiceLangs = nil
+	none := render(b, ReleaseFilters{})
+	for _, s := range []string{`<span>Dub</span>`, `aria-label="Dub"`, `<th>Languages</th>`, `class="ml`} {
+		if strings.Contains(none, s) {
+			t.Errorf("has %s without languages", s)
+		}
 	}
 }
