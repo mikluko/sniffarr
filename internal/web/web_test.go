@@ -169,17 +169,24 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 	})
 	require.NoError(t, err)
 	require.NoError(t, st.ComputeTop(ctx, now))
-	h, err := New(Config{Browse: browse(t, st, audio.Tags(languages)), Languages: languages, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, Location: time.UTC, Now: func() time.Time { return now }})
+	tasks, err := store.NewTasks(ctx, db, store.TaskOptions{})
+	require.NoError(t, err)
+	_, _, err = tasks.Enqueue(ctx, []store.Sighting{{Hash: hash(30), Discovery: store.Arr}, {Hash: hash(31), Discovery: store.Sample}, {Hash: hash(32), Discovery: store.Sample}}, now)
+	require.NoError(t, err)
+	for i := range 10 {
+		tasks.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
+	}
+	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages)), Languages: languages, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h
 }
 
 // browse serves BrowseService over st behind the token "search" in-process,
 // and returns a client holding the token.
-func browse(t *testing.T, st *store.Store, tags []string) sniffarrv1connect.BrowseServiceClient {
+func browse(t *testing.T, st *store.Store, tasks *store.Tasks, tags []string) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
-	b := &search.Browser{Store: st, TMDB: titleSearch{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Languages: tags, Now: func() time.Time { return now },
+	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Languages: tags, Now: func() time.Time { return now },
 		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }}}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b))
 	var p http.Protocols
@@ -207,7 +214,7 @@ func get(t *testing.T, h http.Handler, path, target string, header ...string) *h
 	return w
 }
 
-var untranslated = regexp.MustCompile(`\b(?:(?:act|kind|layer|source|drop|voiceband|voicemode|relvoice|relsort|quality|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results|unit|attr|work|rel|search|matched|audio|dub|langname)\.[a-z_]+` +
+var untranslated = regexp.MustCompile(`\b(?:(?:act|kind|layer|source|drop|voiceband|voicemode|relvoice|relsort|quality|script|via|d|card|col|home|sort|nav|f|top|topkind|win|results|unit|attr|work|rel|search|matched|audio|dub|langname|q)\.[a-z_][a-z0-9_]*` +
 	`|tmdb\.(?:votes|noposter|unmatched|unchecked|search|checked|tv|seasons|episode|method|low|key|conf)|tvstatus\.[A-Z][a-zA-Z ]*)\b`)
 
 // ruleLine is a card's fired rule: its id is not a translation key.
@@ -552,6 +559,11 @@ func TestData(t *testing.T) {
 	require.Contains(t, body, "<title>20.10 20:00: ", "the hour of the computation, 11:53 UTC, in the cookie's zone")
 	require.Equal(t, http.StatusOK, get(t, h, "/", "", "Cookie", "tz=Mars/Olympus").Code, "an unknown zone is the process's")
 	require.Contains(t, body, "Dub by language")
+	require.Contains(t, body, `<h2>Task queue <span class="mu">3</span></h2>`)
+	require.Contains(t, body, `<div class="q1" style="flex-grow: 1" title="P1 · 1"></div><div class="q4" style="flex-grow: 2" title="P4 · 2"></div>`, "a segment per priority with tasks")
+	require.Contains(t, body, "<td class=\"r\">1\u00a0min</td>", "one fetch at P1 at a pace of one a minute")
+	require.Contains(t, body, "<td class=\"r\">3\u00a0min</td>", "three at P4 or ahead")
+	require.Contains(t, body, `<span class="mu">—</span>`, "nothing at P0")
 	require.NotContains(t, body, "Grafana")
 	frag := fragment(t, get(t, h, "/", "data"), "data")
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<main id="data"`))

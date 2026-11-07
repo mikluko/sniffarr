@@ -142,6 +142,7 @@ func (s *Service) ProbeResult(ctx context.Context, req *connect.Request[sniffarr
 	default:
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("probe result without outcome"))
 	}
+	s.Tasks.Finished(store.TaskProbe, now)
 	if n := m.GetDownloaded(); n > 0 {
 		if err := s.Store.AddProbeTraffic(ctx, day(now), store.ProbeTraffic{Rx: n}); err != nil {
 			return nil, s.internal(ctx, "add probe traffic", err)

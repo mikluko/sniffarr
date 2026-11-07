@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
@@ -32,6 +33,8 @@ type TitleSearch interface {
 // Browser implements sniffarrv1connect.BrowseServiceHandler.
 type Browser struct {
 	Store *store.Store
+	// Tasks, when set, has Stats report the task queue.
+	Tasks *store.Tasks
 	// TMDB, when set, has SearchTitles search TMDB as well as the store.
 	TMDB TitleSearch
 	Log  *slog.Logger
@@ -300,6 +303,9 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Hours: slices.Clone(st.Hours[:hours]), TokensUsedDay: used,
 		TokensLimitDay: b.DailyTokens, ProbeBytesRxDay: traffic.Rx, ProbeBytesTxDay: traffic.Tx, ProbeBytesLimitDay: b.ProbeDailyBytes,
 		ComputedAt: timestamppb.New(snap.At)}
+	if res.Queue, err = b.queue(ctx); err != nil {
+		return nil, b.internal(ctx, "stats", err)
+	}
 	byKind := map[sniffarrv1.Kind]int64{}
 	for kind, n := range st.Kinds {
 		if slices.Contains(others, kind) {
@@ -329,6 +335,25 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 
 // internal logs a failure of the operation and returns the INTERNAL error
 // the client gets for it.
+// queue returns the levels of Tasks, or none without it.
+func (b *Browser) queue(ctx context.Context) ([]*sniffarrv1.QueueLevel, error) {
+	if b.Tasks == nil {
+		return nil, nil
+	}
+	levels, err := b.Tasks.Levels(ctx, b.now())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*sniffarrv1.QueueLevel, len(levels))
+	for i, l := range levels {
+		out[i] = &sniffarrv1.QueueLevel{Priority: int32(l.Priority), Fetches: l.Tasks[store.TaskFetch], Lookups: l.Tasks[store.TaskPeers], Probes: l.Tasks[store.TaskProbe]}
+		if l.Known {
+			out[i].Eta = durationpb.New(l.ETA)
+		}
+	}
+	return out, nil
+}
+
 func (b *Browser) internal(ctx context.Context, op string, err error) error {
 	b.Log.ErrorContext(ctx, op, "err", err)
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s failed", op))

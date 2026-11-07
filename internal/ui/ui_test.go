@@ -138,6 +138,7 @@ func TestFormat(t *testing.T) {
 	t5 := time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
 	ru := Base{Lang: "ru"}
 	c := Base{Lang: "en"}
+	units := Base{Lang: "ru", msgs: map[string]string{"unit.min": "мин", "unit.h": "ч", "unit.d": "д"}}
 	for _, x := range []struct{ got, want string }{
 		{ru.Num(1284311), "1 284 311"},
 		{c.Num(1284311), "1,284,311"},
@@ -161,6 +162,11 @@ func TestFormat(t *testing.T) {
 		{Base{Seerr: "https://seerr.example.com"}.SeerrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), "https://seerr.example.com/movie/348"},
 		{Base{}.SeerrURL(&TMDBWork{State: TMDBMatched, Type: "movie", ID: 348}), ""},
 		{Base{Seerr: "https://seerr.example.com"}.SeerrURL(nil), ""},
+		{units.Span(30 * time.Second), "<\u00a01\u00a0мин"},
+		{units.Span(42 * time.Minute), "42\u00a0мин"},
+		{units.Span(200 * time.Minute), "3\u00a0ч 20\u00a0мин"},
+		{units.Span(5*24*time.Hour + 4*time.Hour + 59*time.Minute), "5\u00a0д 4\u00a0ч"},
+		{units.Span(48 * time.Hour), "2\u00a0д"},
 		{ru.SE(2, 5), "S02E05"},
 		{ru.SE(2, 0), "S02"},
 		{Base{Lang: "en", Now: t5, msgs: map[string]string{"ago.min": "{0} min ago", "ago.now": "just now"}}.Ago(t5.Add(-125 * time.Minute)), "125 min ago"},

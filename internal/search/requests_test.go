@@ -68,3 +68,28 @@ func TestBrowserRequestProbe(t *testing.T) {
 	_, err = b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byHash(99)}))
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
 }
+
+func TestBrowserStatsQueue(t *testing.T) {
+	ctx := context.Background()
+	b, db := rankedDB(t)
+	res, err := b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
+	require.NoError(t, err)
+	require.Empty(t, res.Msg.GetQueue(), "no queue without Tasks")
+
+	b.Tasks, err = store.NewTasks(ctx, db, store.TaskOptions{})
+	require.NoError(t, err)
+	_, err = b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byHash(1)}))
+	require.NoError(t, err)
+	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
+	require.NoError(t, err)
+	q := res.Msg.GetQueue()
+	require.Len(t, q, 5)
+	require.Equal(t, int32(0), q[0].GetPriority())
+	require.Equal(t, int64(1), q[0].GetProbes())
+	require.Nil(t, q[0].GetEta(), "no pace yet")
+
+	b.Tasks.Finished(store.TaskProbe, now.Add(-time.Minute))
+	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
+	require.NoError(t, err)
+	require.Equal(t, time.Minute, res.Msg.GetQueue()[4].GetEta().AsDuration())
+}

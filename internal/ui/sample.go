@@ -396,9 +396,14 @@ func SampleData(b Base) DataPage {
 		Dropped:    []Count{{"adult", 2114820}, {"filetype", 1507332}, {"size", 611290}, {"software", 388401}, {"course", 92115}, {"script", 41008}},
 		Classifier: ClassifierStats{Pending: 3412, DoneDay: 41280, LimitDay: 50000, PaceDay: 53600},
 		Probe:      ProbeStats{RxDay: 61 << 30, TxDay: 38 << 30, LimitDay: 100 << 30, PaceDay: 79 << 30},
-		Hourly:     NewBarChart(hourly, hl, 12, true, 530),
-		Daily:      NewBarChart(daily, dl, 7, true, 14260),
-		Weekly:     NewBarChart(weekly, wl, 4, true, 92370),
+		Queue: []QueueLevel{{Priority: 0, Lookups: 2, Probes: 1, ETA: 40 * time.Second, Known: true},
+			{Priority: 1, Fetches: 14, Probes: 63, ETA: 3*time.Hour + 10*time.Minute, Known: true},
+			{Priority: 2, Fetches: 1486, ETA: 3*time.Hour + 10*time.Minute, Known: true},
+			{Priority: 3, Fetches: 48210, ETA: 9*time.Hour + 5*time.Minute, Known: true},
+			{Priority: 4, Fetches: 611392, Probes: 2, ETA: 4*24*time.Hour + 7*time.Hour, Known: true}},
+		Hourly: NewBarChart(hourly, hl, 12, true, 530),
+		Daily:  NewBarChart(daily, dl, 7, true, 14260),
+		Weekly: NewBarChart(weekly, wl, 4, true, 92370),
 	}}
 }
 

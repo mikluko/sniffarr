@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Release cards and movie and series pages have a button that asks a fetcher to look up the peers of the release, or of every release of the title, on the DHT now: `BrowseService.RefreshPeers`.
 - Release cards and movie and series pages have a button that asks for a probe of the release, or of every release of the title, ahead of the others and whatever its last probe: `BrowseService.RequestProbe`. The button is disabled without peers over 7 days.
+- The data page shows the task queue as a bar split by priority from P0 to P4, with the fetches, peer lookups and probes at each priority and how long until each is done at the pace of the last 15 minutes. `BrowseService.Stats` returns the same as `queue`.
 
 ### Changed
 

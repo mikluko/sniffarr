@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package sniffarr.v1;
 
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "sniffarr/v1/ingest.proto";
 import "sniffarr/v1/search.proto";
@@ -453,6 +454,23 @@ message StatsResponse {
   // Releases first seen in each of the hours asked for, the latest first.
   // The hours are UTC clock hours, which every zone's hours align with.
   repeated int64 hours = 15;
+  // The task queue at each priority, P0 first, read at the request; empty
+  // on a server without the queue.
+  repeated QueueLevel queue = 16;
+}
+
+// QueueLevel is the task queue at one priority.
+message QueueLevel {
+  // 0, P0, is served first.
+  int32 priority = 1;
+  // Tasks queued at the priority, leased or not, by kind.
+  int64 fetches = 2;
+  int64 lookups = 3;
+  int64 probes = 4;
+  // How long until every task at the priority or ahead is finished at the
+  // pace of the last 15 minutes since the server started, fetchers and
+  // probers each at their own; absent while a pace it needs is unknown.
+  google.protobuf.Duration eta = 5;
 }
 
 message KindCount {

@@ -93,6 +93,11 @@ button:disabled{cursor:default;color:var(--mu);background:var(--bg)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px 32px;align-items:start}
 .meter{position:relative;height:6px;margin-top:8px;background:var(--sf2)}
 .meter div{height:100%;background:var(--ln)}
+.qbar{display:flex;gap:1px;height:12px;margin:8px 0;background:var(--sf2)}
+.qbar>div{min-width:3px}
+.q0{background:var(--ln)}.q1{background:color-mix(in srgb,var(--ln) 78%,var(--bg))}.q2{background:color-mix(in srgb,var(--ln) 58%,var(--bg))}
+.q3{background:color-mix(in srgb,var(--ln) 40%,var(--bg))}.q4{background:color-mix(in srgb,var(--ln) 24%,var(--bg))}
+.qkey{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
 .meter .proj{position:absolute;inset:0 auto 0 0;box-sizing:border-box;background:none;border:1px dashed var(--ln)}
 .charthead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 16px;margin-top:8px}
 .chart{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 8px}

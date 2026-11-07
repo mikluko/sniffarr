@@ -145,6 +145,13 @@ func (s *Service) result(ctx context.Context, owner int64, r *sniffarrv1.Result)
 	if err != nil {
 		return err
 	}
+	kind := store.TaskFetch
+	if _, ok := r.GetOutcome().(*sniffarrv1.Result_Lookup); ok {
+		kind = store.TaskPeers
+	}
+	if r.GetOutcome() != nil {
+		s.Tasks.Finished(kind, s.now())
+	}
 	switch o := r.GetOutcome().(type) {
 	case *sniffarrv1.Result_Torrent:
 		s.metrics().results.Add(ctx, 1, outcome("torrent"))

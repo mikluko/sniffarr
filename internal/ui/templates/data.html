@@ -77,6 +77,28 @@
   </section>
 </div>
 
+{{with .Queue}}
+<section>
+  <h2>{{$.T "d.queue"}} <span class="mu">{{$.Num (queueTasks .)}}</span></h2>
+  <div class="qbar" role="img" aria-label="{{$.T "d.queue"}}">
+    {{- range .}}{{if .Tasks}}<div class="q{{.Priority}}" style="flex-grow: {{.Tasks}}" title="P{{.Priority}} · {{$.Num .Tasks}}"></div>{{end}}{{end -}}
+  </div>
+  <div class="scroll">
+  <table class="t">
+    <thead><tr><th>{{$.T "q.priority"}}</th><th class="r">{{$.T "q.fetches"}}</th><th class="r">{{$.T "q.lookups"}}</th><th class="r">{{$.T "q.probes"}}</th><th class="r">{{$.T "q.eta"}}</th></tr></thead>
+    <tbody>
+    {{range .}}
+      <tr><td><span class="qkey q{{.Priority}}" aria-hidden="true"></span>P{{.Priority}} <span class="mu">{{$.T (printf "q.p%d" .Priority)}}</span></td>
+        <td class="r">{{$.Num .Fetches}}</td><td class="r">{{$.Num .Lookups}}</td><td class="r">{{$.Num .Probes}}</td>
+        <td class="r">{{if not .Known}}<span class="mu" title="{{$.T "q.nopace"}}">?</span>{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="mu">{{$.T "q.note"}}</p>
+</section>
+{{end}}
+
 <section>
   <h2>{{$.T "d.inflow"}}</h2>
   <div class="charthead"><h3>{{$.T "d.hourly"}}</h3><span class="mu">{{$.T "d.lastday"}} {{$.Num .New24h}}</span></div>

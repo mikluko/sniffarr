@@ -108,6 +108,7 @@ func New() (*Renderer, error) {
 		"workAudioArgs": func(b Base, a []WorkAudio, n int) workAudioArgs {
 			return workAudioArgs{B: b, A: a, N: n}
 		},
+		"queueTasks": QueueTasks,
 		"actsArgs": func(b Base, path string, peers int64) actsArgs {
 			return actsArgs{B: b, Path: path, Peers: peers}
 		},

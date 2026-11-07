@@ -675,6 +675,10 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 		Probe:      ui.ProbeStats{RxDay: st.GetProbeBytesRxDay(), TxDay: st.GetProbeBytesTxDay(), LimitDay: st.GetProbeBytesLimitDay(), PaceDay: dayPace(now, st.GetProbeBytesRxDay())},
 		Hourly:     hourly, Daily: daily, Weekly: weekly,
 	}
+	for _, l := range st.GetQueue() {
+		out.Queue = append(out.Queue, ui.QueueLevel{Priority: int(l.GetPriority()), Fetches: l.GetFetches(), Lookups: l.GetLookups(), Probes: l.GetProbes(),
+			ETA: l.GetEta().AsDuration(), Known: l.GetEta() != nil})
+	}
 	byKind := map[string]int64{}
 	for _, c := range st.GetKinds() {
 		byKind[uiOr(kinds, c.GetKind(), "")] += c.GetCount()

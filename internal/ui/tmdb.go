@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // TMDBImageBase is the secure_base_url from TMDB /configuration.
@@ -96,6 +97,24 @@ func (b Base) Runtime(min int) string {
 		return strconv.Itoa(h) + " " + hs
 	}
 	return strconv.Itoa(h) + " " + hs + " " + strconv.Itoa(m) + " " + ms
+}
+
+// Span formats a duration to the minute, and past a day to the hour:
+// "< 1 мин", "42 мин", "3 ч 20 мин", "5 д 4 ч".
+func (b Base) Span(d time.Duration) string {
+	m := int(d / time.Minute)
+	if m < 1 {
+		return "<\u00a01\u00a0" + b.T("unit.min")
+	}
+	if m < 24*60 {
+		return b.Runtime(m)
+	}
+	days, h := m/(24*60), m%(24*60)/60
+	ds, hs := b.T("unit.d"), b.T("unit.h")
+	if h == 0 {
+		return strconv.Itoa(days) + "\u00a0" + ds
+	}
+	return strconv.Itoa(days) + "\u00a0" + ds + " " + strconv.Itoa(h) + "\u00a0" + hs
 }
 
 // Rating formats a TMDB score with one decimal: "7,9".

@@ -98,7 +98,7 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
-		&search.Browser{Store: c.Store, TMDB: c.TMDB, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Languages: audio.Tags(c.Languages), Counts: c.Counts},
+		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Languages: audio.Tags(c.Languages), Counts: c.Counts},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
