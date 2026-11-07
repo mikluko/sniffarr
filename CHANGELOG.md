@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-alpha.1] - 2026-11-07
+
 ### Added
 
 - `-probe` turns probing on, probe tasks and seeding; it is off by default, `-api` and `-fetch` both read it, and the web UI hides the probe button, meter and queue card while the API does not probe. Probe results already stored still show.
@@ -652,7 +654,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.43.0...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.1...HEAD
+[0.44.0-alpha.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.43.0...v0.44.0-alpha.1
 [0.43.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.42.0...v0.43.0
 [0.42.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.41.0...v0.42.0
 [0.41.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.40.0...v0.41.0
