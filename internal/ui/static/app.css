@@ -524,6 +524,7 @@ a.btn:hover{background:var(--muted);text-decoration:none}
 .jtrk{border-collapse:collapse;align-self:flex-start;font-size:12px}
 .jtrk td{padding:1px 16px 1px 0}
 .jcut{margin:0;font-size:12px}
+.jfoot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;padding-top:8px}
 @media (max-width:640px){
   .jgone{padding:12px}
   .jsm{grid-template-columns:44px minmax(0,1fr) 12px;gap:2px 8px}
