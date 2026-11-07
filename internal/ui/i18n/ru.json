@@ -254,6 +254,7 @@
   "f.matched": "сопоставлено",
   "matched.yes": "с фильмом или сериалом",
   "matched.no": "не сопоставлено",
+  "card.journalonly": "Хранится только журнал этого infohash: торрент не сохранялся или уже удалён.",
   "card.journal": "Журнал",
   "journal.when": "Когда",
   "journal.event": "Событие",

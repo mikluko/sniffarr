@@ -478,7 +478,14 @@ func TestTorrent(t *testing.T) {
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<div id="files">`))
 	require.Equal(t, 10, strings.Count(frag, `<td class="mono wrapc">`), "every stored file")
 
-	require.Equal(t, http.StatusNotFound, get(t, h, "/t/"+hexOf(99), "").Code)
+	body = page(t, get(t, h, "/t/"+hexOf(20), ""))
+	require.Contains(t, body, `<h1 class="mono">`+hexOf(20)+`</h1>`, "a rejected torrent, not stored: its hash")
+	require.Contains(t, body, `<td>metadata fetched</td><td>rejected</td>`, "and its journal")
+	require.Contains(t, body, "Only the journal of this infohash is kept")
+	require.NotContains(t, body, `id="files"`, "nothing of a stored torrent")
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(20)+"?lang=ru", "")), "Хранится только журнал этого infohash")
+
+	require.Equal(t, http.StatusNotFound, get(t, h, "/t/"+hexOf(99), "").Code, "neither a torrent nor a journal")
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz", "").Code)
 }
 

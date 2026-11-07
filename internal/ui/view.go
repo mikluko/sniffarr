@@ -256,7 +256,10 @@ type TorrentPage struct {
 }
 
 type Torrent struct {
-	InfoHash      string
+	InfoHash string
+	// JournalOnly marks an infohash the store keeps no torrent of: only
+	// InfoHash and Journal are set.
+	JournalOnly   bool
 	Name          string
 	Magnet        string
 	Size          int64

@@ -313,8 +313,17 @@ func filterReleases(all []Release, f ReleaseFilters) []Release {
 	return out
 }
 
-// SampleTorrent cases: "poster", "noposter" (matched titles), "unmatched", "unchecked".
+// SampleTorrent cases: "poster", "noposter" (matched titles), "unmatched",
+// "unchecked", "journal" (a torrent the store keeps only the journal of).
 func SampleTorrent(b Base, all bool, cs string) TorrentPage {
+	if cs == "journal" {
+		const h = "3c1e0d9a7b2f48e6a5c4d3b2a1f0e9d8c7b6a5f4"
+		return TorrentPage{Base: b, Torrent: Torrent{InfoHash: h, JournalOnly: true, Journal: []JournalEntry{
+			{At: b.Now.Add(-3 * time.Hour), Kind: "sighted", Outcome: "queued", Detail: map[string]any{"discovery": "announce"}},
+			{At: b.Now.Add(-3*time.Hour + time.Minute), Kind: "leased", Outcome: "fetch", Detail: map[string]any{"owner": 2.0, "attempt": 1.0}},
+			{At: b.Now.Add(-2 * time.Hour), Kind: "fetched", Outcome: "rejected", Detail: map[string]any{"reason": "adult", "name": "xxx", "size": 1073741824.0}},
+		}}}
+	}
 	name, query := "Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv", "Игра на понижение 2015"
 	var work *WorkSummary
 	var tmdb *TMDBWork

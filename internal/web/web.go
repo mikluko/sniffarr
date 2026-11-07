@@ -561,7 +561,7 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	lang := s.lang(w, req)
 	card, err := s.cfg.Browse.Card(req.Context(), connect.NewRequest(&sniffarrv1.CardRequest{Infohash: raw, Lang: lang}))
 	if connect.CodeOf(err) == connect.CodeNotFound {
-		http.NotFound(w, req)
+		s.journalOnly(w, req, raw, lang)
 		return
 	}
 	if err != nil {
@@ -621,6 +621,25 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	}
 	for _, f := range files {
 		t.Files.Files = append(t.Files.Files, ui.File{Path: f.GetPath(), Size: f.GetSize()})
+	}
+	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, ""), BackURL: backURL(req), Torrent: t})
+}
+
+// journalOnly renders the card of an infohash the store keeps no torrent
+// of: its journal, or 404 when it has none.
+func (s *server) journalOnly(w http.ResponseWriter, req *http.Request, raw []byte, lang string) {
+	res, err := s.cfg.Browse.Journal(req.Context(), connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: raw}))
+	if err != nil {
+		s.fail(w, req, "journal", err)
+		return
+	}
+	if len(res.Msg.GetEntries()) == 0 {
+		http.NotFound(w, req)
+		return
+	}
+	t := ui.Torrent{InfoHash: hex.EncodeToString(raw), JournalOnly: true}
+	for _, e := range res.Msg.GetEntries() {
+		t.Journal = append(t.Journal, journalEntry(e))
 	}
 	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, ""), BackURL: backURL(req), Torrent: t})
 }

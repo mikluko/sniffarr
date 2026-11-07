@@ -59,6 +59,7 @@ func TestRenderAll(t *testing.T) {
 		{"torrent-unchecked", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "unchecked") }},
 		{"torrent-multilang", "torrent", "/t/x", "", func(b Base) any { multi(&b); return SampleTorrent(b, false, "poster") }},
 		{"torrent-files", "torrent", "/t/x?files=all", "files", func(b Base) any { return SampleTorrent(b, true, "poster") }},
+		{"torrent-journal", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "journal") }},
 		{"data", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
 		{"data-frag", "data", "/", "data", func(b Base) any { return SampleData(b) }},
 	}

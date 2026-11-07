@@ -254,6 +254,7 @@
   "f.matched": "matched",
   "matched.yes": "to a movie or series",
   "matched.no": "not matched",
+  "card.journalonly": "Only the journal of this infohash is kept: its torrent was never stored, or is gone.",
   "card.journal": "Journal",
   "journal.when": "When",
   "journal.event": "Event",

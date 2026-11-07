@@ -1,7 +1,15 @@
-{{define "title"}}{{.Torrent.Name}}{{end}}
+{{define "title"}}{{if .Torrent.JournalOnly}}{{.Torrent.InfoHash}}{{else}}{{.Torrent.Name}}{{end}}{{end}}
 
 {{define "main"}}
 {{with .Torrent}}
+{{if .JournalOnly}}
+<div class="head">
+  <a href="{{if $.BackURL}}{{$.BackURL}}{{else}}/torrents{{end}}">← {{$.T "card.back"}}</a>
+  <h1 class="mono">{{.InfoHash}}</h1>
+</div>
+<p class="mu">{{$.T "card.journalonly"}} <button type="button" data-copy="{{.InfoHash}}">{{$.T "card.copy"}}</button></p>
+{{template "journal" $}}
+{{else}}
 <div class="head">
   <a href="{{if $.BackURL}}{{$.BackURL}}{{else if .Work}}{{.Work.Path}}{{else}}/torrents{{end}}">← {{$.T "card.back"}}</a>
   <h1>{{.Name}}</h1>
@@ -61,29 +69,34 @@
 </section>
 </div>
 
-<section>
-  <h2>{{$.T "card.journal"}}</h2>
-  {{if .Journal}}
-  <div class="scroll">
-  <table class="t">
-    <thead><tr><th>{{$.T "journal.when"}}</th><th>{{$.T "journal.event"}}</th><th>{{$.T "journal.outcome"}}</th><th>{{$.T "journal.detail"}}</th></tr></thead>
-    <tbody>
-    {{range .Journal}}<tr><td>{{$.TimeFull .At}}</td><td>{{$.T (concat "journal.kind." .Kind)}}</td><td>{{$.T (concat "journal.outcome." .Kind "." .Outcome)}}</td>
-      <td class="wrapc"><span class="mono">{{range $i, $p := .Pairs}}{{if $i}} · {{end}}{{$p.Key}}: {{if $p.Time.IsZero}}{{$p.Value}}{{else}}{{$.TimeFull $p.Time}}{{end}}{{end}}</span></td></tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  {{else}}
-  <p class="mu">{{$.T "journal.empty"}}</p>
-  {{end}}
-</section>
+{{template "journal" $}}
 
 <section>
   <h2>{{$.T "card.filelist"}}</h2>
   {{template "files" $}}
 </section>
 {{end}}
+{{end}}
+{{end}}
+
+{{define "journal"}}
+<section>
+  <h2>{{.T "card.journal"}}</h2>
+  {{if .Torrent.Journal}}
+  <div class="scroll">
+  <table class="t">
+    <thead><tr><th>{{.T "journal.when"}}</th><th>{{.T "journal.event"}}</th><th>{{.T "journal.outcome"}}</th><th>{{.T "journal.detail"}}</th></tr></thead>
+    <tbody>
+    {{range .Torrent.Journal}}<tr><td>{{$.TimeFull .At}}</td><td>{{$.T (concat "journal.kind." .Kind)}}</td><td>{{$.T (concat "journal.outcome." .Kind "." .Outcome)}}</td>
+      <td class="wrapc"><span class="mono">{{range $i, $p := .Pairs}}{{if $i}} · {{end}}{{$p.Key}}: {{if $p.Time.IsZero}}{{$p.Value}}{{else}}{{$.TimeFull $p.Time}}{{end}}{{end}}</span></td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p class="mu">{{.T "journal.empty"}}</p>
+  {{end}}
+</section>
 {{end}}
 
 {{define "files"}}
