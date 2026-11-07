@@ -244,4 +244,8 @@ func TestBrowserSettings(t *testing.T) {
 	res, err = b.Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
 	require.NoError(t, err)
 	require.Equal(t, []string{"ru", "en"}, res.Msg.GetAudioLanguages(), "the configured tags in their order")
+	require.False(t, res.Msg.GetProbes(), "probes are off")
+	res, err = (&Browser{Probes: true}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+	require.NoError(t, err)
+	require.True(t, res.Msg.GetProbes())
 }

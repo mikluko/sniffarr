@@ -62,6 +62,9 @@ type Service struct {
 	Now       func() time.Time
 	// Probe tunes the probe tasks.
 	Probe ProbeConfig
+	// Probes has ProbeTask lease probe tasks; without it ProbeTask answers
+	// none.
+	Probes bool
 	// Meter records the service's metrics; the global MeterProvider when
 	// nil.
 	Meter metric.MeterProvider

@@ -55,7 +55,7 @@ func newProbeFixture(t *testing.T, cfg ProbeConfig) *probeFixture {
 	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	f := &probeFixture{st: st, db: db, now: time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)}
-	f.s = &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), Probe: cfg, Now: func() time.Time { return f.now }}
+	f.s = &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), Probe: cfg, Probes: true, Now: func() time.Time { return f.now }}
 	return f
 }
 
@@ -151,6 +151,16 @@ func TestProbeLeaseExpires(t *testing.T) {
 	require.Nil(t, f.task(t))
 	f.now = f.now.Add(10 * time.Minute)
 	require.Equal(t, a[:], f.task(t).GetInfohash(), "an expired lease frees its release and its reservation")
+}
+
+func TestProbeTaskOff(t *testing.T) {
+	f := newProbeFixture(t, ProbeConfig{})
+	f.s.Probes = false
+	f.insert(t, 1, "Alien.1979.1080p", 30)
+	require.Nil(t, f.task(t), "no background probe either")
+	n, err := f.st.ProbeLeases(context.Background(), f.now)
+	require.NoError(t, err)
+	require.Zero(t, n)
 }
 
 func TestProbeResultRejectsBadInput(t *testing.T) {

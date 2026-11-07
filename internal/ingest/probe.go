@@ -69,6 +69,9 @@ func (c ProbeConfig) maxBytes() int64 {
 }
 
 func (s *Service) ProbeTask(ctx context.Context, _ *connect.Request[sniffarrv1.ProbeTaskRequest]) (*connect.Response[sniffarrv1.ProbeTaskResponse], error) {
+	if !s.Probes {
+		return connect.NewResponse(&sniffarrv1.ProbeTaskResponse{}), nil
+	}
 	cfg := s.Probe
 	s.probeMu.Lock()
 	defer s.probeMu.Unlock()

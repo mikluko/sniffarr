@@ -68,6 +68,9 @@ type Config struct {
 	Arr          *arr.Recorder
 	// Probe tunes IngestService's probe tasks.
 	Probe ingest.ProbeConfig
+	// Probes has the APIs queue and lease probes and Torznab record the
+	// releases of its searches for them; without it no probe is queued.
+	Probes bool
 }
 
 // New returns the handler serving the APIs and /healthz.
@@ -89,7 +92,7 @@ func New(c Config) (http.Handler, error) {
 		mux.Handle(route, otelhttp.NewHandler(h, route, hopts...))
 	}
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
-		&ingest.Service{Store: c.Store, Tasks: c.Tasks, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Meter: c.Meter},
+		&ingest.Service{Store: c.Store, Tasks: c.Tasks, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Probes: c.Probes, Meter: c.Meter},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
@@ -100,13 +103,17 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
-		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Languages: audio.Tags(c.Languages), Counts: c.Counts},
+		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	if c.TorznabToken != "" {
 		torznabSearch := &search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy, NoWait: true}
-		traced("GET /torznab/api", &torznab.Handler{Search: torznabSearch, Token: c.TorznabToken, Probes: c.Store, Log: c.Log})
+		th := &torznab.Handler{Search: torznabSearch, Token: c.TorznabToken, Log: c.Log}
+		if c.Probes {
+			th.Probes = c.Store
+		}
+		traced("GET /torznab/api", th)
 	}
 	if c.WebhookToken != "" && c.Arr != nil {
 		traced("POST /webhooks/arr", &arr.Webhook{Recorder: c.Arr, Token: c.WebhookToken, Log: c.Log})

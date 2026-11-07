@@ -81,6 +81,8 @@ type TaskOptions struct {
 	// NoPeersFor is how long a hash dropped by NoPeers is kept out of the
 	// queue; DefaultNoPeersFor.
 	NoPeersFor time.Duration
+	// NoProbes has Trim drop every probe queued.
+	NoProbes bool
 	// Meter records the queue's metrics; the global MeterProvider when nil.
 	Meter metric.MeterProvider
 }
@@ -260,8 +262,8 @@ type Trimmed struct {
 // fetch tasks beyond MaxSize, samples before announced ones and the oldest
 // first, and keeps every evicted hash dead for DeadFor. It drops the peer
 // lookups of releases no longer stored and the probes of releases no longer
-// stored or that a probe cannot read, and forgets the dead hashes whose time
-// is up.
+// stored or that a probe cannot read, every probe with NoProbes, and
+// forgets the dead hashes whose time is up.
 func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 	var t Trimmed
 	until := now.Add(q.opts.DeadFor).UnixMilli()
@@ -295,8 +297,7 @@ func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 			AND NOT EXISTS (SELECT 1 FROM torrent_releases t WHERE t.infohash = task_queue.infohash)`); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM task_queue WHERE kind = 'probe'
-			AND NOT EXISTS (SELECT 1 FROM torrent_releases t WHERE t.infohash = task_queue.infohash AND `+probeReadable+`)`, probeArgs()...); err != nil {
+		if err := trimProbes(ctx, tx, q.opts.NoProbes); err != nil {
 			return err
 		}
 		res, err := tx.ExecContext(ctx, "DELETE FROM task_dead WHERE until <= ?", now.UnixMilli())
@@ -313,6 +314,18 @@ func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 	q.evictions.Add(ctx, int64(t.Aged), evictionAttr("age"))
 	q.evictions.Add(ctx, int64(t.Oversize), evictionAttr("size"))
 	return t, nil
+}
+
+// trimProbes drops the probes of releases no longer stored or that a probe
+// cannot read, or every probe with all.
+func trimProbes(ctx context.Context, tx *sql.Tx, all bool) error {
+	if all {
+		_, err := tx.ExecContext(ctx, "DELETE FROM task_queue WHERE kind = 'probe'")
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `DELETE FROM task_queue WHERE kind = 'probe'
+		AND NOT EXISTS (SELECT 1 FROM torrent_releases t WHERE t.infohash = task_queue.infohash AND `+probeReadable+`)`, probeArgs()...)
+	return err
 }
 
 // Lease frees the expired leases of fetches and peer lookups, then leases up

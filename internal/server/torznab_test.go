@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/search"
 	"github.com/mikluko/sniffarr/internal/store"
 )
@@ -31,6 +33,41 @@ func (c *blockingClassifier) Classify(ctx context.Context, p store.Pending, _ st
 	}
 	c.done <- p.ID
 	return nil
+}
+
+func TestTorznabProbes(t *testing.T) {
+	for _, probes := range []bool{false, true} {
+		srv, hc := start(t, Config{Poll: 20 * time.Millisecond, TorznabToken: "tz", Probes: probes})
+		ingest := ingestClient(srv, hc)
+		_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+		require.NoError(t, err)
+		f := openFetch(t, ingest)
+		f.credit(1)
+		f.expect(1)
+		f.torrent(1, "The.Thing.1982.1080p.BluRay.x264", "The.Thing.1982.mkv")
+		f.finish()
+
+		res, err := hc.Get(srv.URL + "/torznab/api?t=search&q=the+thing&apikey=tz")
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+		require.Equal(t, http.StatusOK, res.StatusCode)
+
+		browse := sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL)
+		st, err := browse.Stats(context.Background(), connect.NewRequest(&sniffarrv1.StatsRequest{}))
+		require.NoError(t, err)
+		var queued int64
+		for _, l := range st.Msg.GetQueueProbes().GetLevels() {
+			queued += l.GetTasks()
+		}
+		settings, err := browse.Settings(context.Background(), connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+		require.NoError(t, err)
+		require.Equal(t, probes, settings.Msg.GetProbes())
+		if probes {
+			require.EqualValues(t, 1, queued, "the search's release is queued for a probe")
+		} else {
+			require.Zero(t, queued, "probes are off: the search queues none")
+		}
+	}
 }
 
 func TestTorznabDoesNotWait(t *testing.T) {

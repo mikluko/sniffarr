@@ -58,6 +58,7 @@ func TestBrowserRefreshPeers(t *testing.T) {
 func TestBrowserRequestProbe(t *testing.T) {
 	ctx := context.Background()
 	b := ranked(t)
+	b.Probes = true
 	require.NoError(t, b.Store.ProbeDone(ctx, hash(1), store.Probe{Outcome: store.ProbeUnknown}, now))
 	res, err := b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byWork("m693134")}))
 	require.NoError(t, err)
@@ -79,6 +80,17 @@ func TestBrowserRequestProbe(t *testing.T) {
 	require.Zero(t, res.Msg.GetReleases(), "and not to be probed")
 }
 
+func TestBrowserRequestProbeOff(t *testing.T) {
+	ctx := context.Background()
+	b := ranked(t)
+	_, err := b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byWork("m693134")}))
+	require.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
+	require.ErrorContains(t, err, "probes are off")
+	_, ok, err := b.Store.LeaseProbe(ctx, 1, now, time.Minute, false, 0)
+	require.NoError(t, err)
+	require.False(t, ok, "nothing queued")
+}
+
 func TestBrowserStatsQueue(t *testing.T) {
 	ctx := context.Background()
 	b, db := rankedDB(t)
@@ -88,6 +100,7 @@ func TestBrowserStatsQueue(t *testing.T) {
 
 	b.Tasks, err = store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
+	b.Probes = true
 	_, err = b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byHash(1)}))
 	require.NoError(t, err)
 	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))

@@ -678,8 +678,11 @@ type SettingsResponse struct {
 	// The audio languages the server is configured with, BCP-47 tags in the
 	// server's order; empty when the audio extension is off.
 	AudioLanguages []string `protobuf:"bytes,1,rep,name=audio_languages,json=audioLanguages,proto3" json:"audio_languages,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Whether the server probes releases for their tracks; false leaves
+	// RequestProbe answering FAILED_PRECONDITION and queues no probe.
+	Probes        bool `protobuf:"varint,2,opt,name=probes,proto3" json:"probes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SettingsResponse) Reset() {
@@ -717,6 +720,13 @@ func (x *SettingsResponse) GetAudioLanguages() []string {
 		return x.AudioLanguages
 	}
 	return nil
+}
+
+func (x *SettingsResponse) GetProbes() bool {
+	if x != nil {
+		return x.Probes
+	}
+	return false
 }
 
 // WorkSummary is a work as lists show it.
@@ -3206,9 +3216,10 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x14RequestMatchResponse\x12\x16\n" +
 	"\x06titles\x18\x01 \x01(\x05R\x06titles\x12.\n" +
 	"\x05works\x18\x02 \x03(\v2\x18.sniffarr.v1.WorkSummaryR\x05works\"\x11\n" +
-	"\x0fSettingsRequest\";\n" +
+	"\x0fSettingsRequest\"S\n" +
 	"\x10SettingsResponse\x12'\n" +
-	"\x0faudio_languages\x18\x01 \x03(\tR\x0eaudioLanguages\"\xd4\x01\n" +
+	"\x0faudio_languages\x18\x01 \x03(\tR\x0eaudioLanguages\x12\x16\n" +
+	"\x06probes\x18\x02 \x01(\bR\x06probes\"\xd4\x01\n" +
 	"\vWorkSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12%\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x11.sniffarr.v1.KindR\x04kind\x12)\n" +

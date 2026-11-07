@@ -92,6 +92,29 @@ func TestTrimDropsProbesNeverLeased(t *testing.T) {
 	require.Equal(t, []Hash{readable}, queuedProbes(t, s), "a release without peers waits; one a probe cannot read goes")
 }
 
+func TestTrimNoProbes(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	q, err := NewTasks(ctx, s.db, TaskOptions{NoProbes: true})
+	require.NoError(t, err)
+	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	_, _, err = s.RequestProbe(ctx, []Hash{a, b}, t0)
+	require.NoError(t, err)
+	_, ok, err := s.LeaseProbe(ctx, 1, t0, time.Minute, false, 1<<20)
+	require.NoError(t, err)
+	require.True(t, ok)
+	_, err = s.WantPeers(ctx, []Hash{a}, t0)
+	require.NoError(t, err)
+
+	_, err = q.Trim(ctx, t0)
+	require.NoError(t, err)
+	require.Empty(t, queuedProbes(t, s), "queued and leased probes go")
+	var peers int
+	require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM task_queue WHERE kind = 'peers'").Scan(&peers))
+	require.Equal(t, 1, peers, "other tasks stay")
+}
+
 func TestMigrateTaskQueue(t *testing.T) {
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})

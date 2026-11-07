@@ -85,6 +85,8 @@ type Config struct {
 	Sonarr ArrHistory
 	// Probe tunes the probe tasks of the ingest service.
 	Probe ingest.ProbeConfig
+	// Probes has the API queue and lease probes; without it none is queued.
+	Probes bool
 	// Feeds are the tracker feeds read, by source name; none reads no feed.
 	Feeds Feeds
 }
@@ -213,6 +215,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		WebhookToken: cfg.WebhookToken,
 		Arr:          rec,
 		Probe:        cfg.Probe,
+		Probes:       cfg.Probes,
 	})
 	if err != nil {
 		return err

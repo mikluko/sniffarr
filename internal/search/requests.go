@@ -25,6 +25,9 @@ func (b *Browser) RefreshPeers(ctx context.Context, req *connect.Request[sniffar
 }
 
 func (b *Browser) RequestProbe(ctx context.Context, req *connect.Request[sniffarrv1.RequestProbeRequest]) (*connect.Response[sniffarrv1.RequestProbeResponse], error) {
+	if !b.Probes {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("probes are off"))
+	}
 	n, err := b.request(ctx, req.Msg.GetReleases(), "request probe", b.Store.RequestProbe)
 	if err != nil {
 		return nil, err
