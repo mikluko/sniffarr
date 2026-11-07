@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - What happens to an infohash is recorded in the new table `torrent_journal`, one row per event in the transaction of the change: queued, promoted, leased, failed, dropped and evicted for one sighted by announce, a feed or Radarr and Sonarr, never for the queue's events of one only sampled; metadata stored, rejected or already stored; classifications by Jev with who asked, kinds copied from a release of the same title and failed classifications; title lookups' matches, no matches and errors with who asked, and the earlier match a release takes from its title as it is stored; grabs and imports; the first listing in each feed, journaled after it is recorded, in a transaction of its own; probes wanted, started and done; deletion. `Card` carries the newest 200 entries as `journal`, the `Journal` RPC of `BrowseService` returns up to 1000 for any infohash, stored or not, and the release card shows them under the classification; an infohash whose torrent is not stored has a card of its journal alone. Entries are kept for `SNIFFARR_RETENTION_JOURNAL`, `720h` by default, and `sniffarr.store.journal.deletions` counts those deleted.
 - With `SNIFFARR_RADARR_URL` or `SNIFFARR_SONARR_URL` set for the UI, the title page and the release card link a matched movie in that Radarr and a series in that Sonarr.
+- `BrowseService.Stats` returns `counts_interval`, how often the counts are recomputed.
 - `SNIFFARR_RADARR_API_URL` and `SNIFFARR_SONARR_API_URL` name the root of the app's v3 API where the API reaches it by another address than the root URL, such as a cluster service; unset, the API uses `/api/v3` under `SNIFFARR_RADARR_URL` or `SNIFFARR_SONARR_URL`, as before.
 
 ### Changed
@@ -19,9 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Explanations open as a tooltip on a dotted-underlined label, on hover or focus; the notes under the task queue on the data page and under the top's controls are such tooltips.
 - The infohash and magnet copy buttons on a release card are icons; the tooltip confirms the copy.
 - Labels and headings are in sentence case, and controls are at least 40 px tall on a phone.
+- The data page leads with its figures and the classifier and probe meters, then the task queue as one card per kind with its priority bar and each priority's meaning in a tooltip on its badge; the current hour's and day's projection is a dashed outline.
+- The data page has a refresh button; counts older than two of their recomputation intervals show "updated N min ago" beside it in amber.
 
 ### Fixed
 
+- The task queue's tables on the data page are no longer cut off on the right at 1280 px and on a phone.
 - The magnet link on the release card opens the torrent in a client and carries its name; it led nowhere.
 - The probe button says when a release has no file a probe can read, rather than reporting a probe that never runs.
 - Releases that had failed probes before a successful one, probed before 0.43.0, get their full number of probe attempts.
