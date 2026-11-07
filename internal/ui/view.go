@@ -251,6 +251,7 @@ type WorkPage struct {
 	Peers    PeerCounts // all releases
 	Audio    []WorkAudio
 	Releases ReleaseTable
+	Back     string // the page the visitor came from, see BackTarget; "" shows no back link
 }
 
 // ReleaseURL is the title page under the release filters with the query
@@ -325,6 +326,9 @@ func (p WorkPage) releaseURL(offset int, key, value string) string {
 	}
 	if offset > 0 {
 		v.Set("o", strconv.Itoa(offset))
+	}
+	if p.Back != "" {
+		v.Set("from", p.Back)
 	}
 	if len(v) == 0 {
 		return p.Releases.Path

@@ -462,7 +462,7 @@ func (s *server) workPage(w http.ResponseWriter, req *http.Request, id, path str
 	t := title.Msg
 	sum := summary(t.GetWork())
 	r := t.GetRanks()
-	page := ui.WorkPage{Base: s.base(req, lang, ""), Work: *sum, Ranks: [3]int{int(r.GetDay()), int(r.GetWeek()), int(r.GetMonth())},
+	page := ui.WorkPage{Base: s.base(req, lang, ""), Back: workBack(req), Work: *sum, Ranks: [3]int{int(r.GetDay()), int(r.GetWeek()), int(r.GetMonth())},
 		Peers: ui.PeerCounts{Day: t.GetPeers().GetDay(), Week: t.GetPeers().GetWeek(), Month: t.GetPeers().GetMonth()}, Audio: workAudio(t.GetAudio())}
 	if sum.Releases == 0 {
 		s.render(w, req, "work", page)
@@ -679,7 +679,7 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	for _, f := range files {
 		t.Files.Files = append(t.Files.Files, ui.File{Path: f.GetPath(), Size: f.GetSize()})
 	}
-	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, ""), BackURL: backURL(req), Torrent: t})
+	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, "torrents"), BackURL: backURL(req), Torrent: t})
 }
 
 // journalOnly renders the card of an infohash the store keeps no torrent
@@ -698,7 +698,7 @@ func (s *server) journalOnly(w http.ResponseWriter, req *http.Request, raw []byt
 	for _, e := range res.Msg.GetEntries() {
 		t.Journal = append(t.Journal, journalEntry(e))
 	}
-	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, ""), BackURL: backURL(req), Torrent: t})
+	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, "torrents"), BackURL: backURL(req), Torrent: t})
 }
 
 // journalEntry is the UI's view of an entry, its detail decoded; a detail
@@ -723,11 +723,33 @@ func title(name string) string {
 	return k
 }
 
+// workBack is the page a title's page leads back to: the one the from
+// parameter of the UI's own links names, else the one the request came from,
+// else "".
+func workBack(req *http.Request) string {
+	if b := ui.BackTarget(req.URL.Query().Get("from")); b != "" {
+		return b
+	}
+	if u := ownReferer(req); u != nil {
+		return ui.BackTarget(u.RequestURI())
+	}
+	return ""
+}
+
+// ownReferer is the Referer of a request made from a page of this host, or nil.
+func ownReferer(req *http.Request) *url.URL {
+	u, err := url.Parse(req.Referer())
+	if err != nil || (u.Host != "" && u.Host != req.Host) {
+		return nil
+	}
+	return u
+}
+
 // backURL is the page of the UI's own the request came from, or "": the
 // torrents, a movie's or series' page, or the top.
 func backURL(req *http.Request) string {
-	u, err := url.Parse(req.Referer())
-	if err != nil || (u.Host != "" && u.Host != req.Host) {
+	u := ownReferer(req)
+	if u == nil {
 		return ""
 	}
 	if u.Path == "/torrents" || u.Path == "/top" || strings.HasPrefix(u.Path, "/movie/") || strings.HasPrefix(u.Path, "/tv/") {

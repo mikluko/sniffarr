@@ -2,9 +2,9 @@
 
 {{define "main"}}
 {{$w := .Work}}{{$m := .Work.TMDB}}
-<div class="head">
-  <a href="/top?kind={{$w.Kind}}">← {{.T (concat "work.back." $w.Kind)}}</a>
-</div>
+{{with .Back}}<div class="head">
+  <a href="{{.}}">← {{$.BackLabel}}</a>
+</div>{{end}}
 
 <section class="hero" aria-label="TMDB">
   {{if $m.HasPoster}}
@@ -68,6 +68,7 @@
   <form class="rfl" action="{{$r.Path}}" method="get"
         hx-get="{{$r.Path}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true"
         hx-trigger="change, input changed delay:500ms from:input[type=text], submit">
+    {{with .Back}}<input type="hidden" name="from" value="{{.}}">{{end}}
     {{with $f.Quality}}<input type="hidden" name="quality" value="{{.}}">{{end}}
     {{with $f.Source}}<input type="hidden" name="source" value="{{.}}">{{end}}
     {{if .VoiceLangs}}{{if gt (len .VoiceLangs) 1}}<input type="hidden" name="vl" value="{{$f.VoiceLang}}">{{end}}{{if ne $f.Voice "any"}}<input type="hidden" name="voice" value="{{$f.Voice}}">{{end}}{{end}}
@@ -105,7 +106,7 @@
       <select name="sort">
         {{range relSorts}}<option value="{{.}}"{{if eq . $f.Sort}} selected{{end}}>{{$.T (concat "relsort." .)}}</option>{{end}}
       </select></label>
-    {{if $set}}<a href="{{$r.Path}}" hx-get="{{$r.Path}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true" class="fx">{{.T "work.reset"}}</a>{{end}}
+    {{if $set}}<a href="{{.ResetURL}}" hx-get="{{.ResetURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true" class="fx">{{.T "work.reset"}}</a>{{end}}
   </form>
   {{if $r.Rows}}
   <div class="scroll">
@@ -141,7 +142,7 @@
     </span>
   </nav>
   {{else}}
-  <p>{{.T "work.nomatch"}} <a href="{{$r.Path}}" hx-get="{{$r.Path}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "work.reset"}}</a></p>
+  <p>{{.T "work.nomatch"}} <a href="{{.ResetURL}}" hx-get="{{.ResetURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "work.reset"}}</a></p>
   {{end}}
 </section>
 {{end}}

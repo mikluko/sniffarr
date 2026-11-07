@@ -304,6 +304,8 @@
   "audio.script": "Script",
   "work.back.movie": "Top movies",
   "work.back.series": "Top series",
+  "work.back.torrents": "Back to results",
+  "work.back.torrent": "Back to the release",
   "work.releases": "Releases",
   "work.noreleases": "No releases with us yet: found on TMDB only.",
   "work.nomatch": "No releases match the filters.",
