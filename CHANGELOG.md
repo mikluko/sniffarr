@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The dark theme keeps 0.43.0's background, surfaces and lines, and buttons, selects, inputs and switches have borders of their own shade.
+- The torrents page fits its table at 1280 px, cuts names at two lines with the movie or series linked under them, and shows the first-seen date in the tooltip on "Last seen".
+- The torrents page explains in tooltips what "?" and "—" in place of a poster mean and which layer decided a torrent's kind, with the classifier's confidence.
+- The torrents page borders a filter that is set and offers "Reset filters" only then, keeping the search and the sort; on a phone the filters sit behind a "Filters · N" button.
 
 ## [0.44.0-alpha.1] - 2026-11-07
 
