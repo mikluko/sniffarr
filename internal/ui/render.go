@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-//go:embed templates/*.html static i18n/*.json
+//go:embed templates/*.html static i18n/*.json icons/*.svg
 var files embed.FS
 
 // Page names and the fragments (htmx targets) each one can return alone.
@@ -42,6 +42,12 @@ type workAudioArgs struct {
 type audioArgs struct {
 	B Base
 	A []Audio
+}
+
+// copyArgs are an icon button that copies Value, named by Label.
+type copyArgs struct {
+	B            Base
+	Value, Label string
 }
 
 // tipArgs are a tooltip's trigger Label and its Text.
@@ -79,6 +85,7 @@ type Renderer struct {
 	msgs   map[string]map[string]string
 	langs  []string
 	static map[string]string // file under static/ → version, a hash of its content
+	icons  map[string]template.HTML
 }
 
 func New() (*Renderer, error) {
@@ -87,8 +94,12 @@ func New() (*Renderer, error) {
 	if r.static, err = staticVersions(); err != nil {
 		return nil, err
 	}
+	if r.icons, err = loadIcons(); err != nil {
+		return nil, err
+	}
 	funcs := template.FuncMap{
 		"static":      r.StaticURL,
+		"icon":        r.Icon,
 		"kinds":       func() []string { return Kinds },
 		"sources":     func() []string { return Sources },
 		"layers":      func() []string { return Layers },
@@ -117,6 +128,9 @@ func New() (*Renderer, error) {
 		"tipArgs":    func(label, text string) tipArgs { return tipArgs{Label: label, Text: text} },
 		"actsArgs": func(b Base, path string, peers int64) actsArgs {
 			return actsArgs{B: b, Path: path, Peers: peers}
+		},
+		"copyArgs": func(b Base, value, label string) copyArgs {
+			return copyArgs{B: b, Value: value, Label: label}
 		},
 		"audioArgs": func(b any, a []Audio) audioArgs {
 			return audioArgs{B: baseOf(b), A: a}
@@ -247,6 +261,33 @@ func staticVersions() (map[string]string, error) {
 		return nil
 	})
 	return versions, err
+}
+
+// loadIcons reads every icons/<name>.svg, keyed by name.
+func loadIcons() (map[string]template.HTML, error) {
+	paths, err := fs.Glob(files, "icons/*.svg")
+	if err != nil {
+		return nil, err
+	}
+	icons := map[string]template.HTML{}
+	for _, p := range paths {
+		b, err := files.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+		icons[strings.TrimSuffix(strings.TrimPrefix(p, "icons/"), ".svg")] = template.HTML(strings.TrimSpace(string(b)))
+	}
+	return icons, nil
+}
+
+// Icon returns the inline SVG of the icon name, drawn in currentColor and
+// hidden from assistive technology; an unknown name is an error.
+func (r *Renderer) Icon(name string) (template.HTML, error) {
+	svg, ok := r.icons[name]
+	if !ok {
+		return "", fmt.Errorf("no icon %q", name)
+	}
+	return svg, nil
 }
 
 // StaticURL returns the URL of a file under static/ with its version, which

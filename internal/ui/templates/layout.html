@@ -68,4 +68,7 @@
 {{/* Label with the tooltip Text, shown on hover and on focus, so a tap opens it too. */}}
 {{define "tip"}}<span class="tip" tabindex="0" aria-label="{{.Label}}: {{.Text}}">{{.Label}}<span class="tipb" aria-hidden="true">{{.Text}}</span></span>{{end}}
 
+{{/* An icon button that copies Value; its tooltip names it and, once copied, says so. */}}
+{{define "copy"}}<span class="tip ic"><button type="button" class="ic" data-copy="{{.Value}}" data-done="{{.B.T "card.copied"}}" aria-label="{{.Label}}">{{icon "copy"}}</button><span class="tipb" role="status">{{.Label}}</span></span>{{end}}
+
 {{define "act"}}<span id="act-{{.Action}}" class="mu" role="status">{{if and (eq .Action "probe") (eq .Releases 0)}}{{.T "act.probe_unreadable"}}{{else}}{{.T (concat "act.done." .Action)}}{{end}}{{if gt .Releases 1}}: {{.Releases}} {{.T "top.releases_lc"}}{{end}}</span>{{end}}

@@ -442,3 +442,54 @@ func TestTip(t *testing.T) {
 		t.Errorf("no tooltip %s", want)
 	}
 }
+
+// The card's copy buttons are icon buttons named by aria-label, with a
+// tooltip of the same name and the confirmation text.
+func TestCopyButtons(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/t/x", nil)
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	p := SampleTorrent(b, false, "poster")
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "torrent", p); err != nil {
+		t.Fatal(err)
+	}
+	body := w.Body.String()
+	svg, err := r.Icon("copy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, label := range []string{b.T("card.copy_hash"), b.T("card.copy_magnet")} {
+		re := regexp.MustCompile(`<span class="tip ic"><button type="button" class="ic" data-copy="[^"]+" data-done="` +
+			regexp.QuoteMeta(b.T("card.copied")) + `" aria-label="` + regexp.QuoteMeta(label) + `">` +
+			regexp.QuoteMeta(string(svg)) + `</button><span class="tipb" role="status">` + regexp.QuoteMeta(label) + `</span></span>`)
+		if !re.MatchString(body) {
+			t.Errorf("no copy button %q", label)
+		}
+	}
+}
+
+// Every icon is a square-capped SVG hidden from assistive technology.
+func TestIcons(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"copy", "refresh"} {
+		svg, err := r.Icon(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range []string{`<svg `, `stroke="currentColor"`, `stroke-linecap="square"`, `aria-hidden="true"`} {
+			if !strings.Contains(string(svg), s) {
+				t.Errorf("%s: no %s", name, s)
+			}
+		}
+	}
+	if _, err := r.Icon("nope"); err == nil {
+		t.Error("an unknown icon is not an error")
+	}
+}
