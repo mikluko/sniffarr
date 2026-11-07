@@ -51,6 +51,10 @@ component.
 - [Helm](docs/helm.md): the chart, a Deployment per component or one process
 - [Development](docs/development.md): building the image, generating code and cutting a release
 
+## Contributing
+
+Proposals, not code; see [CONTRIBUTING](CONTRIBUTING.md).
+
 ## License
 
 MIT; see [LICENSE](LICENSE).
