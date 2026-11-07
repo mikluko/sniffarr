@@ -104,6 +104,14 @@ func NewBarChart(values []int64, labels []string, labelEvery int, partial bool, 
 	return c
 }
 
+// Last is the chart's last bar, the zero Bar when it has none.
+func (c Chart) Last() Bar {
+	if len(c.Bars) == 0 {
+		return Bar{}
+	}
+	return c.Bars[len(c.Bars)-1]
+}
+
 // niceCeil rounds up to 1, 2 or 5 × 10^k.
 func niceCeil(v int64) int64 {
 	if v <= 0 {

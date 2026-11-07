@@ -66,6 +66,7 @@ func TestRenderAll(t *testing.T) {
 		{"torrent-journal", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "journal") }},
 		{"data", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
 		{"data-frag", "data", "/", "data", func(b Base) any { return SampleData(b) }},
+		{"data-stale", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleDataStale(b) }},
 	}
 	dir := os.Getenv("PREVIEW_DIR")
 	for _, lang := range []string{"ru", "en"} {
@@ -625,5 +626,73 @@ func TestIcons(t *testing.T) {
 	}
 	if _, err := r.Icon("nope"); err == nil {
 		t.Error("an unknown icon is not an error")
+	}
+}
+
+// The counts are stale past two of the intervals they are refreshed at:
+// the page's own, or the API's when that is longer.
+func TestDataStale(t *testing.T) {
+	now := time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
+	for _, c := range []struct {
+		age, interval time.Duration
+		stale         bool
+	}{
+		{time.Minute, 0, false},
+		{time.Minute + time.Second, 0, true},
+		{3 * time.Minute, 5 * time.Minute, false},
+		{10 * time.Minute, 5 * time.Minute, false},
+		{12 * time.Minute, 5 * time.Minute, true},
+		{90 * time.Second, 10 * time.Second, true},
+	} {
+		p := DataPage{Base: Base{Now: now}, Stats: Stats{Computed: now.Add(-c.age), Interval: c.interval}}
+		if got := p.Stale(); got != c.stale {
+			t.Errorf("age %v, interval %v: stale %v, want %v", c.age, c.interval, got, c.stale)
+		}
+	}
+}
+
+// The data page's refresh button, its staleness line, the queue's badges
+// and bars, and the meters of the daily limits.
+func TestDataMarkup(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	b := r.Base(req, "en", "data", nil, time.UTC)
+	b.Now = time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
+	render := func(p DataPage) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		if err := r.Render(w, req, "data", p); err != nil {
+			t.Fatal(err)
+		}
+		return w.Body.String()
+	}
+	svg, err := r.Icon("refresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, stale := render(SampleData(b)), render(SampleDataStale(b))
+	for _, want := range []string{
+		`hx-trigger="every 30s [document.visibilityState=='visible'], tz"`,
+		`<button type="button" class="ic" hx-get="/" hx-target="#data" hx-swap="morph:outerHTML" aria-label="Refresh" aria-describedby="refresh-tip">` + string(svg) + `</button>`,
+		`<span class="tipb" id="refresh-tip" role="tooltip">Refresh. Data as of Oct 20 14:02, updated 3 min ago. The page refreshes itself every 30 seconds.</span>`,
+		`<span class="tip" tabindex="0" aria-label="P0: asked for in the UI"><span class="badge"><span class="sw q0"></span>P0</span><span class="tipb" aria-hidden="true">P0: asked for in the UI</span></span>`,
+		`<div class="qbar" role="img" aria-label="Probes: P0 1; P1 63; P4 2;"><i class="q0" style="flex-grow: 1"></i><i class="q1" style="flex-grow: 63"></i><i class="q4" style="flex-grow: 2"></i></div>`,
+		`<span class="xs dw">≈ 107.2% by 00:00 UTC</span>`,
+		`<span class="xs mu">≈ 79.0% by 00:00 UTC</span>`,
+		`<i style="width: 82.6%"></i><span class="proj" style="width: 100.0%"></span>`,
+		`now 530 an hour`,
+	} {
+		if !strings.Contains(fresh, want) {
+			t.Errorf("no %s", want)
+		}
+	}
+	if strings.Contains(fresh, `class="xs dw">updated`) {
+		t.Error("fresh data shows its age outside the tooltip")
+	}
+	if !strings.Contains(stale, `<span class="xs dw">updated 12 min ago</span>`) {
+		t.Error("stale data does not show its age")
 	}
 }

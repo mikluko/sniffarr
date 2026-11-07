@@ -556,8 +556,57 @@ type DataPage struct {
 	Stats Stats
 }
 
+// Refresh is how often the data page fetches itself again while it is
+// visible.
+const Refresh = 30 * time.Second
+
+// RefreshSeconds is Refresh in whole seconds.
+func (p DataPage) RefreshSeconds() int { return int(Refresh / time.Second) }
+
+// Stale reports whether at Now the counts are older than two of the
+// intervals they are refreshed at, the longer of Refresh and
+// Stats.Interval.
+func (p DataPage) Stale() bool {
+	return p.Now.Sub(p.Stats.Computed) > 2*max(Refresh, p.Stats.Interval)
+}
+
+// RefreshTip is the refresh button's tooltip: when the counts were
+// computed, how long ago, and how often the page refreshes itself.
+func (p DataPage) RefreshTip() string {
+	return p.Fmt("d.refresh_tip", p.Time(p.Stats.Computed), p.Ago(p.Stats.Computed), strconv.Itoa(p.RefreshSeconds()))
+}
+
+// ClassifierTip is the tooltip of the classifier's figure: its tokens on
+// the UTC day against the limit, their pace, and the torrents pending.
+func (p DataPage) ClassifierTip() string {
+	c := p.Stats.Classifier
+	s := p.Fmt("d.tokens_tip", p.Num(c.DoneDay))
+	if c.LimitDay > 0 {
+		s = p.Fmt("d.tokens_limit_tip", p.Num(c.DoneDay), p.Num(c.LimitDay))
+		if c.PaceDay > 0 {
+			s += " " + p.Fmt("d.pace_tip", p.Pct(c.PaceDay, c.LimitDay))
+		}
+	}
+	return s + " " + p.Fmt("d.pending_tip", p.Num(c.Pending))
+}
+
+// ProbeTip is the tooltip of the probes' figure: piece data downloaded on
+// the UTC day against the limit, uploaded back, and the pace.
+func (p DataPage) ProbeTip() string {
+	r := p.Stats.Probe
+	if r.LimitDay == 0 {
+		return p.Fmt("d.probe_tip", p.Size(r.RxDay), p.Size(r.TxDay))
+	}
+	s := p.Fmt("d.probe_limit_tip", p.Size(r.RxDay), p.Size(r.LimitDay), p.Size(r.TxDay))
+	if r.PaceDay > 0 {
+		s += " " + p.Fmt("d.pace_tip", p.Pct(r.PaceDay, r.LimitDay))
+	}
+	return s
+}
+
 type Stats struct {
-	Computed     time.Time // when the API computed the counts
+	Computed     time.Time     // when the API computed the counts
+	Interval     time.Duration // how often the API computes the counts, 0 when at every request
 	Total        int64
 	NewDay       int64 // first seen on the current calendar day
 	NewWeek      int64 // first seen on the last 7 calendar days, today included
@@ -596,8 +645,6 @@ type ClassifierStats struct {
 	PaceDay  int64 // what DoneDay comes to by the end of the UTC day at its pace so far, 0 for none
 }
 
-// ProbeStats is the piece data of probes on the UTC day, in bytes: RxDay
-// downloaded, against LimitDay, 0 for none, and TxDay uploaded back.
 // TaskQueue is the tasks of one kind queued, by priority.
 type TaskQueue struct {
 	Kind   string // a TaskKinds key
@@ -637,6 +684,8 @@ func QueueTasks(queues []TaskQueue) int64 {
 	return n
 }
 
+// ProbeStats is the piece data of probes on the UTC day, in bytes: RxDay
+// downloaded, against LimitDay, 0 for none, and TxDay uploaded back.
 type ProbeStats struct {
 	RxDay    int64
 	TxDay    int64

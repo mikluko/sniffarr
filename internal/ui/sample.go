@@ -427,7 +427,7 @@ func SampleData(b Base) DataPage {
 		hl = append(hl, b.Now.Truncate(time.Hour).Add(time.Duration(i-len(hourly)+1)*time.Hour).Format("02.01 15:04"))
 	}
 	return DataPage{Base: b, Stats: Stats{
-		Computed: b.Now.Add(-3 * time.Minute), Total: 1284311, NewDay: 9506, NewWeek: 86060, New24h: 12721, DroppedTotal: 4754966,
+		Computed: b.Now.Add(-3 * time.Minute), Interval: 5 * time.Minute, Total: 1284311, NewDay: 9506, NewWeek: 86060, New24h: 12721, DroppedTotal: 4754966,
 		ByKind:     []Count{{"movie", 312940}, {"series", 248117}, {"other", 628184}, {"unknown", 95070}},
 		ByLayer:    []Count{{"rules", 702118}, {"title_repeat", 211540}, {"classifier", 370653}},
 		BySource:   []Count{{"disc", 18204}, {"remux", 41377}, {"rip", 233510}, {"web", 251096}, {"other", 740124}},
@@ -452,6 +452,14 @@ func SampleData(b Base) DataPage {
 		Daily:  NewBarChart(daily, dl, 7, true, 14260),
 		Weekly: NewBarChart(weekly, wl, 4, true, 92370),
 	}}
+}
+
+// SampleDataStale is SampleData computed 12 minutes before Now, past two
+// of its 5-minute intervals.
+func SampleDataStale(b Base) DataPage {
+	p := SampleData(b)
+	p.Stats.Computed = b.Now.Add(-12 * time.Minute)
+	return p
 }
 
 func dottedSE(se string) string {

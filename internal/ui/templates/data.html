@@ -4,14 +4,66 @@
 
 {{define "data"}}
 {{with .Stats}}
-<main id="data" hx-get="/" hx-trigger="every 30s [document.visibilityState=='visible'], tz" hx-swap="morph:outerHTML" hx-target="this">
-<div class="kpis">
-  <div><span class="mu">{{$.T "d.total"}}</span> <b>{{$.Num .Total}}</b></div>
-  <div><span class="mu">{{$.T "d.newday"}}</span> <b>{{$.Num .NewDay}}</b></div>
-  <div><span class="mu">{{$.T "d.newweek"}}</span> <b>{{$.Num .NewWeek}}</b></div>
-  <div><span class="mu">{{$.T "d.dropped"}}</span> <b>{{$.Num .DroppedTotal}}</b></div>
-  <div class="mu at" title="{{$.TimeFull .Computed}}">{{$.T "d.updated"}} {{$.Ago .Computed}}</div>
+<main id="data" hx-get="/" hx-trigger="every {{$.RefreshSeconds}}s [document.visibilityState=='visible'], tz" hx-swap="morph:outerHTML" hx-target="this">
+<div class="dhead">
+  <h1>{{$.T "nav.data"}}</h1>
+  <div class="drefresh">
+    {{- if $.Stale}}<span class="xs dw">{{$.T "d.updated"}} {{$.Ago .Computed}}</span>{{end -}}
+    <span class="tip ic rt"><button type="button" class="ic" hx-get="/" hx-target="#data" hx-swap="morph:outerHTML" aria-label="{{$.T "d.refresh"}}" aria-describedby="refresh-tip">{{icon "refresh"}}</button><span class="tipb" id="refresh-tip" role="tooltip">{{$.RefreshTip}}</span></span>
+  </div>
 </div>
+
+<div class="dstats">
+  <div class="stat"><span class="mu">{{$.T "d.total"}}</span><b class="big">{{$.Num .Total}}</b><span class="mu xs">{{$.T "d.dropped"}} {{$.Num .DroppedTotal}}</span></div>
+  <div class="stat"><span class="mu">{{$.T "d.newday"}}</span><b class="big">{{$.Num .NewDay}}</b><span class="mu xs">{{$.T "d.newweek"}} {{$.Num .NewWeek}}</span></div>
+  {{with .Classifier}}
+  <div class="stat"><span class="mu">{{template "tip" (tipArgs ($.T "d.classifier") $.ClassifierTip)}}</span>
+    {{- if .LimitDay}}<b class="big">{{$.Pct .DoneDay .LimitDay}}</b>{{template "dpace" (limitArgs $.Base .DoneDay .PaceDay .LimitDay)}}{{template "meter" (limitArgs $.Base .DoneDay .PaceDay .LimitDay)}}
+    {{- else}}<b class="big">{{$.Num .DoneDay}}</b><span class="mu xs">{{$.T "d.nolimit"}}</span>{{end}}</div>
+  {{end}}
+  {{with .Probe}}
+  <div class="stat"><span class="mu">{{template "tip" (tipArgs ($.T "d.probes") $.ProbeTip)}}</span>
+    {{- if .LimitDay}}<b class="big">{{$.Pct .RxDay .LimitDay}}</b>{{template "dpace" (limitArgs $.Base .RxDay .PaceDay .LimitDay)}}{{template "meter" (limitArgs $.Base .RxDay .PaceDay .LimitDay)}}
+    {{- else}}<b class="big">{{$.Size .RxDay}}</b><span class="mu xs">{{$.T "d.nolimit"}}</span>{{end}}</div>
+  {{end}}
+</div>
+
+{{with .Queue}}
+<section class="dq">
+  <h2>{{template "tip" (tipArgs ($.T "d.queue") ($.T "q.note"))}} <span class="mu">{{$.Num (queueTasks .)}}</span></h2>
+  <div class="qcards">
+  {{range .}}{{if or .Tasks .Paced}}{{$kind := $.T (concat "q." .Kind)}}
+    <div class="qcard">
+      <div><h3>{{$kind}}</h3><span class="mu">{{$.Fmt "q.count" ($.Num .Tasks)}}</span></div>
+      <div class="qbar" role="img" aria-label="{{$kind}}:{{range .Levels}}{{if .Tasks}} P{{.Priority}} {{$.Num .Tasks}};{{end}}{{end}}">
+        {{- range .Levels}}{{if .Tasks}}<i class="q{{.Priority}}" style="flex-grow: {{.Tasks}}"></i>{{end}}{{end -}}
+      </div>
+      <table class="t">
+        <thead><tr><th>{{$.T "q.priority"}}</th><th class="r">{{$.T "q.tasks"}}</th><th class="r">{{$.T "q.eta"}}</th></tr></thead>
+        <tbody>
+        {{range .Levels}}{{$p := printf "P%d" .Priority}}{{$tip := concat $p ": " ($.T (printf "q.p%d" .Priority))}}
+          <tr><td><span class="tip" tabindex="0" aria-label="{{$tip}}"><span class="badge"><span class="sw q{{.Priority}}"></span>{{$p}}</span><span class="tipb" aria-hidden="true">{{$tip}}</span></span></td>
+            <td class="r">{{$.Num .Tasks}}</td>
+            <td class="r">{{if not .Known}}{{template "tip" (tipArgs "?" ($.T "q.nopace"))}}{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+  {{end}}{{end}}
+  </div>
+</section>
+{{end}}
+
+<section class="dinflow">
+  <h2>{{$.T "d.inflow"}}</h2>
+  <div class="charthead"><h3>{{$.T "d.hourly"}}</h3><span class="mu">{{$.T "d.lastday"}} {{$.Num .New24h}}
+    {{- with .Hourly.Last}}{{if .Projected}} · {{template "tip" (tipArgs ($.Fmt "d.hour_now" ($.Num .Projected)) ($.Fmt "d.hour_now_tip" .Label ($.Num .Value) ($.Num .Projected)))}}{{end}}{{end}}</span></div>
+  {{template "chart" (chartArgs $.Base .Hourly ($.T "d.hourly"))}}
+  <div class="charthead"><h3>{{$.T "d.daily"}}</h3><span class="mu">{{$.T "d.max"}} {{$.Num .Daily.Max.Value}} ({{.Daily.Max.Label}}) · {{$.T "d.min"}} {{$.Num .Daily.Min.Value}} ({{.Daily.Min.Label}})</span></div>
+  {{template "chart" (chartArgs $.Base .Daily ($.T "d.daily"))}}
+  <div class="charthead"><h3>{{$.T "d.weekly"}}</h3><span class="mu">{{$.T "d.lastweek"}} {{$.Num .NewWeek}}</span></div>
+  {{template "chart" (chartArgs $.Base .Weekly ($.T "d.weekly"))}}
+</section>
 
 <section>
   <h2>{{$.T "d.store"}}</h2>
@@ -40,80 +92,24 @@
       </table>
     </div>
     {{end}}
-  </div>
-</section>
-
-<div class="grid">
-  <section>
-    <h2>{{$.T "d.droppedby"}}</h2>
-    <table class="t">
-      <tbody>{{range .Dropped}}<tr><td>{{$.T (concat "drop." .Key)}}</td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.DroppedTotal}}</td></tr>{{end}}</tbody>
-      <tfoot><tr><td>{{$.T "d.sum"}}</td><td class="r">{{$.Num .DroppedTotal}}</td><td></td></tr></tfoot>
-    </table>
-  </section>
-  <section>
-    <h2>{{$.T "d.classifier"}}</h2>
-    {{with .Classifier}}
-    <table class="t">
-      <tr><td>{{$.T "d.pending"}}</td><td class="r">{{$.Num .Pending}}</td></tr>
-      <tr><td>{{$.T "d.doneday"}}</td><td class="r">{{$.Num .DoneDay}}</td></tr>
-      <tr><td>{{$.T "d.limitday"}}</td><td class="r">{{$.Num .LimitDay}}</td></tr>
-    </table>
-    <div class="meter" role="img" aria-label="{{$.Pct .DoneDay .LimitDay}}">{{if .PaceDay}}<div class="proj" style="width: {{$.PctW .PaceDay .LimitDay | safeCSS}}"></div>{{end}}<div style="width: {{$.PctW .DoneDay .LimitDay | safeCSS}}"></div></div>
-    <p class="mu">{{$.Pct .DoneDay .LimitDay}} {{$.T "d.oflimit"}}{{if .PaceDay}}, {{$.T "chart.pace"}} {{$.Pct .PaceDay .LimitDay}}{{end}}</p>
-    {{end}}
-  </section>
-  <section>
-    <h2>{{$.T "d.probes"}}</h2>
-    {{with .Probe}}
-    <table class="t">
-      <tr><td>{{$.T "d.proberx"}}</td><td class="r">{{$.Size .RxDay}}</td></tr>
-      <tr><td>{{$.T "d.probetx"}}</td><td class="r">{{$.Size .TxDay}}</td></tr>
-      <tr><td>{{$.T "d.probelimitday"}}</td><td class="r">{{if .LimitDay}}{{$.Size .LimitDay}}{{else}}—{{end}}</td></tr>
-    </table>
-    <div class="meter" role="img" aria-label="{{$.Pct .RxDay .LimitDay}}">{{if .PaceDay}}<div class="proj" style="width: {{$.PctW .PaceDay .LimitDay | safeCSS}}"></div>{{end}}<div style="width: {{$.PctW .RxDay .LimitDay | safeCSS}}"></div></div>
-    <p class="mu">{{$.Pct .RxDay .LimitDay}} {{$.T "d.oflimit"}}{{if .PaceDay}}, {{$.T "chart.pace"}} {{$.Pct .PaceDay .LimitDay}}{{end}}</p>
-    {{end}}
-  </section>
-</div>
-
-{{with .Queue}}
-<section>
-  <h2>{{template "tip" (tipArgs ($.T "d.queue") ($.T "q.note"))}} <span class="mu">{{$.Num (queueTasks .)}}</span></h2>
-  <div class="grid">
-  {{range .}}{{if or .Tasks .Paced}}
     <div>
-      <h3>{{$.T (concat "q." .Kind)}} <span class="mu">{{$.Num .Tasks}}</span></h3>
-      <div class="qbar" role="img" aria-label="{{$.T (concat "q." .Kind)}}">
-        {{- range .Levels}}{{if .Tasks}}<div class="q{{.Priority}}" style="flex-grow: {{.Tasks}}" title="P{{.Priority}} · {{$.Num .Tasks}}"></div>{{end}}{{end -}}
-      </div>
-      <div class="scroll">
+      <h3>{{$.T "d.droppedby"}}</h3>
       <table class="t">
-        <thead><tr><th>{{$.T "q.priority"}}</th><th class="r">{{$.T "q.tasks"}}</th><th class="r">{{$.T "q.eta"}}</th></tr></thead>
-        <tbody>
-        {{range .Levels}}
-          <tr><td><span class="qkey q{{.Priority}}" aria-hidden="true"></span>P{{.Priority}} <span class="mu">{{$.T (printf "q.p%d" .Priority)}}</span></td>
-            <td class="r">{{$.Num .Tasks}}</td>
-            <td class="r">{{if not .Known}}<span class="mu" title="{{$.T "q.nopace"}}">?</span>{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
-        {{end}}
-        </tbody>
+        <tbody>{{range .Dropped}}<tr><td>{{$.T (concat "drop." .Key)}}</td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.DroppedTotal}}</td></tr>{{end}}</tbody>
+        <tfoot><tr><td>{{$.T "d.sum"}}</td><td class="r">{{$.Num .DroppedTotal}}</td><td></td></tr></tfoot>
       </table>
-      </div>
     </div>
-  {{end}}{{end}}
   </div>
-</section>
-{{end}}
-
-<section>
-  <h2>{{$.T "d.inflow"}}</h2>
-  <div class="charthead"><h3>{{$.T "d.hourly"}}</h3><span class="mu">{{$.T "d.lastday"}} {{$.Num .New24h}}</span></div>
-  {{template "chart" (chartArgs $.Base .Hourly ($.T "d.hourly"))}}
-  <div class="charthead"><h3>{{$.T "d.daily"}}</h3><span class="mu">{{$.T "d.max"}} {{$.Num .Daily.Max.Value}} ({{.Daily.Max.Label}}) · {{$.T "d.min"}} {{$.Num .Daily.Min.Value}} ({{.Daily.Min.Label}})</span></div>
-  {{template "chart" (chartArgs $.Base .Daily ($.T "d.daily"))}}
-  <div class="charthead"><h3>{{$.T "d.weekly"}}</h3><span class="mu">{{$.T "d.lastweek"}} {{$.Num .NewWeek}}</span></div>
-  {{template "chart" (chartArgs $.Base .Weekly ($.T "d.weekly"))}}
 </section>
 </main>
 {{end}}
 {{end}}
+
+{{/* The pace of a daily limit: what the day comes to at its pace so far, amber past the limit. */}}
+{{define "dpace"}}{{$b := .B}}
+  {{- if .Pace}}<span class="xs {{if gt .Pace .Limit}}dw{{else}}mu{{end}}">≈ {{$b.Pct .Pace .Limit}} {{$b.T "d.bymidnight"}}</span>
+  {{- else}}<span class="mu xs">{{$b.T "d.oflimit"}}</span>{{end}}
+{{- end}}
+
+{{/* A daily limit's meter: Done filled, Pace outlined dashed, both clamped to the limit. */}}
+{{define "meter"}}{{$b := .B}}<div class="meter" role="img" aria-label="{{$b.Pct .Done .Limit}}"><i style="width: {{$b.PctW .Done .Limit | safeCSS}}"></i>{{if .Pace}}<span class="proj" style="width: {{$b.PctW .Pace .Limit | safeCSS}}"></span>{{end}}</div>{{end}}

@@ -706,6 +706,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	hourly, daily, weekly := charts(computed, hours, s.location(req))
 	out := ui.Stats{
 		Computed:   computed,
+		Interval:   st.GetCountsInterval().AsDuration(),
 		Total:      st.GetTotal(),
 		NewDay:     sumLast(daily, 1),
 		NewWeek:    sumLast(daily, 7),

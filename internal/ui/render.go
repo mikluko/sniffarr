@@ -50,6 +50,13 @@ type copyArgs struct {
 	Value, Label string
 }
 
+// limitArgs are a daily limit's figures: Done so far, Pace, what the day
+// comes to at its pace so far, 0 for none, and Limit.
+type limitArgs struct {
+	B                 Base
+	Done, Pace, Limit int64
+}
+
 // tipArgs are a tooltip's trigger Label and its Text.
 type tipArgs struct {
 	Label, Text string
@@ -126,6 +133,9 @@ func New() (*Renderer, error) {
 		},
 		"queueTasks": QueueTasks,
 		"tipArgs":    func(label, text string) tipArgs { return tipArgs{Label: label, Text: text} },
+		"limitArgs": func(b Base, done, pace, limit int64) limitArgs {
+			return limitArgs{B: b, Done: done, Pace: pace, Limit: limit}
+		},
 		"actsArgs": func(b Base, path string, peers int64) actsArgs {
 			return actsArgs{B: b, Path: path, Peers: peers}
 		},
