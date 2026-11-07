@@ -102,6 +102,26 @@ func TestJournalDetailBounded(t *testing.T) {
 	require.Contains(t, short, `"name":"Tom & Jerry <1940>"`, "a short name unchanged, not escaped for HTML")
 }
 
+func TestJournalProbedTracksBounded(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeTracks, Tracks: []Track{
+		{Kind: "audio", Language: strings.Repeat("\x01", 1<<20), Codec: "aac"},
+		{Kind: "audio", Language: "rus", Codec: "x" + strings.Repeat("ж", 1000)},
+		{Kind: "video", Codec: "h264"},
+	}}, t0))
+	detail := entry(t, s, h, JournalProbed, ProbeTracks).Detail
+	require.Less(t, len(detail), 16<<10, "a 1 MiB language of control characters")
+	var d struct{ Tracks []string }
+	require.NoError(t, json.Unmarshal([]byte(detail), &d))
+	require.Equal(t, []string{
+		"audio:" + strings.Repeat("\x01", 1<<10-len("audio:")) + "…",
+		"audio:rus:x" + strings.Repeat("ж", (1<<10-len("audio:rus:x"))/2) + "…",
+		"video::h264",
+	}, d.Tracks, "each track cut at 1 KiB on a rune boundary")
+}
+
 // counters returns what the reader's counters counted, by name, unit and
 // attributes.
 func counters(t *testing.T, reader *sdkmetric.ManualReader) map[string]int64 {

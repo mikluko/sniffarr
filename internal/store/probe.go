@@ -488,7 +488,7 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 		}
 		tracks := make([]string, len(p.Tracks))
 		for i, t := range p.Tracks {
-			tracks[i] = t.Kind + ":" + t.Language + ":" + t.Codec
+			tracks[i] = clip(t.Kind + ":" + t.Language + ":" + t.Codec)
 		}
 		audio, err := audioProbabilities(ctx, tx, id)
 		if err != nil {
