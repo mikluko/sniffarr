@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The torrents page fits its table at 1280 px, cuts names at two lines with the movie or series linked under them, and shows the first-seen date in the tooltip on "Last seen".
 - The torrents page explains in tooltips what "?" and "—" in place of a poster mean and which layer decided a torrent's kind, with the classifier's confidence.
 - The torrents page borders a filter that is set and offers "Reset filters" only then, keeping the search and the sort; on a phone the filters sit behind a "Filters · N" button.
+- The movie and series page sets the poster beside the TMDB details, lists the place in the top, peers, releases and dub as a table, and answers "Refresh peers" and "Probe tracks" beside the buttons.
+- A movie's or series' releases are filtered by segments for season, quality, source and dub, with size and episode as fields; "Reset filters" shows only while a filter is set, and on a phone the filters fold behind "Filters · N".
+- The episode filter takes `E05` as well as `5`.
 
 ## [0.44.0-alpha.1] - 2026-11-07
 
