@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-alpha.2] - 2026-11-07
+
 ### Added
 
 - `BrowseService.Settings` reports `features`: for the Jev classifier, probes, audio and tracker feeds, whether each is on, whether it works now and the flag or variable that turns it on.
@@ -677,7 +679,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.1...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.2...HEAD
+[0.44.0-alpha.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.1...v0.44.0-alpha.2
 [0.44.0-alpha.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.43.0...v0.44.0-alpha.1
 [0.43.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.42.0...v0.43.0
 [0.42.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.41.0...v0.42.0
