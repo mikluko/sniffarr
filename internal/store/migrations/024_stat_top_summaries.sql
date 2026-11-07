@@ -1,0 +1,3 @@
+ALTER TABLE stat_top ADD COLUMN first_seen INTEGER;
+ALTER TABLE stat_top ADD COLUMN sources TEXT;
+ALTER TABLE stat_top ADD COLUMN audio TEXT;

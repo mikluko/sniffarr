@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
+	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -67,112 +67,50 @@ func voiceKey(v Voice, lang string) string {
 	return lang + ":" + string(v)
 }
 
+// topVoice is a voice in a language a top is computed for.
+type topVoice struct {
+	v    Voice
+	lang string
+}
+
+// topRow is one entry of a top as ComputeTop computes it.
+type topRow struct {
+	kind, window string
+	voice        topVoice
+	rank         int
+	work, peers  int64
+	prev         int
+	sum          Summary
+}
+
 // ComputeTop recomputes at now the tops of every kind, window, and voice in
-// each of Options.Languages, TopSize works each, and the PeersWeek of every
-// torrent and every work.
+// each of Options.Languages, TopSize works each with their summaries over
+// the releases the voice admits, and the PeersWeek of every torrent and
+// every work.
 func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 	conn, err := s.r.Conn(ctx)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	type row struct {
-		kind     string
-		window   string
-		voice    string
-		rank     int
-		work     int64
-		peers    int64
-		prev     int
-		releases int64
-	}
-	type voice struct {
-		v    Voice
-		lang string
-	}
-	voices := []voice{{v: VoiceAny}}
+	voices := []topVoice{{v: VoiceAny}}
 	for _, l := range s.opts.Languages {
-		voices = append(voices, voice{VoiceLikely, l}, voice{VoiceMarker, l})
+		voices = append(voices, topVoice{VoiceLikely, l}, topVoice{VoiceMarker, l})
 	}
-	var rows []row
+	var rows []topRow
 	var week, works map[int64]int64
 	for _, w := range Windows {
-		h, d := w.since(now)
-		ph, pd := h-int64(w.Length/time.Second), d-int64(w.Length/time.Second)
-		if _, err := conn.ExecContext(ctx, "DROP TABLE IF EXISTS temp.win; DROP TABLE IF EXISTS temp.prev"); err != nil {
+		wr, wt, ww, err := windowTops(ctx, conn, w, now, voices, w == WindowWeek)
+		if err != nil {
 			return err
 		}
-		if _, err := conn.ExecContext(ctx, `CREATE TEMP TABLE win AS SELECT torrent_id, hll_union_agg(sketch) AS sketch FROM (
-			SELECT torrent_id, sketch FROM stat_peers_by_hour WHERE hour >= ?1
-			UNION ALL SELECT torrent_id, sketch FROM stat_peers_by_day WHERE day >= ?2) GROUP BY torrent_id`, h, d); err != nil {
-			return err
-		}
-		if _, err := conn.ExecContext(ctx, `CREATE TEMP TABLE prev AS SELECT torrent_id, hll_union_agg(sketch) AS sketch FROM (
-			SELECT torrent_id, sketch FROM stat_peers_by_hour WHERE hour >= ?1 AND hour < ?2
-			UNION ALL SELECT torrent_id, sketch FROM stat_peers_by_day WHERE day >= ?3 AND day < ?4) GROUP BY torrent_id`, ph, h, pd, d); err != nil {
-			return err
-		}
+		rows = append(rows, wr...)
 		if w == WindowWeek {
-			if week, err = counts(ctx, conn, "SELECT torrent_id, hll_card(sketch) FROM win"); err != nil {
-				return err
-			}
+			week, works = wt, ww
 		}
-		for _, vc := range voices {
-			cond, args := voiceTest(vc.v, vc.lang, "t")
-			filter := ""
-			if cond != "" {
-				filter = " WHERE " + cond
-			}
-			for _, tbl := range []string{"win", "prev"} {
-				if _, err := conn.ExecContext(ctx, "CREATE TEMP TABLE "+tbl+`w AS SELECT t.work AS work, k.type AS type, hll_card(hll_union_agg(s.sketch)) AS peers
-					FROM `+tbl+` s JOIN torrent_releases t ON t.id = s.torrent_id JOIN tmdb_works k ON k.id = t.work`+filter+` GROUP BY t.work`, args...); err != nil {
-					return err
-				}
-			}
-			if w == WindowWeek && vc.v == VoiceAny {
-				if works, err = counts(ctx, conn, "SELECT work, peers FROM winw"); err != nil {
-					return err
-				}
-			}
-			rcond, rargs := voiceTest(vc.v, vc.lang, "r")
-			for _, kind := range TopKinds {
-				res, err := conn.QueryContext(ctx, `SELECT work, peers, (SELECT count(*) FROM torrent_releases r WHERE r.work = winw.work`+and(rcond)+`)
-					FROM winw WHERE type = ? ORDER BY peers DESC, work LIMIT ?`, slices.Concat(rargs, []any{TypeOf(kind), TopSize})...)
-				if err != nil {
-					return err
-				}
-				var top []row
-				for res.Next() {
-					r := row{kind: kind, window: w.Name, voice: voiceKey(vc.v, vc.lang)}
-					if err := res.Scan(&r.work, &r.peers, &r.releases); err != nil {
-						res.Close()
-						return err
-					}
-					r.rank = len(top) + 1
-					top = append(top, r)
-				}
-				if err := errors.Join(res.Err(), res.Close()); err != nil {
-					return err
-				}
-				if len(top) == 0 {
-					continue
-				}
-				before, err := ranks(ctx, conn, "SELECT work FROM prevw WHERE type = ? AND peers > 0 ORDER BY peers DESC, work", TypeOf(kind))
-				if err != nil {
-					return err
-				}
-				for i := range top {
-					top[i].prev = before[top[i].work]
-				}
-				rows = append(rows, top...)
-			}
-			if _, err := conn.ExecContext(ctx, "DROP TABLE winw; DROP TABLE prevw"); err != nil {
-				return err
-			}
-		}
-		if _, err := conn.ExecContext(ctx, "DROP TABLE win; DROP TABLE prev"); err != nil {
-			return err
-		}
+	}
+	if err := summarizeTops(ctx, conn, rows, s.opts.Languages); err != nil {
+		return err
 	}
 	rc, err := peersWeekChanges(ctx, conn, "torrent_releases", week)
 	if err != nil {
@@ -182,25 +120,161 @@ func (s *Store) ComputeTop(ctx context.Context, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	err = s.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, "DELETE FROM stat_top"); err != nil {
-			return err
-		}
-		for _, r := range rows {
-			if _, err := tx.ExecContext(ctx, "INSERT INTO stat_top (kind, window, voice, rank, work, peers, prev_rank, releases, computed_at) VALUES (?, ?, ?, ?, ?, ?, nullif(?, 0), ?, ?)",
-				r.kind, r.window, r.voice, r.rank, r.work, r.peers, r.prev, r.releases, now.Unix()); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
+	if err := s.writeTops(ctx, rows, now); err != nil {
 		return err
 	}
 	if err := s.writePeersWeek(ctx, "torrent_releases", rc); err != nil {
 		return err
 	}
 	return s.writePeersWeek(ctx, "tmdb_works", wc)
+}
+
+// windowTops returns the tops over the window ending at now of every kind
+// and voice, computed on conn, and with peers the peers of every torrent and
+// of every work over the window.
+func windowTops(ctx context.Context, conn *sql.Conn, w Window, now time.Time, voices []topVoice, peers bool) (rows []topRow, torrents, works map[int64]int64, err error) {
+	h, d := w.since(now)
+	ph, pd := h-int64(w.Length/time.Second), d-int64(w.Length/time.Second)
+	if _, err := conn.ExecContext(ctx, "DROP TABLE IF EXISTS temp.win; DROP TABLE IF EXISTS temp.prev"); err != nil {
+		return nil, nil, nil, err
+	}
+	if _, err := conn.ExecContext(ctx, `CREATE TEMP TABLE win AS SELECT torrent_id, hll_union_agg(sketch) AS sketch FROM (
+		SELECT torrent_id, sketch FROM stat_peers_by_hour WHERE hour >= ?1
+		UNION ALL SELECT torrent_id, sketch FROM stat_peers_by_day WHERE day >= ?2) GROUP BY torrent_id`, h, d); err != nil {
+		return nil, nil, nil, err
+	}
+	if _, err := conn.ExecContext(ctx, `CREATE TEMP TABLE prev AS SELECT torrent_id, hll_union_agg(sketch) AS sketch FROM (
+		SELECT torrent_id, sketch FROM stat_peers_by_hour WHERE hour >= ?1 AND hour < ?2
+		UNION ALL SELECT torrent_id, sketch FROM stat_peers_by_day WHERE day >= ?3 AND day < ?4) GROUP BY torrent_id`, ph, h, pd, d); err != nil {
+		return nil, nil, nil, err
+	}
+	if peers {
+		if torrents, err = counts(ctx, conn, "SELECT torrent_id, hll_card(sketch) FROM win"); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	for _, vc := range voices {
+		vr, vw, err := voiceTops(ctx, conn, w, vc, peers && vc.v == VoiceAny)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		rows = append(rows, vr...)
+		if vw != nil {
+			works = vw
+		}
+	}
+	if _, err := conn.ExecContext(ctx, "DROP TABLE win; DROP TABLE prev"); err != nil {
+		return nil, nil, nil, err
+	}
+	return rows, torrents, works, nil
+}
+
+// voiceTops returns the tops of every kind under vc over the window whose
+// peers by torrent are in temp tables win and prev, and with peers the
+// peers of every work vc admits a release of.
+func voiceTops(ctx context.Context, conn *sql.Conn, w Window, vc topVoice, peers bool) (rows []topRow, works map[int64]int64, err error) {
+	cond, args := voiceTest(vc.v, vc.lang, "t")
+	filter := ""
+	if cond != "" {
+		filter = " WHERE " + cond
+	}
+	for _, tbl := range []string{"win", "prev"} {
+		if _, err := conn.ExecContext(ctx, "CREATE TEMP TABLE "+tbl+`w AS SELECT t.work AS work, k.type AS type, hll_card(hll_union_agg(s.sketch)) AS peers
+			FROM `+tbl+` s JOIN torrent_releases t ON t.id = s.torrent_id JOIN tmdb_works k ON k.id = t.work`+filter+` GROUP BY t.work`, args...); err != nil {
+			return nil, nil, err
+		}
+	}
+	if peers {
+		if works, err = counts(ctx, conn, "SELECT work, peers FROM winw"); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, kind := range TopKinds {
+		top, err := kindTop(ctx, conn, kind, w, vc)
+		if err != nil {
+			return nil, nil, err
+		}
+		rows = append(rows, top...)
+	}
+	if _, err := conn.ExecContext(ctx, "DROP TABLE winw; DROP TABLE prevw"); err != nil {
+		return nil, nil, err
+	}
+	return rows, works, nil
+}
+
+// kindTop returns the top of the kind under vc over the window whose peers
+// by work are in temp tables winw and prevw.
+func kindTop(ctx context.Context, conn *sql.Conn, kind string, w Window, vc topVoice) ([]topRow, error) {
+	var top []topRow
+	err := eachOn(ctx, conn, func(rows *sql.Rows) error {
+		r := topRow{kind: kind, window: w.Name, voice: vc, rank: len(top) + 1}
+		if err := rows.Scan(&r.work, &r.peers); err != nil {
+			return err
+		}
+		top = append(top, r)
+		return nil
+	}, "SELECT work, peers FROM winw WHERE type = ? ORDER BY peers DESC, work LIMIT ?", TypeOf(kind), TopSize)
+	if err != nil || len(top) == 0 {
+		return nil, err
+	}
+	before, err := ranks(ctx, conn, "SELECT work FROM prevw WHERE type = ? AND peers > 0 ORDER BY peers DESC, work", TypeOf(kind))
+	if err != nil {
+		return nil, err
+	}
+	for i := range top {
+		top[i].prev = before[top[i].work]
+	}
+	return top, nil
+}
+
+// summarizeTops sets, on conn, the summary of every row over the releases
+// its voice admits, one pass per voice over the works in any of its tops.
+func summarizeTops(ctx context.Context, conn *sql.Conn, rows []topRow, langs []string) error {
+	byVoice := map[topVoice]map[int64]Summary{}
+	for _, r := range rows {
+		if byVoice[r.voice] == nil {
+			byVoice[r.voice] = map[int64]Summary{}
+		}
+		byVoice[r.voice][r.work] = emptySummary(Work{ID: r.work}, langs)
+	}
+	for vc, sums := range byVoice {
+		if err := releaseSums(ctx, conn, sums, vc.v, vc.lang, langs); err != nil {
+			return err
+		}
+	}
+	for i := range rows {
+		rows[i].sum = byVoice[rows[i].voice][rows[i].work]
+	}
+	return nil
+}
+
+// writeTops replaces stat_top with rows computed at now.
+func (s *Store) writeTops(ctx context.Context, rows []topRow, now time.Time) error {
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM stat_top"); err != nil {
+			return err
+		}
+		for _, r := range rows {
+			sources, err := json.Marshal(r.sum.Sources)
+			if err != nil {
+				return err
+			}
+			audio, err := json.Marshal(r.sum.Audio)
+			if err != nil {
+				return err
+			}
+			var first any
+			if !r.sum.FirstSeen.IsZero() {
+				first = r.sum.FirstSeen.Unix()
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO stat_top (kind, window, voice, rank, work, peers, prev_rank, releases, first_seen, sources, audio, computed_at)
+				VALUES (?, ?, ?, ?, ?, ?, nullif(?, 0), ?, ?, ?, ?, ?)`,
+				r.kind, r.window, voiceKey(r.voice.v, r.voice.lang), r.rank, r.work, r.peers, r.prev, r.sum.Releases, first, string(sources), string(audio), now.Unix()); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // ranks returns, by the IDs the query selects on conn, their places in its
@@ -288,7 +362,9 @@ func (s *Store) writePeersWeek(ctx context.Context, table string, changes map[in
 
 // Top returns, from offset, up to limit entries of the top of the kind,
 // window and voice in the language, how many entries it has, and when it
-// was computed, the zero time while it never was.
+// was computed, the zero time while it never was. What an entry sums up of
+// the releases is as of then; its TMDB texts, Rank and GrabsWeek are read
+// now.
 func (s *Store) Top(ctx context.Context, kind string, w Window, v Voice, lang string, limit, offset int) ([]TopEntry, int64, time.Time, error) {
 	key := voiceKey(v, lang)
 	var total int64
@@ -301,27 +377,63 @@ func (s *Store) Top(ctx context.Context, kind string, w Window, v Voice, lang st
 		at = time.Unix(computed.Int64, 0).UTC()
 	}
 	var out []TopEntry
-	var ids []int64
+	var ids, unsummed []int64
 	if err := s.each(ctx, func(rows *sql.Rows) error {
-		var e TopEntry
-		if err := rows.Scan(&e.Rank, &e.Work.Work.ID, &e.Peers, &e.PrevRank, &e.Work.Releases); err != nil {
+		e, summed, err := scanTopEntry(rows)
+		if err != nil {
 			return err
 		}
 		out = append(out, e)
 		ids = append(ids, e.Work.Work.ID)
+		if !summed {
+			unsummed = append(unsummed, e.Work.Work.ID)
+		}
 		return nil
-	}, "SELECT rank, work, peers, coalesce(prev_rank, 0), releases FROM stat_top WHERE kind = ? AND window = ? AND voice = ? ORDER BY rank LIMIT ? OFFSET ?",
+	}, "SELECT rank, work, peers, coalesce(prev_rank, 0), releases, first_seen, sources, audio FROM stat_top WHERE kind = ? AND window = ? AND voice = ? ORDER BY rank LIMIT ? OFFSET ?",
 		kind, w.Name, key, limit, offset); err != nil {
 		return nil, 0, time.Time{}, err
 	}
-	sums, err := s.summaries(ctx, ids, v, lang)
+	works, err := s.workSummaries(ctx, ids)
+	if err != nil {
+		return nil, 0, time.Time{}, err
+	}
+	sums, err := s.summaries(ctx, unsummed, v, lang)
 	if err != nil {
 		return nil, 0, time.Time{}, err
 	}
 	for i := range out {
-		if sum, ok := sums[out[i].Work.Work.ID]; ok {
+		id := out[i].Work.Work.ID
+		if sum, ok := sums[id]; ok {
+			out[i].Work = sum
+		} else if sum, ok := works[id]; ok {
+			sum.Releases, sum.FirstSeen, sum.Sources, sum.Audio = out[i].Work.Releases, out[i].Work.FirstSeen, out[i].Work.Sources, out[i].Work.Audio
 			out[i].Work = sum
 		}
 	}
 	return out, total, at, nil
+}
+
+// scanTopEntry scans a row of stat_top's rank, work, peers, prev_rank,
+// releases, first_seen, sources and audio, and reports whether it holds
+// the summary, which a row stored before stat_top had those columns lacks.
+func scanTopEntry(rows *sql.Rows) (TopEntry, bool, error) {
+	var e TopEntry
+	var first sql.NullInt64
+	var sources, audio sql.NullString
+	if err := rows.Scan(&e.Rank, &e.Work.Work.ID, &e.Peers, &e.PrevRank, &e.Work.Releases, &first, &sources, &audio); err != nil {
+		return TopEntry{}, false, err
+	}
+	if !audio.Valid {
+		return e, false, nil
+	}
+	if first.Valid {
+		e.Work.FirstSeen = time.Unix(first.Int64, 0).UTC()
+	}
+	if err := json.Unmarshal([]byte(sources.String), &e.Work.Sources); err != nil {
+		return TopEntry{}, false, err
+	}
+	if err := json.Unmarshal([]byte(audio.String), &e.Work.Audio); err != nil {
+		return TopEntry{}, false, err
+	}
+	return e, true, nil
 }

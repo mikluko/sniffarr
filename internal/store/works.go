@@ -1,8 +1,10 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -52,123 +54,164 @@ func (s *Store) Summaries(ctx context.Context, ids []int64) (map[int64]Summary, 
 // summaries returns the summaries of the stored works with the IDs over the
 // releases v admits in the language.
 func (s *Store) summaries(ctx context.Context, ids []int64, v Voice, lang string) (map[int64]Summary, error) {
+	out, err := s.workSummaries(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return out, releaseSums(ctx, s.r, out, v, lang, s.opts.Languages)
+}
+
+// workSummaries returns the summaries of the stored works with the IDs with
+// what their releases sum up to left empty, Audio holding an empty entry
+// per language of Options.Languages.
+func (s *Store) workSummaries(ctx context.Context, ids []int64) (map[int64]Summary, error) {
 	works, err := s.Works(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 	out := make(map[int64]Summary, len(works))
 	for id, w := range works {
-		sum := Summary{Work: w}
-		for _, l := range s.opts.Languages {
-			sum.Audio = append(sum.Audio, WorkAudio{Language: l})
-		}
-		out[id] = sum
+		out[id] = emptySummary(w, s.opts.Languages)
 	}
-	if len(out) == 0 {
-		return out, nil
-	}
-	cond, cargs := voiceTest(v, lang, "t")
 	weekAgo := time.Now().Add(-7 * 24 * time.Hour).Unix()
-	for c := range slices.Chunk(ids, 500) {
+	for c := range slices.Chunk(slices.Sorted(maps.Keys(out)), 500) {
 		in := placeholders(len(c))
-		if err := s.each(ctx, func(rows *sql.Rows) error {
+		if err := eachOn(ctx, s.r, func(rows *sql.Rows) error {
 			var id, n int64
 			if err := rows.Scan(&id, &n); err != nil {
 				return err
 			}
-			if sum, ok := out[id]; ok {
-				sum.GrabsWeek = n
-				out[id] = sum
-			}
+			sum := out[id]
+			sum.GrabsWeek = n
+			out[id] = sum
 			return nil
 		}, "SELECT work, count(*) FROM arr_events WHERE work IN ("+in+") AND event = ? AND at >= ? GROUP BY work",
 			slices.Concat(int64Args(c), []any{EventGrab, weekAgo})...); err != nil {
 			return nil, err
 		}
-		args := slices.Concat(int64Args(c), cargs)
-		if err := s.each(ctx, func(rows *sql.Rows) error {
-			var id, n, first int64
-			var sources string
-			if err := rows.Scan(&id, &n, &first, &sources); err != nil {
-				return err
-			}
-			sum, ok := out[id]
-			if !ok {
-				return nil
-			}
-			sum.Releases, sum.FirstSeen = n, time.Unix(first, 0).UTC()
-			for src := range strings.SplitSeq(sources, ",") {
-				if src != "" && !slices.Contains(sum.Sources, src) {
-					sum.Sources = append(sum.Sources, src)
-				}
-			}
-			slices.SortFunc(sum.Sources, func(a, b string) int { return slices.Index(sourceOrder, a) - slices.Index(sourceOrder, b) })
-			out[id] = sum
-			return nil
-		}, `SELECT t.work, count(*), min(t.first_seen), coalesce(group_concat(DISTINCT t.source), '') FROM torrent_releases t
-			WHERE t.work IN (`+in+`)`+and(cond)+` GROUP BY t.work`, args...); err != nil {
-			return nil, err
-		}
-		if err := s.each(ctx, func(rows *sql.Rows) error {
+		if err := eachOn(ctx, s.r, func(rows *sql.Rows) error {
 			var id int64
 			var r int
 			if err := rows.Scan(&id, &r); err != nil {
 				return err
 			}
-			if sum, ok := out[id]; ok {
-				sum.Rank = r
-				out[id] = sum
-			}
+			sum := out[id]
+			sum.Rank = r
+			out[id] = sum
 			return nil
 		}, "SELECT work, rank FROM stat_top WHERE window = ? AND voice = ? AND work IN ("+in+")",
 			slices.Concat([]any{WindowWeek.Name, string(VoiceAny)}, int64Args(c))...); err != nil {
 			return nil, err
 		}
-		if len(s.opts.Languages) == 0 {
-			continue
-		}
-		langs := make([]any, len(s.opts.Languages))
-		for i, l := range s.opts.Languages {
-			langs[i] = l
-		}
-		audio := func(id int64, l string, f func(*WorkAudio)) {
-			sum, ok := out[id]
-			if !ok {
-				return
-			}
-			if i := slices.IndexFunc(sum.Audio, func(a WorkAudio) bool { return a.Language == l }); i >= 0 {
-				f(&sum.Audio[i])
-			}
-		}
-		if err := s.each(ctx, func(rows *sql.Rows) error {
-			var id, marked, likely int64
-			var l string
-			if err := rows.Scan(&id, &l, &marked, &likely); err != nil {
-				return err
-			}
-			audio(id, l, func(a *WorkAudio) { a.Marked, a.Likely = marked, likely })
-			return nil
-		}, `SELECT t.work, a.language, coalesce(sum(a.marker), 0), coalesce(sum(NOT a.marker AND a.probability >= 0.5), 0)
-			FROM torrent_releases t JOIN torrent_audio a ON a.torrent_id = t.id
-			WHERE t.work IN (`+in+`) AND a.language IN (`+placeholders(len(langs))+`)`+and(cond)+` GROUP BY 1, 2`,
-			slices.Concat(int64Args(c), langs, cargs)...); err != nil {
-			return nil, err
-		}
-		if err := s.each(ctx, func(rows *sql.Rows) error {
-			var id int64
-			var l, mark string
-			if err := rows.Scan(&id, &l, &mark); err != nil {
-				return err
-			}
-			audio(id, l, func(a *WorkAudio) { a.Marks = append(a.Marks, mark) })
-			return nil
-		}, `SELECT t.work, a.language, a.mark FROM torrent_releases t JOIN torrent_audio a ON a.torrent_id = t.id
-			WHERE t.work IN (`+in+`) AND a.language IN (`+placeholders(len(langs))+`) AND a.marker AND a.mark IS NOT NULL`+and(cond)+`
-			GROUP BY 1, 2, 3 ORDER BY 1, 2, count(*) DESC, 3`, slices.Concat(int64Args(c), langs, cargs)...); err != nil {
-			return nil, err
-		}
 	}
 	return out, nil
+}
+
+// emptySummary is the summary of w before its releases are summed up.
+func emptySummary(w Work, langs []string) Summary {
+	sum := Summary{Work: w}
+	for _, l := range langs {
+		sum.Audio = append(sum.Audio, WorkAudio{Language: l})
+	}
+	return sum
+}
+
+// releaseSums sums up, on q, the releases v admits in the language of every
+// work out holds, into its Releases, FirstSeen, Sources and the Audio
+// entries of langs.
+func releaseSums(ctx context.Context, q querier, out map[int64]Summary, v Voice, lang string, langs []string) error {
+	cond, cargs := voiceTest(v, lang, "t")
+	for c := range slices.Chunk(slices.Sorted(maps.Keys(out)), 500) {
+		if err := releaseCounts(ctx, q, out, c, cond, cargs); err != nil {
+			return err
+		}
+		if len(langs) == 0 {
+			continue
+		}
+		if err := audioSums(ctx, q, out, c, cond, cargs, langs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// releaseCounts sets Releases, FirstSeen and Sources of the works of ids in
+// out over their releases cond, an SQL condition on alias t, admits.
+func releaseCounts(ctx context.Context, q querier, out map[int64]Summary, ids []int64, cond string, cargs []any) error {
+	return eachOn(ctx, q, func(rows *sql.Rows) error {
+		var id, n, first int64
+		var sources string
+		if err := rows.Scan(&id, &n, &first, &sources); err != nil {
+			return err
+		}
+		sum := out[id]
+		sum.Releases, sum.FirstSeen = n, time.Unix(first, 0).UTC()
+		for src := range strings.SplitSeq(sources, ",") {
+			if src != "" && !slices.Contains(sum.Sources, src) {
+				sum.Sources = append(sum.Sources, src)
+			}
+		}
+		slices.SortFunc(sum.Sources, func(a, b string) int { return slices.Index(sourceOrder, a) - slices.Index(sourceOrder, b) })
+		out[id] = sum
+		return nil
+	}, `SELECT t.work, count(*), min(t.first_seen), coalesce(group_concat(DISTINCT t.source), '') FROM torrent_releases t
+		WHERE t.work IN (`+placeholders(len(ids))+`)`+and(cond)+` GROUP BY t.work`, slices.Concat(int64Args(ids), cargs)...)
+}
+
+// audioSums sets the Audio entries of langs of the works of ids in out over
+// their releases cond, an SQL condition on alias t, admits.
+func audioSums(ctx context.Context, q querier, out map[int64]Summary, ids []int64, cond string, cargs []any, langs []string) error {
+	ls := make([]any, len(langs))
+	for i, l := range langs {
+		ls[i] = l
+	}
+	type key struct {
+		work int64
+		lang string
+	}
+	marks := map[key]map[string]int64{}
+	err := eachOn(ctx, q, func(rows *sql.Rows) error {
+		var k key
+		var marker, likely bool
+		var mark sql.NullString
+		var n int64
+		if err := rows.Scan(&k.work, &k.lang, &marker, &likely, &mark, &n); err != nil {
+			return err
+		}
+		sum := out[k.work]
+		i := slices.IndexFunc(sum.Audio, func(a WorkAudio) bool { return a.Language == k.lang })
+		switch {
+		case i < 0:
+		case marker:
+			sum.Audio[i].Marked += n
+			if mark.Valid {
+				if marks[k] == nil {
+					marks[k] = map[string]int64{}
+				}
+				marks[k][mark.String] += n
+			}
+		case likely:
+			sum.Audio[i].Likely += n
+		}
+		return nil
+	}, `SELECT t.work, a.language, a.marker, coalesce(a.probability >= 0.5, 0), a.mark, count(*)
+		FROM torrent_releases t JOIN torrent_audio a ON a.torrent_id = t.id
+		WHERE t.work IN (`+placeholders(len(ids))+`) AND a.language IN (`+placeholders(len(ls))+`)`+and(cond)+` GROUP BY 1, 2, 3, 4, 5`,
+		slices.Concat(int64Args(ids), ls, cargs)...)
+	if err != nil {
+		return err
+	}
+	for k, counts := range marks {
+		sum := out[k.work]
+		i := slices.IndexFunc(sum.Audio, func(a WorkAudio) bool { return a.Language == k.lang })
+		sum.Audio[i].Marks = slices.SortedFunc(maps.Keys(counts), func(a, b string) int {
+			if c := cmp.Compare(counts[b], counts[a]); c != 0 {
+				return c
+			}
+			return strings.Compare(a, b)
+		})
+	}
+	return nil
 }
 
 // matchedTitles is how many best text matches of titles, and of release

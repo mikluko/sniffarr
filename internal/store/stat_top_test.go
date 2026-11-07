@@ -173,6 +173,44 @@ func TestComputeTop(t *testing.T) {
 	require.Zero(t, ws[dune].PeersWeek)
 }
 
+func TestTopSummaries(t *testing.T) {
+	ctx := context.Background()
+	s := seeded(t)
+	top, _, _, err := s.Top(ctx, "series", WindowMonth, VoiceMarker, "ru", 10, 0)
+	require.NoError(t, err)
+	require.Empty(t, top, "no Severance release has a marker")
+	top, _, _, err = s.Top(ctx, "series", WindowMonth, VoiceAny, "", 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, []WorkAudio{{Language: "ru", Likely: 1}}, top[0].Work.Audio, "the season pack has the likely track")
+	require.Equal(t, "Severance", top[0].Work.Work.Texts["en"].Title)
+	top, _, _, err = s.Top(ctx, "movie", WindowDay, VoiceLikely, "ru", 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), top[1].Work.Releases)
+	require.Equal(t, []WorkAudio{{Language: "ru", Likely: 1}}, top[1].Work.Audio)
+
+	before, _, _, err := s.Top(ctx, "movie", WindowDay, VoiceAny, "", 10, 0)
+	require.NoError(t, err)
+	_, _, err = s.Insert(ctx, named(11, "Dune.Part.Two.2024.720p.WEB-DL.Rus", "movie", marker))
+	require.NoError(t, err)
+	top, _, _, err = s.Top(ctx, "movie", WindowDay, VoiceAny, "", 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, before, top, "the summaries are as of the computation")
+
+	_, err = s.w.ExecContext(ctx, "UPDATE stat_top SET first_seen = NULL, sources = NULL, audio = NULL")
+	require.NoError(t, err)
+	top, _, _, err = s.Top(ctx, "movie", WindowDay, VoiceAny, "", 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), top[0].Work.Releases, "a row without a summary is summed up on reading")
+	require.Equal(t, []WorkAudio{{Language: "ru", Marked: 4, Marks: []string{"Rus", "LostFilm"}}}, top[0].Work.Audio)
+	require.Equal(t, before[1].Work, top[1].Work)
+
+	require.NoError(t, s.ComputeTop(ctx, t0))
+	top, _, _, err = s.Top(ctx, "movie", WindowDay, VoiceAny, "", 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), top[0].Work.Releases)
+	require.Equal(t, []WorkAudio{{Language: "ru", Marked: 4, Marks: []string{"Rus", "LostFilm"}}}, top[0].Work.Audio)
+}
+
 func TestPeersWeekChanges(t *testing.T) {
 	ctx := context.Background()
 	s := seeded(t)

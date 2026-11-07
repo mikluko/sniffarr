@@ -167,9 +167,19 @@ func (s *Store) tx(ctx context.Context, f func(*sql.Tx) error) error {
 	return s.db.Tx(ctx, f)
 }
 
+// querier runs queries: a *sql.DB, a *sql.Conn or a *sql.Tx.
+type querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
 // each calls f on every row of the query.
 func (s *Store) each(ctx context.Context, f func(*sql.Rows) error, query string, args ...any) error {
-	rows, err := s.r.QueryContext(ctx, query, args...)
+	return eachOn(ctx, s.r, f, query, args...)
+}
+
+// eachOn calls f on every row of the query on q.
+func eachOn(ctx context.Context, q querier, f func(*sql.Rows) error, query string, args ...any) error {
+	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
