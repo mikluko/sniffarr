@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The release check reads the latest stable release from the releases feed, `https://sarak.sh/mikluko/sniffarr/releases.rss`, the highest stable version among its items; an RSS or Atom feed of releases reads the same.
 - The data page's refresh tooltip says how often the server recomputes the data.
 - In English, the title page's facts say "Chart position".
+- A search on the torrents page, and `BrowseService.Torrents`, finds a release by the titles of its matched movie or series too, original or translated, whatever its own name.
 
 ### Fixed
 

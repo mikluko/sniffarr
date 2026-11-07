@@ -322,8 +322,9 @@ message TitleReleasesResponse {
 }
 
 message TorrentsRequest {
-  // Words that the name or stored file paths must all contain, or the 40
-  // hex digits of an infohash.
+  // Words that the name or stored file paths must all contain, or one of
+  // the titles of the work the release is matched to, original or
+  // translated; or the 40 hex digits of an infohash.
   string query = 1;
   // Only releases of this kind; KIND_OTHER takes music, books and software
   // in. KIND_UNSPECIFIED is any.

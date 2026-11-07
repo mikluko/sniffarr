@@ -1753,8 +1753,9 @@ func (x *TitleReleasesResponse) GetSeasons() []int32 {
 
 type TorrentsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Words that the name or stored file paths must all contain, or the 40
-	// hex digits of an infohash.
+	// Words that the name or stored file paths must all contain, or one of
+	// the titles of the work the release is matched to, original or
+	// translated; or the 40 hex digits of an infohash.
 	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	// Only releases of this kind; KIND_OTHER takes music, books and software
 	// in. KIND_UNSPECIFIED is any.

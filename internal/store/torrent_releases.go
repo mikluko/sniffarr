@@ -569,10 +569,20 @@ func matchExpr(text string) string {
 	return strings.Join(words, " ")
 }
 
+// textHits are the releases whose name or file paths match the first
+// argument, and those matched to a work whose titles match the second, each
+// once with its best rank.
+const textHits = `(SELECT id, min(rank) AS rank FROM (
+	SELECT rowid AS id, rank FROM torrent_releases_fts WHERE torrent_releases_fts MATCH ?
+	UNION ALL
+	SELECT r.id, w.rank FROM tmdb_titles_fts w JOIN torrent_releases r ON r.work = w.rowid WHERE tmdb_titles_fts MATCH ?
+) GROUP BY id)`
+
 // Browse selects releases for Page.
 type Browse struct {
 	// Text matches releases whose name or file paths contain all its words,
-	// or, as 40 hex digits, the release with that infohash.
+	// and those matched to a work one of whose titles does, original or
+	// translated; or, as 40 hex digits, the release with that infohash.
 	Text string
 	// Kinds selects releases of these kinds, "" for those whose kind is
 	// unknown; empty selects any kind.
@@ -633,9 +643,8 @@ func (s *Store) Page(ctx context.Context, b Browse) ([]Release, int64, error) {
 		where = append(where, "t.infohash = ?")
 		args = append(args, h)
 	} else if m := matchExpr(b.Text); m != "" {
-		from = "torrent_releases_fts f JOIN torrent_releases t ON t.id = f.rowid"
-		where = append(where, "torrent_releases_fts MATCH ?")
-		args = append(args, m)
+		from = textHits + " f JOIN torrent_releases t ON t.id = f.id"
+		args = append(args, m, m)
 		order = "f.rank, t.id"
 	}
 	if o, ok := orders[b.Sort]; ok {

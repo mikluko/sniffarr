@@ -375,6 +375,31 @@ func TestPeersWeekChanges(t *testing.T) {
 	require.Equal(t, week, held, "an id with no row is skipped")
 }
 
+// A text search finds a release by its matched work's titles too, in any of
+// their languages, though its own name is in another.
+func TestPageByWorkTitles(t *testing.T) {
+	ctx := context.Background()
+	s := seeded(t)
+	_, _, err := s.RecordMatch(ctx, "y:interstellar 2014", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 157336, Lang: "ru", Title: "Интерстеллар", OriginalTitle: "Interstellar"},
+		Confidence: 1, Layer: LayerTMDB}, t0)
+	require.NoError(t, err)
+	for _, tt := range []struct {
+		text string
+		want []Hash
+	}{
+		{"Интерстеллар", []Hash{hash(3)}},
+		{"Dune Part Two", []Hash{hash(1), hash(2), hash(9)}},
+		{"Дюна", []Hash{hash(9)}},
+	} {
+		t.Run(tt.text, func(t *testing.T) {
+			rs, total, err := s.Page(ctx, Browse{Text: tt.text, Limit: 10})
+			require.NoError(t, err)
+			require.ElementsMatch(t, tt.want, hashes(rs))
+			require.EqualValues(t, len(tt.want), total)
+		})
+	}
+}
+
 func TestTitlePage(t *testing.T) {
 	ctx := context.Background()
 	s := seeded(t)
