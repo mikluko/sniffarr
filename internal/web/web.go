@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"connectrpc.com/connect"
@@ -54,7 +55,8 @@ type Config struct {
 	Browse sniffarrv1connect.BrowseServiceClient
 	// Languages are the API's audio languages in its order, as
 	// ObtainSettings returns them; none leaves the voice filters, columns
-	// and card rows out of every page.
+	// and card rows out of every page. Handler.Apply and Handler.Watch
+	// replace them while the UI runs.
 	Languages []audio.Language
 	// Probes is whether the API probes releases, as ObtainSettings returns
 	// it; false leaves the probe button, meter and queue out of every page
@@ -93,13 +95,34 @@ type Locales interface {
 type server struct {
 	cfg   Config
 	ui    *ui.Renderer
-	tags  []string
+	cur   atomic.Pointer[current]
 	zones sync.Map // zone name → *time.Location, the ones tz cookies named
 }
 
-// New returns the UI's handler, every response naming the build in its
-// Server header.
-func New(cfg Config) (http.Handler, error) {
+// current is the Settings the pages show with the tags of their languages.
+type current struct {
+	Settings
+	tags []string
+}
+
+// settings is what the pages show now; a request reads it once.
+func (s *server) settings() *current { return s.cur.Load() }
+
+// Handler is the UI's http.Handler, whose Settings can change while it
+// serves.
+type Handler struct {
+	http.Handler
+	s *server
+}
+
+// Apply makes every page requested from now on show settings.
+func (h *Handler) Apply(settings Settings) {
+	h.s.cur.Store(&current{Settings: settings, tags: audio.Tags(settings.Languages)})
+}
+
+// New returns the UI's handler, showing the Settings of cfg, every response
+// naming the build in its Server header.
+func New(cfg Config) (*Handler, error) {
 	r, err := ui.New()
 	if err != nil {
 		return nil, err
@@ -113,7 +136,9 @@ func New(cfg Config) (http.Handler, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	s := &server{cfg: cfg, ui: r, tags: audio.Tags(cfg.Languages)}
+	s := &server{cfg: cfg, ui: r}
+	h := &Handler{s: s}
+	h.Apply(Settings{Languages: cfg.Languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds})
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", r.Static())
 	mux.HandleFunc("GET /{$}", s.data)
@@ -129,7 +154,8 @@ func New(cfg Config) (http.Handler, error) {
 	mux.Handle("POST /movie/{id}/{action}", cop.Handler(s.requestWork("movie")))
 	mux.Handle("POST /tv/{id}/{action}", cop.Handler(s.requestWork("series")))
 	mux.HandleFunc("/", s.notFound)
-	return version.Middleware(mux), nil
+	h.Handler = version.Middleware(mux)
+	return h, nil
 }
 
 // notFound answers 404 with the page naming the path asked for.
@@ -160,11 +186,12 @@ func (s *server) lang(w http.ResponseWriter, req *http.Request) string {
 }
 
 func (s *server) base(req *http.Request, lang, nav string) ui.Base {
-	b := s.ui.Base(req, lang, nav, s.tags, s.location(req))
+	c := s.settings()
+	b := s.ui.Base(req, lang, nav, c.tags, s.location(req))
 	b.Now = s.cfg.Now()
 	b.Seerr = s.cfg.SeerrURL
 	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
-	b.Probes, b.Classifier, b.Feeds = s.cfg.Probes, s.cfg.Classifier, s.cfg.Feeds
+	b.Probes, b.Classifier, b.Feeds = c.Probes, c.Classifier, c.Feeds
 	return b
 }
 
@@ -296,8 +323,9 @@ func audioOf(a *sniffarrv1.Audio) ui.Audio {
 // configured languages with a marker or a probability.
 func (s *server) releaseAudio(as []*sniffarrv1.Audio) []ui.Audio {
 	var out []ui.Audio
+	tags := s.settings().tags
 	for _, a := range as {
-		if slices.Contains(s.tags, a.GetLanguage()) && (a.GetMarker() || a.Probability != nil) {
+		if slices.Contains(tags, a.GetLanguage()) && (a.GetMarker() || a.Probability != nil) {
 			out = append(out, audioOf(a))
 		}
 	}
@@ -309,8 +337,9 @@ func (s *server) releaseAudio(as []*sniffarrv1.Audio) []ui.Audio {
 // default and without languages.
 func (s *server) voice(q url.Values, lang string) (vl, mode string) {
 	vl, mode = q.Get("vl"), q.Get("voice")
-	if !slices.Contains(s.tags, vl) {
-		vl = ui.DefaultVoiceLang(s.tags, lang)
+	tags := s.settings().tags
+	if !slices.Contains(tags, vl) {
+		vl = ui.DefaultVoiceLang(tags, lang)
 	}
 	if vl == "" || !slices.Contains(ui.VoiceModes, mode) {
 		mode = "any"
@@ -509,7 +538,7 @@ func (s *server) torrents(w http.ResponseWriter, req *http.Request) {
 	}
 	rows, total := res.Msg.GetRows(), res.Msg.GetTotal()
 	results := ui.Results{Offset: o, Shown: len(rows), Total: total}
-	vdef := ui.DefaultVoiceLang(s.tags, lang)
+	vdef := ui.DefaultVoiceLang(s.settings().tags, lang)
 	results.PrevURL, results.NextURL = pager(o, len(rows), total, func(o int) string {
 		return link("/torrents", o, "q", q, "", "kind", f.Kind, "", "matched", f.Matched, "", "quality", f.Quality, "", "vl", f.VoiceLang, vdef,
 			"voice", f.Voice, "any", "source", f.Source, "", "layer", f.Layer, "", "min", f.MinSizeGB, "", "sort", f.Sort, "peers")
@@ -622,7 +651,7 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		t.Source.Layer = "classifier"
 		t.Source.Confidence = new(float64(r.GetSourceConfidence()))
 	}
-	for _, l := range s.cfg.Languages {
+	for _, l := range s.settings().Languages {
 		a := ui.Audio{Lang: l.Tag}
 		for _, x := range r.GetAudio() {
 			if x.GetLanguage() != l.Tag {
@@ -739,7 +768,8 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 		Probe:      ui.ProbeStats{RxDay: st.GetProbeBytesRxDay(), TxDay: st.GetProbeBytesTxDay(), LimitDay: st.GetProbeBytesLimitDay(), PaceDay: dayPace(now, st.GetProbeBytesRxDay())},
 		Hourly:     hourly, Daily: daily, Weekly: weekly,
 	}
-	out.Queue = taskQueues(st, s.cfg.Probes)
+	c := s.settings()
+	out.Queue = taskQueues(st, c.Probes)
 	byKind := map[string]int64{}
 	for _, c := range st.GetKinds() {
 		byKind[uiOr(kinds, c.GetKind(), "")] += c.GetCount()
@@ -765,7 +795,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	for _, a := range st.GetAudio() {
 		audio[a.GetLanguage()] = a
 	}
-	for _, tag := range s.tags {
+	for _, tag := range c.tags {
 		a := audio[tag]
 		out.Voice = append(out.Voice, ui.VoiceStats{Lang: tag, Bands: [4]int64{a.GetMarker(), a.GetLikely(), a.GetUnlikely(), st.GetTotal() - a.GetMarker() - a.GetLikely() - a.GetUnlikely()}})
 	}
@@ -979,7 +1009,7 @@ func (s *server) request(w http.ResponseWriter, req *http.Request, page, path st
 			ans.Releases = int(res.Msg.GetReleases())
 		}
 	case "probe":
-		if !s.cfg.Probes {
+		if !s.settings().Probes {
 			http.NotFound(w, req)
 			return
 		}
