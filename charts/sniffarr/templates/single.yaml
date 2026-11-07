@@ -153,6 +153,12 @@ spec:
             {{- if and $dhtOn $port (or $discover $hostNetwork $svc.enabled) }}
             {{- include "sniffarr.dhtContainerPorts" (dict "port" $port) | trim | nindent 12 }}
             {{- end }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 360
           readinessProbe:
             httpGet:
               path: /readyz

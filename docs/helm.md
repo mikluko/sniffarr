@@ -32,7 +32,11 @@ api:
             kubernetes.io/metadata.name: media
 ```
 
-The chart installs in one of two modes, both of the one image.
+The chart installs in one of two modes, both of the one image. In either, the
+container that runs `-api` has a startup probe giving it an hour to first
+answer `/healthz`, and its liveness probe runs only after that: the API
+migrates the database before it listens, and a migration over a large
+database takes minutes.
 
 ## A Deployment per component
 
