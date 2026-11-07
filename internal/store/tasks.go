@@ -215,7 +215,7 @@ func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 	var t Trimmed
 	until := now.Add(q.opts.DeadFor).UnixMilli()
 	err := q.db.Tx(ctx, func(tx *sql.Tx) error {
-		n, err := evict(ctx, tx, "SELECT id FROM task_queue WHERE kind = 'fetch' AND lease_owner IS NULL AND queued_at < ?", until, now.Add(-q.opts.MaxAge).UnixMilli())
+		n, err := evict(ctx, tx, agedIDs, until, now.Add(-q.opts.MaxAge).UnixMilli())
 		if err != nil {
 			return err
 		}
@@ -225,7 +225,7 @@ func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 			return err
 		}
 		if over := size - q.opts.MaxSize; over > 0 {
-			n, err := evict(ctx, tx, "SELECT id FROM task_queue WHERE kind = 'fetch' AND lease_owner IS NULL ORDER BY priority DESC, id LIMIT ?", until, over)
+			n, err := evict(ctx, tx, oversizeIDs, until, over)
 			if err != nil {
 				return err
 			}
@@ -269,10 +269,8 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 		if expired, err = freeExpired(ctx, tx, "kind IN ('fetch', 'peers')", now); err != nil {
 			return err
 		}
-		rows, err := tx.QueryContext(ctx, `UPDATE task_queue SET lease_owner = ?1, lease_until = ?2, leased_at = ?3 WHERE id IN (
-				SELECT id FROM task_queue WHERE kind IN ('fetch', 'peers') AND lease_owner IS NULL AND not_before <= ?3 ORDER BY priority, id LIMIT ?4)
-			RETURNING kind, infohash, priority, id`,
-			owner, now.Add(d).UnixMilli(), now.UnixMilli(), n)
+		rows, err := tx.QueryContext(ctx, "UPDATE task_queue SET lease_owner = ?, lease_until = ?, leased_at = ? WHERE id IN ("+leaseIDs+") RETURNING kind, infohash, priority, id",
+			owner, now.Add(d).UnixMilli(), now.UnixMilli(), now.UnixMilli(), n)
 		if err != nil {
 			return err
 		}
@@ -304,10 +302,28 @@ func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d 
 	return tasks, expired, nil
 }
 
+// The queries below name their index: SQLite, without statistics, takes the
+// (kind, infohash) key for a condition on kind and walks every fetch queued.
+const (
+	// leaseIDs selects, given now and n, the first n free fetches and peer
+	// lookups in the queue's order.
+	leaseIDs = "SELECT id FROM task_queue INDEXED BY task_queue_order WHERE kind IN ('fetch', 'peers') AND lease_owner IS NULL AND not_before <= ? ORDER BY priority, id LIMIT ?"
+	// agedIDs selects the free fetches queued before the given time.
+	agedIDs = "SELECT id FROM task_queue INDEXED BY task_queue_queued_at WHERE kind = 'fetch' AND lease_owner IS NULL AND queued_at < ?"
+	// oversizeIDs selects, given n, the n free fetches Trim evicts first.
+	oversizeIDs = "SELECT id FROM task_queue INDEXED BY task_queue_evict WHERE kind = 'fetch' AND lease_owner IS NULL ORDER BY priority DESC, id LIMIT ?"
+)
+
+// freeExpiredQuery frees, given now, the expired leases of the tasks kinds
+// selects, an SQL condition.
+func freeExpiredQuery(kinds string) string {
+	return "UPDATE task_queue INDEXED BY task_queue_lease_until SET lease_owner = NULL, lease_until = NULL WHERE " + kinds + " AND lease_until <= ?"
+}
+
 // freeExpired frees the leases expired by now of the tasks kinds selects,
 // an SQL condition, and returns how many it freed.
 func freeExpired(ctx context.Context, tx *sql.Tx, kinds string, now time.Time) (int, error) {
-	res, err := tx.ExecContext(ctx, "UPDATE task_queue SET lease_owner = NULL, lease_until = NULL WHERE "+kinds+" AND lease_until <= ?", now.UnixMilli())
+	res, err := tx.ExecContext(ctx, freeExpiredQuery(kinds), now.UnixMilli())
 	if err != nil {
 		return 0, err
 	}

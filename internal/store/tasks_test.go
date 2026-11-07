@@ -260,3 +260,29 @@ func TestTrimMetrics(t *testing.T) {
 	require.EqualValues(t, 2, got["sniffarr.queue.dead"])
 	require.EqualValues(t, 1, got["sniffarr.queue.depth"])
 }
+
+func TestTaskPlans(t *testing.T) {
+	q := openQueue(t)
+	for _, tt := range []struct {
+		query, want string
+		args        []any
+	}{
+		{leaseIDs, "SCAN task_queue USING INDEX task_queue_order", []any{0, 1}},
+		{agedIDs, "SEARCH task_queue USING INDEX task_queue_queued_at (queued_at<?)", []any{0}},
+		{oversizeIDs, "SCAN task_queue USING INDEX task_queue_evict", []any{1}},
+		{freeExpiredQuery("kind IN ('fetch', 'peers')"), "SEARCH task_queue USING INDEX task_queue_lease_until (lease_until<?)", []any{0}},
+		{freeExpiredQuery("kind = 'probe'"), "SEARCH task_queue USING INDEX task_queue_lease_until (lease_until<?)", []any{0}},
+	} {
+		rows, err := q.db.R.QueryContext(context.Background(), "EXPLAIN QUERY PLAN "+tt.query, tt.args...)
+		require.NoError(t, err)
+		var plan []string
+		for rows.Next() {
+			var id, parent, unused int
+			var detail string
+			require.NoError(t, rows.Scan(&id, &parent, &unused, &detail))
+			plan = append(plan, detail)
+		}
+		require.NoError(t, rows.Close())
+		require.Equal(t, []string{tt.want}, plan, "walks its index in order, not the (kind, infohash) key with a sort: %s", tt.query)
+	}
+}
