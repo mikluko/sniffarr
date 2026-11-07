@@ -46,3 +46,10 @@ how the project runs for now.
 The idea in a pull request is still welcome: open an issue and make the
 case for it as above. If code makes the idea clearer, link your branch from
 the issue.
+
+## Becoming a maintainer
+
+Working on the code is open to maintainers, and the door to becoming one is
+open too. If you have a history of contributing, here or in other projects,
+and want to get involved in the code itself, say so in an issue: what you
+have worked on, and what in sniffarr you would like to take on.

@@ -10,6 +10,8 @@ runs for now.
 
 The idea behind your change is the part that helps most, and it's very
 welcome: open an issue that explains the problem and why it matters, and
-link your branch there if code makes it clearer.
+link your branch there if code makes it clearer. And if you'd like to work
+on the code itself, there's a way in:
+[becoming a maintainer](https://sarak.sh/mikluko/sniffarr/src/branch/main/CONTRIBUTING.md#becoming-a-maintainer).
 
 Agreed in: <!-- link the issue -->
