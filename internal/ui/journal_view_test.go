@@ -88,7 +88,7 @@ func TestJournalFormats(t *testing.T) {
 	}{
 		{"ru", "day", "19 октября"}, {"en", "day", "Oct 19"}, {"ru", "day-year", "31 декабря 2025"}, {"en", "day-year", "Dec 31, 2025"},
 		{"ru", "span", "18.10 20:57 – 19.10 00:07"}, {"ru", "span-day", "20.10 11:05 – 12:05"},
-		{"ru", "stamp", "19.10.2026 00:07:09"}, {"en", "stamp", "2026-10-19 00:07:09"},
+		{"ru", "stamp", "19.10.2026 00:07:09"}, {"en", "stamp", "Oct 19, 2026, 00:07:09"},
 		{"ru", "retention", "30 дней"}, {"ru", "retention-hours", "36 часов"}, {"en", "retention", "30 days"},
 		{"ru", "title", "Метаданные получены"}, {"ru", "group", "Метаданные"},
 	} {

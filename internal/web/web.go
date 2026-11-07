@@ -851,7 +851,8 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	if len(hours) < statHours {
 		hours = append(hours, make([]int64, statHours-len(hours))...)
 	}
-	hourly, daily, weekly := charts(computed, hours, s.location(req))
+	b := s.base(req, s.lang(w, req), "data")
+	hourly, daily, weekly := charts(b, computed, hours)
 	out := ui.Stats{
 		Computed:   computed,
 		Interval:   st.GetCountsInterval().AsDuration(),
@@ -905,7 +906,7 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	slices.SortStableFunc(out.Dropped, func(a, b ui.Count) int {
 		return cmp.Or(cmp.Compare(b.N, a.N), cmp.Compare(slices.Index(ui.DropReasons, a.Key), slices.Index(ui.DropReasons, b.Key)))
 	})
-	s.render(w, req, "data", ui.DataPage{Base: s.base(req, s.lang(w, req), "data"), Stats: out, Features: s.features(req.Context())})
+	s.render(w, req, "data", ui.DataPage{Base: b, Stats: out, Features: s.features(req.Context())})
 }
 
 // features are the API's optional features as Settings tells them now, in
@@ -944,12 +945,13 @@ func (s *server) noProbers(ctx context.Context) bool {
 
 // charts folds counts per clock hour, the latest first, into bars for the
 // last 48 hours, the last 30 calendar days and the last 26 calendar weeks,
-// Monday first, in loc; the last bar of each is the current, unfinished
-// period, outlined up to a projection: the mean of the count over the same
-// length of time ending now and of the period's pace so far, the latter
-// once a tenth of it has passed.
-func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, weekly ui.Chart) {
+// Monday first, in b's zone, labelled by b.Time and b.Date; the last bar of
+// each is the current, unfinished period, outlined up to a projection: the
+// mean of the count over the same length of time ending now and of the
+// period's pace so far, the latter once a tenth of it has passed.
+func charts(b ui.Base, now time.Time, hours []int64) (hourly, daily, weekly ui.Chart) {
 	const nh, nd, nw = 48, 30, 26
+	loc := b.Loc
 	first := now.Truncate(time.Hour)
 	today := dayStart(now.In(loc))
 	week := today.AddDate(0, 0, -mondayOffset(today))
@@ -983,7 +985,24 @@ func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, we
 		}
 		return int64(math.Round(r))
 	}
-	dv, wv := make([]int64, nd), make([]int64, nw)
+	dv, wv := dayWeekTotals(hours, first, today, week, loc, nd, nw)
+	var hv []int64
+	var hl []string
+	for i := min(nh, len(hours)) - 1; i >= 0; i-- {
+		hv = append(hv, hours[i])
+		hl = append(hl, b.Time(first.Add(-time.Duration(i)*time.Hour)))
+	}
+	dl, wl := dayLabels(b, today, nd, 1), dayLabels(b, week, nw, 7)
+	return ui.NewBarChart(hv, hl, 12, true, pace(hv[len(hv)-1], first, first.Add(time.Hour))),
+		ui.NewBarChart(dv, dl, 7, true, pace(dv[nd-1], today, today.AddDate(0, 0, 1))),
+		ui.NewBarChart(wv, wl, 4, true, pace(wv[nw-1], week, week.AddDate(0, 0, 7)))
+}
+
+// dayWeekTotals sums counts per clock hour, the latest at first, into the nd
+// calendar days ending today and the nw weeks ending with the one starting
+// on week, in loc, the oldest first.
+func dayWeekTotals(hours []int64, first, today, week time.Time, loc *time.Location, nd, nw int) (dv, wv []int64) {
+	dv, wv = make([]int64, nd), make([]int64, nw)
 	for i, n := range hours {
 		day := dayStart(first.Add(-time.Duration(i) * time.Hour).In(loc))
 		if d := calendarDays(day, today); d < nd {
@@ -993,21 +1012,16 @@ func charts(now time.Time, hours []int64, loc *time.Location) (hourly, daily, we
 			wv[nw-1-w] += n
 		}
 	}
-	var hv []int64
-	var hl, dl, wl []string
-	for i := min(nh, len(hours)) - 1; i >= 0; i-- {
-		hv = append(hv, hours[i])
-		hl = append(hl, first.Add(-time.Duration(i)*time.Hour).In(loc).Format("02.01 15:04"))
+	return dv, wv
+}
+
+// dayLabels names n periods of step days by b.Date, the last starting on last.
+func dayLabels(b ui.Base, last time.Time, n, step int) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = b.Date(last.AddDate(0, 0, step*(i-n+1)))
 	}
-	for i := range dv {
-		dl = append(dl, today.AddDate(0, 0, i-nd+1).Format("02.01"))
-	}
-	for i := range wv {
-		wl = append(wl, week.AddDate(0, 0, 7*(i-nw+1)).Format("02.01"))
-	}
-	return ui.NewBarChart(hv, hl, 12, true, pace(hv[len(hv)-1], first, first.Add(time.Hour))),
-		ui.NewBarChart(dv, dl, 7, true, pace(dv[nd-1], today, today.AddDate(0, 0, 1))),
-		ui.NewBarChart(wv, wl, 4, true, pace(wv[nw-1], week, week.AddDate(0, 0, 7)))
+	return out
 }
 
 // taskQueues returns the queue of st per ui.TaskKinds, that of probes only

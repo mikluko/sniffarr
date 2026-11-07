@@ -228,12 +228,12 @@ func (b Base) DayLabel(t time.Time) string {
 // Clock is the time of t in Loc, "15:04".
 func (b Base) Clock(t time.Time) string { return t.In(b.loc()).Format("15:04") }
 
-// Stamp is t in Loc to the second: "19.10.2026 00:07:12", "2026-10-19 00:07:12".
+// Stamp is t in Loc to the second: "19.10.2026 00:07:12", "Oct 19, 2026, 00:07:12".
 func (b Base) Stamp(t time.Time) string {
 	if b.ru() {
 		return t.In(b.loc()).Format("02.01.2006 15:04:05")
 	}
-	return t.In(b.loc()).Format(time.DateTime)
+	return t.In(b.loc()).Format("Jan 2, 2006, 15:04:05")
 }
 
 // ISO is t as a <time> element's datetime, in UTC.

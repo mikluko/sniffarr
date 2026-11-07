@@ -19,7 +19,7 @@
     <h1>{{$m.Title}}{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h1>
     {{if $m.ShowOriginal}}<div class="mu">{{$m.OriginalTitle}}</div>{{end}}
     <div>{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}</div>
-    {{if or $m.Genres $m.Votes}}<div>{{.List $m.Genres}}{{if $m.Votes}}<span class="mu">{{if $m.Genres}} · {{end}}TMDB {{.Rating $m.Rating}} · {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span>{{end}}</div>{{end}}
+    {{if or $m.Genres $m.Votes}}<div>{{.Genres $m.Genres}}{{if $m.Votes}}<span class="mu">{{if $m.Genres}} · {{end}}TMDB {{.Rating $m.Rating}} · {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span>{{end}}</div>{{end}}
     {{if $m.Overview}}<p class="hero-desc">{{$m.Overview}}</p>{{end}}
     <div>
       <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}{{with $.SeerrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Seerr</a>{{end}}{{with $.RadarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Radarr</a>{{end}}{{with $.SonarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Sonarr</a>{{end}}
@@ -53,7 +53,7 @@
 {{end}}
 
 {{/* A title's places over the windows on a line: "24 h №2 · 7 days №1 · 30 days —"; "—" is no place. */}}
-{{define "wplaces"}}{{$b := .B}}{{range $i, $win := windows}}{{if $i}} · {{end}}{{$b.T (concat "win." $win)}} {{with index $.N $i}}{{if eq $i $.Bold}}<b>№{{.}}</b>{{else}}№{{.}}{{end}}{{else}}<span class="mu">—</span>{{end}}{{end}}{{end}}
+{{define "wplaces"}}{{$b := .B}}{{range $i, $win := windows}}{{if $i}} · {{end}}{{$b.T (concat "win." $win)}} {{with index $.N $i}}{{if eq $i $.Bold}}<b>{{$b.RankN .}}</b>{{else}}{{$b.RankN .}}{{end}}{{else}}<span class="mu">—</span>{{end}}{{end}}{{end}}
 
 {{/* Dub of a title in one language, on a line: how many of its N releases are marked, the marks
      in the tooltip, and how many more are likely. */}}
@@ -72,7 +72,7 @@
 {{define "releases"}}
 {{$r := .Releases}}{{$f := .Releases.Filters}}{{$set := .FiltersSet}}
 <section id="releases" class="rels">
-  <h2>{{.T "work.releases"}} <span class="mu">{{if $set}}{{$r.Matched}} {{.T "results.of"}} {{$r.Total}}{{else}}{{$r.Total}}{{end}}</span></h2>
+  <h2>{{.T "work.releases"}} <span class="mu">{{if $set}}{{.Num (int64 $r.Matched)}} {{.T "results.of"}} {{.Num (int64 $r.Total)}}{{else}}{{.Num (int64 $r.Total)}}{{end}}</span></h2>
   <form class="rfl" action="{{$r.Path}}" method="get"
         hx-get="{{$r.Path}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true"
         hx-trigger="change, input changed delay:500ms from:input[type=text], submit">
@@ -101,7 +101,7 @@
     {{end}}
     <label class="rsort">{{.T "f.sort"}}
       <select name="sort">
-        {{range relSorts}}<option value="{{.}}"{{if eq . $f.Sort}} selected{{end}}>{{$.T (concat "relsort." .)}}</option>{{end}}
+        {{range relSorts}}<option value="{{.}}"{{if eq . $f.Sort}} selected{{end}}>{{$.T (concat "sort." .)}}</option>{{end}}
       </select></label>
     {{if $set}}<a href="{{.ResetURL}}" hx-get="{{.ResetURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true" class="fx">{{.T "work.reset"}}</a>{{end}}
   </form>
@@ -129,7 +129,7 @@
   </table>
   </div>
   <nav class="rpager">
-    <span class="mu">{{add $r.Offset 1}}–{{add $r.Offset $r.Shown}} {{.T "results.of"}} {{$r.Matched}}</span>
+    <span class="mu">{{.Num (int64 (add $r.Offset 1))}}–{{.Num (int64 (add $r.Offset $r.Shown))}} {{.T "results.of"}} {{.Num (int64 $r.Matched)}}</span>
     <span class="rpager-b">
     {{- if $r.PrevURL}}<a class="btn" href="{{$r.PrevURL}}" hx-get="{{$r.PrevURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">← {{.T "pager.prev"}}</a>{{end}}
     {{- if $r.NextURL}}<a class="btn" href="{{$r.NextURL}}" hx-get="{{$r.NextURL}}" hx-target="#releases" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "pager.next"}} →</a>{{end -}}

@@ -111,7 +111,7 @@ func TestTopHistory(t *testing.T) {
 	body = renderTop(t, "ru", func(p *TopPage) { p.Since = p.Works[4].Debut })
 	for _, want := range []string{
 		`<td class="r oc">` + tip("1 дн", "В топе с начала истории, 19.10.2026: 1 день; раньше не записано.") + `<span class="mb"> в топе</span></td>`,
-		`<td class="r db mu mh">` + tip("≤ 19.10", "Было в сотне уже в начале истории, 19.10.2026; раньше не записано.") + `</td>`,
+		`<td class="r db mu"><span class="dk">` + tip("≤ 19.10", "Было в сотне уже в начале истории, 19.10.2026; раньше не записано.") + `</span><span class="mb">с 19.10</span></td>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("at the history's start: no %s", want)
@@ -132,7 +132,7 @@ func TestTopMarkup(t *testing.T) {
 		`<a class="o on" href="/top?kind=movie&amp;win=7d" hx-get="/top?kind=movie&amp;win=7d" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true" aria-current="true">7 days</a>`,
 		`<a class="o" href="/top?kind=movie&amp;voice=explicit&amp;win=7d"`,
 		`hx-push-url="true">explicit</a>`,
-		`<span class="mu">` + tip("Russian dub", "Which releases count towards peers and place. “≥ 0.5”: an audio estimate of 0.5 or more. “explicit”: the audio is named in the torrent&#39;s name.") + `</span>`,
+		`<span class="mu">` + tip("Voice-over: ru", "Which releases count towards peers and place. “≥ 0.5”: an audio estimate of 0.5 or more. “explicit”: the audio is named in the torrent&#39;s name.") + `</span>`,
 		`<span class="th th-none" aria-hidden="true"></span>`,
 		"<td class=\"r rl\"><span class=\"dk\">95</span><span class=\"mb\">95 releases</span></td>",
 		`<table class="t tt fit">`,

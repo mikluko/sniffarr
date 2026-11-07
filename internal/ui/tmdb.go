@@ -175,6 +175,10 @@ func (b Base) Rating(r float64) string { return b.dec(r, 1) }
 // List joins strings with ", ".
 func (b Base) List(xs []string) string { return strings.Join(xs, ", ") }
 
+// Genres joins TMDB genres lower-cased, "Science Fiction" as "science
+// fiction": TMDB capitalises them in English and not in Russian.
+func (b Base) Genres(xs []string) string { return strings.ToLower(b.List(xs)) }
+
 // WorkID is the URL id of a title: "m318846" for a movie, "tv1399" for a series.
 // TMDB numbers movies and series separately, so the bare TMDB id is ambiguous.
 func WorkID(kind string, tmdbID int64) string {

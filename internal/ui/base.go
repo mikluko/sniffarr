@@ -168,45 +168,42 @@ func (b Base) BuildTip() string {
 	return b.Fmt("foot.build", utc.TimeFull(b.Build.Built), b.Build.Commit)
 }
 
-// Time formats a timestamp compactly: same year → "20.10 14:02", else "20.10.2025".
-func (b Base) Time(t time.Time) string {
-	if t.IsZero() {
-		return "—"
-	}
-	loc := b.Loc
-	if loc == nil {
-		loc = time.Local
-	}
-	t = t.In(loc)
+// thisYear reports whether t falls in Now's year in Loc.
+func (b Base) thisYear(t time.Time) bool {
 	now := b.Now
 	if now.IsZero() {
 		now = time.Now()
 	}
-	if b.ru() {
-		if t.Year() == now.In(loc).Year() {
-			return t.Format("02.01 15:04")
-		}
-		return t.Format("02.01.2006")
-	}
-	if t.Year() == now.In(loc).Year() {
-		return t.Format("Jan 2 15:04")
-	}
-	return t.Format("2006-01-02")
+	return t.In(b.loc()).Year() == now.In(b.loc()).Year()
 }
 
-// TimeFull formats a timestamp in full: 20.10.2026 14:02 / 2026-10-20 14:02.
+// Time formats a timestamp compactly: "20.10 14:02" / "Oct 20, 14:02", and
+// a timestamp of another year by its day alone: "20.10.2025" / "Oct 20, 2025".
+func (b Base) Time(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	layout := "Jan 2, 2006"
+	switch {
+	case b.ru() && b.thisYear(t):
+		layout = "02.01 15:04"
+	case b.ru():
+		layout = "02.01.2006"
+	case b.thisYear(t):
+		layout = "Jan 2, 15:04"
+	}
+	return t.In(b.loc()).Format(layout)
+}
+
+// TimeFull formats a timestamp with its year: "20.10.2026 14:02" / "Oct 20, 2026, 14:02".
 func (b Base) TimeFull(t time.Time) string {
 	if t.IsZero() {
 		return "—"
 	}
-	loc := b.Loc
-	if loc == nil {
-		loc = time.Local
-	}
 	if b.ru() {
-		return t.In(loc).Format("02.01.2006 15:04")
+		return t.In(b.loc()).Format("02.01.2006 15:04")
 	}
-	return t.In(loc).Format("2006-01-02 15:04")
+	return t.In(b.loc()).Format("Jan 2, 2006, 15:04")
 }
 
 // Ago formats how long before Now t was in whole minutes by "ago.min", or
@@ -298,31 +295,23 @@ func (p TopPage) setVoice(v url.Values, vl, voice string) {
 	}
 }
 
-// Date formats a day: same year → "20.10" / "Oct 20", else "20.10.2025" / "2025-10-20".
+// Date formats a day: "20.10" / "Oct 20", with the year when it is not
+// Now's: "20.10.2025" / "Oct 20, 2025".
 func (b Base) Date(t time.Time) string {
 	if t.IsZero() {
 		return "—"
 	}
-	loc := b.Loc
-	if loc == nil {
-		loc = time.Local
+	if b.thisYear(t) {
+		if b.ru() {
+			return t.In(b.loc()).Format("02.01")
+		}
+		return t.In(b.loc()).Format("Jan 2")
 	}
-	t = t.In(loc)
-	now := b.Now
-	if now.IsZero() {
-		now = time.Now()
-	}
-	same := t.Year() == now.In(loc).Year()
-	switch {
-	case b.ru() && same:
-		return t.Format("02.01")
-	case b.ru():
-		return t.Format("02.01.2006")
-	case same:
-		return t.Format("Jan 2")
-	}
-	return t.Format("2006-01-02")
+	return b.FullDate(t)
 }
+
+// RankN writes a place: "№2" / "#2".
+func (b Base) RankN(n int) string { return b.Fmt("rank.n", b.Num(int64(n))) }
 
 // Prob2 is Prob for a plain value.
 func (b Base) Prob2(p float64) string { return b.dec(p, 2) }

@@ -422,18 +422,18 @@ func SampleData(b Base) DataPage {
 	daily := []int64{12890, 11380, 13590, 15000, 10440, 10660, 14880, 10860, 13330, 15300, 10540, 14630, 11960, 10350, 10780, 13950, 13800, 10640, 12190, 10830, 15010, 13870, 4100, 15150, 11120, 12040, 15740, 15710, 15310, 9506}
 	var dl []string
 	for i := range daily {
-		dl = append(dl, b.Now.AddDate(0, 0, i-len(daily)+1).Format("02.01"))
+		dl = append(dl, b.Date(b.Now.AddDate(0, 0, i-len(daily)+1)))
 	}
 	weekly := []int64{88910, 89187, 82998, 71624, 77244, 71526, 88240, 74363, 79489, 83734, 74726, 86060}
 	var wl []string
 	for i := range weekly {
-		wl = append(wl, b.Now.AddDate(0, 0, 7*(i-len(weekly)+1)).Format("02.01"))
+		wl = append(wl, b.Date(b.Now.AddDate(0, 0, 7*(i-len(weekly)+1))))
 	}
 	hourly := []int64{512, 488, 530, 601, 577, 640, 702, 655, 590, 544, 498, 470, 455, 431, 420, 462, 503, 548, 591, 622, 604, 570, 533, 508,
 		495, 471, 520, 589, 566, 630, 688, 641, 582, 537, 489, 463, 449, 426, 417, 455, 497, 541, 584, 613, 598, 561, 526, 212}
 	var hl []string
 	for i := range hourly {
-		hl = append(hl, b.Now.Truncate(time.Hour).Add(time.Duration(i-len(hourly)+1)*time.Hour).Format("02.01 15:04"))
+		hl = append(hl, b.Time(b.Now.Truncate(time.Hour).Add(time.Duration(i-len(hourly)+1)*time.Hour)))
 	}
 	return DataPage{Base: b, Stats: Stats{
 		Computed: b.Now.Add(-3 * time.Minute), Interval: 5 * time.Minute, Total: 1284311, NewDay: 9506, NewWeek: 86060, New24h: 12721, DroppedTotal: 4754966,

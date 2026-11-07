@@ -70,7 +70,7 @@
 {{template "journal" $}}
 
 <section>
-  <h2>{{$.T "card.filelist"}} <span class="mu">{{.FileCount}}</span></h2>
+  <h2>{{$.T "card.filelist"}} <span class="mu">{{$.Num (int64 .FileCount)}}</span></h2>
   {{template "files" $}}
 </section>
 {{end}}
@@ -163,7 +163,7 @@
   </table>
   </div>
   <div class="files-foot">
-    <span class="mu">{{$.T "files.shown"}} {{len .Files}} {{$.T "results.of"}} {{.Stored}}{{if lt .Stored $.Torrent.FileCount}} ({{$.T "files.top"}} {{$.Torrent.FileCount}}){{end}}</span>
+    <span class="mu">{{$.T "files.shown"}} {{$.Num (int64 (len .Files))}} {{$.T "results.of"}} {{$.Num (int64 .Stored)}}{{if lt .Stored $.Torrent.FileCount}} ({{$.T "files.top"}} {{$.Num (int64 $.Torrent.FileCount)}}){{end}}</span>
     {{if and (not .All) (lt (len .Files) .Stored)}}
       <a class="btn" href="/t/{{.InfoHash}}?files=all#files" hx-get="/t/{{.InfoHash}}?files=all" hx-target="#files" hx-swap="morph:outerHTML">{{$.T "files.all"}}</a>
     {{end}}
@@ -187,10 +187,10 @@
   <div class="tm-body">
     <h2 class="tm-title"><a class="tm-stretch" href="{{.WorkURL $w.Path}}">{{$m.Title}}</a>{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h2>
     {{if $m.ShowOriginal}}<div class="tm-orig">{{$m.OriginalTitle}}</div>{{end}}
-    <div class="tm-facts">{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}{{if $m.Genres}} · {{.List $m.Genres}}{{end}}</div>
+    <div class="tm-facts">{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}{{if $m.Genres}} · {{.Genres $m.Genres}}{{end}}</div>
     {{if $m.Votes}}<div class="tm-facts">TMDB {{.Rating $m.Rating}} <span class="mu">· {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span></div>{{end}}
     {{if $m.Overview}}<p class="tm-over">{{$m.Overview}}</p>{{end}}
-    <div class="tm-links"><span class="mu">{{if $w.Rank}}№{{$w.Rank}} {{.T (concat "card.intop." $w.Kind)}} · {{end}}{{$w.Releases}} {{.T "top.releases_lc"}}, {{.T "card.thisis"}}{{$t.RankInWork}} ·</span>
+    <div class="tm-links"><span class="mu">{{if $w.Rank}}{{.RankN $w.Rank}} {{.T (concat "card.intop." $w.Kind)}} · {{end}}{{.Count (int64 $w.Releases) "top.rels"}}, {{.Fmt "card.thisis" (.RankN $t.RankInWork)}} ·</span>
       <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}{{with $.SeerrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Seerr</a>{{end}}{{with $.RadarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Radarr</a>{{end}}{{with $.SonarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Sonarr</a>{{end}}
     </div>
     {{with $m.Method}}<div class="tm-op mu">{{template "tip" (tipArgs ($.T (concat "card.match." .)) ($.MatchTip $m))}}{{if lowConf $m.Confidence}} <b class="warn">{{$.T "card.match.low"}}</b>{{end}}</div>{{end}}

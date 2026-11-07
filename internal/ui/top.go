@@ -69,12 +69,8 @@ func (p TopPage) OnChartTip(w Work) string {
 
 // FullDate formats a day with its year: "07.11.2026" / "Nov 7, 2026".
 func (b Base) FullDate(t time.Time) string {
-	loc := b.Loc
-	if loc == nil {
-		loc = time.Local
-	}
 	if b.ru() {
-		return t.In(loc).Format("02.01.2006")
+		return t.In(b.loc()).Format("02.01.2006")
 	}
-	return t.In(loc).Format("Jan 2, 2006")
+	return t.In(b.loc()).Format("Jan 2, 2006")
 }

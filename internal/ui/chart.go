@@ -34,7 +34,8 @@ type Bar struct {
 }
 
 // NewBarChart lays out one bar per value. labels[i] names values[i];
-// every labelEvery-th label (and the last one) goes to the x axis. With
+// every labelEvery-th label goes to the x axis, and the last one in place
+// of a label less than half a step before it. With
 // partial the last bar is the current, unfinished period, outlined up to
 // projected when that is above 0.
 func NewBarChart(values []int64, labels []string, labelEvery int, partial bool, projected int64) Chart {
@@ -92,6 +93,9 @@ func NewBarChart(values []int64, labels []string, labelEvery int, partial bool, 
 		labelEvery = 1
 	}
 	for i := 0; i < len(labels); i += labelEvery {
+		if len(labels)-1-i < labelEvery/2 && i > 0 {
+			break
+		}
 		c.XLabels = append(c.XLabels, XLabel{labels[i], r1((float64(i) + 0.5) * slot / w * 100)})
 	}
 	if last := len(labels) - 1; last >= 0 && (len(c.XLabels) == 0 || c.XLabels[len(c.XLabels)-1].Text != labels[last]) {

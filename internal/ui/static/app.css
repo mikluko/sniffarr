@@ -471,7 +471,7 @@ a.btn:hover{background:var(--muted);text-decoration:none}
   .topv .tt tr.wk td.mh{display:none}
   .topv .tt tr.wk td.rl{grid-area:4/2/5/6}
   .topv .mb{display:inline}
-  .topv .rl .dk{display:none}
+  .topv .rl .dk,.topv .db .dk{display:none}
 }
 
 /* data page, store: three columns, a share bar after each row's percentage;

@@ -164,7 +164,7 @@ func TestRenderFooterVersion(t *testing.T) {
 			`<span class="ver"><span class="tip" tabindex="0" aria-label="sniffarr 0.44.0-alpha.2: Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.">sniffarr 0.44.0-alpha.2<span class="tipb" aria-hidden="true">Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.</span></span></span>`,
 		})
 		checkBody(t, "en/"+page, render("en", sampleBuild, page, data), nil, []string{
-			`aria-label="sniffarr 0.44.0-alpha.2: Built 2026-11-07 14:02 UTC, commit 1a2b3c4."`,
+			`aria-label="sniffarr 0.44.0-alpha.2: Built Nov 7, 2026, 14:02 UTC, commit 1a2b3c4."`,
 		})
 		checkBody(t, "dev/"+page, render("en", version.Info{Version: "dev"}, page, data), []string{`class="tip" tabindex="0" aria-label="sniffarr dev`}, []string{
 			`<span class="ver">sniffarr dev</span>`,
@@ -211,7 +211,7 @@ func TestRenderFeaturesOff(t *testing.T) {
 				t.Fatalf("%s/%s: %v", lang, c.name, err)
 			}
 			off := []string{
-				`name="vl"`, `name="voice"`, `voice=`, b.T("d.voice"), b.T("top.audio"), b.T("card.audio_mark"),
+				`name="vl"`, `name="voice"`, `voice=`, b.T("d.voice") + ": ", "<th>" + b.T("top.audio") + "</th>", `<h3 class="gap">` + b.T("top.audio"), b.T("card.audio_mark"),
 				`act-probe`, b.T("act.probe_nopeers"), `aria-label="` + b.T("d.probes") + `: `, `<h3>` + b.T("q.probe") + `</h3>`, b.T("q.p1"), b.T("q.p4"),
 				`aria-label="` + b.T("d.classifier") + `: `, `/torrents?layer=classifier`,
 				`P2: ` + b.T("q.p2") + `<`,
@@ -618,7 +618,7 @@ func TestJournalDetail(t *testing.T) {
 				{"attempts ran out", "yes", ""},
 				{"novel", "x", ""},
 				{"file", "a.mkv", ""},
-				{"next try", "2025-11-07 09:20", ""},
+				{"next try", "Nov 7, 2025, 09:20", ""},
 				{"tracks", "video hevc, audio rus eac3", ""},
 			}},
 		{"probed in Russian", "ru", JournalEntry{Kind: "probed", Detail: map[string]any{"final": false, "downloaded": 4194304.0, "audio": map[string]any{"ru": 0.88},
@@ -627,7 +627,7 @@ func TestJournalDetail(t *testing.T) {
 				{"дорожки", "видео hevc, звук rus eac3, субтитры eng subrip, other x y", ""}}},
 		{"a codec with colons", "en", JournalEntry{Kind: "probed", Detail: map[string]any{"tracks": []any{"audio:eng:A:B"}}}, []DetailPair{{"tracks", "audio eng A:B", ""}}},
 		{"stored", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"kind": "movie", "kind_layer": "reuse", "discovery": "announce", "size": 26629001216.0, "leases": 3.0}},
-			[]DetailPair{{"discovered by", "announce", ""}, {"kind", "movie", ""}, {"kind decided by", "title repeat", ""}, {"leased", "3 times", ""}, {"size", "24.8\u00a0GB", ""}}},
+			[]DetailPair{{"discovered by", "announce", ""}, {"kind", "movie", ""}, {"kind decided by", "same title", ""}, {"leased", "3 times", ""}, {"size", "24.8\u00a0GB", ""}}},
 		{"leased twice in Russian", "ru", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 2.0}}, []DetailPair{{"выдана", "2 раза", ""}}},
 		{"leased 5 times in Russian", "ru", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 5.0}}, []DetailPair{{"выдана", "5 раз", ""}}},
 		{"leased 12 times in Russian", "ru", JournalEntry{Kind: "fetch_failed", Detail: map[string]any{"leases": 12.0}}, []DetailPair{{"выдана", "12 раз", ""}}},
@@ -643,11 +643,11 @@ func TestJournalDetail(t *testing.T) {
 		{"the classifier's disc image", "en", JournalEntry{Kind: "classified", Detail: map[string]any{"source": "disc_image"}}, []DetailPair{{"source", "disc image", ""}}},
 		{"the classifier's encode", "ru", JournalEntry{Kind: "classified", Detail: map[string]any{"source": "encode"}}, []DetailPair{{"источник", "rip", ""}}},
 		{"arr", "en", JournalEntry{Kind: "arr", Detail: map[string]any{"app": "sonarr", "source": "history", "recorded_at": 1762500000.0}},
-			[]DetailPair{{"app", "Sonarr", ""}, {"recorded", "2025-11-07 09:20", ""}, {"came by", "history import", ""}}},
+			[]DetailPair{{"app", "Sonarr", ""}, {"recorded", "Nov 7, 2025, 09:20", ""}, {"came by", "history import", ""}}},
 		{"an arr match", "en", JournalEntry{Kind: "matched", Detail: map[string]any{"event_at": 1762500000.0, "trigger": "arr"}},
-			[]DetailPair{{"time of the Radarr/Sonarr event", "2025-11-07 09:20", ""}, {"asked by", "Radarr/Sonarr", ""}}},
+			[]DetailPair{{"time of the Radarr/Sonarr event", "Nov 7, 2025, 09:20", ""}, {"asked by", "Radarr/Sonarr", ""}}},
 		{"an earlier match", "en", JournalEntry{Kind: "matched", Detail: map[string]any{"layer": "tmdb", "key_matched_at": 1762500000.0}},
-			[]DetailPair{{"match made", "2025-11-07 09:20", ""}, {"matched by", "TMDB search", ""}}},
+			[]DetailPair{{"match made", "Nov 7, 2025, 09:20", ""}, {"matched by", "TMDB search", ""}}},
 		{"an earlier match in Russian", "ru", JournalEntry{Kind: "matched", Detail: map[string]any{"layer": "arr", "key_matched_at": 1762500000.0}},
 			[]DetailPair{{"сопоставлено", "07.11.2025 09:20", ""}, {"чем сопоставлено", "Radarr/Sonarr", ""}}},
 		{"feed", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker"}}, []DetailPair{{"feed", "rutracker", ""}}},
@@ -669,7 +669,7 @@ func TestJournalDetail(t *testing.T) {
 		{"a time on the entry's day in the zone, not in UTC", "en", JournalEntry{Kind: "leased", At: time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC),
 			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 19, 1, 0, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "03:00", ""}}},
 		{"a time on the next day in the zone", "en", JournalEntry{Kind: "leased", At: time.Date(2026, 10, 18, 21, 30, 0, 0, time.UTC),
-			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "2026-10-19 00:30", ""}}},
+			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "Oct 19, 2026, 00:30", ""}}},
 		{"an infohash under any key", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"sibling": "8F3C2A91D07E4B6C5A1E9F20B37D4C8E6A0F1B52"}},
 			[]DetailPair{{"sibling", "8f3c2a91", "/t/8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"}}},
 		{"a tracker page by its source", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker", "url": "https://rutracker.org/forum/viewtopic.php?t=1"}},
@@ -914,7 +914,7 @@ func TestDataMarkup(t *testing.T) {
 	for _, want := range []string{
 		`hx-trigger="every 30s [document.visibilityState=='visible'], tz"`,
 		`<button type="button" class="ic" hx-get="/" hx-target="#data" hx-swap="morph:outerHTML" aria-label="Refresh" aria-describedby="refresh-tip">` + string(svg) + `</button>`,
-		`<span class="tipb" id="refresh-tip" role="tooltip">Refresh. Data as of Oct 20 14:02, updated 3 min ago. The page refreshes itself every 30 seconds.</span>`,
+		`<span class="tipb" id="refresh-tip" role="tooltip">Refresh. Data as of Oct 20, 14:02, updated 3 min ago. The page refreshes itself every 30 seconds.</span>`,
 		`<span class="tip" tabindex="0" aria-label="P0: asked for in the UI"><span class="badge"><span class="sw q0"></span>P0</span><span class="tipb" aria-hidden="true">P0: asked for in the UI</span></span>`,
 		`<div class="qbar" role="img" aria-label="Probes: P0 1; P1 63; P4 2;"><i class="q0" style="flex-grow: 1"></i><i class="q1" style="flex-grow: 63"></i><i class="q4" style="flex-grow: 2"></i></div>`,
 		`<span class="xs dw">≈ 107.2% by 00:00 UTC</span>`,
@@ -1130,10 +1130,10 @@ func TestWorkMarkup(t *testing.T) {
 	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
 	b.Probes = true
 	on := render(b, ReleaseFilters{})
-	for _, want := range []string{`id="act-probe"`, `<span>Dub</span>`, `Releases <span class="mu">95</span>`, `<th>Quality</th>`, `<th class="r">First seen</th>`,
+	for _, want := range []string{`id="act-probe"`, `<span>Voice-over</span>`, `Releases <span class="mu">95</span>`, `<th>Quality</th>`, `<th class="r">First seen</th>`,
 		`role="group" aria-label="Quality"`, `name="min"`, `name="sort"`,
 		`<img class="hero-ph" src="https://image.tmdb.org/t/p/w185/`, ` 2x" width="185" height="278"`,
-		`<span>24 h №2 · 7 days <b>№1</b> · 30 days №3</span>`, `<span>24 h №1 · 7 days №1 · 30 days №2</span>`} {
+		`<span>24 h #2 · 7 days <b>#1</b> · 30 days #3</span>`, `<span>24 h #1 · 7 days #1 · 30 days #2</span>`} {
 		if !strings.Contains(on, want) {
 			t.Errorf("no %s", want)
 		}
@@ -1148,14 +1148,14 @@ func TestWorkMarkup(t *testing.T) {
 	if off := render(b, ReleaseFilters{}); strings.Contains(off, "act-probe") {
 		t.Error("the probe button shows while probes are off")
 	}
-	for _, s := range []string{`aria-label="Source"`, `aria-label="Dub"`, `name="source"`, `name="voice"`, `<th>Source</th>`, `<th>Languages</th>`, `name="episode"`, `<th>Episode</th>`} {
+	for _, s := range []string{`aria-label="Source"`, `aria-label="Voice-over"`, `name="source"`, `name="voice"`, `<th>Source</th>`, `<th>Voice-over</th>`, `name="episode"`, `<th>Episode</th>`} {
 		if strings.Contains(on, s) {
 			t.Errorf("a movie has %s", s)
 		}
 	}
 	b.VoiceLangs = nil
 	none := render(b, ReleaseFilters{})
-	if strings.Contains(none, `<span>Dub</span>`) {
+	if strings.Contains(none, `<span>Voice-over</span>`) {
 		t.Error("the dub fact shows without languages")
 	}
 }
@@ -1180,7 +1180,7 @@ func TestWorkSeriesMarkup(t *testing.T) {
 			t.Errorf("no %s", want)
 		}
 	}
-	for _, s := range []string{`aria-label="Source"`, `aria-label="Dub"`, `name="source"`, `name="voice"`, `<th>Source</th>`, `<th>Languages</th>`} {
+	for _, s := range []string{`aria-label="Source"`, `aria-label="Voice-over"`, `name="source"`, `name="voice"`, `<th>Source</th>`, `<th>Voice-over</th>`} {
 		if strings.Contains(body, s) {
 			t.Errorf("has %s", s)
 		}

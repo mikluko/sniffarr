@@ -103,7 +103,7 @@
 </div>
 <nav class="pager mu">
   {{if .Results.PrevURL}}<a href="{{.Results.PrevURL}}" hx-get="{{.Results.PrevURL}}" hx-target="#torrents" hx-swap="morph:outerHTML" hx-push-url="true">← {{.T "pager.prev"}}</a>{{end}}
-  <span>{{add .Results.Offset 1}}–{{add .Results.Offset .Results.Shown}} {{.T "results.of"}} {{$.Num .Results.Total}}</span>
+  <span>{{$.Num (int64 (add .Results.Offset 1))}}–{{$.Num (int64 (add .Results.Offset .Results.Shown))}} {{.T "results.of"}} {{$.Num .Results.Total}}</span>
   {{if .Results.NextURL}}<a href="{{.Results.NextURL}}" hx-get="{{.Results.NextURL}}" hx-target="#torrents" hx-swap="morph:outerHTML" hx-push-url="true">{{.T "pager.next"}} →</a>{{end}}
 </nav>
 {{else}}

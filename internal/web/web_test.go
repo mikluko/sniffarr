@@ -389,7 +389,7 @@ func TestTorrents(t *testing.T) {
 	body = page(t, get(t, h, "/torrents?q=alien&kind=movie&min=1&voice=p50&sort=size", ""))
 	require.Contains(t, body, `<select name="kind" class="set">`)
 	require.Contains(t, body, `class="num set"`)
-	require.Contains(t, body, `<select name="voice" aria-label="Dub threshold" class="set">`)
+	require.Contains(t, body, `<select name="voice" aria-label="Voice-over threshold" class="set">`)
 	require.Contains(t, body, `<select name="quality">`, "a filter left at all is not set")
 	require.Contains(t, body, `<select name="sort">`, "the sort is no filter")
 	require.Contains(t, body, `Filters<span class="mu"> · 3</span></button>`)
@@ -409,7 +409,7 @@ func TestTop(t *testing.T) {
 	require.Contains(t, body, `<td class="r mu">1</td>`, "its place")
 	require.Contains(t, body, `<td class="r dl mu"><span class="tip" tabindex="0" aria-label="—: In the top 100 since the history began, Oct 20, 2026;`,
 		"no peers the week before, and in the top at the first computation: new or back is not known")
-	require.Contains(t, body, "<td class=\"r db mu mh\"><span class=\"tip\" tabindex=\"0\" aria-label=\"≤\u00a0Oct 20: ", "its debut is the history's start or before")
+	require.Contains(t, body, "<td class=\"r db mu\"><span class=\"dk\"><span class=\"tip\" tabindex=\"0\" aria-label=\"≤\u00a0Oct 20: ", "its debut is the history's start or before")
 	require.Contains(t, body, `<td class="r rl"><span class="dk">2</span>`, "both title keys")
 	require.Contains(t, body, `<td class="r pk"><span class="mb">peak </span><b>#1</b></td>`, "at its peak")
 	require.NotContains(t, body, "Marked in the name", "no audio column")
@@ -417,7 +417,7 @@ func TestTop(t *testing.T) {
 	require.NotContains(t, body, "Severance")
 	require.NotContains(t, body, narcissist, "an unmatched release is in no top")
 	require.Contains(t, body, ">Show all 100</a>", "the first 25 of 100")
-	require.Contains(t, body, "Oct 20 12:00", "computed at now")
+	require.Contains(t, body, "Oct 20, 12:00", "computed at now")
 	require.Contains(t, page(t, get(t, h, "/top?lang=ru", "")), `<a href="/movie/348?from=%2Ftop">Чужой</a>`, "the title in the page's language")
 
 	body = page(t, get(t, h, "/top?kind=series&win=24h&all=1", ""))
@@ -430,7 +430,7 @@ func TestTop(t *testing.T) {
 	body = page(t, get(t, h, "/top?voice=explicit", ""))
 	require.Contains(t, body, "/movie/348")
 	require.NotContains(t, body, "/movie/8195", "no marker on Ronin")
-	require.Contains(t, body, `<span class="tipb" aria-hidden="true">By unique peers in the window, summed over releases that pass the dub filter. “Russian dub: explicit mark”: only peers of releases whose name carries an explicit marker`, "the caption and the filter's hint in one tooltip")
+	require.Contains(t, body, `<span class="tipb" aria-hidden="true">By unique peers in the window, summed over releases that pass the voice-over filter. “explicit”: only peers of releases whose name carries an explicit marker`, "the caption and the filter's hint in one tooltip")
 	require.NotContains(t, body, `class="hint"`)
 	require.Contains(t, page(t, get(t, h, "/top?voice=p50", "")), "/movie/348")
 
@@ -465,11 +465,11 @@ func TestWork(t *testing.T) {
 	require.Contains(t, body, `<img class="hero-ph" src="https://image.tmdb.org/t/p/w185/p.jpg" srcset="https://image.tmdb.org/t/p/w342/p.jpg 2x" width="185" height="278"`)
 	require.Contains(t, body, `<h1>Alien <span class="mu">1979</span></h1>`)
 	require.Contains(t, body, "Movie · 1 h 57 min · US · en", "the year is the title's")
-	require.Contains(t, body, `<div>Horror, Science Fiction<span class="mu"> · TMDB 8.2 · 16,995 votes</span></div>`, "the rating on the genres' line")
+	require.Contains(t, body, `<div>horror, science fiction<span class="mu"> · TMDB 8.2 · 16,995 votes</span></div>`, "the rating on the genres' line")
 	require.Contains(t, body, `<a href="https://www.themoviedb.org/movie/348" rel="noreferrer" target="_blank">TMDB</a> · <a href="https://www.imdb.com/title/tt0078748/"`)
 	require.NotContains(t, body, "Seerr", "no Seerr configured")
 	require.Contains(t, body, `<span>Place in the top</span>
-    <span>24 h №1 · 7 days <b>№1</b> · 30 days №1</span>`, "its places in the three tops, the 7 days' in bold")
+    <span>24 h #1 · 7 days <b>#1</b> · 30 days #1</span>`, "its places in the three tops, the 7 days' in bold")
 	require.Contains(t, body, `<span class="tip" tabindex="0" aria-label="Peak: `, "the peak's tooltip on its label")
 	require.Regexp(t, `<span>Peers</span>\s*<span><b>1\d\d</b> in 7 days`, body, "the peers of both title keys")
 	require.Contains(t, body, `<span>Releases</span>
@@ -486,7 +486,7 @@ func TestWork(t *testing.T) {
 	require.NotContains(t, body, `aria-label="Source"`, "no source filter")
 	require.NotContains(t, body, `name="voice"`, "no dub filter")
 	require.NotContains(t, body, `<th>Source</th>`, "no source column")
-	require.NotContains(t, body, `<th>Languages</th>`, "no dub column")
+	require.NotContains(t, body, `<th>Voice-over</th>`, "no dub column")
 	require.NotContains(t, body, "Reset filters", "nothing to reset")
 	require.Contains(t, body, `<a href="/t/`+hexOf(1)+`">`+alien+`</a>`)
 	require.Contains(t, body, `<a href="/t/`+hexOf(2)+`">`+chuzhoy+`</a>`, "the release under the Russian title")
@@ -563,8 +563,8 @@ func TestTorrent(t *testing.T) {
 	require.Contains(t, body, `<section class="tm tm-matched tm-card" aria-label="TMDB">`, "the match")
 	require.Contains(t, body, `<img class="tm-poster" src="https://image.tmdb.org/t/p/w342/p.jpg" width="116" height="174"`)
 	require.Contains(t, body, `<a class="tm-stretch" href="/movie/348?from=%2Ft%2F`+hexOf(1)+`">Alien</a> <span class="mu">1979</span>`, "the title leads to its work")
-	require.Contains(t, body, "Movie · 1 h 57 min · US · en · Horror, Science Fiction", "the genres on the facts' line")
-	require.Contains(t, body, `№1 among movies · 2 releases, this one by peers #1 ·</span>`)
+	require.Contains(t, body, "Movie · 1 h 57 min · US · en · horror, science fiction", "the genres on the facts' line")
+	require.Contains(t, body, "#1 among movies · 2 releases, this one by peers #1 ·</span>")
 	require.Contains(t, body, `<span class="tip" tabindex="0" aria-label="Picked by the classifier: By the classifier among TMDB candidates, confidence 0.80, Oct 20.">Picked by the classifier<span class="tipb"`,
 		"how it was matched, the details in the tooltip")
 	require.Contains(t, body, `<h2>Files <span class="mu">10</span></h2>`)
@@ -576,12 +576,12 @@ func TestTorrent(t *testing.T) {
 		require.Contains(t, body, hit)
 	}
 	require.Contains(t, body, `<details class="jrow" id="ev-1">`, "a row anchored by its entry")
-	require.Contains(t, body, `<time datetime="2026-10-20T11:00:00Z" title="2026-10-20 11:00:00">11:00</time>`, "the time to the second in its title")
+	require.Contains(t, body, `<time datetime="2026-10-20T11:00:00Z" title="Oct 20, 2026, 11:00:00">11:00</time>`, "the time to the second in its title")
 	require.Contains(t, body, "<span class=\"jw\">Metadata fetched</span>\n  <span class=\"jo\">stored</span>\n  <span class=\"jk\">10 files · 55.0 GB</span>",
 		"the journal, its kind, outcome and main particulars in words")
 	require.Contains(t, body, "<span>discovered by</span><span>announce</span><span>files</span><span>10</span>", "every particular under the open row")
 	require.Contains(t, body, `<span class="jw">Title matched</span>`)
-	require.Contains(t, body, "2 events · Oct 20 11:00</span>", "how many, and when")
+	require.Contains(t, body, "2 events · Oct 20, 11:00</span>", "how many, and when")
 	require.Contains(t, body, "Entries are kept for 30 days", "the retention in the heading's tooltip")
 	ru := page(t, get(t, h, "/t/"+hexOf(1)+"?lang=ru", ""))
 	require.Contains(t, ru, "<span class=\"jw\">Метаданные получены</span>\n  <span class=\"jo\">сохранены</span>", "in Russian, agreeing with the event")
@@ -615,7 +615,7 @@ func TestTorrent(t *testing.T) {
 
 	body = page(t, get(t, h, "/t/"+hexOf(20), ""))
 	require.Contains(t, body, `<h1 class="mono">`+hexOf(20)+`</h1>`, "a rejected torrent, not stored: its hash")
-	require.Contains(t, body, `<i class="m bad" aria-hidden="true"></i><b>No torrent: rejected Oct 20 12:00</b>, reason: under 50 MB.</span>`, "what ended it")
+	require.Contains(t, body, `<i class="m bad" aria-hidden="true"></i><b>No torrent: rejected Oct 20, 12:00</b>, reason: under 50 MB.</span>`, "what ended it")
 	require.Contains(t, body, "The torrent was never stored, so only its journal is left. Metadata: “small”, 1.0\u00a0MB.")
 	require.Contains(t, body, `<details class="jrow" id="ev-`, "and its journal")
 	require.Contains(t, body, `<span class="jo o-bad"><i class="m bad" aria-hidden="true"></i><span class="vh">final failure: </span>rejected</span>`, "a final failure marked, in words too")
@@ -787,7 +787,7 @@ func TestFeatures(t *testing.T) {
 	} {
 		require.Contains(t, body, want)
 	}
-	for _, s := range []string{`aria-label="Classifier: `, `/torrents?layer=classifier`, "Dub by language", `>P2: feeds<`} {
+	for _, s := range []string{`aria-label="Classifier: `, `/torrents?layer=classifier`, "Voice-over: ", `>P2: feeds<`} {
 		require.NotContains(t, body, s)
 	}
 }
@@ -852,16 +852,16 @@ func TestData(t *testing.T) {
 	require.Contains(t, body, `<span class="proj" style="width: 100.0%"></span>`, "the outline stops at the limit")
 	require.Contains(t, body, "Downloaded on the UTC day: 61.0 GB of 100 GB; uploaded 38.0 GB.", "piece data probes downloaded and the fetchers uploaded today")
 	require.NotContains(t, body, `<span class="xs dw">updated`, "counts 7 minutes old are fresh at the API's 5-minute interval")
-	require.Contains(t, body, "Refresh. Data as of Oct 20 11:53, updated 7 min ago.", "when the API computed the counts")
+	require.Contains(t, body, "Refresh. Data as of Oct 20, 11:53, updated 7 min ago.", "when the API computed the counts")
 	require.Contains(t, body, "New torrents per hour, 48 hours")
 	require.Equal(t, 3, strings.Count(body, `class="partial"><title>`), "the current hour, day and week are unfinished")
 	require.Contains(t, body, " · in progress, on pace for ")
 	require.Contains(t, body, `<rect class="proj" `)
 	require.Contains(t, body, `hx-trigger="every 30s [document.visibilityState=='visible'], tz"`, "the script's event once the tz cookie is set")
 	body = page(t, get(t, h, "/", "", "Cookie", "tz=Asia/Tokyo"))
-	require.Contains(t, body, "<title>20.10 20:00: ", "the hour of the computation, 11:53 UTC, in the cookie's zone")
+	require.Contains(t, body, "<title>Oct 20, 20:00: ", "the hour of the computation, 11:53 UTC, in the cookie's zone")
 	require.Equal(t, http.StatusOK, get(t, h, "/", "", "Cookie", "tz=Mars/Olympus").Code, "an unknown zone is the process's")
-	require.Contains(t, body, "Dub by language")
+	require.Contains(t, body, "Voice-over: ru")
 	require.Contains(t, body, `<h2><span class="tip" tabindex="0" aria-label="Task queue: A priority is done once`, "the note in a tooltip on the heading")
 	require.Contains(t, body, `</span></span> <span class="mu">3</span></h2>`, "the count after the heading")
 	require.NotContains(t, body, `<p class="mu">A priority is done`, "the note is not a paragraph")
@@ -885,7 +885,8 @@ func TestCharts(t *testing.T) {
 	hours[15] = 1 // 00:00 local, today still
 	hours[16] = 1 // 23:00 local yesterday, this week
 	hours[40] = 1 // 23:00 local on Sunday, last week
-	hourly, daily, weekly := charts(now, hours, time.FixedZone("east", 3*3600))
+	east := time.FixedZone("east", 3*3600)
+	hourly, daily, weekly := charts(ui.Base{Lang: "ru", Loc: east, Now: now}, now, hours)
 
 	require.Len(t, hourly.Bars, 48)
 	last := hourly.Bars[47]
@@ -904,6 +905,8 @@ func TestCharts(t *testing.T) {
 	require.EqualValues(t, 1, daily.Bars[28].Value)
 	require.EqualValues(t, 1, daily.Bars[27].Value, "Sunday")
 	require.Equal(t, "18.10", daily.Bars[27].Label)
+	require.Equal(t, "20.10", daily.XLabels[len(daily.XLabels)-1].Text)
+	require.Equal(t, "12.10", daily.XLabels[len(daily.XLabels)-2].Text, "the day before the last is not labelled beside it")
 
 	require.Len(t, weekly.Bars, 26)
 	require.Equal(t, "19.10", weekly.Bars[25].Label, "the Monday of this week")
@@ -914,6 +917,11 @@ func TestCharts(t *testing.T) {
 	require.Equal(t, "12.10", weekly.Bars[24].Label)
 	require.False(t, weekly.Bars[24].Partial)
 	require.Equal(t, int64(1), weekly.Max.Value, "the unfinished week is out of max and min")
+
+	hourly, daily, weekly = charts(ui.Base{Lang: "en", Loc: east, Now: now}, now, hours)
+	require.Equal(t, "Oct 20, 15:00", hourly.Bars[47].Label, "labels in the page's locale")
+	require.Equal(t, "Oct 20", daily.Bars[29].Label)
+	require.Equal(t, "Oct 19", weekly.Bars[25].Label)
 }
 
 // locales knows the token "ru-token" as a person with the locale ru.
@@ -956,7 +964,7 @@ func TestNoLanguages(t *testing.T) {
 	h := handlerLangs(t, nil, "")
 	for _, path := range []string{"/torrents", "/torrents?vl=ru&voice=explicit", "/top", "/top?voice=explicit", "/movie/348", "/movie/348?voice=explicit", "/t/" + hexOf(1), "/"} {
 		body := page(t, get(t, h, path, ""))
-		forbidden := []string{`name="vl"`, `name="voice"`, "Languages", "Dub by language", "<b>Rus</b>"}
+		forbidden := []string{`name="vl"`, `name="voice"`, "<th>Voice-over</th>", "Voice-over: ", "<b>Rus</b>"}
 		if !strings.Contains(path, "voice=") {
 			forbidden = append(forbidden, "voice=")
 		}
