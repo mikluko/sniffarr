@@ -189,7 +189,7 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 			require.NoError(t, st.RecordDetails(ctx, w, *d, ids, now))
 		}
 	}
-	match(alien, store.TypeMovie, 348, &alienDetails, []store.ExternalID{{Provider: store.ProviderIMDb, ID: "tt0078748"}}, store.LayerJev)
+	match(alien, store.TypeMovie, 348, &alienDetails, []store.ExternalID{{Provider: store.ProviderIMDb, ID: "tt0078748"}}, store.LayerClassifier)
 	match(chuzhoy, store.TypeMovie, 348, nil, nil, store.LayerTMDB)
 	match(severance, store.TypeTV, 95396, &store.Details{Type: "tv", OriginalTitle: "Severance", Year: 2022, PosterPath: "/s.jpg", Status: "Returning Series", Seasons: 2,
 		Texts: map[string]store.Text{"en": {Title: "Severance"}, "ru": {Title: "Разделение"}}}, nil, store.LayerTMDB)

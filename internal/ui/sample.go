@@ -401,7 +401,7 @@ func sampleJournal(at time.Time, name string) []JournalEntry {
 		{At: at, Kind: "fetched", Outcome: "stored", Detail: map[string]any{"name": name, "size": 26629001216.0, "files": 14.0, "discovery": "announce",
 			"queued_at": sec(at.Add(-6 * time.Minute)), "leases": 2.0}},
 		{At: at.Add(30 * time.Second), Kind: "classified", Outcome: "reuse", Detail: map[string]any{"kind": "movie", "from": sibling}},
-		{At: at.Add(time.Minute), Kind: "classified", Outcome: "jev", Detail: map[string]any{"source": "web", "source_confidence": 0.8,
+		{At: at.Add(time.Minute), Kind: "classified", Outcome: "classifier", Detail: map[string]any{"source": "web", "source_confidence": 0.8,
 			"audio": map[string]any{"ru": 0.88}, "trigger": "worker"}},
 		{At: at.Add(2 * time.Minute), Kind: "matched", Outcome: "earlier", Detail: map[string]any{"tmdb_id": 318846.0, "type": "movie", "confidence": 0.8,
 			"layer": "tmdb", "key_matched_at": sec(at.Add(-30 * time.Hour))}},

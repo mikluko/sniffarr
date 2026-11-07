@@ -19,9 +19,9 @@ import (
 	"github.com/mikluko/sniffarr/internal/store"
 )
 
-// fakeJev classifies by name: answers maps a name to its classification,
+// fakeClassifier classifies by name: answers maps a name to its classification,
 // and a name it lacks fails. It holds each answer for delay.
-type fakeJev struct {
+type fakeClassifier struct {
 	store    *store.Store
 	delay    time.Duration
 	answers  map[string]store.Classification
@@ -30,7 +30,7 @@ type fakeJev struct {
 	triggers []string
 }
 
-func (f *fakeJev) Classify(ctx context.Context, p store.Pending, trigger string) error {
+func (f *fakeClassifier) Classify(ctx context.Context, p store.Pending, trigger string) error {
 	f.mu.Lock()
 	f.calls[p.ID]++
 	f.triggers = append(f.triggers, trigger)
@@ -52,7 +52,7 @@ func (f *fakeJev) Classify(ctx context.Context, p store.Pending, trigger string)
 	return err
 }
 
-func (f *fakeJev) total() int {
+func (f *fakeClassifier) total() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	n := 0
@@ -62,7 +62,7 @@ func (f *fakeJev) total() int {
 	return n
 }
 
-func setup(t *testing.T, torrents ...store.Torrent) (*store.Store, *fakeJev) {
+func setup(t *testing.T, torrents ...store.Torrent) (*store.Store, *fakeClassifier) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
@@ -77,7 +77,7 @@ func setup(t *testing.T, torrents ...store.Torrent) (*store.Store, *fakeJev) {
 		_, _, err := s.Insert(ctx, tr)
 		require.NoError(t, err)
 	}
-	return s, &fakeJev{store: s, calls: map[int64]int{}, answers: map[string]store.Classification{}}
+	return s, &fakeClassifier{store: s, calls: map[int64]int{}, answers: map[string]store.Classification{}}
 }
 
 func search(t *testing.T, svc *Service, req *sniffarrv1.SearchRequest) map[string]*sniffarrv1.Release {
@@ -92,13 +92,13 @@ func search(t *testing.T, svc *Service, req *sniffarrv1.SearchRequest) map[strin
 }
 
 func TestLazyClassifiesAndCaches(t *testing.T) {
-	s, jev := setup(t,
+	s, cl := setup(t,
 		store.Torrent{Name: "Heat 1995"},
 		store.Torrent{Name: "Ronin S01E01", Kind: "series", KindLayer: store.LayerRules},
 	)
-	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux", Audio: map[string]float64{"ru": 0.8}}
-	jev.answers["Ronin S01E01"] = store.Classification{Kind: "movie", Source: "web", Audio: map[string]float64{"ru": 0.1}}
-	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: jev, Log: slog.New(slog.DiscardHandler)}}
+	cl.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux", Audio: map[string]float64{"ru": 0.8}}
+	cl.answers["Ronin S01E01"] = store.Classification{Kind: "movie", Source: "web", Audio: map[string]float64{"ru": 0.1}}
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: cl, Log: slog.New(slog.DiscardHandler)}}
 
 	got := search(t, svc, &sniffarrv1.SearchRequest{})
 	require.Len(t, got, 2)
@@ -111,24 +111,24 @@ func TestLazyClassifiesAndCaches(t *testing.T) {
 	require.Equal(t, sniffarrv1.Kind_KIND_SERIES, ronin.GetKind(), "the rules' kind stays")
 	require.Equal(t, sniffarrv1.Layer_LAYER_RULES, ronin.GetLayer())
 	require.Equal(t, sniffarrv1.VideoSource_VIDEO_SOURCE_WEB, ronin.GetSource())
-	require.Equal(t, 2, jev.total())
+	require.Equal(t, 2, cl.total())
 
 	search(t, svc, &sniffarrv1.SearchRequest{})
-	require.Equal(t, 2, jev.total(), "the second search uses the recorded answers")
-	require.Equal(t, []string{store.TriggerSearch, store.TriggerSearch}, jev.triggers, "a search that waits is the trigger")
+	require.Equal(t, 2, cl.total(), "the second search uses the recorded answers")
+	require.Equal(t, []string{store.TriggerSearch, store.TriggerSearch}, cl.triggers, "a search that waits is the trigger")
 }
 
 func TestLazyFiltersOnWhatIsKnown(t *testing.T) {
-	s, jev := setup(t,
+	s, cl := setup(t,
 		store.Torrent{Name: "Heat 1995"},
 		store.Torrent{Name: "Ronin 1998"},
 		store.Torrent{Name: "Thief 1981"},
 		store.Torrent{Name: "Collateral 2004", Kind: "movie", KindLayer: store.LayerRules},
 	)
-	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Audio: map[string]float64{"ru": 0.9}}
-	jev.answers["Ronin 1998"] = store.Classification{Kind: "music", Audio: map[string]float64{"ru": 0.9}}
-	jev.answers["Collateral 2004"] = store.Classification{Audio: map[string]float64{"ru": 0.2}}
-	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: jev, Log: slog.New(slog.DiscardHandler)}}
+	cl.answers["Heat 1995"] = store.Classification{Kind: "movie", Audio: map[string]float64{"ru": 0.9}}
+	cl.answers["Ronin 1998"] = store.Classification{Kind: "music", Audio: map[string]float64{"ru": 0.9}}
+	cl.answers["Collateral 2004"] = store.Classification{Audio: map[string]float64{"ru": 0.2}}
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: cl, Log: slog.New(slog.DiscardHandler)}}
 
 	got := search(t, svc, &sniffarrv1.SearchRequest{Kinds: []sniffarrv1.Kind{sniffarrv1.Kind_KIND_MOVIE}})
 	require.ElementsMatch(t, []string{"Heat 1995", "Collateral 2004"}, keys(got), "Ronin turned out music; Thief failed and stays unknown")
@@ -233,17 +233,17 @@ func TestLazyBounded(t *testing.T) {
 	for _, n := range []string{"A 2001", "B 2002", "C 2003", "D 2004", "E 2005"} {
 		torrents = append(torrents, store.Torrent{Name: n})
 	}
-	s, jev := setup(t, torrents...)
-	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: jev, Max: 2, Log: slog.New(slog.DiscardHandler)}}
+	s, cl := setup(t, torrents...)
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: cl, Max: 2, Log: slog.New(slog.DiscardHandler)}}
 	search(t, svc, &sniffarrv1.SearchRequest{})
-	require.Equal(t, 2, jev.total())
+	require.Equal(t, 2, cl.total())
 }
 
 func TestLazySlowClassifierDoesNotFailSearch(t *testing.T) {
-	s, jev := setup(t, store.Torrent{Name: "Heat 1995"})
-	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux", Audio: map[string]float64{"ru": 0.8}}
-	jev.delay = 300 * time.Millisecond
-	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: jev, Wait: 20 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}}
+	s, cl := setup(t, store.Torrent{Name: "Heat 1995"})
+	cl.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux", Audio: map[string]float64{"ru": 0.8}}
+	cl.delay = 300 * time.Millisecond
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Lazy: &Lazy{Classifier: cl, Wait: 20 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}}
 
 	start := time.Now()
 	got := search(t, svc, &sniffarrv1.SearchRequest{})
@@ -254,22 +254,22 @@ func TestLazySlowClassifierDoesNotFailSearch(t *testing.T) {
 		r, err := s.Get(context.Background(), store.Hash{1})
 		return err == nil && r.Classified
 	}, 2*time.Second, 10*time.Millisecond, "the late answer is recorded")
-	jev.delay = 0
+	cl.delay = 0
 	got = search(t, svc, &sniffarrv1.SearchRequest{})
 	require.Equal(t, sniffarrv1.Kind_KIND_MOVIE, got["Heat 1995"].GetKind())
-	require.Equal(t, 1, jev.total())
+	require.Equal(t, 1, cl.total())
 }
 
 func TestLazyNoWait(t *testing.T) {
-	s, jev := setup(t,
+	s, cl := setup(t,
 		store.Torrent{Name: "Heat 1995"},
 		store.Torrent{Name: "Ronin 1998", Kind: "movie", KindLayer: store.LayerRules},
 	)
-	jev.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux"}
-	jev.answers["Ronin 1998"] = store.Classification{Source: "web"}
-	jev.delay = 100 * time.Millisecond
+	cl.answers["Heat 1995"] = store.Classification{Kind: "movie", Source: "remux"}
+	cl.answers["Ronin 1998"] = store.Classification{Source: "web"}
+	cl.delay = 100 * time.Millisecond
 	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), NoWait: true,
-		Lazy: &Lazy{Classifier: jev, Wait: time.Minute, Log: slog.New(slog.DiscardHandler)}}
+		Lazy: &Lazy{Classifier: cl, Wait: time.Minute, Log: slog.New(slog.DiscardHandler)}}
 	movies := &sniffarrv1.SearchRequest{Kinds: []sniffarrv1.Kind{sniffarrv1.Kind_KIND_MOVIE}}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -277,7 +277,7 @@ func TestLazyNoWait(t *testing.T) {
 	res, err := svc.Search(ctx, connect.NewRequest(movies))
 	cancel()
 	require.NoError(t, err)
-	require.Less(t, time.Since(start), jev.delay, "not waited for")
+	require.Less(t, time.Since(start), cl.delay, "not waited for")
 	require.Len(t, res.Msg.GetReleases(), 1)
 	require.Equal(t, "Ronin 1998", res.Msg.GetReleases()[0].GetName(), "the kind the store holds; Heat's is still unknown")
 	require.False(t, res.Msg.GetReleases()[0].GetClassified())
@@ -285,14 +285,14 @@ func TestLazyNoWait(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return len(search(t, svc, movies)) == 2
 	}, 5*time.Second, 20*time.Millisecond, "the classifications run past the request and serve later searches")
-	require.Equal(t, 2, jev.total())
-	require.Equal(t, []string{store.TriggerTorznab, store.TriggerTorznab}, jev.triggers, "a search that does not wait is Torznab's")
+	require.Equal(t, 2, cl.total())
+	require.Equal(t, []string{store.TriggerTorznab, store.TriggerTorznab}, cl.triggers, "a search that does not wait is Torznab's")
 }
 
 func TestLazyClassifyRecordedMeanwhile(t *testing.T) {
-	s, jev := setup(t, store.Torrent{Name: "Heat 1995"})
-	jev.answers["Heat 1995"] = store.Classification{Source: "web"}
-	l := &Lazy{Classifier: jev, Log: slog.New(slog.DiscardHandler)}
+	s, cl := setup(t, store.Torrent{Name: "Heat 1995"})
+	cl.answers["Heat 1995"] = store.Classification{Source: "web"}
+	l := &Lazy{Classifier: cl, Log: slog.New(slog.DiscardHandler)}
 	ctx := context.Background()
 	r, err := s.Get(ctx, store.Hash{1})
 	require.NoError(t, err)
@@ -303,7 +303,7 @@ func TestLazyClassifyRecordedMeanwhile(t *testing.T) {
 	_, err = s.Classify(ctx, r.ID, store.Classification{Source: "remux"}, time.Now())
 	require.NoError(t, err)
 	require.NoError(t, l.classify(ctx, s, pending[0], store.TriggerSearch))
-	require.Zero(t, jev.total(), "recorded since it was read")
+	require.Zero(t, cl.total(), "recorded since it was read")
 }
 
 func keys(m map[string]*sniffarrv1.Release) []string {

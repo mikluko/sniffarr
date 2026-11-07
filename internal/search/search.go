@@ -56,15 +56,15 @@ var kinds = map[sniffarrv1.Kind]string{
 }
 
 var layers = map[string]sniffarrv1.Layer{
-	store.LayerRules: sniffarrv1.Layer_LAYER_RULES,
-	store.LayerReuse: sniffarrv1.Layer_LAYER_REUSE,
-	store.LayerJev:   sniffarrv1.Layer_LAYER_CLASSIFIER,
+	store.LayerRules:      sniffarrv1.Layer_LAYER_RULES,
+	store.LayerReuse:      sniffarrv1.Layer_LAYER_REUSE,
+	store.LayerClassifier: sniffarrv1.Layer_LAYER_CLASSIFIER,
 }
 
 var tmdbLayers = map[string]sniffarrv1.TMDBLayer{
-	store.LayerTMDB: sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH,
-	store.LayerJev:  sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER,
-	store.LayerArr:  sniffarrv1.TMDBLayer_TMDB_LAYER_ARR,
+	store.LayerTMDB:       sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH,
+	store.LayerClassifier: sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER,
+	store.LayerArr:        sniffarrv1.TMDBLayer_TMDB_LAYER_ARR,
 }
 
 var sources = map[string]sniffarrv1.VideoSource{

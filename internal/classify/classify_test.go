@@ -326,7 +326,7 @@ func TestClassifierAsksKindOnlyWhenUnknown(t *testing.T) {
 	r, err = s.Get(ctx, store.Hash{1})
 	require.NoError(t, err)
 	require.Equal(t, "movie", r.Kind)
-	require.Equal(t, store.LayerJev, r.KindLayer)
+	require.Equal(t, store.LayerClassifier, r.KindLayer)
 
 	cl.DailyTokens = 1
 	require.ErrorIs(t, cl.Classify(ctx, store.Pending{ID: 1, Name: "Heat.1995"}, store.TriggerWorker), ErrBudget)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -216,7 +217,7 @@ func TestMigrateAudio(t *testing.T) {
 	}
 	require.Equal(t, map[int64]Audio{
 		1: {Language: "ru", Marker: true, ScriptHint: true, Probability: new(1.0), Layer: LayerRules},
-		2: {Language: "ru", ScriptHint: true, Probability: new(0.8), Layer: LayerJev},
+		2: {Language: "ru", ScriptHint: true, Probability: new(0.8), Layer: LayerClassifier},
 		3: {Language: "ru", ScriptHint: true},
 		4: {Language: "ru"},
 	}, got)
@@ -351,7 +352,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 26, version)
+	require.Equal(t, 27, version)
 	var queueRows int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations WHERE component = 'queue'").Scan(&queueRows))
 	require.Zero(t, queueRows, "the queue component is gone")
@@ -397,4 +398,62 @@ func TestMigrateModules(t *testing.T) {
 	_, err = New(ctx, fresh, Options{})
 	require.NoError(t, err)
 	require.Equal(t, schema(t, fresh), names, "a fresh database has the same schema as a migrated one")
+}
+
+func TestMigrateClassifierLayer(t *testing.T) {
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	require.NoError(t, err)
+	defer db.Close()
+	old := fstest.MapFS{}
+	names, err := fs.Glob(migrations, "migrations/*.sql")
+	require.NoError(t, err)
+	for _, name := range names {
+		if name >= "migrations/027" {
+			break
+		}
+		b, err := migrations.ReadFile(name)
+		require.NoError(t, err)
+		old[name[len("migrations/"):]] = &fstest.MapFile{Data: b}
+	}
+	require.NoError(t, db.Migrate(ctx, "store", old))
+	for _, stmt := range []string{
+		`INSERT INTO torrent_releases (id, infohash, name, size, file_count, discovery, first_seen, last_seen, kind, kind_layer)
+			VALUES (1, x'01', 'a', 1, 1, 'sample', 0, 0, 'movie', 'jev'), (2, x'02', 'b', 1, 1, 'sample', 0, 0, 'movie', 'rules')`,
+		"INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer) VALUES (1, 'ru', 0, 0, 0.7, 'jev'), (2, 'ru', 1, 0, 1.0, 'rules')",
+		"INSERT INTO tmdb_matches (title_key, layer, confidence, matched_at) VALUES ('y:a', 'jev', 0.8, 0), ('y:b', 'tmdb', 0.9, 0)",
+		`INSERT INTO torrent_journal (infohash, at, kind, outcome, detail) VALUES
+			(x'01', 0, 'classified', 'jev', '{"kind":"movie"}'),
+			(x'01', 1, 'matched', 'jev', NULL),
+			(x'01', 2, 'matched', 'earlier', '{"layer":"jev","tmdb_id":1}'),
+			(x'02', 3, 'matched', 'earlier', '{"layer":"tmdb","tmdb_id":2}'),
+			(x'02', 4, 'probed', 'jev', NULL)`,
+	} {
+		_, err := db.W.ExecContext(ctx, stmt)
+		require.NoError(t, err, stmt)
+	}
+
+	_, err = New(ctx, db, Options{})
+	require.NoError(t, err)
+	column := func(query string) []string {
+		t.Helper()
+		var out []string
+		rows, err := db.R.QueryContext(ctx, query)
+		require.NoError(t, err)
+		defer rows.Close()
+		for rows.Next() {
+			var v string
+			require.NoError(t, rows.Scan(&v))
+			out = append(out, v)
+		}
+		require.NoError(t, rows.Err())
+		return out
+	}
+	require.Equal(t, []string{LayerClassifier, LayerRules}, column("SELECT kind_layer FROM torrent_releases ORDER BY id"))
+	require.Equal(t, []string{LayerClassifier, LayerRules}, column("SELECT layer FROM torrent_audio ORDER BY torrent_id"))
+	require.Equal(t, []string{LayerClassifier, LayerTMDB}, column("SELECT layer FROM tmdb_matches ORDER BY title_key"))
+	require.Equal(t, []string{"classifier", "classifier", "earlier", "earlier", "jev"}, column("SELECT outcome FROM torrent_journal ORDER BY at"),
+		"outcomes of the classified and matched kinds only")
+	require.Equal(t, []string{`{"layer":"classifier","tmdb_id":1}`, `{"layer":"tmdb","tmdb_id":2}`},
+		column("SELECT detail FROM torrent_journal WHERE outcome = 'earlier' ORDER BY at"))
 }

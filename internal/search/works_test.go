@@ -88,7 +88,7 @@ func rankedDB(t *testing.T) (*Browser, *database.DB) {
 	}
 	add(1, "Dune.Part.Two.2024.1080p.BluRay.x264", "movie", store.Audio{})
 	add(2, "Dune.Part.Two.2024.2160p.BluRay.Rus", "movie", store.Audio{Marker: true, Mark: "Rus", Probability: new(1.0), Layer: store.LayerRules})
-	add(3, "Interstellar 2014 1080p BluRay x264", "movie", store.Audio{Probability: new(0.6), Layer: store.LayerJev})
+	add(3, "Interstellar 2014 1080p BluRay x264", "movie", store.Audio{Probability: new(0.6), Layer: store.LayerClassifier})
 	add(4, "Дюна: Часть вторая (2024) WEB-DL 720p", "movie", store.Audio{})
 	add(5, "Severance.S02E01.1080p.WEB-DL", "series", store.Audio{})
 	add(6, "Severance.S01E02.720p.WEB-DL", "series", store.Audio{})

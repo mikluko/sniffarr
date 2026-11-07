@@ -35,7 +35,7 @@ func TestRecordArrStoredRelease(t *testing.T) {
 		_, _, err := s.Insert(ctx, x)
 		require.NoError(t, err)
 	}
-	other, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 999, Title: "Alien Resurrection"}, Confidence: 0.8, Layer: LayerJev}, t0)
+	other, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 999, Title: "Alien Resurrection"}, Confidence: 0.8, Layer: LayerClassifier}, t0)
 	require.NoError(t, err)
 
 	r, err := s.RecordArr(ctx, grab(1, "abc", t0), t0)

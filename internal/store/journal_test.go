@@ -204,10 +204,10 @@ func TestJournalDetailNonFinite(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	require.NoError(t, s.tx(ctx, func(tx *sql.Tx) error {
-		return journal(ctx, tx, hash(1), t0, JournalClassified, LayerJev, Detail("confidence", math.NaN(), "ratio", math.Inf(1),
+		return journal(ctx, tx, hash(1), t0, JournalClassified, LayerClassifier, Detail("confidence", math.NaN(), "ratio", math.Inf(1),
 			"audio", map[string]float64{"ru": math.NaN(), "en": 0.5}, "kind", "movie"))
 	}), "a value JSON cannot hold fails neither the row nor the change it rides with")
-	require.JSONEq(t, `{"audio":{"en":0.5},"kind":"movie"}`, entry(t, s, hash(1), JournalClassified, LayerJev).Detail)
+	require.JSONEq(t, `{"audio":{"en":0.5},"kind":"movie"}`, entry(t, s, hash(1), JournalClassified, LayerClassifier).Detail)
 }
 
 func TestJournalProbedTracksBounded(t *testing.T) {
@@ -498,14 +498,14 @@ func TestJournalClassified(t *testing.T) {
 	copied := classify(t, s, one.ID, Classification{Kind: "movie", KindConfidence: 0.9, Source: "web", SourceConfidence: 0.8, Audio: map[string]float64{"ru": 0.7}, Trigger: TriggerSearch})
 	require.Equal(t, 2, copied)
 	require.JSONEq(t, `{"kind":"movie","kind_confidence":0.9,"source":"web","source_confidence":0.8,"audio":{"ru":0.7},"copied":2,"trigger":"search"}`,
-		entry(t, s, hash(1), JournalClassified, LayerJev).Detail)
+		entry(t, s, hash(1), JournalClassified, LayerClassifier).Detail)
 	for _, h := range []Hash{hash(2), hash(3)} {
 		require.JSONEq(t, `{"kind":"movie","from":"`+hexOf(hash(1))+`"}`, entry(t, s, h, JournalClassified, LayerReuse).Detail, "the sibling by infohash")
 	}
 	classify(t, s, mustGet(t, s, hash(2)).ID, Classification{Source: "remux", Trigger: TriggerWorker})
-	require.JSONEq(t, `{"source":"remux","trigger":"worker"}`, entry(t, s, hash(2), JournalClassified, LayerJev).Detail, "a kind known already is not asked about")
+	require.JSONEq(t, `{"source":"remux","trigger":"worker"}`, entry(t, s, hash(2), JournalClassified, LayerClassifier).Detail, "a kind known already is not asked about")
 	classify(t, s, mustGet(t, s, hash(3)).ID, Classification{Kind: "series", KindConfidence: 0.6, Source: "web", Trigger: TriggerWorker})
-	require.JSONEq(t, `{"source":"web","trigger":"worker"}`, entry(t, s, hash(3), JournalClassified, LayerJev).Detail, "a kind a sibling gave first is not applied")
+	require.JSONEq(t, `{"source":"web","trigger":"worker"}`, entry(t, s, hash(3), JournalClassified, LayerClassifier).Detail, "a kind a sibling gave first is not applied")
 	require.Equal(t, "movie", mustGet(t, s, hash(3)).Kind)
 
 	require.NoError(t, s.ClassifyFailed(ctx, mustGet(t, s, hash(3)).ID, "malformed", t0))
@@ -533,7 +533,7 @@ func TestJournalReuseCapped(t *testing.T) {
 	copied := classify(t, s, mustGet(t, s, hash(1)).ID, Classification{Kind: "movie"})
 	require.Equal(t, journalReuse+1, copied)
 	require.Equal(t, []string{"fetched/stored"}, entries(t, s, hash(2)), "a copy to more siblings than the cap is journaled on none")
-	require.JSONEq(t, `{"kind":"movie","copied":51}`, entry(t, s, hash(1), JournalClassified, LayerJev).Detail)
+	require.JSONEq(t, `{"kind":"movie","copied":51}`, entry(t, s, hash(1), JournalClassified, LayerClassifier).Detail)
 }
 
 func TestJournalMatched(t *testing.T) {
@@ -543,10 +543,10 @@ func TestJournalMatched(t *testing.T) {
 		_, _, err := s.Insert(ctx, x)
 		require.NoError(t, err)
 	}
-	work, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 348, Title: "Alien"}, Confidence: 0.8, Layer: LayerJev, Trigger: TriggerWorker}, t0)
+	work, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 348, Title: "Alien"}, Confidence: 0.8, Layer: LayerClassifier, Trigger: TriggerWorker}, t0)
 	require.NoError(t, err)
 	for _, h := range []Hash{hash(1), hash(2)} {
-		require.JSONEq(t, `{"tmdb_id":348,"type":"movie","confidence":0.8,"trigger":"worker"}`, entry(t, s, h, JournalMatched, LayerJev).Detail)
+		require.JSONEq(t, `{"tmdb_id":348,"type":"movie","confidence":0.8,"trigger":"worker"}`, entry(t, s, h, JournalMatched, LayerClassifier).Detail)
 	}
 	require.Equal(t, []string{"fetched/stored"}, entries(t, s, hash(3)), "another key")
 
@@ -556,7 +556,7 @@ func TestJournalMatched(t *testing.T) {
 		entry(t, s, hash(1), JournalMatched, LayerTMDB).Detail, "a rematch names the work before")
 	_, _, err = s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 8077}, Confidence: 1, Layer: LayerTMDB}, t0.Add(2*time.Hour))
 	require.NoError(t, err)
-	require.Equal(t, []string{"fetched/stored", "matched/jev", "matched/tmdb"}, entries(t, s, hash(1)), "the same match again changes no release")
+	require.Equal(t, []string{"fetched/stored", "matched/classifier", "matched/tmdb"}, entries(t, s, hash(1)), "the same match again changes no release")
 
 	_, _, err = s.RecordMatch(ctx, "y:heat 1995", Found{Trigger: TriggerTorznab}, t0)
 	require.NoError(t, err)

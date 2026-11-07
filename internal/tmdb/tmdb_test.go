@@ -355,7 +355,7 @@ func TestMatchSeveral(t *testing.T) {
 			if tt.picked {
 				require.Equal(t, outcome{TMDBID: 438631, IDs: []store.ExternalID{{Provider: "imdb", ID: "tt1160419"}, {Provider: "tmdb", ID: "438631"}},
 					Details:    store.Details{Type: "movie", OriginalTitle: "Dune", Year: 2021, Texts: map[string]store.Text{"en": {Title: "Dune"}, "ru": {Title: "Dune"}}},
-					Confidence: 0.7, Layer: store.LayerJev}, outcomeOf(t, s, 1))
+					Confidence: 0.7, Layer: store.LayerClassifier}, outcomeOf(t, s, 1))
 			} else {
 				require.Equal(t, store.Match{MatchedAt: now}, match(t, s, 1))
 			}

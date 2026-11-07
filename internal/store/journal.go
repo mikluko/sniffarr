@@ -25,11 +25,12 @@ const (
 	JournalFetchFailed = "fetch_failed"
 	// JournalEvicted is a hash Trim evicted: aged, oversize.
 	JournalEvicted = "evicted"
-	// JournalClassified is a classification recorded: jev, reuse, failed.
+	// JournalClassified is a classification recorded: classifier, reuse,
+	// failed.
 	JournalClassified = "classified"
-	// JournalMatched is a title key match the release took: tmdb, jev, arr,
-	// none, error; or earlier, the key's match from before the release was
-	// stored.
+	// JournalMatched is a title key match the release took: tmdb,
+	// classifier, arr, none, error; or earlier, the key's match from before
+	// the release was stored.
 	JournalMatched = "matched"
 	// JournalArr is an event Radarr or Sonarr reported: grab, import.
 	JournalArr = "arr"
@@ -58,8 +59,8 @@ var JournalOutcomes = map[string][]string{
 	JournalFetched:     {"stored", "rejected", "duplicate"},
 	JournalFetchFailed: {"no_peers", "timeout", "dropped"},
 	JournalEvicted:     {"aged", "oversize"},
-	JournalClassified:  {LayerJev, LayerReuse, "failed"},
-	JournalMatched:     {LayerTMDB, LayerJev, LayerArr, MatchEarlier, "none", "error"},
+	JournalClassified:  {LayerClassifier, LayerReuse, "failed"},
+	JournalMatched:     {LayerTMDB, LayerClassifier, LayerArr, MatchEarlier, "none", "error"},
 	JournalArr:         {EventGrab, EventImport},
 	JournalFeed:        {"stored", "queued", "already_queued", "rejected"},
 	JournalProbeWanted: {"search", "request"},

@@ -28,7 +28,7 @@ func named(b byte, name, kind string, ru Audio) Torrent {
 
 var (
 	marker = Audio{Marker: true, Mark: "Rus", Probability: new(1.0), Layer: LayerRules}
-	likely = Audio{Probability: new(0.7), Layer: LayerJev}
+	likely = Audio{Probability: new(0.7), Layer: LayerClassifier}
 	silent = Audio{}
 )
 

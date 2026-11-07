@@ -2189,8 +2189,8 @@ func (x *JournalResponse) GetOlder() int64 {
 // kind and outcome are the store's words: sighted (queued, promoted,
 // revived), leased (fetch), fetched (stored, rejected, duplicate),
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
-// classified (jev, reuse, failed), matched (tmdb, jev, arr, earlier, none,
-// error), arr (grab, import), feed (stored, queued, already_queued,
+// classified (classifier, reuse, failed), matched (tmdb, classifier, arr,
+// earlier, none, error), arr (grab, import), feed (stored, queued, already_queued,
 // rejected), probe_wanted
 // (search, request), probe_leased (request, retry, search, background),
 // probed (tracks, unknown, no_peers, timeout), peers_wanted (request),

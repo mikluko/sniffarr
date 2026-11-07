@@ -17,9 +17,9 @@ import (
 
 // Layers name what decided a torrent's kind or audio probability.
 const (
-	LayerRules = "rules"
-	LayerReuse = "reuse"
-	LayerJev   = "jev"
+	LayerRules      = "rules"
+	LayerReuse      = "reuse"
+	LayerClassifier = "classifier"
 )
 
 // Torrent is a torrent to store.
@@ -510,7 +510,7 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 			if _, err := tx.ExecContext(ctx, `INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer)
 				VALUES (?, ?, 0, 0, ?, ?) ON CONFLICT (torrent_id, language) DO UPDATE SET
 				probability = excluded.probability, layer = excluded.layer WHERE torrent_audio.layer IS NOT ? AND torrent_audio.layer IS NOT ?`,
-				id, lang, c.Audio[lang], LayerJev, LayerRules, LayerProbe); err != nil {
+				id, lang, c.Audio[lang], LayerClassifier, LayerRules, LayerProbe); err != nil {
 				return err
 			}
 		}
@@ -520,7 +520,7 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 		if c.Kind != "" {
 			var key sql.NullString
 			err := tx.QueryRowContext(ctx, `UPDATE torrent_releases SET kind = ?, kind_layer = ?, kind_confidence = ? WHERE id = ? AND kind IS NULL
-				RETURNING title_key`, c.Kind, LayerJev, c.KindConfidence, id).Scan(&key)
+				RETURNING title_key`, c.Kind, LayerClassifier, c.KindConfidence, id).Scan(&key)
 			switch {
 			case err == nil:
 				kind, kindConfidence = c.Kind, c.KindConfidence
@@ -534,7 +534,7 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 				copied = len(siblings)
 			}
 		}
-		if err := journal(ctx, tx, h, at, JournalClassified, LayerJev, Detail("kind", kind, "kind_confidence", kindConfidence, "source", c.Source,
+		if err := journal(ctx, tx, h, at, JournalClassified, LayerClassifier, Detail("kind", kind, "kind_confidence", kindConfidence, "source", c.Source,
 			"source_confidence", c.SourceConfidence, "audio", c.Audio, "copied", copied, "trigger", c.Trigger)); err != nil {
 			return err
 		}

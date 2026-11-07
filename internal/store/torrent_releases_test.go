@@ -110,13 +110,13 @@ func TestSearch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, Release{
 		ID: 1, Hash: hash(1), Name: "Alien.1979.Director's.Cut.1080p.BluRay", Size: 1 << 30, FileCount: 1,
-		Kind: "movie", KindLayer: LayerJev, KindConfidence: 0.9, Source: "encode", Classified: true,
-		Audio:     []Audio{{Language: "ru", Probability: new(0.2), Layer: LayerJev}},
+		Kind: "movie", KindLayer: LayerClassifier, KindConfidence: 0.9, Source: "encode", Classified: true,
+		Audio:     []Audio{{Language: "ru", Probability: new(0.2), Layer: LayerClassifier}},
 		FirstSeen: t0.Add(time.Minute), LastSeen: t0.Add(time.Minute),
 	}, r)
 	r, err = s.Get(ctx, hash(2))
 	require.NoError(t, err)
-	require.Equal(t, []Audio{{Language: "ru", Probability: new(0.7), Layer: LayerJev}}, r.Audio, "uk is not among the languages")
+	require.Equal(t, []Audio{{Language: "ru", Probability: new(0.7), Layer: LayerClassifier}}, r.Audio, "uk is not among the languages")
 	r, err = s.Get(ctx, hash(4))
 	require.NoError(t, err)
 	require.Nil(t, r.Audio)
@@ -348,7 +348,7 @@ func TestStats(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 5, st.Total)
 	require.Equal(t, map[string]int64{"movie": 1, "series": 1, "adult": 1, "": 2}, st.Kinds)
-	require.Equal(t, map[string]int64{LayerRules: 2, LayerJev: 1, "": 2}, st.Layers)
+	require.Equal(t, map[string]int64{LayerRules: 2, LayerClassifier: 1, "": 2}, st.Layers)
 	require.Equal(t, map[string]int64{"web": 1, "": 4}, st.Sources)
 	require.Equal(t, map[string]AudioCounts{"ru": {Marker: 1, Likely: 1, Unlikely: 1}}, st.Audio)
 	require.Equal(t, map[string]int64{"small": 2, "adult": 1}, st.Rejected)

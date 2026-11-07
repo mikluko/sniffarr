@@ -120,7 +120,7 @@ func TestTMDB(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, rs, "the ID of another provider")
 
-	other, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 8077}, Confidence: 0.6, Layer: LayerJev}, t0)
+	other, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 8077}, Confidence: 0.6, Layer: LayerClassifier}, t0)
 	require.NoError(t, err)
 	require.NotEqual(t, alien, other)
 	r, err = s.Get(ctx, hash(2))
@@ -402,7 +402,7 @@ func TestMigrateWorks(t *testing.T) {
 	r, err := s.Get(ctx, hash(2))
 	require.NoError(t, err)
 	require.Equal(t, 0.7, r.Match.Confidence, "each key keeps its own match")
-	require.Equal(t, LayerJev, r.Match.Layer)
+	require.Equal(t, LayerClassifier, r.Match.Layer)
 	require.Equal(t, time.Unix(150, 0).UTC(), r.Match.MatchedAt)
 	require.Equal(t, "720p", r.Quality, "the features are derived")
 	r, err = s.Get(ctx, hash(3))

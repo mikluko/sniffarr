@@ -189,7 +189,7 @@ func TestBrowserJournal(t *testing.T) {
 	res, err := b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:]}))
 	require.NoError(t, err)
 	require.Len(t, res.Msg.GetEntries(), 2)
-	require.Equal(t, []string{"fetched/stored", "classified/jev"}, []string{
+	require.Equal(t, []string{"fetched/stored", "classified/classifier"}, []string{
 		res.Msg.GetEntries()[0].GetKind() + "/" + res.Msg.GetEntries()[0].GetOutcome(), res.Msg.GetEntries()[1].GetKind() + "/" + res.Msg.GetEntries()[1].GetOutcome()}, "oldest first")
 	require.Equal(t, int64(2), res.Msg.GetTotal())
 	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Limit: 1}))

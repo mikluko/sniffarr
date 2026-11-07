@@ -32,7 +32,7 @@ func matched(t *testing.T) *Browser {
 			Kind: x.kind, KindLayer: store.LayerRules, TitleKey: p.Key, Year: p.Year, Season: p.Season})
 		require.NoError(t, err)
 	}
-	w, _, err := s.RecordMatch(ctx, "y:alien 1979", store.Found{Hit: &store.Hit{Type: store.TypeMovie, TMDBID: 348}, Confidence: 0.8, Layer: store.LayerJev}, now.Add(-time.Hour))
+	w, _, err := s.RecordMatch(ctx, "y:alien 1979", store.Found{Hit: &store.Hit{Type: store.TypeMovie, TMDBID: 348}, Confidence: 0.8, Layer: store.LayerClassifier}, now.Add(-time.Hour))
 	require.NoError(t, err)
 	require.NoError(t, s.RecordDetails(ctx, w, store.Details{Type: "movie", OriginalTitle: "Alien", Year: 1979, PosterPath: "/p.jpg", Rating: 8.2, Votes: 16995,
 		Runtime: 117, Countries: []string{"US"}, Language: "en",

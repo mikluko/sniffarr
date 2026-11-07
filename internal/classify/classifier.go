@@ -151,7 +151,7 @@ func (j *Classifier) classify(ctx context.Context, p store.Pending, trigger stri
 		return fmt.Errorf("store classification: %w", err)
 	}
 	if r.Kind != "" {
-		j.metrics().classifications.Add(ctx, 1, layerAttrs(store.LayerJev, r.Kind))
+		j.metrics().classifications.Add(ctx, 1, layerAttrs(store.LayerClassifier, r.Kind))
 		j.metrics().classifications.Add(ctx, int64(copied), layerAttrs(store.LayerReuse, r.Kind))
 	}
 	return nil

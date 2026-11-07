@@ -95,9 +95,9 @@ func TestBackfillAudioCodes(t *testing.T) {
 	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
 	defer db.Close()
 	coded := torrent(1, "Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", "Bad.Apples.2026.P.WEB-DL.1O8Op.mkv")
-	coded.Audio = []Audio{{Language: "ru", Probability: new(0.03), Layer: LayerJev}}
+	coded.Audio = []Audio{{Language: "ru", Probability: new(0.03), Layer: LayerClassifier}}
 	plain := torrent(2, "Plan.B.2001.WEB-DL", "Plan.B.2001.WEB-DL.mkv")
-	plain.Audio = []Audio{{Language: "ru", Probability: new(0.03), Layer: LayerJev}}
+	plain.Audio = []Audio{{Language: "ru", Probability: new(0.03), Layer: LayerClassifier}}
 	for _, tr := range []Torrent{coded, plain} {
 		_, _, err := s.Insert(ctx, tr)
 		require.NoError(t, err)

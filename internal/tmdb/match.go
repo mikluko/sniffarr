@@ -105,7 +105,7 @@ func (m *Matcher) Matchable(ctx context.Context, keys []string) ([]store.TitleKe
 // Match looks the key up on TMDB and records what it finds, with the
 // trigger that asked, store.TriggerWorker, store.TriggerSearch,
 // store.TriggerTorznab or store.TriggerRequest: the one plausible candidate, under layer tmdb; the
-// Chooser's pick among several, under layer jev; or no match. It records
+// Chooser's pick among several, under layer classifier; or no match. It records
 // nothing when it fails, except for a request TMDB refuses for good, which
 // is recorded as a failed match. It returns classify.ErrBudget when the
 // Chooser's budget is spent. A match to a work whose details are not
@@ -406,7 +406,7 @@ func (m *Matcher) choose(ctx context.Context, k store.TitleKey, fits []fit) (fit
 		return fit{}, false, fmt.Errorf("choice %q", r.Choice)
 	}
 	f := fits[i-1]
-	f.confidence, f.layer = r.Confidence, store.LayerJev
+	f.confidence, f.layer = r.Confidence, store.LayerClassifier
 	return f, true, nil
 }
 

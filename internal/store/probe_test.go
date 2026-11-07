@@ -202,7 +202,7 @@ func TestProbeDoneTracksAndAudio(t *testing.T) {
 	requireAudio(t, r, 1, LayerProbe)
 	requireAudio(t, mustGet(t, s, en), 0, LayerProbe)
 	requireAudio(t, mustGet(t, s, marked), 0, LayerProbe)
-	requireAudio(t, mustGet(t, s, und), 0.4, LayerJev)
+	requireAudio(t, mustGet(t, s, und), 0.4, LayerClassifier)
 
 	_, err = s.Classify(ctx, r.ID, Classification{Audio: map[string]float64{"ru": 0.2}}, t0)
 	require.NoError(t, err)

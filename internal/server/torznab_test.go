@@ -71,8 +71,8 @@ func TestTorznabProbes(t *testing.T) {
 }
 
 func TestTorznabDoesNotWait(t *testing.T) {
-	jev := &blockingClassifier{started: make(chan int64, 1), done: make(chan int64, 1), release: make(chan struct{})}
-	lazy := &search.Lazy{Classifier: jev, Wait: time.Minute, Log: slog.New(slog.DiscardHandler)}
+	cl := &blockingClassifier{started: make(chan int64, 1), done: make(chan int64, 1), release: make(chan struct{})}
+	lazy := &search.Lazy{Classifier: cl, Wait: time.Minute, Log: slog.New(slog.DiscardHandler)}
 	srv, hc := start(t, Config{Poll: 20 * time.Millisecond, Languages: russian, TorznabToken: "tz", Lazy: lazy})
 
 	ingest := ingestClient(srv, hc)
@@ -95,13 +95,13 @@ func TestTorznabDoesNotWait(t *testing.T) {
 	require.Contains(t, string(b), "The.Thing.1982.1080p.BluRay.x264", "with what the store holds")
 
 	select {
-	case <-jev.started:
+	case <-cl.started:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the classification did not start")
 	}
-	close(jev.release)
+	close(cl.release)
 	select {
-	case <-jev.done:
+	case <-cl.done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the classification did not run past the answer")
 	}

@@ -696,7 +696,7 @@ func TestJournalAudioOff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	classified := JournalEntry{Kind: "classified", Outcome: "jev", Detail: map[string]any{"audio": map[string]any{"ru": 0.88}, "source": "web"}}
+	classified := JournalEntry{Kind: "classified", Outcome: "classifier", Detail: map[string]any{"audio": map[string]any{"ru": 0.88}, "source": "web"}}
 	probed := JournalEntry{Kind: "probed", Outcome: "tracks", Detail: map[string]any{"audio": map[string]any{"ru": 0.88}, "tracks": []any{"audio:rus:eac3"}}}
 	for _, c := range []struct {
 		name  string
