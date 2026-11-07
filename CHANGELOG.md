@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Torznab titles carry every voice label of the Russian track, even one the release name already has, as in `HIN.DUB [Dub, RUS]`.
+
+### Fixed
+
+- Torznab titles write `[RUS, -]` instead of a bare `[RUS]`, which Radarr read as the release group.
+- A Russian word in a subtitle file's path no longer marks a release as having Russian audio; stored markers from subtitle paths alone are cleared.
+
 ## [0.42.0] - 2026-11-07
 
 ### Added
