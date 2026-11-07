@@ -422,3 +422,17 @@ a.btn:hover{background:var(--muted);text-decoration:none}
 .nf .val{color:var(--muted-foreground);word-break:break-all}
 .nf .acts{margin-top:8px}
 @media (max-width:640px){.nf{padding:40px 0 56px}}
+
+/* optional features: a store table that is gone leaves its column empty,
+ * a feature on but not working is amber with a square marker, and the
+ * block of features lists each with its state and a note */
+#data .grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.meter.full i{background:var(--warn)}
+.m{display:inline-block;width:8px;height:8px;margin-right:6px;background:var(--warn)}
+.act-ans.dw{color:var(--warn)}
+.qhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.feat{display:grid;grid-template-columns:max-content max-content minmax(0,1fr);gap:4px 20px;align-items:baseline}
+@media (max-width:640px){
+  .feat{grid-template-columns:max-content minmax(0,1fr)}
+  .feat .why{grid-column:1 / 3;margin-bottom:6px}
+}

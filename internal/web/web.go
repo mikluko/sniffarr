@@ -59,6 +59,13 @@ type Config struct {
 	// it; false leaves the probe button, meter and queue out of every page
 	// and answers a request for a probe with 404.
 	Probes bool
+	// Classifier is whether the API runs the Jev classifier, as
+	// ObtainSettings returns it; false leaves its meter and layer out of the
+	// data page.
+	Classifier bool
+	// Feeds is whether the API reads tracker feeds, as ObtainSettings
+	// returns it; false labels the feeds' priority as off.
+	Feeds bool
 	// Locales tells the locale of the person an access token was issued to;
 	// when nil, the language is only the one picked on the page.
 	Locales Locales
@@ -155,7 +162,7 @@ func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	b.Now = s.cfg.Now()
 	b.Seerr = s.cfg.SeerrURL
 	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
-	b.Probes = s.cfg.Probes
+	b.Probes, b.Classifier, b.Feeds = s.cfg.Probes, s.cfg.Classifier, s.cfg.Feeds
 	return b
 }
 
@@ -208,6 +215,8 @@ var (
 		sniffarrv1.Sort_SORT_FIRST_SEEN: "first_seen"}
 	windows     = map[sniffarrv1.Window]string{sniffarrv1.Window_WINDOW_DAY: "24h", sniffarrv1.Window_WINDOW_WEEK: "7d", sniffarrv1.Window_WINDOW_MONTH: "30d"}
 	voices      = map[sniffarrv1.Voice]string{sniffarrv1.Voice_VOICE_UNSPECIFIED: "any", sniffarrv1.Voice_VOICE_LIKELY: "p50", sniffarrv1.Voice_VOICE_MARKER: "explicit"}
+	featureKeys = map[sniffarrv1.Feature]string{sniffarrv1.Feature_FEATURE_CLASSIFIER: "classifier", sniffarrv1.Feature_FEATURE_PROBES: "probes",
+		sniffarrv1.Feature_FEATURE_AUDIO: "audio", sniffarrv1.Feature_FEATURE_FEEDS: "feeds"}
 	tmdbMethods = map[sniffarrv1.TMDBLayer]string{sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH: "search", sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER: "classifier",
 		sniffarrv1.TMDBLayer_TMDB_LAYER_ARR: "arr"}
 )
@@ -769,7 +778,41 @@ func (s *server) data(w http.ResponseWriter, req *http.Request) {
 	slices.SortStableFunc(out.Dropped, func(a, b ui.Count) int {
 		return cmp.Or(cmp.Compare(b.N, a.N), cmp.Compare(slices.Index(ui.DropReasons, a.Key), slices.Index(ui.DropReasons, b.Key)))
 	})
-	s.render(w, req, "data", ui.DataPage{Base: s.base(req, s.lang(w, req), "data"), Stats: out})
+	s.render(w, req, "data", ui.DataPage{Base: s.base(req, s.lang(w, req), "data"), Stats: out, Features: s.features(req.Context())})
+}
+
+// features are the API's optional features as Settings tells them now, in
+// ui.FeatureKeys order; none when it fails, which is logged.
+func (s *server) features(ctx context.Context) []ui.Feature {
+	res, err := s.cfg.Browse.Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+	if err != nil {
+		s.cfg.Log.WarnContext(ctx, "settings", "err", err)
+		return nil
+	}
+	byKey := map[string]ui.Feature{}
+	for _, f := range res.Msg.GetFeatures() {
+		if k, ok := featureKeys[f.GetFeature()]; ok {
+			byKey[k] = ui.Feature{Key: k, On: f.GetOn(), Works: f.GetWorks(), Setting: f.GetSetting(), Values: f.GetValues()}
+		}
+	}
+	out := make([]ui.Feature, 0, len(byKey))
+	for _, k := range ui.FeatureKeys {
+		if f, ok := byKey[k]; ok {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// noProbers reports whether Settings tells probes on and no prober
+// connected; false when it fails.
+func (s *server) noProbers(ctx context.Context) bool {
+	for _, f := range s.features(ctx) {
+		if f.Key == "probes" {
+			return f.On && !f.Works
+		}
+	}
+	return false
 }
 
 // charts folds counts per clock hour, the latest first, into bars for the
@@ -941,6 +984,7 @@ func (s *server) request(w http.ResponseWriter, req *http.Request, page, path st
 		var res *connect.Response[sniffarrv1.RequestProbeResponse]
 		if res, err = s.cfg.Browse.RequestProbe(req.Context(), connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: r})); err == nil {
 			ans.Releases = int(res.Msg.GetReleases())
+			ans.NoProbers = ans.Releases > 0 && s.noProbers(req.Context())
 		}
 	case "match":
 		ans, err = s.requestMatch(req.Context(), r, lang)

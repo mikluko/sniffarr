@@ -115,19 +115,27 @@ func (f titleSearch) SearchWorks(ctx context.Context, typ, query, lang string) (
 // with peers and the tops computed at now.
 func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
-	return handlerWith(t, "ru", Config{Locales: l, Probes: true})
+	return handlerWith(t, "ru", Config{Locales: l, Probes: true, Classifier: true, Feeds: true})
 }
 
 // handlerLangs is handler with the audio languages langs, a comma-separated
 // list, in the store and the UI alike; "" leaves the extension off.
 func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
 	t.Helper()
-	return handlerWith(t, langs, Config{Locales: l, Probes: true})
+	return handlerWith(t, langs, Config{Locales: l, Probes: true, Classifier: true, Feeds: true})
 }
 
-// handlerWith is handlerLangs taking Locales, Probes, and the Seerr, Radarr
-// and Sonarr URLs from cfg; Probes goes to the API too.
+// handlerWith is handlerLangs taking Locales, Probes, Classifier, Feeds,
+// and the Seerr, Radarr and Sonarr URLs from cfg; the features go to the
+// API too.
 func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
+	t.Helper()
+	h, _ := handlerTasks(t, langs, cfg)
+	return h
+}
+
+// handlerTasks is handlerWith returning the API's queue as well.
+func handlerTasks(t *testing.T, langs string, cfg Config) (http.Handler, *store.Tasks) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
@@ -206,18 +214,24 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 		tasks.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
 	}
 	tasks.Finished(store.TaskPeers, now.Add(-time.Minute))
-	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages), cfg.Probes), Languages: languages, Probes: cfg.Probes, Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, Now: func() time.Time { return now }})
+	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds,
+		Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, Now: func() time.Time { return now }})
 	require.NoError(t, err)
-	return h
+	return h, tasks
 }
 
-// browse serves BrowseService over st, probing with probes, behind the token
-// "search" in-process, and returns a client holding the token.
-func browse(t *testing.T, st *store.Store, tasks *store.Tasks, tags []string, probes bool) sniffarrv1connect.BrowseServiceClient {
+// browse serves BrowseService over st with the probes, classifier and
+// feeds, the last reading rutor, cfg turns on, behind the token "search"
+// in-process, and returns a client holding the token.
+func browse(t *testing.T, st *store.Store, tasks *store.Tasks, tags []string, cfg Config) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
-	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Probes: probes, Languages: tags, Now: func() time.Time { return now },
+	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30,
+		Probes: cfg.Probes, Classifier: cfg.Classifier, Languages: tags, Now: func() time.Time { return now },
 		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }, Interval: 5 * time.Minute}}
+	if cfg.Feeds {
+		b.Feeds = []string{"rutor"}
+	}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b))
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)
@@ -576,7 +590,7 @@ func post(t *testing.T, h http.Handler, path, target string, header ...string) *
 }
 
 func TestRequests(t *testing.T) {
-	h := handler(t, nil)
+	h, tasks := handlerTasks(t, "ru", Config{Probes: true})
 	body := page(t, get(t, h, "/t/"+hexOf(1), ""))
 	require.Contains(t, body, `<form method="post" action="/t/`+hexOf(1)+`/peers" hx-post="/t/`+hexOf(1)+`/peers" hx-target="#act-answer" hx-swap="outerHTML" hx-disabled-elt="find button">`,
 		"the answer goes to the line under the buttons, the button disabled meanwhile")
@@ -593,7 +607,11 @@ func TestRequests(t *testing.T) {
 	require.Equal(t, `<div id="act-answer" class="act-ans" role="status">Peer lookup requested at priority P0.`+queue+"\n"+
 		`<button id="act-peers" type="submit" disabled hx-swap-oob="true">Refresh peers</button>`, strings.TrimSpace(frag), "the pressed button stays disabled")
 	frag = fragment(t, post(t, h, "/movie/348/probe", "act-answer"), "act-answer")
-	require.Contains(t, frag, `>Track probe requested at priority P0.`+queue, "the one release of the title a probe can read")
+	require.Contains(t, frag, `<div id="act-answer" class="act-ans dw" role="status"><i class="m"></i>Track probe requested at priority P0. No prober is connected now: the probe starts once one is.</div>`,
+		"in amber while no prober is connected")
+	tasks.ProberSeen("a", now)
+	frag = fragment(t, post(t, h, "/movie/348/probe", "act-answer"), "act-answer")
+	require.Contains(t, frag, `<div id="act-answer" class="act-ans" role="status">Track probe requested at priority P0.`+queue, "the one release of the title a probe can read")
 	frag = fragment(t, post(t, h, "/t/"+hexOf(2)+"/probe", "act-answer"), "act-answer")
 	require.Contains(t, frag, `>Cannot probe tracks: no file a probe can read.</div>`)
 	require.Contains(t, frag, `<button id="act-probe" type="submit" disabled hx-swap-oob="true">Probe tracks</button>`)
@@ -635,6 +653,36 @@ func TestProbesOff(t *testing.T) {
 	}
 	require.Equal(t, []string{"fetch", "peers", "probe"}, kinds(taskQueues(st, true)))
 	require.Equal(t, []string{"fetch", "peers"}, kinds(taskQueues(st, false)), "probes queued before they went off are not shown")
+}
+
+// The data page's block of features, with every feature on and with every
+// one off, and the amber states of a feature on and not working.
+func TestFeatures(t *testing.T) {
+	h, tasks := handlerTasks(t, "ru", Config{Probes: true, Classifier: true, Feeds: true})
+	body := page(t, get(t, h, "/", ""))
+	for _, want := range []string{
+		`<span>Jev classifier</span>`, `<span>working</span>`, `25.0% of the daily limit`,
+		`<span class="dw"><i class="m"></i>no probers</span>`, "The probe queue grows: 0\u00a0tasks.",
+		`<span>on: ru</span>`, `<span>on: rutor</span>`, `>P2: feeds<`,
+	} {
+		require.Contains(t, body, want)
+	}
+	require.Contains(t, body, `aria-label="Classifier: `, "the classifier's meter")
+	require.Contains(t, body, `/torrents?layer=classifier`, "and its layer")
+	tasks.ProberSeen("a", now)
+	require.Contains(t, page(t, get(t, h, "/", "")), "They read tracks from the first pieces of a release.", "a prober connected")
+
+	body = page(t, get(t, handlerWith(t, "", Config{}), "/", ""))
+	for _, want := range []string{
+		`<span class="mu">no key</span>`, "Turned on by the API key in TYPESAFE_API_KEY at start.",
+		"Turned on by the -probe flag at start.", "Turned on at start, by the languages in SNIFFARR_AUDIO_LANGUAGES.",
+		"Turned on at start, by the feeds in SNIFFARR_FEEDS.", `>P2: feeds (off)<`,
+	} {
+		require.Contains(t, body, want)
+	}
+	for _, s := range []string{`aria-label="Classifier: `, `/torrents?layer=classifier`, "Dub by language", `>P2: feeds<`} {
+		require.NotContains(t, body, s)
+	}
 }
 
 func TestRequestMatch(t *testing.T) {

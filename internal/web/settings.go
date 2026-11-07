@@ -23,6 +23,10 @@ type Settings struct {
 	Languages []audio.Language
 	// Probes is whether it probes releases.
 	Probes bool
+	// Classifier is whether it runs the Jev classifier.
+	Classifier bool
+	// Feeds is whether it reads tracker feeds.
+	Feeds bool
 }
 
 // ObtainSettings asks the browse API for its settings, retrying after
@@ -42,7 +46,16 @@ func ObtainSettings(ctx context.Context, browse sniffarrv1connect.BrowseServiceC
 			if err != nil {
 				return Settings{}, fmt.Errorf("the API's audio languages %q: %w", tags, err)
 			}
-			return Settings{Languages: langs, Probes: res.Msg.GetProbes()}, nil
+			out := Settings{Languages: langs, Probes: res.Msg.GetProbes()}
+			for _, f := range res.Msg.GetFeatures() {
+				switch f.GetFeature() {
+				case sniffarrv1.Feature_FEATURE_CLASSIFIER:
+					out.Classifier = f.GetOn()
+				case sniffarrv1.Feature_FEATURE_FEEDS:
+					out.Feeds = f.GetOn()
+				}
+			}
+			return out, nil
 		}
 		if attempt > 1 {
 			log.Warn("settings", "err", err, "attempt", attempt)

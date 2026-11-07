@@ -16,11 +16,12 @@
 <div class="dstats">
   <div class="stat"><span class="mu">{{$.T "d.total"}}</span><b class="big">{{$.Num .Total}}</b><span class="mu xs">{{$.T "d.dropped"}} {{$.Num .DroppedTotal}}</span></div>
   <div class="stat"><span class="mu">{{$.T "d.newday"}}</span><b class="big">{{$.Num .NewDay}}</b><span class="mu xs">{{$.T "d.newweek"}} {{$.Num .NewWeek}}</span></div>
-  {{with .Classifier}}
+  {{if $.Classifier}}{{with .Classifier}}
   <div class="stat"><span class="mu">{{template "tip" (tipArgs ($.T "d.classifier") $.ClassifierTip)}}</span>
-    {{- if .LimitDay}}<b class="big">{{$.Pct .DoneDay .LimitDay}}</b>{{template "dpace" (limitArgs $.Base .DoneDay .PaceDay .LimitDay)}}{{template "meter" (limitArgs $.Base .DoneDay .PaceDay .LimitDay)}}
+    {{- if $.ClassifierSpent}}<b class="big">{{$.Pct .DoneDay .LimitDay}}</b><span class="xs dw">{{$.Fmt "d.spent" ($.Num .Pending)}}</span><div class="meter full" role="img" aria-label="{{$.Pct .DoneDay .LimitDay}}"><i style="width: 100%"></i></div>
+    {{- else if .LimitDay}}<b class="big">{{$.Pct .DoneDay .LimitDay}}</b>{{template "dpace" (limitArgs $.Base .DoneDay .PaceDay .LimitDay)}}{{template "meter" (limitArgs $.Base .DoneDay .PaceDay .LimitDay)}}
     {{- else}}<b class="big">{{$.Num .DoneDay}}</b><span class="mu xs">{{$.T "d.nolimit"}}</span>{{end}}</div>
-  {{end}}
+  {{end}}{{end}}
   {{if $.Probes}}{{with .Probe}}
   <div class="stat"><span class="mu">{{template "tip" (tipArgs ($.T "d.probes") $.ProbeTip)}}</span>
     {{- if .LimitDay}}<b class="big">{{$.Pct .RxDay .LimitDay}}</b>{{template "dpace" (limitArgs $.Base .RxDay .PaceDay .LimitDay)}}{{template "meter" (limitArgs $.Base .RxDay .PaceDay .LimitDay)}}
@@ -32,9 +33,10 @@
 <section class="dq">
   <h2>{{template "tip" (tipArgs ($.T "d.queue") ($.T "q.note"))}} <span class="mu">{{$.Num (queueTasks .)}}</span></h2>
   <div class="qcards">
-  {{range .}}{{if or .Tasks .Paced}}{{$kind := $.T (concat "q." .Kind)}}
+  {{range .}}{{if or .Tasks .Paced}}{{$kind := $.T (concat "q." .Kind)}}{{$noprobers := and (eq .Kind "probe") $.NoProbers}}
     <div class="qcard">
-      <div><h3>{{$kind}}</h3><span class="mu">{{$.Fmt "q.count" ($.Num .Tasks)}}</span></div>
+      <div class="qhead"><div><h3>{{$kind}}</h3><span class="mu">{{$.Fmt "q.count" ($.Num .Tasks)}}</span></div>
+        {{- if $noprobers}}<span class="xs dw rt"><i class="m"></i>{{template "tip" (tipArgs ($.T "q.noprobers") ($.T "q.noprobers_tip"))}}</span>{{end}}</div>
       <div class="qbar" role="img" aria-label="{{$kind}}:{{range .Levels}}{{if .Tasks}} P{{.Priority}} {{$.Num .Tasks}};{{end}}{{end}}">
         {{- range .Levels}}{{if .Tasks}}<i class="q{{.Priority}}" style="flex-grow: {{.Tasks}}"></i>{{end}}{{end -}}
       </div>
@@ -44,7 +46,7 @@
         {{range .Levels}}{{$p := printf "P%d" .Priority}}{{$tip := concat $p ": " ($.Priority .Priority)}}
           <tr><td><span class="tip" tabindex="0" aria-label="{{$tip}}"><span class="badge"><span class="sw q{{.Priority}}"></span>{{$p}}</span><span class="tipb" aria-hidden="true">{{$tip}}</span></span></td>
             <td class="r">{{$.Num .Tasks}}</td>
-            <td class="r">{{if not .Known}}{{template "tip" (tipArgs "?" ($.T "q.nopace"))}}{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
+            <td class="r">{{if $noprobers}}{{template "tip" (tipArgs "?" ($.T "q.noprobers_eta"))}}{{else if not .Known}}{{template "tip" (tipArgs "?" ($.T "q.nopace"))}}{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
         {{end}}
         </tbody>
       </table>
@@ -74,7 +76,7 @@
     </div>
     <div>
       <h3>{{$.T "d.bylayer"}}</h3>
-      <table class="t">{{range .ByLayer}}<tr><td><a href="/torrents?layer={{.Key}}">{{$.T (concat "layer." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
+      <table class="t">{{range .ByLayer}}{{if or $.Classifier (ne .Key "classifier")}}<tr><td><a href="/torrents?layer={{.Key}}">{{$.T (concat "layer." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}{{end}}</table>
       <h3 class="gap">{{$.T "d.bysource"}}</h3>
       <table class="t">{{range .BySource}}<tr><td><a href="/torrents?source={{.Key}}">{{$.T (concat "source." .Key)}}</a></td><td class="r">{{$.Num .N}}</td><td class="r mu">{{$.Pct .N $.Stats.Total}}</td></tr>{{end}}</table>
     </div>
@@ -101,6 +103,19 @@
     </div>
   </div>
 </section>
+
+{{with $.Features}}
+<section class="dfeat">
+  <h2>{{$.T "feat.title"}}</h2>
+  <div class="feat">
+  {{- range .}}{{$st := $.FeatureState .}}
+    <span>{{$.T (concat "feat." .Key)}}</span>
+    <span{{if eq $st "fails"}} class="dw"{{else if eq $st "off"}} class="mu"{{end}}>{{if eq $st "fails"}}<i class="m"></i>{{end}}{{$.FeatureLabel .}}</span>
+    <span class="mu xs why">{{$.FeatureNote .}}</span>
+  {{- end}}
+  </div>
+</section>
+{{end}}
 </main>
 {{end}}
 {{end}}

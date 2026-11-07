@@ -22,6 +22,7 @@ type settingsAPI struct {
 	failures int
 	tags     []string
 	probes   bool
+	features []*sniffarrv1.FeatureState
 	calls    int
 }
 
@@ -30,7 +31,7 @@ func (a *settingsAPI) Settings(context.Context, *connect.Request[sniffarrv1.Sett
 	if a.calls <= a.failures {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("not yet"))
 	}
-	return connect.NewResponse(&sniffarrv1.SettingsResponse{AudioLanguages: a.tags, Probes: a.probes}), nil
+	return connect.NewResponse(&sniffarrv1.SettingsResponse{AudioLanguages: a.tags, Probes: a.probes, Features: a.features}), nil
 }
 
 func TestObtainSettings(t *testing.T) {
@@ -39,10 +40,13 @@ func TestObtainSettings(t *testing.T) {
 	russian, err := audio.Parse("ru")
 	require.NoError(t, err)
 
-	api := &settingsAPI{failures: 2, tags: []string{"ru"}, probes: true}
+	api := &settingsAPI{failures: 2, tags: []string{"ru"}, probes: true, features: []*sniffarrv1.FeatureState{
+		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, On: true},
+		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, On: true, Works: true, Values: []string{"rutor"}},
+	}}
 	got, err := ObtainSettings(ctx, api, time.Millisecond, log)
 	require.NoError(t, err)
-	require.Equal(t, Settings{Languages: russian, Probes: true}, got)
+	require.Equal(t, Settings{Languages: russian, Probes: true, Classifier: true, Feeds: true}, got, "on, whether working or not")
 	require.Equal(t, 3, api.calls, "two failures, then the answer")
 
 	api = &settingsAPI{}
@@ -50,6 +54,7 @@ func TestObtainSettings(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, got.Languages, "the extension is off")
 	require.False(t, got.Probes, "probes are off")
+	require.False(t, got.Classifier || got.Feeds, "an API that names no feature has them off")
 	require.Equal(t, 1, api.calls)
 
 	_, err = ObtainSettings(ctx, &settingsAPI{tags: []string{"ru", "xx"}}, time.Millisecond, nil)

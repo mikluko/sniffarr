@@ -89,6 +89,15 @@ func TestRenderAll(t *testing.T) {
 		{"data-stale", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleDataStale(b) }},
 		{"data-noprobes", "data", "/", "", func(b Base) any { b.Nav, b.Probes = "data", false; return SampleData(b) }},
 		{"notfound", "notfound", "/stats/old", "", func(b Base) any { return NotFoundPage{Base: b, Asked: "/stats/old"} }},
+		{"act-probe-noprobers", "torrent", "/t/x/probe", "act-answer", func(b Base) any { return Requested{Base: b, Action: "probe", Releases: 1, NoProbers: true} }},
+	}
+	for _, state := range []string{"all", "off", "degraded"} {
+		cases = append(cases,
+			tc{"data-features-" + state, "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleDataFeatures(b, state) }},
+			tc{"torrent-features-" + state, "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(SampleFeatureBase(b, state), false, "poster") }},
+			tc{"work-features-" + state, "work", "/movie/900001", "", func(b Base) any {
+				return SampleWork(SampleFeatureBase(b, state), SampleSpiderID, ReleaseFilters{})
+			}})
 	}
 	dir := os.Getenv("PREVIEW_DIR")
 	for _, lang := range []string{"ru", "en"} {
@@ -99,7 +108,7 @@ func TestRenderAll(t *testing.T) {
 				req.Header.Set("HX-Target", c.target)
 			}
 			b := r.Base(req, lang, "", []string{"ru"}, loc)
-			b.Now, b.Probes = now, true
+			b.Now, b.Probes, b.Classifier, b.Feeds = now, true, true, true
 			w := httptest.NewRecorder()
 			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
 				t.Fatalf("%s/%s: %v", lang, c.name, err)
@@ -132,9 +141,9 @@ func writePreview(dir, name string, full bool, body []byte) {
 	_ = os.WriteFile(filepath.Join(dir, name+".html"), body, 0o644)
 }
 
-// Renders every page without audio languages: nothing of the extension in
-// the output.
-func TestRenderNoLanguages(t *testing.T) {
+// Renders every page with every optional feature off: none leaves a trace
+// but the data page's block of features, which says each is off.
+func TestRenderFeaturesOff(t *testing.T) {
 	r, err := New()
 	if err != nil {
 		t.Fatal(err)
@@ -147,28 +156,103 @@ func TestRenderNoLanguages(t *testing.T) {
 		{"torrents", "torrents", "/torrents", func(b Base) any { return SampleTorrents(b, "", Filters{}) }},
 		{"top", "top", "/top", func(b Base) any { return SampleTop(b, "movie", false) }},
 		{"work", "work", "/movie/900001", func(b Base) any { return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
-		{"torrent", "torrent", "/t/x", func(b Base) any { return SampleTorrent(b, false, "poster") }},
-		{"data", "data", "/", func(b Base) any {
-			p := SampleData(b)
-			p.Stats.Voice = nil
-			return p
-		}},
+		{"torrent", "torrent", "/t/x", func(b Base) any { return SampleTorrent(b, false, "nopeers") }},
+		{"data", "data", "/", func(b Base) any { return SampleDataFeatures(b, "off") }},
 	}
 	for _, lang := range []string{"ru", "en"} {
 		for _, c := range cases {
 			req := httptest.NewRequest("GET", c.path, nil)
-			b := r.Base(req, lang, c.name, nil, loc)
+			b := SampleFeatureBase(r.Base(req, lang, c.name, []string{"ru"}, loc), "off")
 			w := httptest.NewRecorder()
 			if err := r.Render(w, req, c.page, c.data(b)); err != nil {
 				t.Fatalf("%s/%s: %v", lang, c.name, err)
 			}
-			body := w.Body.String()
-			for _, s := range []string{`name="vl"`, `name="voice"`, `voice=`, b.T("d.voice"), b.T("top.audio"), b.T("card.audio_mark")} {
-				if strings.Contains(body, s) {
-					t.Errorf("%s/%s: has %q", lang, c.name, s)
-				}
+			off := []string{
+				`name="vl"`, `name="voice"`, `voice=`, b.T("d.voice"), b.T("top.audio"), b.T("card.audio_mark"),
+				`act-probe`, b.T("act.probe_nopeers"), `aria-label="` + b.T("d.probes") + `: `, `<h3>` + b.T("q.probe") + `</h3>`, b.T("q.p1"), b.T("q.p4"),
+				`aria-label="` + b.T("d.classifier") + `: `, `/torrents?layer=classifier`,
+				`P2: ` + b.T("q.p2") + `<`,
 			}
+			var on []string
+			if c.name == "data" {
+				on = []string{`P2: ` + b.T("q.p2_nofeeds") + `<`, b.T("feat.state.classifier.off"), b.Fmt("feat.how.probes", "-probe")}
+			}
+			checkBody(t, lang+"/"+c.name, w.Body.String(), off, on)
 		}
+	}
+}
+
+// checkBody fails the test for each of without the body has and each of
+// with it lacks.
+func checkBody(t *testing.T, name, body string, without, with []string) {
+	t.Helper()
+	for _, s := range without {
+		if strings.Contains(body, s) {
+			t.Errorf("%s: has %q", name, s)
+		}
+	}
+	for _, s := range with {
+		if !strings.Contains(body, s) {
+			t.Errorf("%s: no %q", name, s)
+		}
+	}
+}
+
+// The data page and a probe's answer with the classifier's limit spent and
+// no prober connected, in amber, against the same with every feature
+// working.
+func TestRenderFeaturesDegraded(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	b := r.Base(req, "ru", "data", []string{"ru"}, time.UTC)
+	b.Now = time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
+	render := func(page string, data any) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		if err := r.Render(w, req, page, data); err != nil {
+			t.Fatal(err)
+		}
+		return w.Body.String()
+	}
+	degraded := []string{
+		`<div class="meter full" role="img" aria-label="100,0%"><i style="width: 100%"></i></div>`,
+		`<span class="xs dw">` + b.Fmt("d.spent", b.Num(3412)) + `</span>`,
+		b.T("d.spent_tip"),
+		`<i class="m"></i><span class="tip" tabindex="0" aria-label="Нет проберов: ` + b.T("q.noprobers_tip"),
+		`aria-label="?: ` + b.T("q.noprobers_eta") + `"`,
+		`<span class="dw"><i class="m"></i>лимит на сутки исчерпан</span>`,
+		`<span class="dw"><i class="m"></i>нет проберов</span>`,
+		b.Fmt("feat.why.probes_fails", b.Count(2230, "q.tasks_n")),
+	}
+	bad := render("data", SampleDataFeatures(b, "degraded"))
+	all := render("data", SampleDataFeatures(b, "all"))
+	for _, s := range degraded {
+		if !strings.Contains(bad, s) {
+			t.Errorf("degraded: no %q", s)
+		}
+		if strings.Contains(all, s) {
+			t.Errorf("all working: has %q", s)
+		}
+	}
+	for _, s := range []string{"82,6% суточного лимита", "включена: ru", "включены: rutracker, rutor", ">P2: фиды<"} {
+		if !strings.Contains(all, s) {
+			t.Errorf("all working: no %q", s)
+		}
+	}
+
+	req = httptest.NewRequest("POST", "/t/x/probe", nil)
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("HX-Target", "act-answer")
+	act := Requested{Base: b, Action: "probe", Releases: 1}
+	if s := render("torrent", act); strings.Contains(s, "act-ans dw") || strings.Contains(s, b.T("act.noprobers")) {
+		t.Error("a probe asked for with a prober connected is answered in amber")
+	}
+	act.NoProbers = true
+	if s := render("torrent", act); !strings.Contains(s, `class="act-ans dw"`) || !strings.Contains(s, `<i class="m"></i>`+b.T("act.done.probe")+" "+b.T("act.noprobers")) {
+		t.Errorf("a probe asked for with no prober connected: %s", s)
 	}
 }
 
@@ -717,7 +801,7 @@ func TestDataMarkup(t *testing.T) {
 	}
 	req := httptest.NewRequest("GET", "/", nil)
 	b := r.Base(req, "en", "data", nil, time.UTC)
-	b.Now, b.Probes = time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC), true
+	b.Now, b.Probes, b.Classifier = time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC), true, true
 	render := func(p DataPage) string {
 		t.Helper()
 		w := httptest.NewRecorder()

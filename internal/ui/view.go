@@ -392,6 +392,9 @@ type Requested struct {
 	Titles   int
 	Work     *WorkSummary
 	Failure  string
+	// NoProbers marks a probe asked for while probes are on and no prober
+	// is connected: the answer says it waits for one, in amber.
+	NoProbers bool
 }
 
 type TorrentPage struct {
@@ -702,6 +705,94 @@ type File struct {
 type DataPage struct {
 	Base
 	Stats Stats
+	// Features are the optional features, one per FeatureKeys in its
+	// order; none leaves the block of them out.
+	Features []Feature
+}
+
+// FeatureKeys are the optional features in the order the data page lists
+// them; labels come from i18n ("feat.<key>").
+var FeatureKeys = []string{"classifier", "probes", "audio", "feeds"}
+
+// Feature is the state of an optional feature: whether it is On, whether it
+// Works now, the flag or variable Setting that turns it on, and the Values
+// it is on with, the audio languages or the feeds' names.
+type Feature struct {
+	Key     string
+	On      bool
+	Works   bool
+	Setting string
+	Values  []string
+}
+
+// Feature returns the state of the feature with the key, off when
+// Features has none.
+func (p DataPage) Feature(key string) Feature {
+	for _, f := range p.Features {
+		if f.Key == key {
+			return f
+		}
+	}
+	return Feature{Key: key}
+}
+
+// ClassifierSpent reports whether the classifier is on and has spent the
+// day's token limit.
+func (p DataPage) ClassifierSpent() bool {
+	f := p.Feature("classifier")
+	return f.On && !f.Works
+}
+
+// NoProbers reports whether probes are on and no prober is connected.
+func (p DataPage) NoProbers() bool {
+	f := p.Feature("probes")
+	return f.On && !f.Works
+}
+
+// FeatureState is the state the block of features writes for f: "off",
+// "works" or "fails", the last in amber.
+func (p DataPage) FeatureState(f Feature) string {
+	switch {
+	case !f.On:
+		return "off"
+	case f.Works:
+		return "works"
+	}
+	return "fails"
+}
+
+// FeatureNote is the line beside a feature's state: how to turn it on while
+// it is off, what it does or why it fails while it is on.
+func (p DataPage) FeatureNote(f Feature) string {
+	state := p.FeatureState(f)
+	switch {
+	case state == "off":
+		return p.Fmt("feat.how."+f.Key, f.Setting)
+	case f.Key == "classifier" && state == "works" && p.Stats.Classifier.LimitDay > 0:
+		return p.Fmt("feat.why.classifier_limit", p.Pct(p.Stats.Classifier.DoneDay, p.Stats.Classifier.LimitDay))
+	case f.Key == "probes" && state == "fails":
+		return p.Fmt("feat.why.probes_fails", p.Count(p.probeTasks(), "q.tasks_n"))
+	}
+	return p.T("feat.why." + f.Key + "_" + state)
+}
+
+// FeatureLabel is a feature's state in words, with the values it is on with.
+func (p DataPage) FeatureLabel(f Feature) string {
+	s := p.T("feat.state." + f.Key + "." + p.FeatureState(f))
+	if f.On && len(f.Values) > 0 {
+		s += ": " + strings.Join(f.Values, ", ")
+	}
+	return s
+}
+
+// probeTasks is every probe queued, 0 without the queue.
+func (p DataPage) probeTasks() int64 {
+	for _, q := range p.Stats.Queue {
+		if q.Kind == "probe" {
+			return q.Tasks()
+		}
+	}
+	return 0
 }
 
 // Refresh is how often the data page fetches itself again while it is
@@ -725,9 +816,13 @@ func (p DataPage) RefreshTip() string {
 }
 
 // ClassifierTip is the tooltip of the classifier's figure: its tokens on
-// the UTC day against the limit, their pace, and the torrents pending.
+// the UTC day against the limit, their pace, and the torrents pending; or,
+// with the limit spent, what decides the kind until midnight.
 func (p DataPage) ClassifierTip() string {
 	c := p.Stats.Classifier
+	if p.ClassifierSpent() {
+		return p.Fmt("d.tokens_limit_tip", p.Num(c.DoneDay), p.Num(c.LimitDay)) + " " + p.T("d.spent_tip")
+	}
 	s := p.Fmt("d.tokens_tip", p.Num(c.DoneDay))
 	if c.LimitDay > 0 {
 		s = p.Fmt("d.tokens_limit_tip", p.Num(c.DoneDay), p.Num(c.LimitDay))

@@ -465,7 +465,60 @@ func SampleData(b Base) DataPage {
 		Hourly: NewBarChart(hourly, hl, 12, true, 530),
 		Daily:  NewBarChart(daily, dl, 7, true, 14260),
 		Weekly: NewBarChart(weekly, wl, 4, true, 92370),
-	}}
+	}, Features: SampleFeatures("all")}
+}
+
+// SampleFeatures are the optional features all on and working, "all"; all
+// off, "off"; or all on with the classifier's limit spent and no prober,
+// "degraded".
+func SampleFeatures(state string) []Feature {
+	fs := []Feature{
+		{Key: "classifier", On: true, Works: true, Setting: "TYPESAFE_API_KEY"},
+		{Key: "probes", On: true, Works: true, Setting: "-probe"},
+		{Key: "audio", On: true, Works: true, Setting: "SNIFFARR_AUDIO_LANGUAGES", Values: []string{"ru"}},
+		{Key: "feeds", On: true, Works: true, Setting: "SNIFFARR_FEEDS", Values: []string{"rutracker", "rutor"}},
+	}
+	for i := range fs {
+		switch state {
+		case "off":
+			fs[i].On, fs[i].Works, fs[i].Values = false, false, nil
+		case "degraded":
+			fs[i].Works = fs[i].Key != "classifier" && fs[i].Key != "probes"
+		}
+	}
+	return fs
+}
+
+// SampleFeatureBase is b as the UI sets it up with the optional features
+// in the state SampleFeatures names.
+func SampleFeatureBase(b Base, state string) Base {
+	on := state != "off"
+	b.Probes, b.Classifier, b.Feeds = on, on, on
+	if !on {
+		b.VoiceLangs = nil
+	}
+	return b
+}
+
+// SampleDataFeatures is SampleData with the optional features in the state
+// SampleFeatures names, counted as the API counts them then.
+func SampleDataFeatures(b Base, state string) DataPage {
+	p := SampleData(SampleFeatureBase(b, state))
+	p.Features = SampleFeatures(state)
+	switch state {
+	case "off":
+		p.Stats.Voice = nil
+		p.Stats.Queue = p.Stats.Queue[:2]
+	case "degraded":
+		c := &p.Stats.Classifier
+		c.DoneDay, c.PaceDay = c.LimitDay, 0
+		probes := &p.Stats.Queue[2]
+		probes.Paced = false
+		for i, n := range []int64{55, 2090, 0, 0, 85} {
+			probes.Levels[i] = QueueLevel{Priority: i, Tasks: n}
+		}
+	}
+	return p
 }
 
 // SampleDataStale is SampleData computed 12 minutes before Now, past two
