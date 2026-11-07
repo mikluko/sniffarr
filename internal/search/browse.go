@@ -347,6 +347,9 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Hours: slices.Clone(st.Hours[:hours]), TokensUsedDay: used,
 		TokensLimitDay: b.DailyTokens, ProbeBytesRxDay: traffic.Rx, ProbeBytesTxDay: traffic.Tx, ProbeBytesLimitDay: b.ProbeDailyBytes,
 		ComputedAt: timestamppb.New(snap.At)}
+	if b.Counts != nil && b.Counts.Interval > 0 {
+		res.CountsInterval = durationpb.New(b.Counts.Interval)
+	}
 	if err = b.queue(ctx, res); err != nil {
 		return nil, b.internal(ctx, "stats", err)
 	}

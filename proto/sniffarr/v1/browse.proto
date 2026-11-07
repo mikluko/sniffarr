@@ -503,6 +503,9 @@ message StatsResponse {
   TaskQueue queue_fetches = 17;
   TaskQueue queue_lookups = 18;
   TaskQueue queue_probes = 19;
+  // How often the counts are computed; absent when they are computed at
+  // every request.
+  google.protobuf.Duration counts_interval = 20;
 }
 
 // TaskQueue is the tasks of one kind queued, by priority.

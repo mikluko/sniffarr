@@ -2507,11 +2507,14 @@ type StatsResponse struct {
 	Hours []int64 `protobuf:"varint,15,rep,packed,name=hours,proto3" json:"hours,omitempty"`
 	// The metadata fetches, peer lookups and probes queued, read at the
 	// request; absent on a server without the queue.
-	QueueFetches  *TaskQueue `protobuf:"bytes,17,opt,name=queue_fetches,json=queueFetches,proto3" json:"queue_fetches,omitempty"`
-	QueueLookups  *TaskQueue `protobuf:"bytes,18,opt,name=queue_lookups,json=queueLookups,proto3" json:"queue_lookups,omitempty"`
-	QueueProbes   *TaskQueue `protobuf:"bytes,19,opt,name=queue_probes,json=queueProbes,proto3" json:"queue_probes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	QueueFetches *TaskQueue `protobuf:"bytes,17,opt,name=queue_fetches,json=queueFetches,proto3" json:"queue_fetches,omitempty"`
+	QueueLookups *TaskQueue `protobuf:"bytes,18,opt,name=queue_lookups,json=queueLookups,proto3" json:"queue_lookups,omitempty"`
+	QueueProbes  *TaskQueue `protobuf:"bytes,19,opt,name=queue_probes,json=queueProbes,proto3" json:"queue_probes,omitempty"`
+	// How often the counts are computed; absent when they are computed at
+	// every request.
+	CountsInterval *durationpb.Duration `protobuf:"bytes,20,opt,name=counts_interval,json=countsInterval,proto3" json:"counts_interval,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *StatsResponse) Reset() {
@@ -2659,6 +2662,13 @@ func (x *StatsResponse) GetQueueLookups() *TaskQueue {
 func (x *StatsResponse) GetQueueProbes() *TaskQueue {
 	if x != nil {
 		return x.QueueProbes
+	}
+	return nil
+}
+
+func (x *StatsResponse) GetCountsInterval() *durationpb.Duration {
+	if x != nil {
+		return x.CountsInterval
 	}
 	return nil
 }
@@ -3229,7 +3239,7 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\n" +
 	"_prev_rankJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05R\x05delta\"0\n" +
 	"\fStatsRequest\x12\x14\n" +
-	"\x05hours\x18\x02 \x01(\x05R\x05hoursJ\x04\b\x01\x10\x02R\x04days\"\xbb\x06\n" +
+	"\x05hours\x18\x02 \x01(\x05R\x05hoursJ\x04\b\x01\x10\x02R\x04days\"\xff\x06\n" +
 	"\rStatsResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x03R\x05total\x12,\n" +
 	"\x05kinds\x18\x02 \x03(\v2\x16.sniffarr.v1.KindCountR\x05kinds\x12/\n" +
@@ -3249,7 +3259,8 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x05hours\x18\x0f \x03(\x03R\x05hours\x12;\n" +
 	"\rqueue_fetches\x18\x11 \x01(\v2\x16.sniffarr.v1.TaskQueueR\fqueueFetches\x12;\n" +
 	"\rqueue_lookups\x18\x12 \x01(\v2\x16.sniffarr.v1.TaskQueueR\fqueueLookups\x129\n" +
-	"\fqueue_probes\x18\x13 \x01(\v2\x16.sniffarr.v1.TaskQueueR\vqueueProbesJ\x04\b\b\x10\tJ\x04\b\x10\x10\x11R\x04daysR\x05queue\"Z\n" +
+	"\fqueue_probes\x18\x13 \x01(\v2\x16.sniffarr.v1.TaskQueueR\vqueueProbes\x12B\n" +
+	"\x0fcounts_interval\x18\x14 \x01(\v2\x19.google.protobuf.DurationR\x0ecountsIntervalJ\x04\b\b\x10\tJ\x04\b\x10\x10\x11R\x04daysR\x05queue\"Z\n" +
 	"\tTaskQueue\x12\x1d\n" +
 	"\n" +
 	"per_minute\x18\x01 \x01(\x01R\tperMinute\x12.\n" +
@@ -3439,41 +3450,42 @@ var file_sniffarr_v1_browse_proto_depIdxs = []int32{
 	37, // 49: sniffarr.v1.StatsResponse.queue_fetches:type_name -> sniffarr.v1.TaskQueue
 	37, // 50: sniffarr.v1.StatsResponse.queue_lookups:type_name -> sniffarr.v1.TaskQueue
 	37, // 51: sniffarr.v1.StatsResponse.queue_probes:type_name -> sniffarr.v1.TaskQueue
-	38, // 52: sniffarr.v1.TaskQueue.levels:type_name -> sniffarr.v1.TaskLevel
-	53, // 53: sniffarr.v1.TaskLevel.eta:type_name -> google.protobuf.Duration
-	44, // 54: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
-	49, // 55: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
-	47, // 56: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
-	3,  // 57: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
-	13, // 58: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
-	15, // 59: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
-	18, // 60: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
-	20, // 61: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
-	23, // 62: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
-	25, // 63: sniffarr.v1.BrowseService.Journal:input_type -> sniffarr.v1.JournalRequest
-	35, // 64: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
-	30, // 65: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
-	32, // 66: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
-	9,  // 67: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
-	5,  // 68: sniffarr.v1.BrowseService.RefreshPeers:input_type -> sniffarr.v1.RefreshPeersRequest
-	7,  // 69: sniffarr.v1.BrowseService.RequestProbe:input_type -> sniffarr.v1.RequestProbeRequest
-	14, // 70: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
-	16, // 71: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
-	19, // 72: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
-	21, // 73: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
-	24, // 74: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
-	26, // 75: sniffarr.v1.BrowseService.Journal:output_type -> sniffarr.v1.JournalResponse
-	36, // 76: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
-	31, // 77: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
-	33, // 78: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
-	10, // 79: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
-	6,  // 80: sniffarr.v1.BrowseService.RefreshPeers:output_type -> sniffarr.v1.RefreshPeersResponse
-	8,  // 81: sniffarr.v1.BrowseService.RequestProbe:output_type -> sniffarr.v1.RequestProbeResponse
-	70, // [70:82] is the sub-list for method output_type
-	58, // [58:70] is the sub-list for method input_type
-	58, // [58:58] is the sub-list for extension type_name
-	58, // [58:58] is the sub-list for extension extendee
-	0,  // [0:58] is the sub-list for field type_name
+	53, // 52: sniffarr.v1.StatsResponse.counts_interval:type_name -> google.protobuf.Duration
+	38, // 53: sniffarr.v1.TaskQueue.levels:type_name -> sniffarr.v1.TaskLevel
+	53, // 54: sniffarr.v1.TaskLevel.eta:type_name -> google.protobuf.Duration
+	44, // 55: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
+	49, // 56: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
+	47, // 57: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
+	3,  // 58: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
+	13, // 59: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
+	15, // 60: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
+	18, // 61: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
+	20, // 62: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
+	23, // 63: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
+	25, // 64: sniffarr.v1.BrowseService.Journal:input_type -> sniffarr.v1.JournalRequest
+	35, // 65: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
+	30, // 66: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
+	32, // 67: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
+	9,  // 68: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
+	5,  // 69: sniffarr.v1.BrowseService.RefreshPeers:input_type -> sniffarr.v1.RefreshPeersRequest
+	7,  // 70: sniffarr.v1.BrowseService.RequestProbe:input_type -> sniffarr.v1.RequestProbeRequest
+	14, // 71: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
+	16, // 72: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
+	19, // 73: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
+	21, // 74: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
+	24, // 75: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
+	26, // 76: sniffarr.v1.BrowseService.Journal:output_type -> sniffarr.v1.JournalResponse
+	36, // 77: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
+	31, // 78: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
+	33, // 79: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
+	10, // 80: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
+	6,  // 81: sniffarr.v1.BrowseService.RefreshPeers:output_type -> sniffarr.v1.RefreshPeersResponse
+	8,  // 82: sniffarr.v1.BrowseService.RequestProbe:output_type -> sniffarr.v1.RequestProbeResponse
+	71, // [71:83] is the sub-list for method output_type
+	59, // [59:71] is the sub-list for method input_type
+	59, // [59:59] is the sub-list for extension type_name
+	59, // [59:59] is the sub-list for extension extendee
+	0,  // [0:59] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_browse_proto_init() }

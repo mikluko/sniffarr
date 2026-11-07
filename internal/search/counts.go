@@ -26,6 +26,9 @@ type Counts struct {
 	Now func() time.Time
 	// Log gets the failures of Run.
 	Log *slog.Logger
+	// Interval is how often Run refreshes the snapshot, which Browser.Stats
+	// reports.
+	Interval time.Duration
 
 	latest atomic.Pointer[Snapshot]
 	once   sync.Once
@@ -63,10 +66,10 @@ func (c *Counts) Refresh(ctx context.Context) (*Snapshot, error) {
 	return c.compute(ctx)
 }
 
-// Run refreshes the snapshot at once and then every interval until ctx is
+// Run refreshes the snapshot at once and then every Interval until ctx is
 // done; a failed refresh is logged and keeps the previous snapshot.
-func (c *Counts) Run(ctx context.Context, interval time.Duration) error {
-	tick := time.NewTicker(interval)
+func (c *Counts) Run(ctx context.Context) error {
+	tick := time.NewTicker(c.Interval)
 	defer tick.Stop()
 	for {
 		start := time.Now()

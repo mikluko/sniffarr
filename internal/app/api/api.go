@@ -176,8 +176,8 @@ func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 	return c
 }
 
-func newCounts(s *store.Store, log *slog.Logger) *search.Counts {
-	return &search.Counts{Store: s, Log: log}
+func newCounts(cfg Config, s *store.Store, log *slog.Logger) *search.Counts {
+	return &search.Counts{Store: s, Log: log, Interval: cfg.StatsInterval}
 }
 
 func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logger) *arr.Recorder {
@@ -247,7 +247,7 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		every(ctx, topInterval, func() { computeTop(ctx, s, log) })
 		return nil
 	})
-	app.Go(lc, sd, log, "counts", func(ctx context.Context) error { return counts.Run(ctx, cfg.StatsInterval) })
+	app.Go(lc, sd, log, "counts", func(ctx context.Context) error { return counts.Run(ctx) })
 	if c.jev != nil {
 		w := &classify.Worker{Store: s, Jev: c.jev, Concurrency: cfg.ClassifyConcurrency, Reserve: cfg.SearchReserve, Poll: workerPoll, Log: log}
 		app.Go(lc, sd, log, "classify worker", w.Run)

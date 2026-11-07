@@ -94,6 +94,7 @@ others out, as the chart's `api.networkPolicy` does.
 `Stats` and `Home` serve the counts the API computed last, at start and then
 every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
 `probe_bytes_rx_day`, `probe_bytes_tx_day` and the queue are read at the request.
+`Stats` gives that interval as `counts_interval`.
 
 `lang` is `ru` or `en`, `en` when empty: the language of `tmdb` texts, and
 of TMDB's search for `SearchTitles`. A work's `id` that is not one fails

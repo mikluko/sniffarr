@@ -18,12 +18,16 @@ func TestBrowserServesSnapshot(t *testing.T) {
 	ctx := context.Background()
 	b := browser(t)
 	at := now.Add(-time.Minute)
-	b.Counts = &Counts{Store: b.Store, Now: func() time.Time { return at }}
-
 	res, err := b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Hours: 2}))
+	require.NoError(t, err)
+	require.Nil(t, res.Msg.GetCountsInterval(), "no interval without Counts")
+	b.Counts = &Counts{Store: b.Store, Now: func() time.Time { return at }, Interval: 5 * time.Minute}
+
+	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{Hours: 2}))
 	require.NoError(t, err)
 	require.EqualValues(t, 5, res.Msg.GetTotal(), "computed on demand before any snapshot")
 	require.Equal(t, at, res.Msg.GetComputedAt().AsTime())
+	require.Equal(t, 5*time.Minute, res.Msg.GetCountsInterval().AsDuration())
 
 	_, _, err = b.Store.Insert(ctx, store.Torrent{Hash: hash(6), Name: "Dune", Size: 1 << 30, Discovery: "sample", SeenAt: now})
 	require.NoError(t, err)
@@ -62,10 +66,10 @@ func TestBrowserServesSnapshot(t *testing.T) {
 
 func TestCountsRun(t *testing.T) {
 	b := browser(t)
-	c := &Counts{Store: b.Store, Log: slog.New(slog.DiscardHandler)}
+	c := &Counts{Store: b.Store, Log: slog.New(slog.DiscardHandler), Interval: 10 * time.Millisecond}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error)
-	go func() { done <- c.Run(ctx, 10*time.Millisecond) }()
+	go func() { done <- c.Run(ctx) }()
 	defer func() {
 		cancel()
 		require.NoError(t, <-done)
