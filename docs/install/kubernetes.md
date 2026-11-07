@@ -1,6 +1,6 @@
 # Install on Kubernetes
 
-This guide installs sniffarr with its Helm chart, one Deployment per
+This guide installs sniffarr with its Helm chart, one workload per
 component. Every value is described in the chart's
 [`values.yaml`](../../charts/sniffarr/values.yaml), and the chart's behaviour
 under [Helm](../helm.md) in the README.
@@ -55,7 +55,7 @@ nobody: put an authenticating proxy in front of it before exposing it, as
 
 ```shell
 kubectl get pods -l app.kubernetes.io/instance=sniffarr
-kubectl logs deploy/sniffarr-api --since=5m
+kubectl logs statefulset/sniffarr-api --since=5m
 ```
 
 ## Upgrade

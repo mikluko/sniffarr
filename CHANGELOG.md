@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The chart runs the API as a StatefulSet of one, `<release>-api`, in place of a Deployment, with the same volume, so a replacement starts only once the old pod is gone; a command naming `deployment/<release>-api` names `statefulset/<release>-api`.
+
 ## [0.44.0-beta.2] - 2026-11-07
 
 ### Changed

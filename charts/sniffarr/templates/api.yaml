@@ -14,7 +14,7 @@
 {{- end }}
 {{- if not .Values.single.enabled }}
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ $name }}
   labels:
@@ -22,8 +22,7 @@ metadata:
     app.kubernetes.io/component: api
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
+  serviceName: {{ $name }}
   selector:
     matchLabels:
       {{- include "sniffarr.selector" (dict "root" . "component" "api") | nindent 6 }}

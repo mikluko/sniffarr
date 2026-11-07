@@ -42,7 +42,10 @@ database takes minutes.
 
 By default each component is a Deployment of its own, reaching the API at the
 Service `<release>-api`. `<release>-api` runs `sniffarr -api` behind that
-Service. `<release>-sniff` runs `sniffarr -sniff`, `sniff.discover` and
+Service, a StatefulSet of one: its replacement starts only once the old pod is
+gone, so two never write the database. Its `/data` is `api.persistence`,
+with type `pvc` the claim `<release>-api` or `existingClaim`, never a claim
+per replica. `<release>-sniff` runs `sniffarr -sniff`, `sniff.discover` and
 `sniff.fetch` rendering `-sniff` and `-fetch`, in the host's network by default
 so that `announce_peer` queries reach its DHT port. `<release>-fetch` runs
 `sniffarr -fetch`, in the pod network by default, with `fetch.replicas`
