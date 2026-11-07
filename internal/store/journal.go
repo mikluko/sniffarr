@@ -43,6 +43,9 @@ const (
 	JournalProbeLeased = "probe_leased"
 	// JournalProbed is a probe's result: tracks, unknown, no_peers, timeout.
 	JournalProbed = "probed"
+	// JournalPeersWanted is a peer lookup asked for through RefreshPeers,
+	// which the web UI's button calls, at PriorityRequest: request.
+	JournalPeersWanted = "peers_wanted"
 	// JournalDeleted is the torrent swept from the store: idle, expired.
 	JournalDeleted = "deleted"
 )
@@ -62,6 +65,7 @@ var JournalOutcomes = map[string][]string{
 	JournalProbeWanted: {"search", "request"},
 	JournalProbeLeased: {"request", "retry", "search", "background"},
 	JournalProbed:      {ProbeTracks, ProbeUnknown, ProbeNoPeers, ProbeTimeout},
+	JournalPeersWanted: {"request"},
 	JournalDeleted:     {"idle", "expired"},
 }
 

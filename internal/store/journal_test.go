@@ -1012,3 +1012,45 @@ func TestJournalDeleted(t *testing.T) {
 	require.Equal(t, now, entry(t, s, hash(2), JournalDeleted, "idle").At)
 	require.Equal(t, []string{"fetched/stored", "matched/tmdb", "deleted/expired"}, entries(t, s, hash(1)), "the trail outlives the torrent")
 }
+
+func TestJournalPeersWanted(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	q, err := NewTasks(ctx, s.db, TaskOptions{})
+	require.NoError(t, err)
+	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	wanted := func(h Hash) []time.Time {
+		t.Helper()
+		got, err := s.Journal(ctx, h, 1000)
+		require.NoError(t, err)
+		var out []time.Time
+		for _, e := range got {
+			if e.Kind == JournalPeersWanted {
+				require.Equal(t, "request", e.Outcome)
+				require.Empty(t, e.Detail)
+				out = append(out, e.At)
+			}
+		}
+		return out
+	}
+
+	_, err = s.WantPeers(ctx, []Hash{a, hash(99)}, t0)
+	require.NoError(t, err)
+	require.Equal(t, []time.Time{t0}, wanted(a))
+	require.Empty(t, entries(t, s, hash(99)), "nor one of a release not stored")
+	_, err = s.WantPeers(ctx, []Hash{a, b}, t0.Add(time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, []time.Time{t0}, wanted(a), "not again while the lookup waits")
+	require.Equal(t, []time.Time{t0.Add(time.Minute)}, wanted(b))
+
+	_, _, err = q.Lease(ctx, 1, 2, t0.Add(2*time.Minute), time.Minute)
+	require.NoError(t, err)
+	_, err = s.WantPeers(ctx, []Hash{a}, t0.Add(3*time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, []time.Time{t0}, wanted(a), "nor while it runs")
+	require.NoError(t, q.Complete(ctx, TaskPeers, a))
+	_, err = s.WantPeers(ctx, []Hash{a}, t0.Add(4*time.Minute))
+	require.NoError(t, err)
+	require.Equal(t, []time.Time{t0, t0.Add(4 * time.Minute)}, wanted(a), "once it is done, again")
+}

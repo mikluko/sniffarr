@@ -70,8 +70,9 @@ same attempt after one expired, a title lookup that finds nothing or fails as
 the last one did, unless `RequestMatch` asked for it, a search that returns the release within a day of the last,
 a probe requested again before a lease began, and a Radarr or Sonarr event
 that names the work its title key matched already, which raises the match's
-layer to theirs and writes no row. Peer lookups are not journaled, not even
-those the web UI asks for. A kind
+layer to theirs and writes no row. Peer lookups are not journaled; a request
+for one through `RefreshPeers`, which the web UI's button calls, is, at P0,
+unless the release already waits for a lookup or is being looked up. A kind
 copied to more than 50 releases of a title key, a match of more than 500, or
 no match for a key of more than 50, is journaled on none of them. The journal
 is keyed by infohash and outlives the torrent's row, so a rejected, dropped

@@ -103,6 +103,9 @@ var journalSpec = map[string]map[string]journalOutcome{
 		"no_peers": {failedProbe(true), []string{"attempt", "retry_at", "peers_week"}},
 		"timeout":  {failedProbe(true), []string{"attempt", "retry_at", "peers_week"}},
 	},
+	"peers_wanted": {
+		"request": {always(SeverityNormal), nil},
+	},
 	"deleted": {
 		"idle":    {always(SeverityFinal), []string{"last_seen"}},
 		"expired": {always(SeverityFinal), []string{"last_seen"}},

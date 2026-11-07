@@ -2173,7 +2173,8 @@ func (x *JournalResponse) GetTotal() int64 {
 // error), arr (grab, import), feed (stored, queued, already_queued,
 // rejected), probe_wanted
 // (search, request), probe_leased (request, retry, search, background),
-// probed (tracks, unknown, no_peers, timeout), deleted (idle, expired).
+// probed (tracks, unknown, no_peers, timeout), peers_wanted (request),
+// deleted (idle, expired).
 type JournalEntry struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// When the event happened; for a grab or an import Radarr or Sonarr

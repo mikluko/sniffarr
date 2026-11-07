@@ -137,7 +137,7 @@ func TestResultJournals(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []store.Task{{Kind: store.TaskPeers, Hash: store.Hash{4}}}, tasks)
 	require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(4), Outcome: &sniffarrv1.Result_Lookup{Lookup: &sniffarrv1.Lookup{Peers: 3}}}))
-	require.Equal(t, []string{"fetched/stored"}, journal(t, st, store.Hash{4}), "a peer lookup is not journaled, though the web UI asked for it")
+	require.Equal(t, []string{"fetched/stored", "peers_wanted/request"}, journal(t, st, store.Hash{4}), "the request is journaled, the lookup is not")
 }
 
 func TestSightStoredFlags(t *testing.T) {

@@ -108,8 +108,9 @@ type BrowseServiceClient interface {
 	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
 	// RefreshPeers asks a fetcher to look up the peers of a release, or of
 	// every release of a work, on the DHT; the peers found are counted from
-	// the fetcher's next send of its sketches. NOT_FOUND without a stored
-	// release.
+	// the fetcher's next send of its sketches. The journal of each release
+	// that neither waits for a lookup nor is being looked up records the
+	// request as peers_wanted. NOT_FOUND without a stored release.
 	RefreshPeers(context.Context, *connect.Request[v1.RefreshPeersRequest]) (*connect.Response[v1.RefreshPeersResponse], error)
 	// RequestProbe asks the prober to probe a release, or every release of a
 	// work, ahead of the releases searches return, whatever its last probe.
@@ -343,8 +344,9 @@ type BrowseServiceHandler interface {
 	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
 	// RefreshPeers asks a fetcher to look up the peers of a release, or of
 	// every release of a work, on the DHT; the peers found are counted from
-	// the fetcher's next send of its sketches. NOT_FOUND without a stored
-	// release.
+	// the fetcher's next send of its sketches. The journal of each release
+	// that neither waits for a lookup nor is being looked up records the
+	// request as peers_wanted. NOT_FOUND without a stored release.
 	RefreshPeers(context.Context, *connect.Request[v1.RefreshPeersRequest]) (*connect.Response[v1.RefreshPeersResponse], error)
 	// RequestProbe asks the prober to probe a release, or every release of a
 	// work, ahead of the releases searches return, whatever its last probe.
