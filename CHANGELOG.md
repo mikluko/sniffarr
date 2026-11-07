@@ -15,7 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The notes under the task queue on the data page and under the top's controls open as a tooltip from a `?` next to them.
+- The web UI has a new look: JetBrains Mono served by sniffarr itself, neutral colours with blue for data and links, amber for a state or a failure that is retried, red for a final failure, and borders only on blocks with a state of their own.
+- Explanations open as a tooltip on a dotted-underlined label, on hover or focus; the notes under the task queue on the data page and under the top's controls are such tooltips.
+- The infohash and magnet copy buttons on a release card are icons; the tooltip confirms the copy.
+- Labels and headings are in sentence case, and controls are at least 40 px tall on a phone.
 
 ### Fixed
 
