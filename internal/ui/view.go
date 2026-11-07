@@ -218,18 +218,20 @@ type TopPage struct {
 	VoiceMode string // VoiceModes value. With "explicit" or "p50" Peers count only
 	//                  matching releases: explicit = Marker; p50 = Marker or Probability >= 0.5
 	Computed time.Time
-	Limit    int  // 100
-	All      bool // Works holds all Limit entries; otherwise the first 25
+	Since    time.Time // when the history of this top began; zero = none yet
+	Limit    int       // 100
+	All      bool      // Works holds all Limit entries; otherwise the first 25
 	Works    []Work
 }
 
 // Work is one row of the top. The row links to the title page.
 type Work struct {
-	WorkSummary             // Rank here is the place in this top (window and filter)
-	PrevRank    int         // place in the previous window among every work, 0 = had no peers then
-	Audio       []WorkAudio // one entry per configured language, in Base.VoiceLangs order
-	Sources     []string    // Sources values present among releases
-	FirstSeen   time.Time   // earliest release
+	WorkSummary               // Rank here is the place in this top (window and filter)
+	PrevRank    int           // place in the previous window among every work, 0 = had no peers then
+	Debut       time.Time     // first entry into this top since TopPage.Since; zero = no history yet
+	OnChart     time.Duration // time in this top over every stay
+	Peak        int           // best place in this top; 0 = no history yet
+	Reentry     bool          // the current stay follows an earlier one
 }
 
 // ---------- not found ----------

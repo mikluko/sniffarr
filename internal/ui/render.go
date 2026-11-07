@@ -36,12 +36,6 @@ type chartArgs struct {
 	Label string
 }
 
-type workAudioArgs struct {
-	B Base
-	A []WorkAudio
-	N int
-}
-
 type audioArgs struct {
 	B Base
 	A []Audio
@@ -138,11 +132,8 @@ func New() (*Renderer, error) {
 		"chartArgs": func(b Base, c Chart, label string) chartArgs {
 			return chartArgs{B: b, C: c, Label: label}
 		},
-		"tmdbState": StateOf,
-		"workAudio": WorkAudioOf,
-		"workAudioArgs": func(b Base, a []WorkAudio, n int) workAudioArgs {
-			return workAudioArgs{B: b, A: a, N: n}
-		},
+		"tmdbState":  StateOf,
+		"workAudio":  WorkAudioOf,
 		"queueTasks": QueueTasks,
 		"tipArgs":    func(label, text string) tipArgs { return tipArgs{Label: label, Text: text} },
 		"limitArgs": func(b Base, done, pace, limit int64) limitArgs {

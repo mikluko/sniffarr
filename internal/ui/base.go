@@ -220,7 +220,7 @@ func (b Base) Ago(t time.Time) string {
 	return b.Fmt("ago.min", b.Num(m))
 }
 
-// Moved formats the places a work moved from prev to rank: "+3", "−1", "0";
+// Moved formats the places a work moved from prev to rank: "+3", "−1", "=";
 // prev 0 means it had no peers then, "—".
 func (b Base) Moved(rank, prev int) string {
 	if prev == 0 {
@@ -232,12 +232,8 @@ func (b Base) Moved(rank, prev int) string {
 	case d < 0:
 		return "−" + strconv.Itoa(-d)
 	}
-	return "0"
+	return "="
 }
-
-// New reports whether a work whose place in the previous window was prev
-// is new to the top: it had no place then, or one below the top's Limit.
-func (p TopPage) New(prev int) bool { return prev == 0 || prev > p.Limit }
 
 // PrevPlace is the tooltip of a work's place prev in the previous window,
 // 0 for none: "В прошлом окне: 9 787-е место." / "Not in the previous window.".
@@ -266,18 +262,6 @@ func ordinal(n int) string {
 		return "rd"
 	}
 	return "th"
-}
-
-// SourceList joins translated source keys: "WEB, ремукс".
-func (b Base) SourceList(keys []string) string {
-	if len(keys) == 0 {
-		return "—"
-	}
-	out := make([]string, len(keys))
-	for i, k := range keys {
-		out[i] = b.T("source." + k)
-	}
-	return strings.Join(out, ", ")
 }
 
 // URL builds a top page link with the given parameters and the current dub language.

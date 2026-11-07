@@ -593,17 +593,15 @@ func (s *server) top(w http.ResponseWriter, req *http.Request) {
 	if at := res.Msg.GetComputedAt(); at != nil {
 		page.Computed = at.AsTime()
 	}
+	if at := res.Msg.GetHistorySince(); at != nil {
+		page.Since = at.AsTime()
+	}
 	for _, e := range res.Msg.GetEntries() {
-		wk := ui.Work{WorkSummary: *summary(e.GetWork()), Audio: workAudio(e.GetAudio())}
+		wk := ui.Work{WorkSummary: *summary(e.GetWork()), PrevRank: int(e.GetPrevRank()), OnChart: e.GetOnChart().AsDuration(),
+			Peak: int(e.GetPeak()), Reentry: e.GetReentry()}
 		wk.Rank, wk.Peers = int(e.GetRank()), e.GetPeers()
-		wk.PrevRank = int(e.GetPrevRank())
-		if e.FirstSeen != nil {
-			wk.FirstSeen = e.GetFirstSeen().AsTime()
-		}
-		for _, src := range e.GetSources() {
-			if k, ok := sources[src]; ok {
-				wk.Sources = append(wk.Sources, k)
-			}
+		if e.Debut != nil {
+			wk.Debut = e.GetDebut().AsTime()
 		}
 		page.Works = append(page.Works, wk)
 	}

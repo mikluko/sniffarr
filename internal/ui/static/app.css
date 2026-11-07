@@ -451,3 +451,28 @@ a.btn:hover{background:var(--muted);text-decoration:none}
   .top nav{gap:12px}
   .langs>*{padding:0 8px}
 }
+
+/* top as a chart, handoff v8: numeric columns fit their content, the
+ * phone's meta line is on chart · peak · debut, under it the releases */
+.topv .t.fit th.r:not(:first-child),.topv .t.fit td.r:not(:first-child){width:1%;padding-left:28px;white-space:nowrap}
+.topv .mb{display:none}
+.topv th.r .tipb,.topv td.r .tipb{left:auto;right:0}
+.topv th.r .tipb::before,.topv td.r .tipb::before{left:auto;right:12px}
+@media (max-width:640px){
+  .topv .tt tr.wk{grid-template-columns:22px auto auto minmax(0,1fr) auto}
+  .topv .t.fit tr.wk td.r{width:auto;padding-left:0}
+  .topv .tt tr.wk td.r:first-child{grid-area:1/1/3/2}
+  .topv .tt tr.wk td.nm{grid-area:1/2/3/5}
+  .topv .tt tr.wk td.pe{grid-area:1/5;padding-left:10px}
+  .topv .tt tr.wk td.dl{grid-area:2/5;padding-left:10px}
+  .topv .tt tr.wk td.oc,.topv .tt tr.wk td.pk,.topv .tt tr.wk td.db{grid-row:3;margin-top:8px;text-align:left;font-size:12px;color:var(--muted-foreground)}
+  .topv .tt tr.wk td.oc{grid-column:2;margin-left:42px}
+  .topv .tt tr.wk td.pk{grid-column:3}
+  .topv .tt tr.wk td.db{grid-column:4/6;white-space:normal}
+  .topv .tt tr.wk td.pk::before,.topv .tt tr.wk td.db::before{content:"\a0·\a0"}
+  .topv .tt tr.wk td.pk b{font-weight:400}
+  .topv .tt tr.wk td.mh{display:none}
+  .topv .tt tr.wk td.rl{grid-area:4/2/5/6}
+  .topv .mb{display:inline}
+  .topv .rl .dk{display:none}
+}

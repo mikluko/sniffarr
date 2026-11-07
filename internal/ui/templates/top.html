@@ -14,23 +14,25 @@
     <span class="seg">{{range windows}}<a class="o{{if eq . $.Window}} on{{end}}" href="{{$.URL $.Kind . $.VoiceMode $.All}}" hx-get="{{$.URL $.Kind . $.VoiceMode $.All}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.Window}} aria-current="true"{{end}}>{{$.T (concat "win." .)}}</a>{{end}}</span></span>
     {{if .VoiceLangs}}
     {{if gt (len .VoiceLangs) 1}}
-    <span class="flt"><span class="mu">{{.T "audio.filter"}}</span>
+    <span class="flt"><span class="mu">{{template "tip" (tipArgs (.T "audio.filter") (.T "top.voice_tip"))}}</span>
     <span class="seg">{{range .VoiceLangs}}<a class="o{{if eq . $.VoiceLang}} on{{end}}" href="{{$.VoiceLangURL .}}" hx-get="{{$.VoiceLangURL .}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.VoiceLang}} aria-current="true"{{end}}>{{$.LangName .}}</a>{{end}}</span></span>
     {{end}}
-    <span class="flt">{{if eq (len .VoiceLangs) 1}}<span class="mu">{{.DubLabel .VoiceLang}}</span>
-    {{end}}<span class="seg">{{range voiceModes}}<a class="o{{if eq . $.VoiceMode}} on{{end}}" href="{{$.URL $.Kind $.Window . $.All}}" hx-get="{{$.URL $.Kind $.Window . $.All}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.VoiceMode}} aria-current="true"{{end}}>{{$.T (concat "voicemode." .)}}</a>{{end}}</span></span>
+    <span class="flt">{{if eq (len .VoiceLangs) 1}}<span class="mu">{{template "tip" (tipArgs (.DubLabel .VoiceLang) (.T "top.voice_tip"))}}</span>
+    {{end}}<span class="seg">{{range voiceModes}}<a class="o{{if eq . $.VoiceMode}} on{{end}}" href="{{$.URL $.Kind $.Window . $.All}}" hx-get="{{$.URL $.Kind $.Window . $.All}}" hx-target="#top" hx-swap="morph:outerHTML" hx-push-url="true"{{if eq . $.VoiceMode}} aria-current="true"{{end}}>{{$.T (concat "top.voice." .)}}</a>{{end}}</span></span>
     {{end}}
     {{$computed := concat (.T "top.computed") " " ($.Time .Computed)}}
     <span class="mu at">{{if and .VoiceLangs .VoiceMode (ne .VoiceMode "any")}}{{template "tip" (tipArgs $computed (concat (.T "top.caption.filtered") " " (.Fmt (concat "audio.hint." .VoiceMode) (.DubLabel .VoiceLang))))}}{{else}}{{template "tip" (tipArgs $computed (.T "top.caption"))}}{{end}}</span>
   </div>
   {{if .Works}}
   <div class="scroll">
-  <table class="t tt">
+  <table class="t tt fit">
     <thead><tr>
-      <th class="r">#</th><th>{{.T (concat "top.unit." .Kind)}}</th><th class="r">{{.T "top.peers"}}</th><th class="r dl">{{template "tip" (tipArgs (.T "top.moved") (.T "top.moved_tip"))}}</th>
-      <th class="r">{{.T "top.releases"}}</th>
-      {{if .VoiceLangs}}<th>{{.T "top.audio"}}</th>{{end}}
-      <th>{{.T "top.sources"}}</th><th class="r">{{.T "col.first"}}</th>
+      <th class="r">#</th><th>{{.T (concat "top.unit." .Kind)}}</th>
+      <th class="r">{{template "tip" (tipArgs (.T "top.change") (.ChartTip "top.change_tip"))}}</th>
+      <th class="r">{{template "tip" (tipArgs (.T "top.onchart") (.ChartTip "top.onchart_tip"))}}</th>
+      <th class="r">{{template "tip" (tipArgs (.T "top.peak") (.ChartTip "top.peak_tip"))}}</th>
+      <th class="r">{{template "tip" (tipArgs (.T "top.debut") (.ChartTip "top.debut_tip"))}}</th>
+      <th class="r">{{.T "top.peers"}}</th><th class="r">{{.T "top.releases"}}</th>
     </tr></thead>
     <tbody>
     {{range .Works}}
@@ -40,12 +42,28 @@
         {{- if .TMDB.HasPoster}}<img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="32" height="48" alt="" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="th th-none" aria-hidden="true"></span>{{end -}}
         <span class="tw-t"><a href="{{$.WorkURL .Path}}">{{.TMDB.Title}}</a>{{if .TMDB.Year}} <span class="mu">{{.TMDB.Year}}</span>{{end}}
         {{- if .TMDB.ShowOriginal}}<span class="orig mu">{{.TMDB.OriginalTitle}}</span>{{end}}</span></span></td>
+      {{- $c := $.Change .}}
+      {{- if eq $c "move"}}
+      <td class="r dl{{if eq .Rank .PrevRank}} mu{{end}}">{{$.Moved .Rank .PrevRank}}</td>
+      {{- else if or (eq $c "new") (eq $c "re")}}
+      <td class="r dl"><b>{{template "tip" (tipArgs ($.T (concat "top.change." $c)) ($.ChangeTip .))}}</b></td>
+      {{- else}}
+      <td class="r dl mu">{{template "tip" (tipArgs "—" ($.ChangeTip .))}}</td>
+      {{- end}}
+      {{- if .Debut.IsZero}}
+      <td class="r oc mu mh">—</td><td class="r pk mu mh">—</td><td class="r db mu mh">—</td>
+      {{- else}}
+      <td class="r oc">{{template "tip" (tipArgs ($.OnChart .OnChart) ($.OnChartTip .))}}<span class="mb"> {{$.T "top.m_onchart"}}</span></td>
+      {{- $peak := $.Fmt "top.peak_n" ($.Num (int64 .Peak))}}
+      <td class="r pk{{if ne .Rank .Peak}} mu{{end}}"><span class="mb">{{$.T "top.m_peak"}} </span>{{if eq .Rank .Peak}}<b>{{$peak}}</b>{{else}}{{$peak}}{{end}}</td>
+      {{- if $.AtStart .}}
+      <td class="r db mu mh">{{template "tip" (tipArgs ($.Fmt "top.debut_start" ($.Date .Debut)) ($.Fmt "top.debut_start_tip" ($.FullDate $.Since)))}}</td>
+      {{- else}}
+      <td class="r db mu"><span class="mb">{{$.T "top.m_since"}} </span>{{$.Date .Debut}}</td>
+      {{- end}}
+      {{- end}}
       <td class="r pe">{{$.Num .Peers}}</td>
-      <td class="r dl{{if eq .Rank .PrevRank}} mu{{end}}">{{if $.New .PrevRank}}<b>{{template "tip" (tipArgs ($.T "top.new") ($.PrevPlace .PrevRank))}}</b>{{else}}{{$.Moved .Rank .PrevRank}}{{end}}</td>
       <td class="r rl"><span class="dk">{{.Releases}}</span><span class="mb">{{$.Count (int64 .Releases) "top.rels"}}</span></td>
-      {{if $.VoiceLangs}}<td class="au">{{template "topaudio" (workAudioArgs $.Base .Audio .Releases)}}</td>{{end}}
-      <td class="src mu">{{$.SourceList .Sources}}</td>
-      <td class="r mu fs">{{$.Date .FirstSeen}}</td>
     </tr>
     {{end}}
     </tbody>
@@ -58,15 +76,3 @@
   {{end}}
 </section>
 {{end}}
-
-{{/* Audio of a work of the top, a line per configured language: its releases
-     with a marker of N, the marks in a tooltip, and how many more are likely. */}}
-{{define "topaudio"}}{{$b := .B}}{{$n := $b.Num (int64 .N)}}
-  {{- range $b.VoiceLangs}}{{$a := workAudio $.A .}}
-  <div><span class="mu">{{.}}</span>
-    {{- if $a.Marked}}{{$m := $b.Fmt "top.au_marked" ($b.Num (int64 $a.Marked)) $n}} <b>{{if $a.Marks}}{{template "tip" (tipArgs $m ($b.Fmt "top.au_marks" ($b.Marks $a.Marks)))}}{{else}}{{$m}}{{end}}</b>
-    {{- if $a.Likely}}<span class="mu"> · {{$b.Fmt "top.au_more" ($b.Num (int64 $a.Likely))}}</span>{{end}}
-    {{- else if $a.Likely}} <span class="mu">{{$b.Fmt "top.au_likely" ($b.Num (int64 $a.Likely)) $n}}</span>
-    {{- else}} <span class="mu">{{$b.T "audio.none"}}</span>{{end}}</div>
-  {{- end}}
-{{- end}}

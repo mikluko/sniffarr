@@ -52,6 +52,7 @@ func TestRenderAll(t *testing.T) {
 		{"top-p50", "top", "/top?voice=p50", "top", func(b Base) any { return SampleTopFiltered(b, "movie", "", "p50", false) }},
 		{"top-multilang", "top", "/top?vl=uk", "", func(b Base) any { multi(&b); return SampleTopFiltered(b, "series", "uk", "any", false) }},
 		{"top-nolangs", "top", "/top", "", func(b Base) any { b.VoiceLangs = nil; return SampleTop(b, "movie", false) }},
+		{"top-since", "top", "/top", "", func(b Base) any { b.Nav = "top"; return SampleTopSince(b, "movie", b.Now.Add(-10*24*time.Hour)) }},
 		{"work", "work", "/movie/900001", "", func(b Base) any { return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
 		{"work-explicit", "work", "/movie/900001" + "?voice=explicit", "releases", func(b Base) any {
 			return SampleWork(b, SampleSpiderID, ReleaseFilters{Voice: "explicit"})

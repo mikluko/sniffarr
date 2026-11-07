@@ -90,7 +90,8 @@ func SampleTopFiltered(b Base, kind, vl, mode string, all bool) TopPage {
 	if mode == "" {
 		mode = "any"
 	}
-	p := TopPage{Base: b, Kind: kind, Window: "7d", VoiceLang: vl, VoiceMode: mode, Computed: b.Now.Add(-5 * time.Minute), Limit: 100, All: all}
+	p := TopPage{Base: b, Kind: kind, Window: "7d", VoiceLang: vl, VoiceMode: mode, Computed: b.Now.Add(-5 * time.Minute),
+		Since: b.Now.Add(-400 * day), Limit: 100, All: all}
 	if p.VoiceLang == "" {
 		p.VoiceLang = DefaultVoiceLang(b.VoiceLangs, b.Lang)
 	}
@@ -98,10 +99,10 @@ func SampleTopFiltered(b Base, kind, vl, mode string, all bool) TopPage {
 		p.VoiceLang, p.VoiceMode = "", "any"
 	}
 	for i, x := range list {
-		wk := Work{WorkSummary: x.summary(b.Lang, i+1), PrevRank: x.prev,
-			Audio: sampleAudio(x, i, b.VoiceLangs), Sources: x.sources, FirstSeen: b.Now.Add(-time.Duration(x.ageDays) * day)}
+		wk := Work{WorkSummary: x.summary(b.Lang, i+1), PrevRank: x.prev, Debut: b.Now.Add(-time.Duration(x.chart.debut) * day),
+			OnChart: time.Duration(x.chart.days)*day + time.Hour, Peak: x.chart.peak, Reentry: x.chart.re}
 		if p.VoiceMode == "explicit" || p.VoiceMode == "p50" {
-			a := WorkAudioOf(wk.Audio, p.VoiceLang)
+			a := WorkAudioOf(sampleAudio(x, i, b.VoiceLangs), p.VoiceLang)
 			n := a.Marked
 			if p.VoiceMode == "p50" {
 				n += a.Likely
@@ -120,6 +121,21 @@ func SampleTopFiltered(b Base, kind, vl, mode string, all bool) TopPage {
 	sort.SliceStable(p.Works, func(i, j int) bool { return p.Works[i].Peers > p.Works[j].Peers })
 	for i := range p.Works {
 		p.Works[i].Rank = i + 1
+		p.Works[i].Peak = min(p.Works[i].Peak, i+1)
+	}
+	return p
+}
+
+// SampleTopSince is the sample top whose history began at since: a work
+// that debuted earlier was in the top then, and its history counts from
+// since.
+func SampleTopSince(b Base, kind string, since time.Time) TopPage {
+	p := SampleTop(b, kind, false)
+	p.Since = since
+	for i, w := range p.Works {
+		if w.Debut.Before(since) {
+			p.Works[i].Debut, p.Works[i].OnChart, p.Works[i].Reentry = since, b.Now.Sub(since), false
+		}
 	}
 	return p
 }
