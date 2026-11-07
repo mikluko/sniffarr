@@ -108,7 +108,9 @@ lives in the API's memory: a restarted API starts from 0 and reaches the
 true count within those 15 minutes.
 
 The classifier `works` while the tokens spent today are under the day's
-limit, or always without one; probes work while `probers` is above 0; audio
+limit, or always without one, as with an endpoint other than TypeSafe's;
+its `setting` is `SNIFFARR_CLASSIFY_URL` with such an endpoint, else
+`TYPESAFE_API_KEY`. Probes work while `probers` is above 0; audio
 and feeds work whenever they are on. `pending` in `Stats` counts the
 releases the background classifier has yet to examine, those that wait while
 its budget is spent.

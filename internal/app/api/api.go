@@ -37,8 +37,13 @@ import (
 type Config struct {
 	// Addr is the listen address.
 	Addr string
-	// TypesafeKey is the TypeSafe API key; empty leaves Jev out.
+	// TypesafeKey is the TypeSafe API key; empty leaves Jev out unless
+	// ClassifyURL is set.
 	TypesafeKey string
+	// ClassifyURL is the classifier's Jev-compatible endpoint; empty is
+	// TypeSafe's. Another endpoint is asked without TypesafeKey and outside
+	// DailyTokens.
+	ClassifyURL string
 	// TMDBKey is the TMDB API key or read access token; empty matches no
 	// titles.
 	TMDBKey string
@@ -148,24 +153,45 @@ const workerPoll = 10 * time.Second
 // classifiers are the layers above rules and reuse; each is nil without its
 // key.
 type classifiers struct {
-	jev     *classify.Jev
-	matcher *tmdb.Matcher
-	lazy    *search.Lazy
+	endpoint endpoint
+	jev      *classify.Jev
+	matcher  *tmdb.Matcher
+	lazy     *search.Lazy
+}
+
+// endpoint is where the classifier is asked, and on what terms.
+type endpoint struct {
+	url, key    string
+	dailyTokens int64
+	// setting is the variable that turns the classifier on.
+	setting string
+}
+
+// classifierEndpoint returns cfg's classifier endpoint, and false while
+// neither TypesafeKey nor an endpoint other than TypeSafe's is set.
+func classifierEndpoint(cfg Config) (endpoint, bool) {
+	if cfg.ClassifyURL != "" && cfg.ClassifyURL != classify.DefaultURL {
+		return endpoint{url: cfg.ClassifyURL, setting: "SNIFFARR_CLASSIFY_URL"}, true
+	}
+	e := endpoint{url: classify.DefaultURL, key: cfg.TypesafeKey, dailyTokens: cfg.DailyTokens, setting: "TYPESAFE_API_KEY"}
+	return e, e.key != ""
 }
 
 func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
-	c := &classifiers{}
-	if cfg.TypesafeKey == "" && cfg.TMDBKey == "" {
+	e, on := classifierEndpoint(cfg)
+	c := &classifiers{endpoint: e}
+	if !on && cfg.TMDBKey == "" {
 		log.Info("TYPESAFE_API_KEY and TMDB_API_KEY are not set: torrents are classified by their names only")
 		return c
 	}
 	c.lazy = &search.Lazy{Max: cfg.LazyMax, MaxTMDB: cfg.LazyTMDB, Wait: cfg.LazyWait, MaxFiles: classify.MaxFiles, Log: log}
-	if cfg.TypesafeKey == "" {
+	if !on {
 		log.Info("TYPESAFE_API_KEY is not set: torrents are classified by their names only")
 	} else {
-		client := classify.New(cfg.TypesafeKey)
+		client := classify.New(e.key)
+		client.URL = e.url
 		client.Languages = cfg.Languages
-		c.jev = &classify.Jev{Store: s, Classifier: client, DailyTokens: cfg.DailyTokens, Log: log}
+		c.jev = &classify.Jev{Store: s, Classifier: client, DailyTokens: e.dailyTokens, Log: log}
 		c.lazy.Classifier = c.jev
 	}
 	if cfg.TMDBKey != "" {
@@ -198,27 +224,28 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		titles, matcher = c.matcher, c.matcher
 	}
 	handler, err := server.New(server.Config{
-		TMDB:             titles,
-		Matcher:          matcher,
-		Store:            s,
-		Tasks:            q,
-		Lease:            cfg.Lease,
-		Attempts:         cfg.Attempts,
-		Backoff:          cfg.Backoff,
-		Scripts:          cfg.Scripts,
-		Languages:        cfg.Languages,
-		Log:              log,
-		Lazy:             c.lazy,
-		TorznabToken:     cfg.TorznabToken,
-		DailyTokens:      cfg.DailyTokens,
-		Counts:           counts,
-		WebhookToken:     cfg.WebhookToken,
-		Arr:              rec,
-		Probe:            cfg.Probe,
-		Probes:           cfg.Probes,
-		Classifier:       c.jev != nil,
-		Feeds:            cfg.Feeds.Sources,
-		JournalRetention: cfg.RetentionJournal,
+		TMDB:              titles,
+		Matcher:           matcher,
+		Store:             s,
+		Tasks:             q,
+		Lease:             cfg.Lease,
+		Attempts:          cfg.Attempts,
+		Backoff:           cfg.Backoff,
+		Scripts:           cfg.Scripts,
+		Languages:         cfg.Languages,
+		Log:               log,
+		Lazy:              c.lazy,
+		TorznabToken:      cfg.TorznabToken,
+		DailyTokens:       c.endpoint.dailyTokens,
+		Counts:            counts,
+		WebhookToken:      cfg.WebhookToken,
+		Arr:               rec,
+		Probe:             cfg.Probe,
+		Probes:            cfg.Probes,
+		Classifier:        c.jev != nil,
+		ClassifierSetting: c.endpoint.setting,
+		Feeds:             cfg.Feeds.Sources,
+		JournalRetention:  cfg.RetentionJournal,
 	})
 	if err != nil {
 		return err

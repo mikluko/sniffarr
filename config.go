@@ -248,13 +248,7 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Languages, err = audio.Parse(getenv("SNIFFARR_AUDIO_LANGUAGES")); err != nil {
 		return a, d, fmt.Errorf("SNIFFARR_AUDIO_LANGUAGES: %w", err)
 	}
-	if a.ClassifyConcurrency, err = positive(getenv, "SNIFFARR_CLASSIFY_CONCURRENCY", 4); err != nil {
-		return a, d, err
-	}
-	if a.DailyTokens, err = strconv.ParseInt(or(getenv("SNIFFARR_CLASSIFY_DAILY_TOKENS"), strconv.Itoa(classify.DefaultDailyTokens)), 10, 64); err != nil || a.DailyTokens < 0 {
-		return a, d, errors.New("SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer")
-	}
-	if a.SearchReserve, err = percent(getenv, "SNIFFARR_CLASSIFY_SEARCH_RESERVE", classify.DefaultSearchReserve); err != nil {
+	if err = loadClassify(getenv, &a); err != nil {
 		return a, d, err
 	}
 	if a.Attempts, err = positive(getenv, "SNIFFARR_FETCH_ATTEMPTS", ingest.DefaultAttempts); err != nil {
@@ -343,6 +337,22 @@ func loadStore(getenv func(string) string) (store.Options, error) {
 	}
 	o.ProbeBatch, err = positive(getenv, "SNIFFARR_PROBE_BATCH", store.DefaultProbeBatch)
 	return o, err
+}
+
+// loadClassify reads the classifier's settings into a.
+func loadClassify(getenv func(string) string, a *api.Config) error {
+	var err error
+	if a.ClassifyURL, err = rootURL(getenv, "SNIFFARR_CLASSIFY_URL"); err != nil {
+		return err
+	}
+	if a.ClassifyConcurrency, err = positive(getenv, "SNIFFARR_CLASSIFY_CONCURRENCY", 4); err != nil {
+		return err
+	}
+	if a.DailyTokens, err = strconv.ParseInt(or(getenv("SNIFFARR_CLASSIFY_DAILY_TOKENS"), strconv.Itoa(classify.DefaultDailyTokens)), 10, 64); err != nil || a.DailyTokens < 0 {
+		return errors.New("SNIFFARR_CLASSIFY_DAILY_TOKENS: want a non-negative integer")
+	}
+	a.SearchReserve, err = percent(getenv, "SNIFFARR_CLASSIFY_SEARCH_RESERVE", classify.DefaultSearchReserve)
+	return err
 }
 
 // loadProbe reads the probe tasks' settings.
@@ -448,8 +458,8 @@ func arrHistory(getenv func(string) string, app string) (api.ArrHistory, error) 
 	return h, nil
 }
 
-// rootURL reads the variable as the root URL of a web app: "" when unset,
-// else an http or https URL with a host.
+// rootURL reads the variable as the root URL of a web app, or another
+// endpoint: "" when unset, else an http or https URL with a host.
 func rootURL(getenv func(string) string, name string) (string, error) {
 	raw := getenv(name)
 	if raw == "" {

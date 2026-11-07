@@ -246,6 +246,9 @@ func TestLoadAPI(t *testing.T) {
 				d.Tasks = store.TaskOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour, NoProbes: true}
 				d.Store = store.Options{MaxFiles: 50, ProbeBatch: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
+		{name: "classifier endpoint", env: with("SNIFFARR_CLASSIFY_URL", "http://laya:8000/v1/systemone"),
+			want: func(a *api.Config, _ *db.Config) { a.ClassifyURL = "http://laya:8000/v1/systemone" }},
+		{name: "classifier endpoint not a URL", env: with("SNIFFARR_CLASSIFY_URL", "laya:8000"), err: "SNIFFARR_CLASSIFY_URL: want an http or https URL"},
 		{name: "unlimited budget", env: with("SNIFFARR_CLASSIFY_DAILY_TOKENS", "0"), want: func(a *api.Config, _ *db.Config) { a.DailyTokens = 0 }},
 		{name: "no reserve", env: with("SNIFFARR_CLASSIFY_SEARCH_RESERVE", "0"), want: func(a *api.Config, _ *db.Config) { a.SearchReserve = 0 }},
 		{name: "unlimited downloads", env: with("SNIFFARR_PROBE_DAILY_BYTES", "0"), want: func(a *api.Config, _ *db.Config) { a.Probe.DailyBytes = 0 }},
