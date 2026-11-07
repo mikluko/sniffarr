@@ -161,6 +161,20 @@ func TestProbeTaskOff(t *testing.T) {
 	n, err := f.st.ProbeLeases(context.Background(), f.now)
 	require.NoError(t, err)
 	require.Zero(t, n)
+	require.Zero(t, f.s.Tasks.Probers(f.now), "a prober asking while probes are off is not counted")
+}
+
+func TestProbeTaskCountsProbers(t *testing.T) {
+	f := newProbeFixture(t, ProbeConfig{})
+	ask := func(id string) {
+		t.Helper()
+		_, err := f.s.ProbeTask(context.Background(), connect.NewRequest(&sniffarrv1.ProbeTaskRequest{Prober: id}))
+		require.NoError(t, err)
+	}
+	ask("a")
+	ask("a")
+	ask("b")
+	require.Equal(t, 2, f.s.Tasks.Probers(f.now), "with nothing to probe as well")
 }
 
 func TestProbeResultRejectsBadInput(t *testing.T) {

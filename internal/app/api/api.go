@@ -216,6 +216,8 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		Arr:          rec,
 		Probe:        cfg.Probe,
 		Probes:       cfg.Probes,
+		Classifier:   c.jev != nil,
+		Feeds:        cfg.Feeds.Sources,
 	})
 	if err != nil {
 		return err

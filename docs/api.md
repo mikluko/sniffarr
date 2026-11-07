@@ -50,7 +50,8 @@ others out, as the chart's `api.networkPolicy` does.
   and how many it dropped for an infohash it has not stored.
 - `ProbeTask` leases the next release to probe and the most piece data its
   probe may download, or nothing while there is none, the day's budget is
-  spent, or probes are off.
+  spent, or probes are off. Its `prober` is the ID a fetcher picks at start
+  and sends with every request, which `Stats` counts probers by.
 - `ProbeResult` records a probe's outcome: the file's path, format and
   tracks, or why there are none, and the piece data it downloaded.
 - `ProbeUpload` records the piece data a fetcher uploaded to the swarms of
@@ -86,17 +87,29 @@ others out, as the chart's `api.networkPolicy` does.
 | `Card`          | `infohash`, `lang`                                                                                                                                                               | the release, with `tmdb` the state of its title's match; discovery, every stored file, peers over the day, week and month; its `work` and `rank_in_work`, its place among the work's releases by peers; its `rules`, those that recognised features in the name (kind, year, season, episode, quality) or audio markers in the name or file paths, each with the matched fragment, recomputed when the card is opened; its `journal`, the newest 200 events of the infohash, oldest first, ordered by `at`, then by writing |
 | `Journal`       | `infohash`; `limit`, the newest events to return, 200 when 0 and at most 1000                                                                                                     | `entries`, oldest first, ordered by `at`, then by writing, each with `at`, when it happened, for a Radarr or Sonarr event the event's own time, `kind`, `outcome` and `detail`, the event's particulars as the text of a JSON object, its strings not escaped for HTML, or empty; see the kinds and outcomes in `browse.proto`; empty for an infohash never seen |
 | `Top`           | `kind` (movie or series), `window`, `voice` and `voice_language` (the first audio language by default), `offset`, `limit`, `lang`                                                | `entries`: rank, `work`, peers, `prev_rank`, its place in the window of the same length before under the same kind and voice, among every work with a peer then and not only the top's, absent when it had none; `audio`, sources and first sighting of the releases the voice admits, as of `computed_at`; `total`, `computed_at` |
-| `Stats`         | `hours`                                                                                                                                                                          | counts by kind (movie, series, other, unknown; music, books and software are other), layer, source and audio language, rejections by reason, pending, tokens spent today and the day's limit, piece data probes downloaded today, the day's limit on it, and what the fetchers uploaded back today, new torrents per clock hour over the `hours` asked for, the current hour first, `computed_at`; `queue_fetches`, `queue_lookups` and `queue_probes`, read at the request: per kind, `per_minute`, its pace over the last 15 minutes since the API started, and `levels`, the tasks queued at each priority, P0 first, with `eta`, how long until the priority and those ahead are done at that pace, absent while it is 0 and tasks are queued |
+| `Stats`         | `hours`                                                                                                                                                                          | counts by kind (movie, series, other, unknown; music, books and software are other), layer, source and audio language, rejections by reason, pending, tokens spent today and the day's limit, piece data probes downloaded today, the day's limit on it, and what the fetchers uploaded back today, new torrents per clock hour over the `hours` asked for, the current hour first, `computed_at`; `queue_fetches`, `queue_lookups` and `queue_probes`, read at the request: per kind, `per_minute`, its pace over the last 15 minutes since the API started, and `levels`, the tasks queued at each priority, P0 first, with `eta`, how long until the priority and those ahead are done at that pace, absent while it is 0 and tasks are queued; `probers`, read at the request: the fetchers that asked `ProbeTask` for a task within the last 15 minutes, 0 while probes are off |
 | `Home`          |                                                                                                                                                                                  | stored, new in 24 hours and pending, `computed_at`                                                                                         |
-| `Settings`      |                                                                                                                                                                                  | the API's audio languages, BCP-47 tags in its order, empty while the audio extension is off, and `probes`, whether the API probes; the web UI asks it at start |
+| `Settings`      |                                                                                                                                                                                  | the API's audio languages, BCP-47 tags in its order, empty while the audio extension is off, and `probes`, whether the API probes; `features`, one per optional feature, the classifier, probes, audio and feeds: whether it is `on`, whether it `works` now, the `setting`, flag or variable, that turns it on, and the `values` it is on with, the audio languages or the feeds' names; the web UI asks it at start, for the data page and for its answer to a probe request |
 | `RefreshPeers`  | `releases`: an `infohash`, or a `work` for every release of it                                                                                                                  | `releases` to be looked up: a fetcher looks for their peers on the DHT, and the peers found count from its next send of sketches            |
 | `RequestProbe`  | `releases`, as for `RefreshPeers`                                                                                                                                                | `releases` to be probed, ahead of searched ones and whatever their last probe, 0 when none has a file a probe reads; see [Probes](probes.md) |
 | `RequestMatch`  | `releases`, as for `RefreshPeers`; `lang`                                                                                                                                        | `titles` looked up on TMDB at once, the title keys of movies and series among the releases' that no work is matched to, whatever their last lookup, ahead of the background matcher and within TMDB's rate and the classifier's budget as a search's; `works` the releases belong to once that is done |
 
 `Stats` and `Home` serve the counts the API computed last, at start and then
 every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
-`probe_bytes_rx_day`, `probe_bytes_tx_day` and the queue are read at the request.
+`probe_bytes_rx_day`, `probe_bytes_tx_day`, the queue and `probers` are read at the request.
 `Stats` gives that interval as `counts_interval`.
+
+A prober is counted for 15 minutes after it last asked `ProbeTask`, which
+outlasts a fetcher's 30-second poll while it is idle and its default
+10-minute `-probe-timeout` while every probe of it is running. The count
+lives in the API's memory: a restarted API starts from 0 and reaches the
+true count within those 15 minutes.
+
+The classifier `works` while the tokens spent today are under the day's
+limit, or always without one; probes work while `probers` is above 0; audio
+and feeds work whenever they are on. `pending` in `Stats` counts the
+releases the background classifier has yet to examine, those that wait while
+its budget is spent.
 
 `lang` is `ru` or `en`, `en` when empty: the language of `tmdb` texts, and
 of TMDB's search for `SearchTitles`. A work's `id` that is not one fails

@@ -2,6 +2,7 @@ package sniff
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -164,6 +165,8 @@ type Prober struct {
 	cfg      ProberConfig
 	source   ProbeSource
 	outcomes metric.Int64Counter
+	// id is sent with every ProbeTask, for the server to count probers by.
+	id string
 }
 
 // NewProber returns a Prober for cfg that probes with source.
@@ -174,7 +177,7 @@ func NewProber(cfg ProberConfig, source ProbeSource) *Prober {
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
-	return &Prober{cfg: cfg, source: source,
+	return &Prober{cfg: cfg, source: source, id: rand.Text(),
 		outcomes: counter(meter(cfg.Meter), "sniffarr.sniff.probe.outcomes", "{task}", "Probe tasks finished, by outcome.")}
 }
 
@@ -197,7 +200,7 @@ func (p *Prober) Run(ctx context.Context) error {
 
 // once runs one task and reports whether there was one.
 func (p *Prober) once(ctx context.Context) bool {
-	res, err := p.cfg.Ingest.ProbeTask(ctx, connect.NewRequest(&sniffarrv1.ProbeTaskRequest{}))
+	res, err := p.cfg.Ingest.ProbeTask(ctx, connect.NewRequest(&sniffarrv1.ProbeTaskRequest{Prober: p.id}))
 	if err != nil {
 		if ctx.Err() == nil {
 			p.cfg.Log.Warn("probe task", "err", err)

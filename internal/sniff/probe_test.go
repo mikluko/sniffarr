@@ -124,11 +124,13 @@ type probeIngest struct {
 	mu      sync.Mutex
 	tasks   []*sniffarrv1.ProbeTask
 	results chan *sniffarrv1.ProbeResultRequest
+	probers []string
 }
 
-func (p *probeIngest) ProbeTask(context.Context, *connect.Request[sniffarrv1.ProbeTaskRequest]) (*connect.Response[sniffarrv1.ProbeTaskResponse], error) {
+func (p *probeIngest) ProbeTask(_ context.Context, req *connect.Request[sniffarrv1.ProbeTaskRequest]) (*connect.Response[sniffarrv1.ProbeTaskResponse], error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.probers = append(p.probers, req.Msg.GetProber())
 	res := &sniffarrv1.ProbeTaskResponse{}
 	if len(p.tasks) > 0 {
 		res.Task, p.tasks = p.tasks[0], p.tasks[1:]
@@ -167,6 +169,21 @@ func TestProberReportsTracks(t *testing.T) {
 	require.Equal(t, sniffarrv1.TrackKind_TRACK_KIND_AUDIO, tr.GetKind())
 	require.Equal(t, "Дубляж�", tr.GetName(), "invalid UTF-8 is replaced")
 	require.EqualValues(t, 6, tr.GetChannels())
+}
+
+func TestProberID(t *testing.T) {
+	ingest := &probeIngest{}
+	client := ingest.client(t)
+	a := NewProber(ProberConfig{Ingest: client}, &fakeProbeSource{})
+	b := NewProber(ProberConfig{Ingest: client}, &fakeProbeSource{})
+	ctx := context.Background()
+	require.False(t, a.once(ctx))
+	require.False(t, a.once(ctx))
+	require.False(t, b.once(ctx))
+	require.Len(t, ingest.probers, 3)
+	require.NotEmpty(t, ingest.probers[0])
+	require.Equal(t, ingest.probers[0], ingest.probers[1], "a prober sends its ID with every request")
+	require.NotEqual(t, ingest.probers[0], ingest.probers[2], "two probers send two")
 }
 
 func TestProbeResultFailures(t *testing.T) {

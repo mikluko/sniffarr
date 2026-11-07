@@ -67,6 +67,11 @@ type Browser struct {
 	// Languages are the audio languages Settings reports, tags in configured
 	// order; nil when the audio extension is off.
 	Languages []string
+	// Classifier has Settings report the classifier on.
+	Classifier bool
+	// Feeds are the names of the feeds read that Settings reports; nil
+	// when none is.
+	Feeds []string
 	// Counts, when set, holds the counts Stats and Home serve; nil computes
 	// them at every call.
 	Counts *Counts
@@ -87,8 +92,39 @@ func (b *Browser) counts(ctx context.Context) (*Snapshot, error) {
 	return &Snapshot{At: now, Stats: st}, nil
 }
 
-func (b *Browser) Settings(context.Context, *connect.Request[sniffarrv1.SettingsRequest]) (*connect.Response[sniffarrv1.SettingsResponse], error) {
-	return connect.NewResponse(&sniffarrv1.SettingsResponse{AudioLanguages: slices.Clone(b.Languages), Probes: b.Probes}), nil
+func (b *Browser) Settings(ctx context.Context, _ *connect.Request[sniffarrv1.SettingsRequest]) (*connect.Response[sniffarrv1.SettingsResponse], error) {
+	spent, err := b.budgetSpent(ctx)
+	if err != nil {
+		return nil, b.internal(ctx, "settings", err)
+	}
+	feature := func(f sniffarrv1.Feature, on, works bool, setting string, values []string) *sniffarrv1.FeatureState {
+		return &sniffarrv1.FeatureState{Feature: f, On: on, Works: on && works, Setting: setting, Values: slices.Clone(values)}
+	}
+	return connect.NewResponse(&sniffarrv1.SettingsResponse{AudioLanguages: slices.Clone(b.Languages), Probes: b.Probes, Features: []*sniffarrv1.FeatureState{
+		feature(sniffarrv1.Feature_FEATURE_CLASSIFIER, b.Classifier, !spent, "TYPESAFE_API_KEY", nil),
+		feature(sniffarrv1.Feature_FEATURE_PROBES, b.Probes, b.probers() > 0, "-probe", nil),
+		feature(sniffarrv1.Feature_FEATURE_AUDIO, len(b.Languages) > 0, true, "SNIFFARR_AUDIO_LANGUAGES", b.Languages),
+		feature(sniffarrv1.Feature_FEATURE_FEEDS, len(b.Feeds) > 0, true, "SNIFFARR_FEEDS", b.Feeds),
+	}}), nil
+}
+
+// budgetSpent reports whether the classifier is on and has spent the
+// day's token limit.
+func (b *Browser) budgetSpent(ctx context.Context) (bool, error) {
+	if !b.Classifier || b.DailyTokens <= 0 {
+		return false, nil
+	}
+	used, err := b.Store.TokensUsed(ctx, b.now().UTC().Format(time.DateOnly))
+	return used >= b.DailyTokens, err
+}
+
+// probers returns the probers seen within store.ProberWindow, 0 while
+// probes are off or without Tasks.
+func (b *Browser) probers() int {
+	if !b.Probes || b.Tasks == nil {
+		return 0
+	}
+	return b.Tasks.Probers(b.now())
 }
 
 func (b *Browser) now() time.Time {
@@ -358,7 +394,7 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	}
 	res := &sniffarrv1.StatsResponse{Total: st.Total, Pending: st.Pending, Hours: slices.Clone(st.Hours[:hours]), TokensUsedDay: used,
 		TokensLimitDay: b.DailyTokens, ProbeBytesRxDay: traffic.Rx, ProbeBytesTxDay: traffic.Tx, ProbeBytesLimitDay: b.ProbeDailyBytes,
-		ComputedAt: timestamppb.New(snap.At)}
+		ComputedAt: timestamppb.New(snap.At), Probers: int32(b.probers())}
 	if b.Counts != nil && b.Counts.Interval > 0 {
 		res.CountsInterval = durationpb.New(b.Counts.Interval)
 	}

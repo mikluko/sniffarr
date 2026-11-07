@@ -57,6 +57,18 @@ func browser(t *testing.T) *Browser {
 	return &Browser{Store: s, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Languages: []string{"ru"}, Now: func() time.Time { return now }}
 }
 
+// tasks is an empty queue in a database of its own.
+func tasks(t *testing.T) *store.Tasks {
+	t.Helper()
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "tasks.db"), database.Options{})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
+	require.NoError(t, err)
+	return q
+}
+
 func relNames(rs []*sniffarrv1.Release) []string {
 	var out []string
 	for _, r := range rs {
@@ -248,4 +260,73 @@ func TestBrowserSettings(t *testing.T) {
 	res, err = (&Browser{Probes: true}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
 	require.NoError(t, err)
 	require.True(t, res.Msg.GetProbes())
+}
+
+func TestBrowserSettingsFeatures(t *testing.T) {
+	ctx := context.Background()
+	type state struct {
+		Feature   sniffarrv1.Feature
+		On, Works bool
+		Setting   string
+		Values    []string
+	}
+	features := func(b *Browser) []state {
+		t.Helper()
+		res, err := b.Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+		require.NoError(t, err)
+		var out []state
+		for _, f := range res.Msg.GetFeatures() {
+			out = append(out, state{f.GetFeature(), f.GetOn(), f.GetWorks(), f.GetSetting(), f.GetValues()})
+		}
+		return out
+	}
+	off := []state{
+		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, Setting: "TYPESAFE_API_KEY"},
+		{Feature: sniffarrv1.Feature_FEATURE_PROBES, Setting: "-probe"},
+		{Feature: sniffarrv1.Feature_FEATURE_AUDIO, Setting: "SNIFFARR_AUDIO_LANGUAGES"},
+		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, Setting: "SNIFFARR_FEEDS"},
+	}
+	require.Equal(t, off, features(&Browser{}), "every feature off, each with its setting")
+
+	b := browser(t)
+	b.Tasks, b.Classifier, b.Probes, b.Feeds = tasks(t), true, true, []string{"rutracker", "rutor"}
+	on := []state{
+		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, On: true, Works: true, Setting: "TYPESAFE_API_KEY"},
+		{Feature: sniffarrv1.Feature_FEATURE_PROBES, On: true, Setting: "-probe"},
+		{Feature: sniffarrv1.Feature_FEATURE_AUDIO, On: true, Works: true, Setting: "SNIFFARR_AUDIO_LANGUAGES", Values: []string{"ru"}},
+		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, On: true, Works: true, Setting: "SNIFFARR_FEEDS", Values: []string{"rutracker", "rutor"}},
+	}
+	require.Equal(t, on, features(b), "probes do not work without a prober")
+
+	b.Tasks.ProberSeen("a", now)
+	on[1].Works = true
+	require.Equal(t, on, features(b), "a prober seen")
+
+	require.NoError(t, b.Store.AddTokens(ctx, now.Format(time.DateOnly), 750))
+	on[0].Works = false
+	require.Equal(t, on, features(b), "the classifier's budget is spent")
+
+	b.DailyTokens = 0
+	on[0].Works = true
+	require.Equal(t, on, features(b), "no limit is never spent")
+}
+
+func TestBrowserStatsProbers(t *testing.T) {
+	ctx := context.Background()
+	b := browser(t)
+	probers := func() int32 {
+		t.Helper()
+		res, err := b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
+		require.NoError(t, err)
+		return res.Msg.GetProbers()
+	}
+	require.Zero(t, probers(), "no queue")
+	b.Tasks = tasks(t)
+	b.Tasks.ProberSeen("a", now.Add(-store.ProberWindow))
+	b.Tasks.ProberSeen("b", now)
+	require.Zero(t, probers(), "probes are off")
+	b.Probes = true
+	require.EqualValues(t, 2, probers(), "both within the window")
+	b.Now = func() time.Time { return now.Add(time.Second) }
+	require.EqualValues(t, 1, probers(), "one gone past it")
 }

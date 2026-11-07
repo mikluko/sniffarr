@@ -167,7 +167,12 @@ message PeersResponse {
   int64 dropped = 2;
 }
 
-message ProbeTaskRequest {}
+message ProbeTaskRequest {
+  // The ID a prober picks once for its process and sends with every
+  // request, which BrowseService.Stats counts probers by; requests without
+  // one count as one prober.
+  string prober = 1;
+}
 
 message ProbeTaskResponse {
   // Absent when there is nothing to probe.

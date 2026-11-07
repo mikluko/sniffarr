@@ -95,6 +95,7 @@ type Tasks struct {
 	opts      TaskOptions
 	evictions metric.Int64Counter
 	pace      pace
+	probers   probers
 }
 
 // NewTasks returns the Tasks in db, applying any pending migrations.

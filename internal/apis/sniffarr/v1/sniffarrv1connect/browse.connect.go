@@ -103,7 +103,8 @@ type BrowseServiceClient interface {
 	// minutes.
 	Top(context.Context, *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error)
 	// Settings returns what the server is configured with that a client
-	// showing its answers needs to know.
+	// showing its answers needs to know, and whether each optional feature
+	// works now.
 	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
 	// RefreshPeers asks a fetcher to look up the peers of a release, or of
 	// every release of a work, on the DHT; the peers found are counted from
@@ -337,7 +338,8 @@ type BrowseServiceHandler interface {
 	// minutes.
 	Top(context.Context, *connect.Request[v1.TopRequest]) (*connect.Response[v1.TopResponse], error)
 	// Settings returns what the server is configured with that a client
-	// showing its answers needs to know.
+	// showing its answers needs to know, and whether each optional feature
+	// works now.
 	Settings(context.Context, *connect.Request[v1.SettingsRequest]) (*connect.Response[v1.SettingsResponse], error)
 	// RefreshPeers asks a fetcher to look up the peers of a release, or of
 	// every release of a work, on the DHT; the peers found are counted from

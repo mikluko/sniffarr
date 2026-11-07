@@ -1018,7 +1018,11 @@ func (x *PeersResponse) GetDropped() int64 {
 }
 
 type ProbeTaskRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The ID a prober picks once for its process and sends with every
+	// request, which BrowseService.Stats counts probers by; requests without
+	// one count as one prober.
+	Prober        string `protobuf:"bytes,1,opt,name=prober,proto3" json:"prober,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1051,6 +1055,13 @@ func (x *ProbeTaskRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ProbeTaskRequest.ProtoReflect.Descriptor instead.
 func (*ProbeTaskRequest) Descriptor() ([]byte, []int) {
 	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ProbeTaskRequest) GetProber() string {
+	if x != nil {
+		return x.Prober
+	}
+	return ""
 }
 
 type ProbeTaskResponse struct {
@@ -1481,8 +1492,9 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x06sketch\x18\x03 \x01(\fR\x06sketch\"A\n" +
 	"\rPeersResponse\x12\x16\n" +
 	"\x06merged\x18\x01 \x01(\x03R\x06merged\x12\x18\n" +
-	"\adropped\x18\x02 \x01(\x03R\adropped\"\x12\n" +
-	"\x10ProbeTaskRequest\"?\n" +
+	"\adropped\x18\x02 \x01(\x03R\adropped\"*\n" +
+	"\x10ProbeTaskRequest\x12\x16\n" +
+	"\x06prober\x18\x01 \x01(\tR\x06prober\"?\n" +
 	"\x11ProbeTaskResponse\x12*\n" +
 	"\x04task\x18\x01 \x01(\v2\x16.sniffarr.v1.ProbeTaskR\x04task\"D\n" +
 	"\tProbeTask\x12\x1a\n" +

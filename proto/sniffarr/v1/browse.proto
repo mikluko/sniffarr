@@ -57,7 +57,8 @@ service BrowseService {
   // minutes.
   rpc Top(TopRequest) returns (TopResponse);
   // Settings returns what the server is configured with that a client
-  // showing its answers needs to know.
+  // showing its answers needs to know, and whether each optional feature
+  // works now.
   rpc Settings(SettingsRequest) returns (SettingsResponse);
   // RefreshPeers asks a fetcher to look up the peers of a release, or of
   // every release of a work, on the DHT; the peers found are counted from
@@ -133,6 +134,40 @@ message SettingsResponse {
   // Whether the server probes releases for their tracks; false leaves
   // RequestProbe answering FAILED_PRECONDITION and queues no probe.
   bool probes = 2;
+  // The optional features, one per Feature value but FEATURE_UNSPECIFIED,
+  // in the enum's order, read at the request.
+  repeated FeatureState features = 3;
+}
+
+// Feature is an optional feature of the server, off unless configured.
+enum Feature {
+  FEATURE_UNSPECIFIED = 0;
+  // The Jev classifier, which decides the kind of a release the rules and
+  // reuse leave unknown.
+  FEATURE_CLASSIFIER = 1;
+  // Probes, which read a release's tracks from its first pieces.
+  FEATURE_PROBES = 2;
+  // Audio languages, whose signs in releases are counted and scored.
+  FEATURE_AUDIO = 3;
+  // Tracker feeds, whose releases are fetched at priority P2.
+  FEATURE_FEEDS = 4;
+}
+
+// FeatureState is whether an optional feature is on and works now.
+message FeatureState {
+  Feature feature = 1;
+  bool on = 2;
+  // Whether the feature does its work now; false while it is off. The
+  // classifier does not while its daily token budget is spent, probes do
+  // not while Stats.probers is 0; audio and feeds do whenever they are on.
+  bool works = 3;
+  // The command-line flag, "-probe", or the environment variable,
+  // "TYPESAFE_API_KEY", that turns the feature on.
+  string setting = 4;
+  // What the feature is on with: the audio languages, BCP-47 tags in the
+  // server's order, or the names of the feeds read; empty for the others
+  // and while it is off.
+  repeated string values = 5;
 }
 
 // WorkSummary is a work as lists show it.
@@ -532,6 +567,10 @@ message StatsResponse {
   // How often the counts are computed; absent when they are computed at
   // every request.
   google.protobuf.Duration counts_interval = 20;
+  // The probers that asked IngestService.ProbeTask for a task within the
+  // last 15 minutes, read at the request and counted in memory since the
+  // server started; 0 while probes are off or the server has no queue.
+  int32 probers = 21;
 }
 
 // TaskQueue is the tasks of one kind queued, by priority.
