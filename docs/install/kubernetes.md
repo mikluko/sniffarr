@@ -20,7 +20,7 @@ under [Helm](../helm.md) in the README.
 
    ```shell
    kubectl create secret generic sniffarr \
-     --from-literal=TYPESAFE_API_KEY=... \
+     --from-literal=SNIFFARR_CLASSIFY_API_KEY=... \
      --from-literal=SNIFFARR_TORZNAB_TOKEN=...
    ```
 

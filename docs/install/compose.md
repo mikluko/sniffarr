@@ -42,7 +42,7 @@ container, or [a container per component](#a-container-per-component).
    [Configuration](../configuration.md):
 
    ```shell
-   TYPESAFE_API_KEY=...
+   SNIFFARR_CLASSIFY_API_KEY=...
    SNIFFARR_UI_ADDR=127.0.0.1:8081
    ```
 

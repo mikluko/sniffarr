@@ -6,8 +6,8 @@ until SIGINT or SIGTERM.
 
 - `-api` is the centre of a work queue. It queues the infohashes sniffers
   sight, hands them out as fetch tasks, stores the metadata that comes back
-  in SQLite, classifies stored torrents with [TypeSafe](https://typesafe.ai)'s
-  Jev model, and serves the search API and the Torznab indexer. It is the only
+  in SQLite, classifies stored torrents with the classifier, and serves the
+  search API and the Torznab indexer. It is the only
   component that touches the database.
 - `-ui` serves the web UI, a client of the browse API.
 - `-sniff` walks the DHT for infohashes, by BEP 51 `sample_infohashes` and by
@@ -56,7 +56,7 @@ peers or a timeout, with the leases the attempt took when it took more than
 one, dropped and evicted, for an infohash sighted by announce, a feed or
 Radarr or Sonarr; metadata fetched and stored, with the leases its attempt
 took when it took more than one, rejected or already stored;
-a classification by Jev, with who asked for it, a kind copied from a release
+a classification by the classifier, with who asked for it, a kind copied from a release
 of the same title key, and a classification that failed; a title lookup's
 match, no match or error, with who asked for it, and the earlier match of its
 title key a release takes as it is stored; the grabs and imports Radarr and
@@ -106,15 +106,17 @@ records which layer decided its kind:
    the title and year. A torrent of unknown kind takes the kind of a stored
    torrent with the same key, now or once one is classified. Only the kind is
    shared; audio and the video source belong to each release.
-3. [TypeSafe](https://typesafe.ai)'s Jev examines a torrent for audio in each
-   audio language, video source, and kind when it is still unknown. It does
-   so lazily, for the candidates of a search before the answer, and in the
+3. The classifier, a model behind a System One endpoint, examines a torrent
+   for audio in each audio language, video source, and kind when it is still
+   unknown. It does so lazily, for the candidates of a search before the answer, and in the
    background only for torrents of unknown kind whose names carry a marker or
    a script hint of an audio language. Both share a daily token budget,
    2,000,000 tokens by default, some 1,500 torrents a day; the background stops
    at 75% of it by default, leaving the rest for searches. A search waits for
-   Jev for a short while at most; answers that come later are recorded for the
-   next search, and a slow or failing Jev never fails a search.
+   the classifier for a short while at most; answers that come later are
+   recorded for the next search, and a slow or failing classifier never fails
+   a search. It is off without an endpoint or a key; see
+   [the configuration](configuration.md).
 
 Adult and software kinds never show in search results. Music, books and
 software are classified like any other kind, and the web UI shows them only
@@ -148,7 +150,7 @@ its zeros perhaps written as O, and before the source
 comma-separated list between bars (`Movie (1984) BDRip | D, P2, A |`); a
 lone `P` or `A` elsewhere, as in `Plan.B`, is none. A
 marker sets the probability of an audio track in the language to 1; otherwise
-Jev answers it, one question per language. A marker records its mark as
+the classifier answers it, one question per language. A marker records its mark as
 written in the name, or else in a stored file path: a studio when there is
 one, wherever it stands, else a word, else a code, so
 `Silo.S03E10.rus.LostFilm` marks `LostFilm`; stored markers get their marks
@@ -157,7 +159,8 @@ torrents stored before codes were read get a marker from a code in their
 name once, at the first start that reads them. A marker the rules stored
 from a subtitle's path alone is cleared once, with its mark and
 probability; a probe's finding stays. While the extension is off, nothing
-about audio is recorded or returned, Jev is asked about kind and source only,
+about audio is recorded or returned, the classifier is asked about kind and
+source only,
 the background classifier has nothing to select, `BrowseService.Settings`
 returns no languages, and the web UI shows no voice filter, no per-language
 columns in search results and tops, and no audio rows on a release's card.
@@ -175,10 +178,11 @@ series after the torrent's kind, in English and, when it has Cyrillic letters,
 in Russian too. A candidate fits when one of its titles equals one of the
 name's, ignoring case and punctuation, and, when the key has a year, its year
 is the key's or one off. One fit is the match; among several, the one with a
-TMDB popularity of at least 20 and ten times every other's is; else Jev picks
+TMDB popularity of at least 20 and ten times every other's is; else the
+classifier picks
 one or none, shown each fit's titles, year, language, countries, popularity,
 votes and the first sentence of its overview, within the classifier's daily
-budget and its search reserve. Without `TYPESAFE_API_KEY` several fits with no
+budget and its search reserve. With the classifier off several fits with no
 such favourite match nothing. A key that matched nothing is looked up again
 after `SNIFFARR_TMDB_RETRY`, and one that matched never is; `RequestMatch`,
 the release card's button, looks a key that matched nothing up at once.

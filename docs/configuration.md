@@ -23,10 +23,11 @@ the same to each.
 | ---------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `SNIFFARR_DB`                      |                  | Path of the SQLite database; required                                                                                  |
 | `SNIFFARR_ADDR`                    | `:8080`          | Listen address                                                                                                         |
-| `TYPESAFE_API_KEY`                 |                  | TypeSafe API key; when unset, and `SNIFFARR_CLASSIFY_URL` too, only rules and reuse classify                           |
-| `SNIFFARR_CLASSIFY_URL`            | `https://api.typesafe.ai/v1/systemone` | Classifier endpoint serving TypeSafe's `POST /v1/systemone`; another endpoint turns the classifier on without `TYPESAFE_API_KEY`, is not sent it, and has no daily token limit |
+| `SNIFFARR_CLASSIFY_URL`            | `https://api.typesafe.ai/v1/systemone` | Classifier endpoint serving the System One protocol, `POST /v1/systemone`; another endpoint than the default turns the classifier on, with or without a key, and has no daily token limit |
+| `SNIFFARR_CLASSIFY_API_KEY`        |                  | Key sent to `SNIFFARR_CLASSIFY_URL` as a bearer token; with the default endpoint and no key the classifier is off, and only rules and reuse classify |
+| `TYPESAFE_API_KEY`                 |                  | Deprecated: use `SNIFFARR_CLASSIFY_API_KEY`. Read when that is unset, and sent to the default endpoint only            |
 | `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |
-| `SNIFFARR_CLASSIFY_DAILY_TOKENS`   | `2000000`        | TypeSafe tokens per UTC day at most; `0` is no limit                                                                   |
+| `SNIFFARR_CLASSIFY_DAILY_TOKENS`   | `2000000`        | Classifier tokens per UTC day at most with the default endpoint; `0` is no limit                                       |
 | `SNIFFARR_CLASSIFY_SEARCH_RESERVE` | `25`             | Percentage of the daily tokens background classification leaves for searches, `0` to `100`                             |
 | `SNIFFARR_SEARCH_CLASSIFY_MAX`     | `20`             | Candidates one search has classified at most                                                                           |
 | `SNIFFARR_SEARCH_CLASSIFY_WAIT`    | `2s`             | How long a search waits for them                                                                                       |

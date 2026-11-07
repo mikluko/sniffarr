@@ -60,9 +60,9 @@ error and a 404 included, carries the header `Server: sniffarr/<version>`
   the releases it probed since its last report.
 - `Search` matches every word of the query against names and stored file
   paths, and filters by kind and by the probability of an audio track in one
-  language. It has Jev examine a bounded number of its candidates first, so
+  language. It has the classifier examine a bounded number of its candidates first, so
   the filters apply to what is known once that is done. Each release carries
-  the layer that decided its kind, whether Jev has examined it, its audio
+  the layer that decided its kind, whether the classifier has examined it, its audio
   entries with their marks, its quality, season and episode, its work as
   `work`, `m348` or `tv1399`, the work's IDs, the probed `tracks` of its
   main video file, and `tmdb`, a `TMDBWork`: what TMDB knows of the
@@ -108,9 +108,10 @@ lives in the API's memory: a restarted API starts from 0 and reaches the
 true count within those 15 minutes.
 
 The classifier `works` while the tokens spent today are under the day's
-limit, or always without one, as with an endpoint other than TypeSafe's;
-its `setting` is `SNIFFARR_CLASSIFY_URL` with such an endpoint, else
-`TYPESAFE_API_KEY`. Probes work while `probers` is above 0; audio
+limit, or always without one, as with an endpoint other than the default;
+its `setting` is `SNIFFARR_CLASSIFY_URL` with such an endpoint,
+`TYPESAFE_API_KEY` when that deprecated key turned it on, else
+`SNIFFARR_CLASSIFY_API_KEY`. Probes work while `probers` is above 0; audio
 and feeds work whenever they are on. `pending` in `Stats` counts the
 releases the background classifier has yet to examine, those that wait while
 its budget is spent.

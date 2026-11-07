@@ -65,8 +65,8 @@ The service runs `sniffarr $SNIFFARR_FLAGS` with the environment of
 SNIFFARR_FLAGS=-api -ui -sniff -fetch -upnp
 ```
 
-Set the keys there, uncommenting the lines: `TYPESAFE_API_KEY` for the
-classifier, `SNIFFARR_TORZNAB_TOKEN` for Prowlarr, `SNIFFARR_WEBHOOK_TOKEN`
+Set the keys there, uncommenting the lines: `SNIFFARR_CLASSIFY_API_KEY` for
+the classifier, `SNIFFARR_TORZNAB_TOKEN` for Prowlarr, `SNIFFARR_WEBHOOK_TOKEN`
 for Radarr and Sonarr. Every variable and flag is listed under
 [Configuration](../configuration.md). After a change:
 
@@ -143,7 +143,7 @@ WantedBy=multi-user.target
 
 ```shell
 SNIFFARR_FLAGS=-api -ui -sniff -fetch -upnp
-#TYPESAFE_API_KEY=
+#SNIFFARR_CLASSIFY_API_KEY=
 #SNIFFARR_UI_ADDR=127.0.0.1:8081
 #SNIFFARR_TORZNAB_TOKEN=
 #SNIFFARR_WEBHOOK_TOKEN=

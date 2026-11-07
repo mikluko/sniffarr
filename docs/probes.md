@@ -122,7 +122,7 @@ audio file of its own (`.mka`, `.ac3`, `.eac3`, `.dts`, `.aac`, `.flac`,
 `.m4a`, `.mp3`, `.opus`, `.wav`), which may carry that audio. The Torznab
 title follows the probability: `[NORUS …]` once the probe set 0, `[RUS]`
 while the marker stands. A track that gives no language
-leaves the probability as it was. Jev does not override a probe. The
+leaves the probability as it was. The classifier does not override a probe. The
 language's studios named in its tracks, as `MVO LostFilm`, join the
 release's studios for the language.
 

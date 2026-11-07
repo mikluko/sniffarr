@@ -76,9 +76,9 @@ counts are the `db.sql.connection.*` metrics.
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
 `sniffarr.task.kind` is `fetch`, `peers` or `probe`;
 `sniffarr.store.retention.class` is `idle` or `expired`;
-`sniffarr.classify.layer` is `rules`, `reuse` or `jev`;
+`sniffarr.classify.layer` is `rules`, `reuse` or `classifier`;
 `sniffarr.search.lazy.result` is `in_time`, `late` or `failed`;
-`sniffarr.tmdb.layer` is `tmdb`, `jev` or `none`; `sniffarr.tmdb.status` is
+`sniffarr.tmdb.layer` is `tmdb`, `classifier` or `none`; `sniffarr.tmdb.status` is
 the HTTP status of TMDB's answer, or `error` without one;
 `sniffarr.arr.app` is `radarr` or `sonarr`; `sniffarr.arr.event` is `grab`
 or `import`; `sniffarr.arr.source` is `webhook` or `history`;

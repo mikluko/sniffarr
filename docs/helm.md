@@ -9,7 +9,7 @@ helm install sniffarr oci://sarak.sh/mikluko/charts/sniffarr --version X.Y.Z \
 ```
 
 `api.existingSecret` names a Secret the api pod takes as its environment,
-such as `TYPESAFE_API_KEY`, `SNIFFARR_TORZNAB_TOKEN` and
+such as `SNIFFARR_CLASSIFY_API_KEY`, `SNIFFARR_TORZNAB_TOKEN` and
 `SNIFFARR_WEBHOOK_TOKEN`; without it the pod takes none. With
 `api.litestream.enabled`, `api.litestream.existingConfigMap` is required.
 Every value is described in [`values.yaml`](../charts/sniffarr/values.yaml).

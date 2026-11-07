@@ -30,7 +30,7 @@ backfill to fetch.
 With a work and an infohash, the stored release of the hash belongs to the
 work, and its title key is matched to the work under layer `arr` with
 confidence 1, `TMDB_LAYER_ARR` in the API, which every other release of the
-key follows. Neither TMDB's search nor Jev replaces an `arr` match; a later
+key follows. Neither TMDB's search nor the classifier replaces an `arr` match; a later
 event does. A release not stored is queued, ahead of announced infohashes,
 and gets the work and the match when its metadata is stored; one the DHT
 never yields, such as a private tracker's, stays unfetched. A rejected

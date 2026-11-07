@@ -7,8 +7,8 @@ SNIFFARR_FLAGS=-api -ui -sniff -fetch -upnp
 
 # The database is /var/lib/sniffarr/sniffarr.db; SNIFFARR_DB in the unit.
 
-# Without a TypeSafe key, only the rules classify.
-#TYPESAFE_API_KEY=
+# Without a classifier key, only the rules classify.
+#SNIFFARR_CLASSIFY_API_KEY=
 
 # The web UI listens on :8081 and authenticates nobody: put a proxy in front
 # of it, or bind it to loopback.
