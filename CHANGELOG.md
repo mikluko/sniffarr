@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Searches no longer queue probes of releases a probe cannot read (AVI only, BDMV, ISO, not a movie or series), and such probes already queued leave the queue.
 - A probe requested from the web UI while an attempt is running is no longer lost when that attempt fails.
 - A release whose probe found audio tracks, all in other languages, is titled `[NORUS …]` rather than `[RUS, -]` from a word in its name, unless it has an audio file of its own.
+- The top opens in a fraction of a second instead of about four seconds.
+- Probe results, completions and other writes no longer time out while the tops are recomputed.
 - A slow or locked database no longer fails the API's start: leftover leases are freed before it.
 - The Helm chart gives the API an hour to start before its liveness probe runs, so a long migration is no longer killed.
 
