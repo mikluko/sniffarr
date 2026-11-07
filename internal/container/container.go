@@ -52,6 +52,19 @@ type Track struct {
 	Forced bool
 }
 
+// TrackLimit is the most tracks Probe reads: a real file carries a few
+// dozen, and a header can declare millions of tracks a few bytes each.
+const TrackLimit = 128
+
+// addTrack appends t to tracks, or fails with ErrTooManyTracks once they
+// hold TrackLimit.
+func addTrack(tracks []Track, t Track) ([]Track, error) {
+	if len(tracks) >= TrackLimit {
+		return tracks, ErrTooManyTracks
+	}
+	return append(tracks, t), nil
+}
+
 // Info is what Probe learns of a file.
 type Info struct {
 	Format Format
@@ -63,6 +76,8 @@ var (
 	ErrUnknownFormat = errors.New("container: unknown format")
 	// ErrNoTracks reports a file of a known format whose header points to no track list.
 	ErrNoTracks = errors.New("container: no track list")
+	// ErrTooManyTracks reports a track list of more than TrackLimit tracks.
+	ErrTooManyTracks = fmt.Errorf("container: more than %d tracks", TrackLimit)
 
 	errMalformed = errors.New("container: malformed header")
 )

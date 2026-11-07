@@ -322,9 +322,10 @@ func (s segment) readTracks(e element) ([]Track, error) {
 			return nil
 		}
 		t, ok, err := parseTrackEntry(b)
-		if ok {
-			tracks = append(tracks, t)
+		if !ok || err != nil {
+			return err
 		}
+		tracks, err = addTrack(tracks, t)
 		return err
 	})
 	return tracks, err

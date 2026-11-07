@@ -154,6 +154,21 @@ func TestMP4QuickTimeHandlerName(t *testing.T) {
 	require.Equal(t, []Track{{Kind: Audio, Language: "eng", Name: "English", Codec: "ac-3", Channels: 6, Default: true}}, info.Tracks)
 }
 
+func TestMP4TrackLimit(t *testing.T) {
+	file := func(n int) []byte {
+		traks := make([][]byte, n)
+		for i := range traks {
+			traks[i] = trak(tkhd(true, 0, 0), mdia(audioEntry("ac-3", 6), mdhd("eng"), hdlr("soun", "")))
+		}
+		return append(ftyp(), box("moov", traks...)...)
+	}
+	info, err := probeBytes(file(TrackLimit))
+	require.NoError(t, err)
+	require.Len(t, info.Tracks, TrackLimit)
+	_, err = probeBytes(file(TrackLimit + 1))
+	require.ErrorIs(t, err, ErrTooManyTracks)
+}
+
 func TestMP4NoMoov(t *testing.T) {
 	file := append(ftyp(), box("mdat", make([]byte, 64))...)
 	_, err := probeBytes(file)

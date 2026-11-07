@@ -212,6 +212,21 @@ func TestMatroskaOtherDocType(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnknownFormat)
 }
 
+func TestMatroskaTrackLimit(t *testing.T) {
+	file := func(n int) []byte {
+		entries := make([][]byte, n)
+		for i := range entries {
+			entries[i] = el(idTrackEntry, elUint(idTrackType, 2))
+		}
+		return append(ebmlHead("matroska"), el(idSegment, el(idTracks, entries...))...)
+	}
+	info, err := probeBytes(file(TrackLimit))
+	require.NoError(t, err)
+	require.Len(t, info.Tracks, TrackLimit)
+	_, err = probeBytes(file(TrackLimit + 1))
+	require.ErrorIs(t, err, ErrTooManyTracks)
+}
+
 func TestMatroskaNoTracks(t *testing.T) {
 	file := append(ebmlHead("matroska"), el(idSegment, el(0x1549A966, elUint(0x2AD7B1, 1000000)), cluster())...)
 	_, err := probeBytes(file)

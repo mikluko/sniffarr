@@ -93,9 +93,10 @@ func parseMoov(b []byte) ([]Track, error) {
 			return nil
 		}
 		t, ok, err := parseTrak(b)
-		if ok {
-			tracks = append(tracks, t)
+		if !ok || err != nil {
+			return err
 		}
+		tracks, err = addTrack(tracks, t)
 		return err
 	})
 	return tracks, err
