@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-beta.6] - 2026-11-07
+
 ### Added
 
 - `Journal` returns every infohash's events when `infohash` is empty, narrows them by `kind` and by `outcome`, and names each event's `infohash`.
@@ -805,7 +807,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.5...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.6...HEAD
+[0.44.0-beta.6]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.5...v0.44.0-beta.6
 [0.44.0-beta.5]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.4...v0.44.0-beta.5
 [0.44.0-beta.4]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.3...v0.44.0-beta.4
 [0.44.0-beta.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.2...v0.44.0-beta.3
