@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-alpha.3] - 2026-11-07
+
 ### Added
 
 - Every response of the API and the web UI carries the header `Server: sniffarr/<version>`, and the process logs its version, commit and build time at start.
@@ -708,7 +710,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.2...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.3...HEAD
+[0.44.0-alpha.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.2...v0.44.0-alpha.3
 [0.44.0-alpha.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.1...v0.44.0-alpha.2
 [0.44.0-alpha.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.43.0...v0.44.0-alpha.1
 [0.43.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.42.0...v0.43.0
