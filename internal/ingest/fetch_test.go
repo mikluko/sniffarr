@@ -130,6 +130,14 @@ func TestResultJournals(t *testing.T) {
 	got, err := st.Journal(ctx, store.Hash{4}, 1)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"name":"Heat.1995.1080p.BluRay","size":8589934592,"files":1,"discovery":"sample","queued_at":`+strconv.FormatInt(now.Unix(), 10)+`,"kind":"movie","kind_layer":"rules"}`, got[0].Detail)
+
+	_, err = st.WantPeers(ctx, []store.Hash{{4}}, now)
+	require.NoError(t, err)
+	tasks, _, err := q.Lease(ctx, 1, 1, now, time.Minute)
+	require.NoError(t, err)
+	require.Equal(t, []store.Task{{Kind: store.TaskPeers, Hash: store.Hash{4}}}, tasks)
+	require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(4), Outcome: &sniffarrv1.Result_Lookup{Lookup: &sniffarrv1.Lookup{Peers: 3}}}))
+	require.Equal(t, []string{"fetched/stored"}, journal(t, st, store.Hash{4}), "a peer lookup is not journaled, though the web UI asked for it")
 }
 
 func TestSightStoredFlags(t *testing.T) {

@@ -57,7 +57,8 @@ day, and most of them never fetch, so the journal of a sampled infohash
 begins with its metadata. What repeats without changing is left out too: a
 lease of the same attempt after one expired, a title lookup that finds
 nothing or fails as the last one did, a search that returns the release
-within a day of the last. A kind copied to more than 50 releases of a title
+within a day of the last. Peer lookups are not journaled, not even those
+the web UI asks for. A kind copied to more than 50 releases of a title
 key, a match of more than 500, or no match for a key of more than 50, is
 journaled on none of them. The journal is keyed by infohash and outlives
 the torrent's row, so a rejected, dropped or deleted infohash keeps its
