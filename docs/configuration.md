@@ -80,11 +80,13 @@ count, but only its largest files are stored and searched. Once a minute the
 API deletes, in small batches, the torrents nobody has sighted within the
 retention period, or within the idle retention period for those matched to no
 TMDB work, with their peer sketches; a later sighting queues them again.
-In the same batches it deletes the journal entries older than the journal
-retention period. Once an hour it unions the hour sketches older than 8 days into day sketches
-and deletes the day sketches older than 65 days, and every 10 minutes, and
-once at start, it recomputes the tops of works and every torrent's peers over
-the last 7 days.
+Then, in batches of its own, it deletes the journal entries older than the
+journal retention period; with a journal retention shorter than the
+torrents', as by default, a torrent's trail has lost its beginning by the
+time the torrent is deleted, and only its end remains. Once an hour it
+unions the hour sketches older than 8 days into day sketches and deletes the
+day sketches older than 65 days, and every 10 minutes, and once at start, it
+recomputes the tops of works and every torrent's peers over the last 7 days.
 
 ## `-ui`
 

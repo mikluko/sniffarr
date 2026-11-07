@@ -1754,7 +1754,8 @@ func (x *CardResponse) GetJournal() []*JournalEntry {
 type JournalRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Infohash []byte                 `protobuf:"bytes,1,opt,name=infohash,proto3" json:"infohash,omitempty"`
-	// How many of the newest entries to return; 200 when 0, at most 1000.
+	// How many of the newest entries to return; 200 when 0, at most 1000. A
+	// negative limit is INVALID_ARGUMENT.
 	Limit         int32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1855,8 +1856,9 @@ func (x *JournalResponse) GetEntries() []*JournalEntry {
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
 // classified (jev, reuse, failed), matched (tmdb, jev, arr, none, error),
 // arr (grab, import), feed (stored, queued, rejected, duplicate),
-// probe_wanted (search), probe_leased (search, background, retry), probed
-// (tracks, unknown, no_peers, timeout), deleted (idle, expired).
+// probe_wanted (search, request), probe_leased (retry, request, search,
+// background), probed (tracks, unknown, no_peers, timeout), deleted (idle,
+// expired).
 type JournalEntry struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	At      *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`

@@ -300,13 +300,15 @@
   "journal.outcome.feed.rejected": "отброшена",
   "journal.outcome.feed.duplicate": "уже была в фиде",
   "journal.outcome.probe_wanted.search": "запрошена поиском",
+  "journal.outcome.probe_wanted.request": "запрошена вручную",
+  "journal.outcome.probe_leased.retry": "повторный",
+  "journal.outcome.probe_leased.request": "по запросу",
   "journal.outcome.probe_leased.search": "для поиска",
   "journal.outcome.probe_leased.background": "фоновый",
-  "journal.outcome.probe_leased.retry": "повторный",
   "journal.outcome.probed.tracks": "дорожки прочитаны",
   "journal.outcome.probed.unknown": "нечего читать",
   "journal.outcome.probed.no_peers": "нет пиров",
   "journal.outcome.probed.timeout": "таймаут",
-  "journal.outcome.deleted.idle": "не сопоставлена и не замечена",
+  "journal.outcome.deleted.idle": "не сопоставлена и давно не замечена",
   "journal.outcome.deleted.expired": "давно не замечена"
 }

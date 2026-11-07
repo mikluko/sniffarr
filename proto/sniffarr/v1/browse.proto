@@ -315,7 +315,8 @@ message CardResponse {
 
 message JournalRequest {
   bytes infohash = 1;
-  // How many of the newest entries to return; 200 when 0, at most 1000.
+  // How many of the newest entries to return; 200 when 0, at most 1000. A
+  // negative limit is INVALID_ARGUMENT.
   int32 limit = 2;
 }
 
@@ -330,8 +331,9 @@ message JournalResponse {
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
 // classified (jev, reuse, failed), matched (tmdb, jev, arr, none, error),
 // arr (grab, import), feed (stored, queued, rejected, duplicate),
-// probe_wanted (search), probe_leased (search, background, retry), probed
-// (tracks, unknown, no_peers, timeout), deleted (idle, expired).
+// probe_wanted (search, request), probe_leased (retry, request, search,
+// background), probed (tracks, unknown, no_peers, timeout), deleted (idle,
+// expired).
 message JournalEntry {
   google.protobuf.Timestamp at = 1;
   string kind = 2;

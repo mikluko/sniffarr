@@ -300,13 +300,15 @@
   "journal.outcome.feed.rejected": "rejected",
   "journal.outcome.feed.duplicate": "listed before",
   "journal.outcome.probe_wanted.search": "by a search",
+  "journal.outcome.probe_wanted.request": "by request",
+  "journal.outcome.probe_leased.retry": "once more",
+  "journal.outcome.probe_leased.request": "on request",
   "journal.outcome.probe_leased.search": "for a search",
   "journal.outcome.probe_leased.background": "in the background",
-  "journal.outcome.probe_leased.retry": "once more",
   "journal.outcome.probed.tracks": "tracks read",
   "journal.outcome.probed.unknown": "nothing to read",
   "journal.outcome.probed.no_peers": "no peers",
   "journal.outcome.probed.timeout": "timeout",
-  "journal.outcome.deleted.idle": "unmatched and unseen",
+  "journal.outcome.deleted.idle": "unmatched and unseen for a while",
   "journal.outcome.deleted.expired": "unseen"
 }

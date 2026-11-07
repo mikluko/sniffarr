@@ -100,10 +100,10 @@ of TMDB's search for `SearchTitles`. A work's `id` that is not one fails
 with `INVALID_ARGUMENT`, one of no stored work with `NOT_FOUND`;
 `RefreshPeers` and `RequestProbe` fail with `NOT_FOUND` when they name no
 stored release. An `infohash` that is not 20 bytes fails `Card` and
-`Journal` with `INVALID_ARGUMENT`; one of no stored release fails `Card`
-with `NOT_FOUND`, while `Journal` answers for any infohash, stored,
-rejected, dropped or deleted, and never `NOT_FOUND`: for one never seen,
-its answer is no events.
+`Journal` with `INVALID_ARGUMENT`, as a negative `limit` fails `Journal`;
+one of no stored release fails `Card` with `NOT_FOUND`, while `Journal`
+answers for any infohash, stored, rejected, dropped or deleted, and never
+`NOT_FOUND`: for one never seen, its answer is no events.
 
 ## Calling the API from a shell
 
