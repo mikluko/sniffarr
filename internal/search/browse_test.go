@@ -194,6 +194,14 @@ func TestBrowserJournal(t *testing.T) {
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 	_, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Limit: -1}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "a negative limit")
+
+	h = hash(12)
+	for range MaxJournalLimit + 1 {
+		require.NoError(t, b.Store.JournalFeed(ctx, h, now, "duplicate", nil))
+	}
+	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Limit: MaxJournalLimit + 1}))
+	require.NoError(t, err, "a limit above the most is no error")
+	require.Equal(t, MaxJournalLimit, len(res.Msg.GetEntries()), "it returns the most")
 }
 
 func TestBrowserStats(t *testing.T) {
