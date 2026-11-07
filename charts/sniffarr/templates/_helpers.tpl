@@ -215,8 +215,8 @@ values.
 
 {{- /*
 sniffarr.dataVolumes are the volumes of a pod running -api: tmp, data per api.persistence and
-the litestream ConfigMap when enabled. It takes root and claim, the name of the claim the chart
-creates.
+the litestream ConfigMap when enabled. It takes root, claim, the name of the claim the chart
+creates, and template, true when a StatefulSet's claim template is data and none is rendered here.
 */}}
 {{- define "sniffarr.dataVolumes" -}}
 {{- $p := .root.Values.api.persistence }}
@@ -226,6 +226,7 @@ creates.
 {{- end }}
 - name: tmp
   emptyDir: {}
+{{- if not .template }}
 - name: data
   {{- if eq $p.type "hostPath" }}
   hostPath:
@@ -237,6 +238,7 @@ creates.
   {{- else }}
   emptyDir: {}
   {{- end }}
+{{- end }}
 {{- if $ls.enabled }}
 - name: litestream-config
   configMap:

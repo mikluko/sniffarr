@@ -2,6 +2,12 @@
 {{- $p := $v.persistence }}
 {{- $ls := $v.litestream }}
 {{- $name := printf "%s-api" .Release.Name }}
+{{- /* A claim the chart made before the API was a StatefulSet stays its volume; a new install gets a claim from the StatefulSet's template. */}}
+{{- $legacy := dict }}
+{{- if and (eq $p.type "pvc") (not $p.existingClaim) }}
+{{- $legacy = lookup "v1" "PersistentVolumeClaim" .Release.Namespace $name }}
+{{- end }}
+{{- $tmpl := and (eq $p.type "pvc") (not $p.existingClaim) (not $legacy) }}
 {{- if hasKey $v "ui" }}
 {{- fail "api.ui is not a value: the UI is the ui component, ui.enabled, with ui.addr and ui.service.targetPort in place of api.ui.addr and api.ui.targetPort" }}
 {{- end }}
@@ -102,7 +108,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       volumes:
-        {{- include "sniffarr.dataVolumes" (dict "root" . "claim" $name) | trim | nindent 8 }}
+        {{- include "sniffarr.dataVolumes" (dict "root" . "claim" $name "template" $tmpl) | trim | nindent 8 }}
         {{- with $v.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -118,6 +124,22 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if $tmpl }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "sniffarr.labels" . | nindent 10 }}
+          app.kubernetes.io/component: api
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with $p.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $p.size }}
+  {{- end }}
 ---
 {{- end }}
 apiVersion: v1
@@ -169,7 +191,7 @@ spec:
           endPort: 65535
         - protocol: UDP
 {{- end }}
-{{- if and (eq $p.type "pvc") (not $p.existingClaim) }}
+{{- if and (eq $p.type "pvc") (not $p.existingClaim) (or .Values.single.enabled $legacy) }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -178,6 +200,8 @@ metadata:
   labels:
     {{- include "sniffarr.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
+  annotations:
+    helm.sh/resource-policy: keep
 spec:
   accessModes: [ReadWriteOnce]
   {{- with $p.storageClass }}

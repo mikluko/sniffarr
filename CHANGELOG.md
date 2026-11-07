@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- With `api.persistence.type: pvc` and no `existingClaim`, a new install's `/data` is the StatefulSet's claim `data-<release>-api-0`; a claim `<release>-api` an earlier chart made stays `/data`, and the chart keeps it on uninstall.
+- **Breaking:** a release on 0.44.0-beta.3 that moves to the StatefulSet's claim deletes the StatefulSet with `--cascade=orphan` before upgrading, its claim template being immutable.
+
 ## [0.44.0-beta.3] - 2026-11-07
 
 ### Changed

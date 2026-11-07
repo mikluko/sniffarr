@@ -40,11 +40,11 @@ api:
     hostPath:
       # Host directory mounted at /data when type is hostPath.
       path: ""
-    # Claim mounted at /data when type is pvc; the chart creates one when empty.
+    # Claim mounted at /data when type is pvc; when empty, the StatefulSet's claim data-<release>-api-0, or <release>-api where an earlier chart made it.
     existingClaim: ""
-    # Size of the claim the chart creates.
+    # Size of the claim the StatefulSet makes.
     size: 10Gi
-    # Storage class of the claim the chart creates; the cluster default when empty.
+    # Storage class of the claim the StatefulSet makes; the cluster default when empty.
     storageClass: ""
   litestream:
     # Restores /data/sniffarr.db from its replica before start and replicates it while running.
