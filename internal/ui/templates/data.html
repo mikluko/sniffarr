@@ -79,7 +79,7 @@
 
 {{with .Queue}}
 <section>
-  <h2>{{$.T "d.queue"}} <span class="mu">{{$.Num (queueTasks .)}}</span></h2>
+  <h2>{{$.T "d.queue"}} <span class="mu">{{$.Num (queueTasks .)}}</span>{{template "tip" ($.T "q.note")}}</h2>
   <div class="grid">
   {{range .}}{{if or .Tasks .Paced}}
     <div>
@@ -102,7 +102,6 @@
     </div>
   {{end}}{{end}}
   </div>
-  <p class="mu">{{$.T "q.note"}}</p>
 </section>
 {{end}}
 

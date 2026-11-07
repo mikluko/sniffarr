@@ -58,4 +58,7 @@
 </div>
 {{end}}
 
+{{/* A tooltip of the text, shown on hover and on focus, so a tap opens it too. */}}
+{{define "tip"}}<span class="tip" tabindex="0" aria-label="{{.}}"><span aria-hidden="true">?</span><span class="tipb" aria-hidden="true">{{.}}</span></span>{{end}}
+
 {{define "act"}}<span id="act-{{.Action}}" class="mu" role="status">{{.T (concat "act.done." .Action)}}{{if gt .Releases 1}}: {{.Releases}} {{.T "top.releases_lc"}}{{end}}</span>{{end}}

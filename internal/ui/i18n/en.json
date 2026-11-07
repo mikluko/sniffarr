@@ -115,7 +115,7 @@
   "q.p3": "announced",
   "q.p4": "sampled, background probes",
   "q.nopace": "no pace over the last 15 minutes yet",
-  "q.note": "A priority is done once it and those ahead are, each kind at its own pace over the last 15 minutes; tasks queued meanwhile are not counted. A kind with nothing queued and nothing done in that time is not shown.",
+  "q.note": "A priority is done once it and those ahead are, each kind at its own pace over the last 15 minutes; tasks queued meanwhile are not counted. A kind with nothing queued and nothing done in that time is not shown. A ? is an ETA with no pace yet.",
   "unit.d": "d",
   "d.proberx": "downloaded, UTC day",
   "d.probetx": "uploaded, UTC day",

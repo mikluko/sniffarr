@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The notes under the task queue on the data page and under the top's controls open as a tooltip from a `?` next to them.
+
 ## [0.43.0] - 2026-11-07
 
 ### Added
