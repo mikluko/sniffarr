@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every response of the API and the web UI carries the header `Server: sniffarr/<version>`, and the process logs its version, commit and build time at start.
+- The footer of every page of the web UI shows its version, with the build time and commit in a tooltip.
+- The image takes the build arguments `VERSION`, `COMMIT` and `BUILD_TIME`, which the release sets, as it sets them for the archives and packages; a build without them reads `dev`.
+
 ## [0.44.0-alpha.2] - 2026-11-07
 
 ### Added
