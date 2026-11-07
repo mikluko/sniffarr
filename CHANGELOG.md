@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `BrowseService.Settings` reports `features`: for the Jev classifier, probes, audio and tracker feeds, whether each is on, whether it works now and the flag or variable that turns it on.
+- `BrowseService.Stats` reports `probers`, the fetchers that asked for a probe task in the last 15 minutes.
+- The data page lists the optional features with their state and how to turn each on.
+- With the classifier's daily limit spent, its meter is full and amber and says how many torrents wait until 00:00 UTC.
+- With probes on and no prober connected, the probe queue card says "No probers" with no ETAs, and "Probe tracks" answers that the probe starts once a prober connects.
+
 ### Changed
+
+- With the classifier off, the data page leaves out its meter and its row among the layers; with no feeds, P2 reads "feeds (off)".
 
 - The dark theme keeps 0.43.0's background, surfaces and lines, and buttons, selects, inputs and switches have borders of their own shade.
 - The torrents page fits its table at 1280 px, cuts names at two lines with the movie or series linked under them, and shows the first-seen date in the tooltip on "Last seen".
