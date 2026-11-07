@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SNIFFARR_CLASSIFY_API_KEY` sets the key sent to the classifier's endpoint.
 - `-wait-api` polls the API at `SNIFFARR_URL` every 2 seconds and exits once its `Server` header names the binary's own version.
 - The chart gives the ui, sniff, fetch and probe pods an init container `wait-api` that holds each pod until its API serves the same version, on by default and turned off with `waitForAPI.enabled: false`.
+- The web UI's footer version links to the project page, its tooltip saying so beside the build time and commit.
+- The API checks the latest stable release on forge.sarak.sh once a day and reports it as `BrowseService.Settings.latest_release`; `SNIFFARR_RELEASE_CHECK=false` turns the check off.
+- The web UI's footer announces a newer stable release left of the version, linking its release notes, when the build is behind it by more than one minor version or by a major one, or is a pre-release of that version or an earlier one.
 
 ### Changed
 
