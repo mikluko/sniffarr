@@ -137,6 +137,10 @@ const probeGrown = `(p.peers_week IS NULL OR t.peers_week >= 2 * p.peers_week AN
 // probeGrown. Its argument is the time in seconds.
 const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND ` + probeGrown
 
+// leasesAfterMove is the leases of a probe an upsert finds queued: none when
+// the upsert moves it ahead, as many as before otherwise.
+const leasesAfterMove = `CASE WHEN excluded.priority < task_queue.priority THEN 0 ELSE task_queue.leases END`
+
 // WantProbe queues a probe at PriorityArr, at the time, for each stored
 // release of the hashes the search returned that a probe can read, unless
 // its probe is done or its failures ran out without its peers growing; a
@@ -158,7 +162,8 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at ti
 		queued, err := hashesOf(tx.QueryContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
 			SELECT 'probe', t.infohash, ?1, ?2, coalesce(p.retry_at * 1000, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
 			WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND (p.outcome IS NULL OR p.outcome = '`+ProbeFailed+`' AND `+probeGrown+`) AND `+probeReadable+`
-			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at
+			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at,
+				leases = `+leasesAfterMove+`
 			WHERE task_queue.priority >= excluded.priority
 			RETURNING infohash`, args...))
 		if err != nil {
@@ -197,7 +202,8 @@ func (s *Store) RequestProbe(ctx context.Context, hashes []Hash, at time.Time) (
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		queued, err := hashesOf(tx.QueryContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
 			SELECT 'probe', infohash, ?1, ?2 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
-			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0
+			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at, not_before = 0,
+				leases = `+leasesAfterMove+`
 			RETURNING infohash`, args...))
 		if err != nil {
 			return err
@@ -222,8 +228,9 @@ func (s *Store) ProbeLeases(ctx context.Context, now time.Time) (int, error) {
 // background, the release never probed with the most peers over 7 days,
 // else the one due a probe again with the most, which it queues at
 // PrioritySample. Each is a movie or a series with peers and a stored file
-// of a format a probe reads. The first lease of each attempt is journaled
-// with b; a lease after one expired or was freed is not.
+// of a format a probe reads. The first lease of each attempt, and the first
+// after a request or a search moved it ahead, is journaled with b; a lease
+// after one expired or was freed is not.
 func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d time.Duration, background bool, b ProbeBudget) (c ProbeCandidate, ok bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var leases int
@@ -238,7 +245,8 @@ func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d ti
 }
 
 // leaseProbe leases the probe LeaseProbe takes and returns it with how many
-// times its task has been leased in this attempt, or 0 when it leased none.
+// times its task has been leased since its attempt began or it last moved
+// ahead, or 0 when it leased none.
 func leaseProbe(ctx context.Context, tx *sql.Tx, owner int64, now time.Time, d time.Duration, background bool) (c ProbeCandidate, leases int, err error) {
 	if _, err := freeExpired(ctx, tx, "kind = 'probe'", now); err != nil {
 		return ProbeCandidate{}, 0, err

@@ -250,6 +250,29 @@ func TestJournalQueue(t *testing.T) {
 	require.Equal(t, []string{"sighted/queued"}, entries(t, s, hash(6)))
 }
 
+func TestJournalLeasedAfterPromotion(t *testing.T) {
+	ctx := context.Background()
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	q, err := NewTasks(ctx, db, TaskOptions{})
+	require.NoError(t, err)
+	const owner = 7
+	enqueue(t, q, Sample, 1)
+	require.Equal(t, []Hash{hash(1)}, lease(t, q, owner, 1, t0))
+	moved := t0.Add(2 * time.Minute)
+	enqueueAt(t, q, moved, Announce, 1)
+	require.Equal(t, []Hash{hash(1)}, lease(t, q, owner, 1, moved), "the sample's lease expired")
+	require.JSONEq(t, `{"owner":7,"attempt":1,"lease_until":`+unix(moved.Add(time.Minute))+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail,
+		"the first lease since an announce moved it ahead")
+
+	again := moved.Add(2 * time.Minute)
+	enqueueAt(t, q, again, Announce, 1)
+	require.Equal(t, []Hash{hash(1)}, lease(t, q, owner, 1, again))
+	_, err = q.Fail(ctx, hash(1), owner, again, 3, time.Minute)
+	require.NoError(t, err)
+	require.Equal(t, []string{"sighted/promoted", "leased/fetch", "fetch_failed/timeout"}, entries(t, s, hash(1)), "a sighting that moves it nowhere keeps the count")
+}
+
 func TestJournalClassified(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
@@ -571,6 +594,48 @@ func TestJournalProbeLeasedRequestInFlight(t *testing.T) {
 	}
 	require.Equal(t, []string{"search/1", "request/2"}, leasedProbes(t, s, searched), "a request made while the attempt was in flight outlives its failure")
 	require.Equal(t, []string{"request/1", "request/2"}, leasedProbes(t, s, requested), "and so does one made again")
+}
+
+func TestJournalProbeLeasedAfterMove(t *testing.T) {
+	ctx := context.Background()
+	type move func(*Store, Hash, time.Time) error
+	request := func(s *Store, h Hash, at time.Time) error {
+		_, err := s.RequestProbe(ctx, []Hash{h}, at)
+		return err
+	}
+	search := func(s *Store, h Hash, at time.Time) error {
+		return s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, at)
+	}
+	for _, tc := range []struct {
+		name  string
+		moves []move
+		want  []string
+	}{
+		{name: "requested twice", moves: []move{request, request}, want: []string{"background/1", "request/1"}},
+		{name: "searched twice", moves: []move{search, search}, want: []string{"background/1", "search/1"}},
+		{name: "requested, then searched", moves: []move{request, search}, want: []string{"background/1", "request/1"}},
+		{name: "searched, then requested", moves: []move{search, request}, want: []string{"background/1", "search/1", "request/1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := open(t)
+			h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+			lease := func(at time.Time) {
+				t.Helper()
+				c, ok, err := s.LeaseProbe(ctx, 7, at, 10*time.Minute, true, ProbeBudget{})
+				require.NoError(t, err)
+				require.True(t, ok)
+				require.Equal(t, h, c.Hash)
+			}
+			at := t0
+			lease(at)
+			for _, m := range tc.moves {
+				at = at.Add(20 * time.Minute)
+				require.NoError(t, m(s, h, at))
+				lease(at)
+			}
+			require.Equal(t, tc.want, leasedProbes(t, s, h), "the first lease since a move ahead is journaled; a move to where it is keeps the count")
+		})
+	}
 }
 
 func TestJournalDeleted(t *testing.T) {

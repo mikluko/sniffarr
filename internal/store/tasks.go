@@ -217,7 +217,7 @@ func enqueueFetch(ctx context.Context, tx *sql.Tx, g Sighting, now time.Time) (b
 // promote moves the queued fetch of the sighting, at priority old, to its
 // discovery's priority.
 func promote(ctx context.Context, tx *sql.Tx, g Sighting, old int, now time.Time) error {
-	if _, err := tx.ExecContext(ctx, "UPDATE task_queue SET priority = ? WHERE kind = 'fetch' AND infohash = ?", priority(g.Discovery), g.Hash[:]); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE task_queue SET priority = ?, leases = 0 WHERE kind = 'fetch' AND infohash = ?", priority(g.Discovery), g.Hash[:]); err != nil {
 		return err
 	}
 	return journal(ctx, tx, g.Hash, now, JournalSighted, "promoted", Detail("discovery", g.Discovery, "from", discovery(old), "to", g.Discovery))
@@ -295,8 +295,9 @@ func (q *Tasks) Trim(ctx context.Context, now time.Time) (Trimmed, error) {
 // to n of them that are free to owner until now+d. It returns the leased
 // tasks in the queue's order, and how many leases expired. A task is free
 // when it has no lease and its retry backoff has passed. A fetch is
-// journaled on the first lease of each attempt, not on one after a lease
-// expired or was released.
+// journaled on the first lease of each attempt and the first after a
+// sighting moved it ahead, not on one after a lease expired or was
+// released.
 func (q *Tasks) Lease(ctx context.Context, owner int64, n int, now time.Time, d time.Duration) (tasks []Task, expired int, err error) {
 	type leased struct {
 		task             Task
