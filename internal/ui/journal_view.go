@@ -13,6 +13,11 @@ import (
 type JournalView struct {
 	Base
 	Days []JournalDay
+	// InfoHash is the torrent's, which the journal's routes take.
+	InfoHash string
+	// Rows is how many rows the loaded entries make, Shown how many of them
+	// Days holds.
+	Rows, Shown int
 	// Tip is the heading's tooltip.
 	Tip string
 	// From and To are the times of the oldest and the newest loaded entry.
@@ -55,12 +60,16 @@ type JournalGone struct {
 	Note string
 }
 
+// JournalCardRows is how many rows of the journal a card shows until the
+// whole journal is asked for.
+const JournalCardRows = 5
+
 // JournalView builds the card's journal block from the torrent's loaded
-// entries.
+// entries: every row with JournalAll, else the newest JournalCardRows.
 func (p TorrentPage) JournalView() JournalView {
 	b, t := p.Base, p.Torrent
 	rows := b.JournalRows(t.Journal)
-	v := JournalView{Base: b, Tip: p.JournalTip(), Total: max(t.JournalTotal, int64(len(t.Journal)))}
+	v := JournalView{Base: b, InfoHash: t.InfoHash, Rows: len(rows), Tip: p.JournalTip(), Total: max(t.JournalTotal, int64(len(t.Journal)))}
 	if n := len(t.Journal); n > 0 {
 		v.From, v.To = t.Journal[0].At, t.Journal[n-1].At
 	}
@@ -70,6 +79,10 @@ func (p TorrentPage) JournalView() JournalView {
 		cut := b.JournalRetention - 24*time.Hour
 		v.Cut = b.JournalRetention > 0 && v.Total <= int64(len(t.Journal)) && b.Now.Sub(v.From) >= cut
 	}
+	if !t.JournalAll && len(rows) > JournalCardRows {
+		rows = rows[:JournalCardRows]
+	}
+	v.Shown = len(rows)
 	v.Days = b.journalDays(rows)
 	return v
 }

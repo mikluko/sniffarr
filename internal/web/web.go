@@ -153,6 +153,7 @@ func New(cfg Config) (*Handler, error) {
 	mux.HandleFunc("GET /w/{id}", s.redirectWork)
 	mux.HandleFunc("GET /top/w/{id}", s.redirectWork)
 	mux.HandleFunc("GET /t/{infohash}", s.torrent)
+	mux.HandleFunc("GET /t/{infohash}/journal", s.journal)
 	cop := http.NewCrossOriginProtection()
 	mux.Handle("POST /t/{infohash}/{action}", cop.Handler(http.HandlerFunc(s.requestTorrent)))
 	mux.Handle("POST /movie/{id}/{action}", cop.Handler(s.requestWork("movie")))
@@ -672,7 +673,7 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	for _, e := range c.GetJournal() {
 		t.Journal = append(t.Journal, journalEntry(e))
 	}
-	t.JournalTotal = c.GetJournalTotal()
+	t.JournalTotal, t.JournalAll = c.GetJournalTotal(), req.URL.Query().Get("journal") == "all"
 	all := req.URL.Query().Get("files") == "all"
 	files := c.GetFiles()
 	t.Files = ui.FileList{InfoHash: h, Stored: len(files), All: all}
@@ -688,20 +689,53 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 // journalOnly renders the card of an infohash the store keeps no torrent
 // of: its journal, or 404 when it has none.
 func (s *server) journalOnly(w http.ResponseWriter, req *http.Request, raw []byte, lang string) {
-	res, err := s.cfg.Browse.Journal(req.Context(), connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: raw}))
+	t, err := s.journalOf(req.Context(), raw)
 	if err != nil {
 		s.fail(w, req, "journal", err)
 		return
 	}
-	if len(res.Msg.GetEntries()) == 0 {
+	if len(t.Journal) == 0 {
 		s.notFound(w, req)
 		return
 	}
-	t := ui.Torrent{InfoHash: hex.EncodeToString(raw), JournalOnly: true, JournalTotal: res.Msg.GetTotal()}
+	t.JournalOnly, t.JournalAll = true, req.URL.Query().Get("journal") == "all"
+	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, "torrents"), BackURL: backURL(req), Torrent: t})
+}
+
+// journal serves GET /t/{infohash}/journal: to htmx asking for "jlist",
+// every row of the infohash's newest journal entries; to any other request,
+// a redirect to the card showing them.
+func (s *server) journal(w http.ResponseWriter, req *http.Request) {
+	raw, err := hex.DecodeString(req.PathValue("infohash"))
+	if err != nil || len(raw) != infohashLen {
+		s.notFound(w, req)
+		return
+	}
+	if req.Header.Get("HX-Request") != "true" || req.Header.Get("HX-Target") != "jlist" {
+		http.Redirect(w, req, "/t/"+hex.EncodeToString(raw)+"?journal=all#journal", http.StatusSeeOther)
+		return
+	}
+	t, err := s.journalOf(req.Context(), raw)
+	if err != nil {
+		s.fail(w, req, "journal", err)
+		return
+	}
+	t.JournalAll = true
+	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, s.lang(w, req), "torrents"), Torrent: t})
+}
+
+// journalOf is the torrent of the infohash as its newest journal entries
+// alone tell it.
+func (s *server) journalOf(ctx context.Context, raw []byte) (ui.Torrent, error) {
+	res, err := s.cfg.Browse.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: raw}))
+	if err != nil {
+		return ui.Torrent{}, err
+	}
+	t := ui.Torrent{InfoHash: hex.EncodeToString(raw), JournalTotal: res.Msg.GetTotal()}
 	for _, e := range res.Msg.GetEntries() {
 		t.Journal = append(t.Journal, journalEntry(e))
 	}
-	s.render(w, req, "torrent", ui.TorrentPage{Base: s.base(req, lang, "torrents"), BackURL: backURL(req), Torrent: t})
+	return t, nil
 }
 
 // journalEntry is the UI's view of an entry, its detail decoded; a detail

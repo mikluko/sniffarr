@@ -436,6 +436,9 @@ type Torrent struct {
 	Journal []JournalEntry
 	// JournalTotal is how many entries the journal holds in all.
 	JournalTotal int64
+	// JournalAll has the card show every row of Journal, not only the newest
+	// JournalCardRows.
+	JournalAll bool
 
 	Files FileList
 }

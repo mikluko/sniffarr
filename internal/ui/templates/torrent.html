@@ -92,11 +92,21 @@
     <span class="jsum">{{if .Retries}}<span><i class="m warn" aria-hidden="true"></i>{{.Count (int64 .Retries) "journal.retries"}}</span>{{end}}{{if .Finals}}<span><i class="m bad" aria-hidden="true"></i>{{.Count (int64 .Finals) "journal.finals"}}</span>{{end}}</span>
     {{- end}}
   </div>
-  {{if .Days}}<div class="jlist">{{template "jdays" .}}</div>
+  {{if .Days}}{{template "jlistv" .}}
   {{if .Cut}}<p class="mu jcut">{{.Fmt "journal.cut" (.Retention .JournalRetention true)}}</p>{{end}}
   {{else}}<p class="mu">{{.T "journal.empty"}}</p>{{end}}
 </section>
 {{end}}{{end}}
+
+{{/* The journal's rows, the htmx fragment "jlist": the card's newest rows and a button
+     loading every row in their place, morphed so that a row open stays open. */}}
+{{define "jlist"}}{{template "jlistv" .JournalView}}{{end}}
+
+{{define "jlistv"}}<div class="jlist" id="jlist">{{template "jdays" .}}
+{{- if lt .Shown .Rows}}
+<div class="jfoot"><span class="mu">{{.Fmt "journal.shown" (.Num (int64 .Shown)) (.Count (int64 .Rows) "journal.rows")}}</span>
+  <a class="btn" href="/t/{{.InfoHash}}?journal=all#journal" hx-get="/t/{{.InfoHash}}/journal" hx-target="#jlist" hx-swap="morph:keepOpen">{{.T "journal.all"}}</a></div>
+{{- end}}</div>{{end}}
 
 {{define "jdays"}}{{$v := .}}{{range .Days}}
 {{- if .Label}}<div class="jday">{{.Label}}</div>{{end}}

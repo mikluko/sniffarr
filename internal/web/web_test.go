@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -135,6 +136,10 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 	return h
 }
 
+// feedListings is how many feeds listed hash(22), a torrent never stored,
+// each under a title of its own and so in a row of its own.
+const feedListings = 7
+
 // handlerTasks is handlerWith returning the API's queue as well.
 func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Tasks) {
 	t.Helper()
@@ -193,6 +198,10 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 	require.NoError(t, err)
 	_, err = st.Reject(ctx, hash(20), rules.Small, "small", 1<<20, now)
 	require.NoError(t, err)
+	for i := range feedListings {
+		title := fmt.Sprintf("Listing.%d", i+1)
+		require.NoError(t, st.JournalFeed(ctx, hash(22), now.Add(time.Duration(i-feedListings)*time.Hour), "queued", map[string]any{"source": "rutor", "title": title}))
+	}
 	require.NoError(t, st.AddTokens(ctx, now.Format(time.DateOnly), 250))
 	require.NoError(t, st.AddProbeTraffic(ctx, now.Format(time.DateOnly), store.ProbeTraffic{Rx: 61 << 30, Tx: 38 << 30}))
 	k, err := st.HashKey(ctx)
@@ -608,6 +617,29 @@ func TestTorrent(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/"+hexOf(99), "").Code, "neither a torrent nor a journal")
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz", "").Code)
+}
+
+func TestTorrentJournal(t *testing.T) {
+	h := handler(t, nil)
+	card := "/t/" + hexOf(22)
+	rows := func(body string) int { return strings.Count(body, `<details class="jev"`) }
+
+	body := page(t, get(t, h, card, ""))
+	require.Equal(t, ui.JournalCardRows, rows(body), "the card's newest rows")
+	require.Contains(t, body, "Showing the last 5 of 7 rows")
+	require.Contains(t, body, `<a class="btn" href="/t/`+hexOf(22)+`?journal=all#journal" hx-get="/t/`+hexOf(22)+`/journal" hx-target="#jlist" hx-swap="morph:keepOpen">Show the whole journal</a>`)
+
+	frag := fragment(t, get(t, h, card+"/journal", "jlist"), "jlist")
+	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<div class="jlist" id="jlist">`))
+	require.Equal(t, feedListings, rows(frag), "every row")
+	require.NotContains(t, frag, "Show the whole journal")
+
+	w := get(t, h, card+"/journal", "")
+	require.Equal(t, http.StatusSeeOther, w.Code, "without htmx, the card with every row")
+	require.Equal(t, card+"?journal=all#journal", w.Header().Get("Location"))
+	require.Equal(t, feedListings, rows(page(t, get(t, h, card+"?journal=all", ""))))
+
+	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz/journal", "jlist").Code)
 }
 
 // post serves a POST of the path, as htmx asking for target when it is not

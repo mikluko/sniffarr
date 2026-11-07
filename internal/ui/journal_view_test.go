@@ -29,6 +29,14 @@ func TestJournalView(t *testing.T) {
 	if len(v.Days) != 1 || v.Days[0].Label != "20 октября" || len(v.Days[0].Rows) != 2 || v.Days[0].Rows[0].ID != 3 {
 		t.Errorf("days %+v", v.Days)
 	}
+	card := TorrentPage{Base: b, Torrent: Torrent{Journal: sampleJournal(now.Add(-41*time.Hour), "x")}}
+	if v = card.JournalView(); v.Rows != 8 || v.Shown != JournalCardRows || len(v.Days[0].Rows)+len(v.Days[1].Rows) != JournalCardRows {
+		t.Errorf("the card: %d of %d rows shown", v.Shown, v.Rows)
+	}
+	card.Torrent.JournalAll = true
+	if v = card.JournalView(); v.Shown != 8 {
+		t.Errorf("the whole journal: %d of %d rows shown", v.Shown, v.Rows)
+	}
 
 	v = page(true, sighted, timeout, rejected)
 	want := JournalGone{Severity: SeverityFinal, Final: true, ID: 3, Lead: "Раздачи нет: отброшена 20.10 13:05", Rest: ", причина: для взрослых.",

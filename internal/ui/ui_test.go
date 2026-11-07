@@ -75,6 +75,7 @@ func TestRenderAll(t *testing.T) {
 		{"torrent-multilang", "torrent", "/t/x", "", func(b Base) any { multi(&b); return SampleTorrent(b, false, "poster") }},
 		{"torrent-files", "torrent", "/t/x?files=all", "files", func(b Base) any { return SampleTorrent(b, true, "poster") }},
 		{"torrent-journal", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "journal") }},
+		{"torrent-jlist", "torrent", "/t/x/journal", "jlist", func(b Base) any { p := SampleTorrent(b, false, "poster"); p.Torrent.JournalAll = true; return p }},
 		{"torrent-nopeers", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "nopeers") }},
 		{"torrent-noprobes", "torrent", "/t/x", "", func(b Base) any { b.Probes = false; return SampleTorrent(b, false, "nopeers") }},
 		{"act-peers", "torrent", "/t/x/peers", "act-answer", func(b Base) any { return Requested{Base: b, Action: "peers", Releases: 1} }},

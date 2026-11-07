@@ -25,7 +25,7 @@ var pages = map[string][]string{
 	"torrents": {"torrents"},
 	"top":      {"top"},
 	"work":     {"releases", "act"},
-	"torrent":  {"files", "act"},
+	"torrent":  {"files", "act", "jlist"},
 	"data":     {"data"},
 	"notfound": nil,
 }
