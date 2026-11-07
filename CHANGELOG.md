@@ -12,10 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every response of the API and the web UI carries the header `Server: sniffarr/<version>`, and the process logs its version, commit and build time at start.
 - The footer of every page of the web UI shows its version, with the build time and commit in a tooltip.
 - The image takes the build arguments `VERSION`, `COMMIT` and `BUILD_TIME`, which the release sets, as it sets them for the archives and packages; a build without them reads `dev`.
+- A movie or series page links back to the top, the search results or the release it was reached from.
+
+### Changed
+
+- The header's tabs are Torrents and Top; the logo leads to the data page, which selects no tab, and a movie or series page selects none.
 
 ### Fixed
 
 - The web UI asks the API for its settings every minute, so a UI started before a new API no longer shows probes, audio languages and features as off until restarted.
+- The language switch no longer wraps the header onto a second line at 375 px.
 
 ## [0.44.0-alpha.2] - 2026-11-07
 
