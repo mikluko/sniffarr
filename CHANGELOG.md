@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-beta.2] - 2026-11-07
+
 ### Changed
 
 - The release check reads the latest stable release from the releases feed, `https://sarak.sh/mikluko/sniffarr/releases.rss`, the highest stable version among its items; an RSS or Atom feed of releases reads the same.
@@ -776,7 +778,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.1...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.2...HEAD
+[0.44.0-beta.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.1...v0.44.0-beta.2
 [0.44.0-beta.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.4...v0.44.0-beta.1
 [0.44.0-alpha.4]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.3...v0.44.0-alpha.4
 [0.44.0-alpha.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-alpha.2...v0.44.0-alpha.3
