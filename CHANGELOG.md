@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-11-07
+
 ### Added
 
 - Release cards and movie and series pages have a button that asks a fetcher to look up the peers of the release, or of every release of the title, on the DHT now: `BrowseService.RefreshPeers`.
@@ -594,7 +596,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.41.0...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.42.0...HEAD
+[0.42.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.41.0...v0.42.0
 [0.41.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.40.0...v0.41.0
 [0.40.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.39.0...v0.40.0
 [0.39.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.38.0...v0.39.0
