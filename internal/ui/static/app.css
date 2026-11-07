@@ -1,9 +1,10 @@
 /* sniffarr operator UI. Monospace throughout, four core colours plus surfaces,
- * rules and status; no radius, no shadow, no icons, dense tables. No font is
- * bundled or fetched: the system's monospace face is used. */
+ * rules and status; no radius, no shadow, no icons, dense tables. The face is
+ * JetBrains Mono 400 and 600, served from static/fonts and declared in
+ * layout.html; nothing is fetched from elsewhere. */
 :root{
   color-scheme:light dark;
-  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --mono:"JetBrains Mono",monospace;
   --bg:#ffffff;--fg:#1a1a1a;--mu:#5e5e5e;--ln:#0b57a4;
   --sf:#f5f5f5;--sf2:#ebebeb;--rule:#e2e2e2;--rule2:#c4c4c4;
   --ok:#1a7f37;--bad:#c62828;--warn:#8f5f00;--ln-bg:#e5eef9;
@@ -17,16 +18,17 @@
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font:400 14px/1.5 var(--mono)}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 14px/1.5 var(--mono);font-variant-ligatures:none}
 ::selection{background:var(--ln-bg);color:var(--fg)}
 :focus-visible{outline:2px solid var(--ln);outline-offset:2px}
 a{color:inherit;text-decoration:none}
 a:hover{text-decoration:underline;text-underline-offset:.2em}
-h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.2;overflow-wrap:anywhere}
+h1{margin:0;font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.2;overflow-wrap:anywhere}
 h2{margin:0 0 8px;font:500 12px/1.5 var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--mu)}
 h3{margin:0 0 4px;font-size:14px;font-weight:600}
 h3.gap{margin-top:16px}
 p{margin:6px 0}
+b,strong{font-weight:600}
 input,select,button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--rule2);border-radius:0}
 input:hover,select:hover{border-color:var(--mu)}
 input:focus,select:focus{outline:2px solid var(--ln);outline-offset:-1px;border-color:var(--ln)}
@@ -37,11 +39,11 @@ button:hover{background:var(--sf)}
 .mu{color:var(--mu)}
 .mono,.key{font-family:var(--mono);font-size:13px;overflow-wrap:anywhere}
 .scroll{overflow-x:auto}
-.glyph{margin-left:.06em;color:var(--ln);font-weight:700}
+.glyph{margin-left:.06em;color:var(--ln);font-weight:600}
 
 .wrap{max-width:1360px;margin:0 auto;padding:0 16px 32px;display:flex;flex-direction:column;gap:16px}
 .top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 24px;min-height:48px;border-bottom:1px solid var(--rule)}
-.top .brand{font-weight:700;font-size:16px;letter-spacing:-.02em}
+.top .brand{font-weight:600;font-size:16px;letter-spacing:-.02em}
 .top .brand:hover{text-decoration:none}
 .top nav{display:flex;gap:20px}
 .top nav a.on{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:.45em}
@@ -88,7 +90,7 @@ button:disabled{cursor:default;color:var(--mu);background:var(--bg)}
 /* data */
 #data{display:flex;flex-direction:column;gap:24px}
 .kpis{display:flex;flex-wrap:wrap;gap:8px 40px;align-items:baseline}
-.kpis b{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.kpis b{font-size:24px;font-weight:600;letter-spacing:-.02em}
 .kpis .at{margin-left:auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px 32px;align-items:start}
 .meter{position:relative;height:6px;margin-top:8px;background:var(--sf2)}
@@ -150,7 +152,7 @@ h2.tm-title{margin:0;font:600 18px/1.3 var(--mono);text-transform:none;letter-sp
 .tm-stretch::after{content:"";position:absolute;inset:0}
 .tm-links,.tm-links a{position:relative;z-index:1}
 .tm-links a{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.2em}
-.tm-over{margin:4px 0;max-width:72ch;font-weight:300;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tm-over{margin:4px 0;max-width:72ch;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .tm-state{font-weight:600}
 .tm-op{font-size:12px}
 .warn{color:var(--warn);font-weight:600}
@@ -171,7 +173,7 @@ h2.tm-title{margin:0;font:600 18px/1.3 var(--mono);text-transform:none;letter-sp
 
 /* title page */
 .tm-page{max-width:none}
-.tm-page h1.tm-title{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.tm-page h1.tm-title{font-size:24px;font-weight:600;letter-spacing:-.02em}
 .tm-over-long{-webkit-line-clamp:6}
 .ours{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding-top:6px;border-top:1px solid var(--rule)}
 .ours .au div{white-space:normal}

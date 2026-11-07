@@ -383,3 +383,40 @@ func TestTorrentMagnetHref(t *testing.T) {
 		t.Error("the URL filter blocked a link")
 	}
 }
+
+// Every page preloads both faces at the versioned URLs its @font-face rules
+// name, and those URLs serve the font for a year.
+func TestFonts(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "data", SampleData(r.Base(req, "en", "data", nil, time.UTC))); err != nil {
+		t.Fatal(err)
+	}
+	body := w.Body.String()
+	for _, f := range []string{"fonts/jetbrains-mono-400.woff2", "fonts/jetbrains-mono-600.woff2"} {
+		u := r.StaticURL(f)
+		if !strings.Contains(u, "?v=") {
+			t.Fatalf("%s has no version: %q", f, u)
+		}
+		if want := `<link rel="preload" href="` + u + `" as="font" type="font/woff2" crossorigin>`; !strings.Contains(body, want) {
+			t.Errorf("no preload of %s; want %s", f, want)
+		}
+		if want := `src:url("` + u + `")`; !strings.Contains(body, want) {
+			t.Errorf("no @font-face of %s; want %s", f, want)
+		}
+		sw := httptest.NewRecorder()
+		r.Static().ServeHTTP(sw, httptest.NewRequest("GET", u, nil))
+		if sw.Code != 200 || sw.Header().Get("Content-Type") != "font/woff2" || sw.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Errorf("%s: %d %q %q", u, sw.Code, sw.Header().Get("Content-Type"), sw.Header().Get("Cache-Control"))
+		}
+	}
+	sw := httptest.NewRecorder()
+	r.Static().ServeHTTP(sw, httptest.NewRequest("GET", "/static/fonts/OFL.txt", nil))
+	if sw.Code != 200 {
+		t.Errorf("OFL.txt: %d", sw.Code)
+	}
+}

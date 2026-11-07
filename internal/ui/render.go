@@ -253,7 +253,7 @@ func (r *Renderer) StaticURL(p string) string {
 	return "/static/" + p + "?v=" + v
 }
 
-// Static serves /static/ (app.css, app.js and the vendored htmx + idiomorph).
+// Static serves /static/ (app.css, app.js, the fonts and the vendored htmx + idiomorph).
 // A file asked for at its StaticURL is immutable for a year; at any other
 // URL the browser revalidates it by ETag.
 func (r *Renderer) Static() http.Handler {
