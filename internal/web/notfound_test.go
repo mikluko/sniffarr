@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // notFound returns the body of a 404 answer, the page in full.
@@ -29,6 +31,7 @@ func TestNotFound(t *testing.T) {
 	require.Contains(t, body, `<a class="btn" href="/">Home</a>`)
 	require.NotContains(t, body, `aria-current="page"`, "no tab is chosen")
 	require.Contains(t, body, "This product uses the TMDB API")
+	require.Contains(t, body, "sniffarr "+version.Get().Version+"</", "the footer names the build")
 
 	body = notFound(t, get(t, h, "/stats/old?lang=ru", ""))
 	require.Contains(t, body, `<h1>Дратути</h1>`)

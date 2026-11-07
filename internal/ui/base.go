@@ -7,22 +7,25 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 // Base is embedded in every page model. Templates call its methods for
 // translation and locale-aware formatting: {{.T "key"}}, {{$.Num .N}}, ...
 type Base struct {
-	Lang       string   // "ru" | "en"
-	Langs      []string // switcher entries
-	Nav        string   // "data" | "torrents" | "top" | "" (card, title page)
-	VoiceLangs []string // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
-	Path       string   // current path+query, for the language switcher
-	Seerr      string   // base URL of a Seerr the cards link titles to; "" links none
-	Radarr     string   // root URL of a Radarr the cards link movies to; "" links none
-	Sonarr     string   // root URL of a Sonarr the cards link series to; "" links none
-	Probes     bool     // whether the API probes releases; false hides the probe button, meter and queue
-	Classifier bool     // whether the API runs the Jev classifier; false hides its meter and layer on the data page
-	Feeds      bool     // whether the API reads tracker feeds; false labels P2 as feeds turned off
+	Lang       string       // "ru" | "en"
+	Langs      []string     // switcher entries
+	Nav        string       // "data" | "torrents" | "top" | "" (card, title page)
+	VoiceLangs []string     // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
+	Path       string       // current path+query, for the language switcher
+	Seerr      string       // base URL of a Seerr the cards link titles to; "" links none
+	Radarr     string       // root URL of a Radarr the cards link movies to; "" links none
+	Sonarr     string       // root URL of a Sonarr the cards link series to; "" links none
+	Probes     bool         // whether the API probes releases; false hides the probe button, meter and queue
+	Classifier bool         // whether the API runs the Jev classifier; false hides its meter and layer on the data page
+	Feeds      bool         // whether the API reads tracker feeds; false labels P2 as feeds turned off
+	Build      version.Info // the build the footer names
 	Loc        *time.Location
 	Now        time.Time
 
@@ -149,6 +152,17 @@ func (b Base) PctW(part, total int64) string {
 	}
 	v := math.Min(100, float64(part)*100/float64(total))
 	return strconv.FormatFloat(v, 'f', 1, 64) + "%"
+}
+
+// BuildTip is the tooltip of the footer's version, "Built 2026-11-07 14:02 UTC,
+// commit 1a2b3c4."; empty unless the build's time and commit are both known.
+func (b Base) BuildTip() string {
+	if b.Build.Built.IsZero() || b.Build.Commit == "" {
+		return ""
+	}
+	utc := b
+	utc.Loc = time.UTC
+	return b.Fmt("foot.build", utc.TimeFull(b.Build.Built), b.Build.Commit)
 }
 
 // Time formats a timestamp compactly: same year → "20.10 14:02", else "20.10.2025".

@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/mikluko/sniffarr/internal/version"
 )
 
 //go:embed templates/*.html static i18n/*.json icons/*.svg
@@ -209,7 +211,7 @@ func (r *Renderer) Base(req *http.Request, lang, nav string, voiceLangs []string
 	return Base{
 		Lang: lang, Langs: []string{"ru", "en"}, Nav: nav,
 		VoiceLangs: voiceLangs, Path: req.URL.RequestURI(),
-		Loc: loc, Now: time.Now(), msgs: r.msgs[lang],
+		Build: version.Get(), Loc: loc, Now: time.Now(), msgs: r.msgs[lang],
 	}
 }
 
