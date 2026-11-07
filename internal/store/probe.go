@@ -147,8 +147,8 @@ const leasesAfterMove = `CASE WHEN excluded.priority < task_queue.priority THEN 
 // its probe is done or its failures ran out without its peers growing; a
 // failed one waits out its backoff. A release already queued at PriorityArr
 // or behind moves to PriorityArr and to the time; a requested one stays as
-// it is. Each release it queues or moves is journaled as wanted, at most
-// once a day.
+// it is. Each release it queues or moves is journaled as wanted by a
+// search, unless a search was journaled on it within the last day.
 func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at time.Time) error {
 	if len(hashes) == 0 {
 		return nil

@@ -569,6 +569,15 @@ func TestJournalProbeWanted(t *testing.T) {
 		"a day after the last it is")
 	require.Len(t, entries(t, s, probed), 2)
 	require.Len(t, entries(t, s, spent), 2)
+
+	again := insertProbeable(t, s, 7, "Fargo.1996.2160p", 5, "Fargo.1996.2160p.mkv")
+	_, err = s.RequestProbe(ctx, []Hash{again}, t0)
+	require.NoError(t, err)
+	_, err = s.ProbeFailed(ctx, again, ProbeTimeout, 0, t0.Add(time.Minute), 3, time.Hour)
+	require.NoError(t, err)
+	require.NoError(t, s.WantProbe(ctx, []Hash{again}, ProbeWant{T: "movie", Query: "fargo"}, t0.Add(2*time.Hour)))
+	require.Equal(t, []string{"fetched/stored", "probe_wanted/request", "probed/timeout", "probe_wanted/search"}, entries(t, s, again),
+		"a request within the day does not hide a search that queued the probe again")
 }
 
 // leasedProbes returns the hash's probe_leased entries as outcome/attempt,

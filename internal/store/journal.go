@@ -200,11 +200,11 @@ func hashesOf(rows *sql.Rows, err error) ([]Hash, error) {
 	return out, rows.Err()
 }
 
-// wantedSince reports whether the hash has a probe_wanted entry younger
-// than journalWantedFor at the time.
+// wantedSince reports whether the hash has a probe_wanted entry of a search
+// younger than journalWantedFor at the time.
 func wantedSince(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) (bool, error) {
 	var recent bool
-	err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM torrent_journal WHERE infohash = ? AND kind = ? AND at > ?)`,
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM torrent_journal WHERE infohash = ? AND kind = ? AND outcome = 'search' AND at > ?)`,
 		h[:], JournalProbeWanted, at.Add(-journalWantedFor).Unix()).Scan(&recent)
 	return recent, err
 }
