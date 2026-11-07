@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- With audio off, the release card's journal no longer shows past audio probabilities.
+
 ## [0.44.0-alpha.4] - 2026-11-07
 
 ### Added

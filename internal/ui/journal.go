@@ -175,13 +175,14 @@ type SummaryPair struct {
 
 // JournalSummary returns the particulars of the entry a collapsed row shows,
 // those of journalSpec's summary keys it has, in their order, written as
-// summaryPair writes them; the tracks are how many the probe read.
+// summaryPair writes them; the tracks are how many the probe read. The audio
+// probabilities are left out while no dubbing language is configured.
 func (b Base) JournalSummary(e JournalEntry) []SummaryPair {
 	var out []SummaryPair
 	for _, k := range journalSpec[e.Kind][e.Outcome].summary {
 		v, ok := e.Detail[k]
 		switch {
-		case !ok:
+		case !ok || b.hiddenKey(k):
 		case k == "tracks":
 			out = append(out, b.summaryPair(e, k, e.trackCount()))
 		default:

@@ -168,7 +168,7 @@ func TestJournalRowsGolden(t *testing.T) {
 	} {
 		var out strings.Builder
 		for _, lang := range []string{"en", "ru"} {
-			b := r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", nil, loc)
+			b := r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", []string{"ru"}, loc)
 			b.Now = now
 			fmt.Fprintf(&out, "== %s\n", lang)
 			writeJournalRows(&out, b, b.JournalRows(c.es))

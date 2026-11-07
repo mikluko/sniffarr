@@ -522,15 +522,22 @@ func (b Base) JournalDetail(e JournalEntry) []DetailPair {
 	return b.journalDetail(e, "")
 }
 
-// journalDetail is JournalDetail without the particular of the key skip.
+// journalDetail is JournalDetail without the particular of the key skip, and
+// without the audio probabilities while no dubbing language is configured.
 func (b Base) journalDetail(e JournalEntry, skip string) []DetailPair {
 	out := make([]DetailPair, 0, len(e.Detail))
 	for _, f := range e.Fields() {
-		if f.Key != skip {
+		if f.Key != skip && !b.hiddenKey(f.Key) {
 			out = append(out, b.journalPair(e, f))
 		}
 	}
 	return out
+}
+
+// hiddenKey reports whether the journal leaves the particular of the key out:
+// the audio probabilities are past data of a feature that is off.
+func (b Base) hiddenKey(key string) bool {
+	return key == "audio" && len(b.VoiceLangs) == 0
 }
 
 // journalPair is the particular of the entry the field is, as JournalDetail

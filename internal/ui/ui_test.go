@@ -598,7 +598,7 @@ func TestJournalDetail(t *testing.T) {
 	}
 	loc := time.FixedZone("CEST", 2*3600)
 	base := func(lang string) Base {
-		return r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", nil, loc)
+		return r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", []string{"ru"}, loc)
 	}
 	var missing []string
 	onMissing = func(lang, key string) { missing = append(missing, lang+":"+key) }
@@ -686,6 +686,49 @@ func TestJournalDetail(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Errorf("untranslated keys: %v", missing)
+	}
+}
+
+// With no dubbing language configured the journal drops the audio
+// probabilities, in a row's summary and in its details; the tracks stay.
+func TestJournalAudioOff(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	classified := JournalEntry{Kind: "classified", Outcome: "jev", Detail: map[string]any{"audio": map[string]any{"ru": 0.88}, "source": "web"}}
+	probed := JournalEntry{Kind: "probed", Outcome: "tracks", Detail: map[string]any{"audio": map[string]any{"ru": 0.88}, "tracks": []any{"audio:rus:eac3"}}}
+	for _, c := range []struct {
+		name  string
+		langs []string
+		audio bool
+	}{{"on", []string{"ru"}, true}, {"off", nil, false}} {
+		b := r.Base(httptest.NewRequest("GET", "/t/x", nil), "en", "", c.langs, time.UTC)
+		shows := func(ps []DetailPair) bool {
+			for _, p := range ps {
+				if strings.Contains(p.Value, "88%") {
+					return true
+				}
+			}
+			return false
+		}
+		var summary []DetailPair
+		for _, s := range b.JournalSummary(classified) {
+			summary = append(summary, s.DetailPair)
+		}
+		if got := shows(summary); got != c.audio {
+			t.Errorf("%s: summary shows audio %v, want %v", c.name, got, c.audio)
+		}
+		if got := shows(b.JournalDetail(classified)); got != c.audio {
+			t.Errorf("%s: classified details show audio %v, want %v", c.name, got, c.audio)
+		}
+		rows := b.JournalRows([]JournalEntry{probed})
+		if len(rows) != 1 || len(rows[0].Tracks) != 1 {
+			t.Fatalf("%s: rows %+v, want one row with its track", c.name, rows)
+		}
+		if got := shows(rows[0].Details); got != c.audio {
+			t.Errorf("%s: probed row details show audio %v, want %v", c.name, got, c.audio)
+		}
 	}
 }
 
