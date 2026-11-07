@@ -36,16 +36,16 @@ const (
 	Sample   = "sample"
 )
 
-// Priorities order the queue, the lowest first, whatever the kind. A fetch
-// takes its discovery's; a peer lookup or a probe asked for in the web UI
-// takes PriorityRequest, a probe of a release a search returned
-// PriorityArr, and any other probe PrioritySample.
+// Priorities order the queue, P0 first, whatever the kind. A fetch takes
+// its discovery's; a peer lookup or a probe asked for in the web UI takes
+// PriorityRequest, a probe of a release a search returned PriorityArr, and
+// any other probe PrioritySample.
 const (
-	PriorityRequest  = -3
-	PriorityArr      = -2
-	PriorityFeed     = -1
-	PriorityAnnounce = 0
-	PrioritySample   = 1
+	PriorityRequest  = 0
+	PriorityArr      = 1
+	PriorityFeed     = 2
+	PriorityAnnounce = 3
+	PrioritySample   = 4
 )
 
 // Task is one leased task.

@@ -12,10 +12,10 @@ CREATE TABLE task_queue (
 );
 
 INSERT INTO task_queue (id, kind, infohash, priority, queued_at, attempts, not_before, lease_owner, lease_until)
-    SELECT id, 'fetch', infohash, priority, queued_at, attempts, not_before, lease_owner, lease_until FROM ingest_queue;
+    SELECT id, 'fetch', infohash, priority + 3, queued_at, attempts, not_before, lease_owner, lease_until FROM ingest_queue;
 
 INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
-    SELECT 'probe', t.infohash, -2, p.wanted_at * 1000, coalesce(p.retry_at, 0) * 1000
+    SELECT 'probe', t.infohash, 1, p.wanted_at * 1000, coalesce(p.retry_at, 0) * 1000
     FROM probe_releases p JOIN torrent_releases t ON t.id = p.torrent_id
     WHERE p.wanted_at IS NOT NULL AND (p.outcome IS NULL OR p.outcome = 'failed' AND p.peers_week IS NULL);
 
