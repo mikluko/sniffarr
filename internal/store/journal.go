@@ -86,13 +86,12 @@ type JournalEntry struct {
 	Detail string
 }
 
-// maxDetailString is the most bytes of a string Detail keeps.
+// maxDetailString is the most bytes of a string a journal entry keeps.
 const maxDetailString = 1 << 10
 
 // Detail builds an entry's particulars from key-value pairs, leaving out a
 // value that is "", 0, nil, empty or the zero time; a time is written in
-// Unix seconds, and a string of more than maxDetailString bytes is cut at
-// the last rune boundary within them and ends in "…".
+// Unix seconds.
 func Detail(kv ...any) map[string]any {
 	d := make(map[string]any, len(kv)/2)
 	for i := 0; i+1 < len(kv); i += 2 {
@@ -104,7 +103,6 @@ func Detail(kv ...any) map[string]any {
 			if x == "" {
 				continue
 			}
-			v = clip(x)
 		case int:
 			if x == 0 {
 				continue
@@ -136,8 +134,43 @@ func Detail(kv ...any) map[string]any {
 	return d
 }
 
-// clip cuts s to at most maxDetailString bytes at a rune boundary, marking
-// the cut with "…".
+// clipped returns v with clip applied to every string in it, the keys and
+// elements of its maps and lists at any depth among them.
+func clipped(v any) any {
+	switch x := v.(type) {
+	case string:
+		return clip(x)
+	case []string:
+		out := make([]string, len(x))
+		for i, s := range x {
+			out[i] = clip(s)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = clipped(e)
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, e := range x {
+			out[clip(k)] = clipped(e)
+		}
+		return out
+	case map[string]float64:
+		out := make(map[string]float64, len(x))
+		for k, e := range x {
+			out[clip(k)] = e
+		}
+		return out
+	}
+	return v
+}
+
+// clip returns s if it has at most maxDetailString bytes, else its longest
+// prefix of whole runes within them followed by "…": at most 1 KiB and the
+// marker's 3 bytes.
 func clip(s string) string {
 	if len(s) <= maxDetailString {
 		return s
@@ -152,15 +185,15 @@ func clip(s string) string {
 	return s[:end] + "…"
 }
 
-// journal writes one entry of the hash inside tx; an empty detail writes
-// NULL.
+// journal writes one entry of the hash inside tx, its detail clipped; an
+// empty detail writes NULL.
 func journal(ctx context.Context, tx *sql.Tx, h Hash, at time.Time, kind, outcome string, detail map[string]any) error {
 	var d any
 	if len(detail) > 0 {
 		var b strings.Builder
 		enc := json.NewEncoder(&b)
 		enc.SetEscapeHTML(false)
-		if err := enc.Encode(detail); err != nil {
+		if err := enc.Encode(clipped(detail)); err != nil {
 			return err
 		}
 		d = strings.TrimSuffix(b.String(), "\n")

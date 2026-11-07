@@ -110,6 +110,22 @@ func TestJournalDetailBounded(t *testing.T) {
 	require.Equal(t, "x"+strings.Repeat("ж", 511)+"…", nameOf(reject(2, "x"+strings.Repeat("ж", 1000))), "cut at a rune boundary")
 	short := reject(3, "Tom & Jerry <1940>")
 	require.Contains(t, short, `"name":"Tom & Jerry <1940>"`, "a short name unchanged, not escaped for HTML")
+
+	long, cut := strings.Repeat("x", 1<<20), strings.Repeat("x", 1<<10)+"…"
+	_, _, err := s.Insert(ctx, titled(4, "Heat.1995.1080p", "y:heat 1995"))
+	require.NoError(t, err)
+	_, _, err = s.RecordMatch(ctx, "y:heat 1995", Found{Error: long}, t0)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"error":"`+cut+`"}`, entry(t, s, hash(4), JournalMatched, "error").Detail, "a string set after Detail")
+
+	require.NoError(t, s.tx(ctx, func(tx *sql.Tx) error {
+		return journal(ctx, tx, hash(5), t0, JournalProbed, ProbeTracks, map[string]any{"tracks": []string{long, "audio"}, "list": []any{long, 1.0},
+			"nested": map[string]any{"deep": []any{map[string]any{"s": long}}}, long: 1})
+	}))
+	var d map[string]any
+	require.NoError(t, json.Unmarshal([]byte(entry(t, s, hash(5), JournalProbed, ProbeTracks).Detail), &d))
+	require.Equal(t, map[string]any{"tracks": []any{cut, "audio"}, "list": []any{cut, 1.0}, "nested": map[string]any{"deep": []any{map[string]any{"s": cut}}}, cut: 1.0}, d,
+		"every string, at any depth, keys among them")
 }
 
 func TestJournalProbedTracksBounded(t *testing.T) {
