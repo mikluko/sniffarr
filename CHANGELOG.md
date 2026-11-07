@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The notes under the task queue on the data page and under the top's controls open as a tooltip from a `?` next to them.
 
+### Fixed
+
+- The magnet link on the release card opens the torrent in a client and carries its name; it led nowhere.
+
 ## [0.43.0] - 2026-11-07
 
 ### Added
