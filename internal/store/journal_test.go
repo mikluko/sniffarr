@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"path/filepath"
 	"strconv"
@@ -18,6 +19,11 @@ import (
 	"github.com/mikluko/sniffarr/internal/database"
 	"github.com/mikluko/sniffarr/internal/rules"
 )
+
+// hexOf is the hash as a journal detail writes it.
+func hexOf(h Hash) string {
+	return hex.EncodeToString(h[:])
+}
 
 // entries returns the journal of the hash as kind/outcome, oldest first.
 func entries(t *testing.T, s *Store, h Hash) []string {
@@ -352,7 +358,7 @@ func TestJournalClassified(t *testing.T) {
 	require.JSONEq(t, `{"kind":"movie","kind_confidence":0.9,"source":"web","source_confidence":0.8,"audio":{"ru":0.7},"copied":2,"trigger":"search"}`,
 		entry(t, s, hash(1), JournalClassified, LayerJev).Detail)
 	for _, h := range []Hash{hash(2), hash(3)} {
-		require.JSONEq(t, `{"kind":"movie","from":`+strconv.FormatInt(one.ID, 10)+`}`, entry(t, s, h, JournalClassified, LayerReuse).Detail)
+		require.JSONEq(t, `{"kind":"movie","from":"`+hexOf(hash(1))+`"}`, entry(t, s, h, JournalClassified, LayerReuse).Detail, "the sibling by infohash")
 	}
 	classify(t, s, mustGet(t, s, hash(2)).ID, Classification{Source: "remux", Trigger: TriggerWorker})
 	require.JSONEq(t, `{"source":"remux","trigger":"worker"}`, entry(t, s, hash(2), JournalClassified, LayerJev).Detail, "a kind known already is not asked about")
@@ -363,6 +369,14 @@ func TestJournalClassified(t *testing.T) {
 	require.NoError(t, s.ClassifyFailed(ctx, mustGet(t, s, hash(3)).ID, "malformed", t0))
 	require.JSONEq(t, `{"error":"malformed"}`, entry(t, s, hash(3), JournalClassified, "failed").Detail)
 	require.NoError(t, s.ClassifyFailed(ctx, 99, "malformed", t0), "an unknown ID is nothing")
+
+	unknown := torrent(4, "Heat.1995.1080p")
+	unknown.TitleKey = "y:heat 1995"
+	_, _, err := s.Insert(ctx, unknown)
+	require.NoError(t, err)
+	_, _, err = s.Insert(ctx, titled(5, "Heat.1995.2160p", "y:heat 1995"))
+	require.NoError(t, err)
+	require.JSONEq(t, `{"kind":"movie","from":"`+hexOf(hash(5))+`"}`, entry(t, s, hash(4), JournalClassified, LayerReuse).Detail, "a kind a stored sibling brings")
 }
 
 func TestJournalReuseCapped(t *testing.T) {

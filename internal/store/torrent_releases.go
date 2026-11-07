@@ -233,7 +233,7 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 				return err
 			}
 		}
-		return journalEach(ctx, tx, siblings, journalReuse, t.SeenAt, JournalClassified, LayerReuse, Detail("kind", t.Kind, "from", id))
+		return journalEach(ctx, tx, siblings, journalReuse, t.SeenAt, JournalClassified, LayerReuse, Detail("kind", t.Kind, "from", hex.EncodeToString(t.Hash[:])))
 	})
 	return inserted, copied, err
 }
@@ -536,7 +536,7 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 			"source_confidence", c.SourceConfidence, "audio", c.Audio, "copied", copied, "trigger", c.Trigger)); err != nil {
 			return err
 		}
-		return journalEach(ctx, tx, siblings, journalReuse, at, JournalClassified, LayerReuse, Detail("kind", c.Kind, "from", id))
+		return journalEach(ctx, tx, siblings, journalReuse, at, JournalClassified, LayerReuse, Detail("kind", c.Kind, "from", hex.EncodeToString(h[:])))
 	})
 	return copied, err
 }
