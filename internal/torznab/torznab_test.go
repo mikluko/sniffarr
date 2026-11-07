@@ -371,6 +371,7 @@ func TestTitleRussianCodes(t *testing.T) {
 		{"Bad.Apples.2025.Pm.WEB-DL.1O8Op.mkv", "Bad.Apples.2025.Pm.WEB-DL.1080p.mkv [RUS, -]"},
 		{"Movie.2001.A.P2.D.BDRip.1080p", "Movie.2001.A.P2.D.BDRip.1080p [Dub, DVO, AVO, RUS]"},
 		{"Movie (2001) BDRip 1080p | L1 | MVO", "Movie (2001) BDRip 1080p | L1 | MVO [VO, RUS]"},
+		{"Movie.2001.P.WEB-DL.MVO", "Movie.2001.P.WEB-DL.MVO [MVO, RUS]"},
 	} {
 		require.Equal(t, c.want, itemOf(marked(c.name)).Title, c.name)
 	}
@@ -445,10 +446,12 @@ func TestTitleProbedTracks(t *testing.T) {
 			name + " [RUS, -]"},
 		{"the studios of a marker stay", probed(name, &sniffarrv1.Audio{Marker: true, Probability: one, Studios: []string{"LostFilm"}}, audioTrack("rus", "MVO")),
 			name + " [MVO, RUS LostFilm]"},
-		{"a label the name has", probed("Coraline.2009.2160p.2xDub.MVO", nil, audioTrack("rus", "Дубляж"), audioTrack("rus", "Многоголосый"), audioTrack("rus", "АВО")),
-			"Coraline.2009.2160p.2xDub.MVO [AVO, RUS]"},
-		{"every label in the name", probed("Coraline.2009.2160p.Dub", nil, audioTrack("rus", "Дубляж")),
-			"Coraline.2009.2160p.Dub [RUS, -]"},
+		{"labels the name has", probed("Coraline.2009.2160p.2xDub.MVO", nil, audioTrack("rus", "Дубляж"), audioTrack("rus", "Многоголосый"), audioTrack("rus", "АВО")),
+			"Coraline.2009.2160p.2xDub.MVO [Dub, MVO, AVO, RUS]"},
+		{"a dub of another language in the name", probed("Coraline.2009.2160p.HIN.DUB", nil, audioTrack("rus", "Дубляж")),
+			"Coraline.2009.2160p.HIN.DUB [Dub, RUS]"},
+		{"a one-voice track of another language in the name", probed("Coraline.2009.2160p.VO-VF", nil, audioTrack("rus", "Одноголосый, Сербин")),
+			"Coraline.2009.2160p.VO-VF [VO, RUS]"},
 		{"a Ukrainian dub in the name", probed("Coraline.2009.2160p.Dub (Ukr)", nil, audioTrack("rus", "Дубляж")),
 			"Coraline.2009.2160p.Dub (Ukr) [Dub, RUS]"},
 		{"no Russian track", probed(name, &sniffarrv1.Audio{Probability: new(float32(0))}, audioTrack("eng", ""), audioTrack("ukr", "Дубляж")),

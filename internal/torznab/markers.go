@@ -17,20 +17,6 @@ type voice struct {
 	label string
 	// track matches a track name that says the voice.
 	track *regexp.Regexp
-	// name matches the label in a release name as the custom format does,
-	// save where unless matches the text that follows.
-	name   *regexp.Regexp
-	unless *regexp.Regexp
-}
-
-// inName reports whether the custom format of v matches the release name.
-func (v voice) inName(name string) bool {
-	for _, m := range v.name.FindAllStringIndex(name, -1) {
-		if v.unless == nil || !v.unless.MatchString(name[m[1]:]) {
-			return true
-		}
-	}
-	return false
 }
 
 // Word boundaries in any script; regexp's \b knows ASCII only.
@@ -49,23 +35,18 @@ func voiceOf(label, words, abbrev string) voice {
 	return voice{
 		label: label,
 		track: regexp.MustCompile(`(?i:` + words + `)|` + wordStart + `(?:` + abbrevs + `)` + wordEnd),
-		name:  regexp.MustCompile(`(?i)\b\d*x?\s*` + label + `\b`),
 	}
 }
 
 // voices are in the order a title lists them; a track takes the first that
 // matches its name.
-var voices = func() []voice {
-	dub := voiceOf("Dub", `дубл|dubbing|dubbed`, "")
-	dub.unless = regexp.MustCompile(`(?i)^\s*\(?\s*Ukr`)
-	return []voice{
-		dub,
-		voiceOf("MVO", `многоголос`, `МВО`),
-		voiceOf("DVO", `двухголос|двуголос`, `ДВО`),
-		voiceOf("AVO", `авторск`, `АВО`),
-		voiceOf("VO", `одноголос`, `ВО`),
-	}
-}()
+var voices = []voice{
+	voiceOf("Dub", `дубл|dubbing|dubbed`, ""),
+	voiceOf("MVO", `многоголос`, `МВО`),
+	voiceOf("DVO", `двухголос|двуголос`, `ДВО`),
+	voiceOf("AVO", `авторск`, `АВО`),
+	voiceOf("VO", `одноголос`, `ВО`),
+}
 
 func audioTracks(tracks []*sniffarrv1.Track) []*sniffarrv1.Track {
 	var out []*sniffarrv1.Track

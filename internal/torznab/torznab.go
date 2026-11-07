@@ -299,11 +299,11 @@ const russian = 0.9
 // title is the release's name with its year and resolution in digits,
 // followed by markers in brackets for the release-title custom formats of
 // Radarr and Sonarr. With a Russian audio track probed, they are the labels
-// of the Russian tracks' names the name lacks and RUS, as in
-// " [Dub, MVO, RUS]"; with probed audio tracks all of other languages and no
-// Russian marker, NORUS and the tracks' languages, as in " [NORUS ENG, UKR]";
-// else, for a Russian marker or a probability of at least russian, the
-// labels of the name's translation codes it lacks and RUS, as in
+// of the Russian tracks' names and RUS, as in " [Dub, MVO, RUS]"; with
+// probed audio tracks all of other languages and no Russian marker, NORUS
+// and the tracks' languages, as in " [NORUS ENG, UKR]"; else, for a Russian
+// marker or a probability of at least russian, the labels of the name's
+// translation codes and RUS, as in
 // " [MVO, RUS]" for P. RUS carries the Russian audio's studios; with no
 // label and no studio the block is " [RUS, -]".
 func title(r *sniffarrv1.Release) string {
@@ -317,31 +317,31 @@ func title(r *sniffarrv1.Release) string {
 	rus := strings.Join(append([]string{"RUS"}, ru.GetStudios()...), " ")
 	tracks := audioTracks(r.GetTracks())
 	if labels, ok := russianLabels(tracks); ok {
-		return name + bracket(name, labels, rus)
+		return name + bracket(labels, rus)
 	}
 	if langs := otherLanguages(tracks); langs != "" && !ru.GetMarker() {
 		return name + " [" + langs + "]"
 	}
 	if ru != nil && (ru.GetMarker() || ru.Probability != nil && ru.GetProbability() >= russian) {
-		return name + bracket(name, codeLabels(name), rus)
+		return name + bracket(codeLabels(name), rus)
 	}
 	return name
 }
 
-// bracket is " [", the labels of voices name lacks, rus, and "]"; a block
-// of rus alone, when rus is a single word, gets ", -" after it, since Radarr
-// reads a bare trailing word in brackets as the release group.
-func bracket(name string, voices []voice, rus string) string {
-	var add []string
+// bracket is " [", the labels of voices, rus, and "]", whatever labels the
+// name has: the custom formats rank a release by the best kind they read,
+// so a label twice costs nothing. A block of rus alone, when rus is a single
+// word, gets ", -" after it, since Radarr reads a bare trailing word in
+// brackets as the release group.
+func bracket(voices []voice, rus string) string {
+	labels := make([]string, 0, len(voices)+1)
 	for _, v := range voices {
-		if !v.inName(name) {
-			add = append(add, v.label)
-		}
+		labels = append(labels, v.label)
 	}
-	if len(add) == 0 && !strings.Contains(rus, " ") {
+	if len(labels) == 0 && !strings.Contains(rus, " ") {
 		return " [" + rus + ", -]"
 	}
-	return " [" + strings.Join(append(add, rus), ", ") + "]"
+	return " [" + strings.Join(append(labels, rus), ", ") + "]"
 }
 
 // itemOf is the item of a release. Its seeders and peers are both the
