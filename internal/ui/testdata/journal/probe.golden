@@ -1,0 +1,20 @@
+== en
+2026-10-19 00:07 +0s probe [normal] tracks read | audio track probability: Russian 100% · tracks: 4 · downloaded: 4.0 MB
+  step 2026-10-18 23:05 probe_wanted/search [normal] | searched by: TMDB 693134 · query: dune part two · search type: movie | searched by: TMDB 693134 · query: dune part two · search type: movie
+  step 2026-10-19 00:05 probe_leased/search [normal] | attempt: 1 · leased until: 00:15 · may download: 64.0 MB | attempt: 1 · leased until: 00:15 · may download: 64.0 MB
+  step 2026-10-19 00:07 probed/tracks [normal] | audio track probability: Russian 100% · tracks: 4 · downloaded: 4.0 MB | audio track probability: Russian 100% · downloaded: 4.0 MB · format: matroska · file: Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv · tracks: video V_MPEGH/ISO/HEVC, audio rus A_EAC3, audio eng A_EAC3, subtitle rus S_TEXT/UTF8
+  details | audio track probability: Russian 100% · downloaded: 4.0 MB · format: matroska · file: Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv · tracks: video V_MPEGH/ISO/HEVC, audio rus A_EAC3, audio eng A_EAC3, subtitle rus S_TEXT/UTF8
+  track video||V_MPEGH/ISO/HEVC
+  track audio|rus|A_EAC3
+  track audio|eng|A_EAC3
+  track subtitle|rus|S_TEXT/UTF8
+== ru
+19.10.2026 00:07 +0s probe [normal] дорожки прочитаны | вероятность звуковой дорожки: русская 100% · дорожки: 4 · скачано: 4,0 МБ
+  step 18.10.2026 23:05 probe_wanted/search [normal] | искали по: TMDB 693134 · запрос: dune part two · тип поиска: фильм | искали по: TMDB 693134 · запрос: dune part two · тип поиска: фильм
+  step 19.10.2026 00:05 probe_leased/search [normal] | попытка: 1 · выдана до: 00:15 · можно скачать: 64,0 МБ | попытка: 1 · выдана до: 00:15 · можно скачать: 64,0 МБ
+  step 19.10.2026 00:07 probed/tracks [normal] | вероятность звуковой дорожки: русская 100% · дорожки: 4 · скачано: 4,0 МБ | вероятность звуковой дорожки: русская 100% · скачано: 4,0 МБ · формат: matroska · файл: Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv · дорожки: видео V_MPEGH/ISO/HEVC, звук rus A_EAC3, звук eng A_EAC3, субтитры rus S_TEXT/UTF8
+  details | вероятность звуковой дорожки: русская 100% · скачано: 4,0 МБ · формат: matroska · файл: Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv · дорожки: видео V_MPEGH/ISO/HEVC, звук rus A_EAC3, звук eng A_EAC3, субтитры rus S_TEXT/UTF8
+  track video||V_MPEGH/ISO/HEVC
+  track audio|rus|A_EAC3
+  track audio|eng|A_EAC3
+  track subtitle|rus|S_TEXT/UTF8

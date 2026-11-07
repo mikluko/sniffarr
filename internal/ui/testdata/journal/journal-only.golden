@@ -1,0 +1,14 @@
+== en
+2026-10-20 12:05 +1h0m0s fetch [final] rejected | reason: adult · size: 1.0 GB
+  step 2026-10-20 11:06 leased/fetch [normal] | attempt: 1 | attempt: 1 · owner: 2
+  step 2026-10-20 12:05 fetched/rejected [final] | reason: adult · size: 1.0 GB | name: xxx · reason: adult · size: 1.0 GB
+  details | name: xxx · reason: adult · size: 1.0 GB
+2026-10-20 11:05 +0s sighted [normal] queued | discovered by: announce
+  details | discovered by: announce
+== ru
+20.10.2026 12:05 +1h0m0s fetch [final] отброшены | причина: для взрослых · размер: 1,0 ГБ
+  step 20.10.2026 11:06 leased/fetch [normal] | попытка: 1 | попытка: 1 · owner: 2
+  step 20.10.2026 12:05 fetched/rejected [final] | причина: для взрослых · размер: 1,0 ГБ | название: xxx · причина: для взрослых · размер: 1,0 ГБ
+  details | название: xxx · причина: для взрослых · размер: 1,0 ГБ
+20.10.2026 11:05 +0s sighted [normal] поставлена в очередь | обнаружена через: announce
+  details | обнаружена через: announce

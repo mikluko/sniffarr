@@ -1,0 +1,14 @@
+== en
+2026-10-18 21:05 +0s fetch [retry] stored on the 2nd attempt | files: 14 · size: 24.8 GB · queued: 20:59
+  step 2026-10-18 21:00 leased/fetch [normal] | attempt: 1 · leased until: 21:01 | attempt: 1 · leased until: 21:01
+  step 2026-10-18 21:02 fetch_failed/timeout [retry] | attempt: 1 · next try: 21:03 · leased: 2 times | attempt: 1 · leased: 2 times · next try: 21:03
+  step 2026-10-18 21:03 leased/fetch [normal] | attempt: 2 · leased until: 21:04 | attempt: 2 · leased until: 21:04
+  step 2026-10-18 21:05 fetched/stored [normal] | files: 14 · size: 24.8 GB · queued: 20:59 | discovered by: announce · files: 14 · leased: 2 times · name: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · queued: 20:59 · size: 24.8 GB
+  details | discovered by: announce · files: 14 · leased: 2 times · name: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · queued: 20:59 · size: 24.8 GB
+== ru
+18.10.2026 21:05 +0s fetch [retry] сохранены со 2-й попытки | файлов: 14 · размер: 24,8 ГБ · в очереди с: 20:59
+  step 18.10.2026 21:00 leased/fetch [normal] | попытка: 1 · выдана до: 21:01 | попытка: 1 · выдана до: 21:01
+  step 18.10.2026 21:02 fetch_failed/timeout [retry] | попытка: 1 · следующая попытка: 21:03 · выдана: 2 раза | попытка: 1 · выдана: 2 раза · следующая попытка: 21:03
+  step 18.10.2026 21:03 leased/fetch [normal] | попытка: 2 · выдана до: 21:04 | попытка: 2 · выдана до: 21:04
+  step 18.10.2026 21:05 fetched/stored [normal] | файлов: 14 · размер: 24,8 ГБ · в очереди с: 20:59 | обнаружена через: announce · файлов: 14 · выдана: 2 раза · название: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · в очереди с: 20:59 · размер: 24,8 ГБ
+  details | обнаружена через: announce · файлов: 14 · выдана: 2 раза · название: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · в очереди с: 20:59 · размер: 24,8 ГБ

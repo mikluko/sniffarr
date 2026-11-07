@@ -1,0 +1,694 @@
+== en
+2026-10-03 20:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-03 16:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-03 16:50 probed/timeout [retry] | attempt: 1 · next try: 17:05 | attempt: 1 · attempts ran out: no · next try: 17:05
+  step 2026-10-03 18:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-03 18:50 probed/timeout [retry] | attempt: 2 · next try: 19:05 | attempt: 2 · attempts ran out: no · next try: 19:05
+  step 2026-10-03 20:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-03 20:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-03 20:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 20:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 20:05
+  step 2026-10-03 20:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 20:05 | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 20:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 20:05 | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 18:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 18:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 18:05
+  step 2026-10-03 18:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 18:05 | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 18:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 18:05 | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 16:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 16:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 16:05
+  step 2026-10-03 16:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 16:05 | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 16:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 16:05 | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 14:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-03 10:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-03 10:50 probed/timeout [retry] | attempt: 1 · next try: 11:05 | attempt: 1 · attempts ran out: no · next try: 11:05
+  step 2026-10-03 12:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-03 12:50 probed/timeout [retry] | attempt: 2 · next try: 13:05 | attempt: 2 · attempts ran out: no · next try: 13:05
+  step 2026-10-03 14:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-03 14:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-03 14:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 14:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 14:05
+  step 2026-10-03 14:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 14:05 | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 14:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 14:05 | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 12:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 12:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 12:05
+  step 2026-10-03 12:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 12:05 | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 12:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 12:05 | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 10:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 10:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 10:05
+  step 2026-10-03 10:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 10:05 | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 10:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 10:05 | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 08:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-03 04:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-03 04:50 probed/timeout [retry] | attempt: 1 · next try: 05:05 | attempt: 1 · attempts ran out: no · next try: 05:05
+  step 2026-10-03 06:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-03 06:50 probed/timeout [retry] | attempt: 2 · next try: 07:05 | attempt: 2 · attempts ran out: no · next try: 07:05
+  step 2026-10-03 08:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-03 08:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-03 08:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 08:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 08:05
+  step 2026-10-03 08:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 08:05 | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 08:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 08:05 | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 06:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 06:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 06:05
+  step 2026-10-03 06:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 06:05 | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 06:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 06:05 | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 04:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 04:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 04:05
+  step 2026-10-03 04:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 04:05 | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 04:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 04:05 | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 02:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-02 22:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-02 22:50 probed/timeout [retry] | attempt: 1 · next try: 23:05 | attempt: 1 · attempts ran out: no · next try: 23:05
+  step 2026-10-03 00:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-03 00:50 probed/timeout [retry] | attempt: 2 · next try: 01:05 | attempt: 2 · attempts ran out: no · next try: 01:05
+  step 2026-10-03 02:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-03 02:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-03 02:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 02:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 02:05
+  step 2026-10-03 02:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 02:05 | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 02:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 02:05 | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-03 00:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-03 00:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 00:05
+  step 2026-10-03 00:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 00:05 | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-03 00:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 00:05 | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 22:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 22:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 22:05
+  step 2026-10-02 22:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 22:05 | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 22:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 22:05 | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 20:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-02 16:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-02 16:50 probed/timeout [retry] | attempt: 1 · next try: 17:05 | attempt: 1 · attempts ran out: no · next try: 17:05
+  step 2026-10-02 18:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-02 18:50 probed/timeout [retry] | attempt: 2 · next try: 19:05 | attempt: 2 · attempts ran out: no · next try: 19:05
+  step 2026-10-02 20:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-02 20:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-02 20:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 20:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 20:05
+  step 2026-10-02 20:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 20:05 | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 20:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 20:05 | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 18:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 18:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 18:05
+  step 2026-10-02 18:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 18:05 | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 18:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 18:05 | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 16:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 16:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 16:05
+  step 2026-10-02 16:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 16:05 | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 16:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 16:05 | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 14:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-02 10:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-02 10:50 probed/timeout [retry] | attempt: 1 · next try: 11:05 | attempt: 1 · attempts ran out: no · next try: 11:05
+  step 2026-10-02 12:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-02 12:50 probed/timeout [retry] | attempt: 2 · next try: 13:05 | attempt: 2 · attempts ran out: no · next try: 13:05
+  step 2026-10-02 14:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-02 14:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-02 14:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 14:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 14:05
+  step 2026-10-02 14:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 14:05 | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 14:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 14:05 | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 12:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 12:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 12:05
+  step 2026-10-02 12:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 12:05 | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 12:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 12:05 | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 10:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 10:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 10:05
+  step 2026-10-02 10:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 10:05 | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 10:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 10:05 | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 08:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-02 04:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-02 04:50 probed/timeout [retry] | attempt: 1 · next try: 05:05 | attempt: 1 · attempts ran out: no · next try: 05:05
+  step 2026-10-02 06:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-02 06:50 probed/timeout [retry] | attempt: 2 · next try: 07:05 | attempt: 2 · attempts ran out: no · next try: 07:05
+  step 2026-10-02 08:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-02 08:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-02 08:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 08:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 08:05
+  step 2026-10-02 08:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 08:05 | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 08:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 08:05 | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 06:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 06:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 06:05
+  step 2026-10-02 06:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 06:05 | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 06:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 06:05 | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 04:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 04:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 04:05
+  step 2026-10-02 04:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 04:05 | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 04:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 04:05 | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 02:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-01 22:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-01 22:50 probed/timeout [retry] | attempt: 1 · next try: 23:05 | attempt: 1 · attempts ran out: no · next try: 23:05
+  step 2026-10-02 00:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-02 00:50 probed/timeout [retry] | attempt: 2 · next try: 01:05 | attempt: 2 · attempts ran out: no · next try: 01:05
+  step 2026-10-02 02:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-02 02:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-02 02:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 02:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 02:05
+  step 2026-10-02 02:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 02:05 | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 02:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 02:05 | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-02 00:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-02 00:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 00:05
+  step 2026-10-02 00:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 00:05 | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-02 00:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 00:05 | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 22:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 22:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 22:05
+  step 2026-10-01 22:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 22:05 | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 22:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 22:05 | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 20:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-01 16:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-01 16:50 probed/timeout [retry] | attempt: 1 · next try: 17:05 | attempt: 1 · attempts ran out: no · next try: 17:05
+  step 2026-10-01 18:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-01 18:50 probed/timeout [retry] | attempt: 2 · next try: 19:05 | attempt: 2 · attempts ran out: no · next try: 19:05
+  step 2026-10-01 20:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-01 20:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-01 20:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 20:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 20:05
+  step 2026-10-01 20:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 20:05 | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 20:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 20:05 | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 18:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 18:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 18:05
+  step 2026-10-01 18:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 18:05 | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 18:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 18:05 | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 16:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 16:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 16:05
+  step 2026-10-01 16:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 16:05 | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 16:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 16:05 | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 14:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-01 10:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-01 10:50 probed/timeout [retry] | attempt: 1 · next try: 11:05 | attempt: 1 · attempts ran out: no · next try: 11:05
+  step 2026-10-01 12:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-01 12:50 probed/timeout [retry] | attempt: 2 · next try: 13:05 | attempt: 2 · attempts ran out: no · next try: 13:05
+  step 2026-10-01 14:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-01 14:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-01 14:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 14:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 14:05
+  step 2026-10-01 14:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 14:05 | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 14:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 14:05 | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 14:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 12:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 12:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 12:05
+  step 2026-10-01 12:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 12:05 | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 12:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 12:05 | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 12:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 10:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 10:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 10:05
+  step 2026-10-01 10:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 10:05 | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 10:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 10:05 | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 10:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 08:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-10-01 04:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-10-01 04:50 probed/timeout [retry] | attempt: 1 · next try: 05:05 | attempt: 1 · attempts ran out: no · next try: 05:05
+  step 2026-10-01 06:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-01 06:50 probed/timeout [retry] | attempt: 2 · next try: 07:05 | attempt: 2 · attempts ran out: no · next try: 07:05
+  step 2026-10-01 08:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-01 08:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-01 08:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 08:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 08:05
+  step 2026-10-01 08:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 08:05 | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 08:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 08:05 | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 08:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 06:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 06:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 06:05
+  step 2026-10-01 06:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 06:05 | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 06:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 06:05 | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 06:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 04:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 04:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 04:05
+  step 2026-10-01 04:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 04:05 | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 04:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 04:05 | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 04:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 02:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-09-30 22:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-09-30 22:50 probed/timeout [retry] | attempt: 1 · next try: 23:05 | attempt: 1 · attempts ran out: no · next try: 23:05
+  step 2026-10-01 00:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-10-01 00:50 probed/timeout [retry] | attempt: 2 · next try: 01:05 | attempt: 2 · attempts ran out: no · next try: 01:05
+  step 2026-10-01 02:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-10-01 02:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-10-01 02:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 02:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 02:05
+  step 2026-10-01 02:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 02:05 | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 02:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 02:05 | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 02:05 · size: 1.0 GB · feed: rutor · title: x
+2026-10-01 00:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-10-01 00:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 00:05
+  step 2026-10-01 00:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 00:05 | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-10-01 00:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 00:05 | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 00:05 · size: 1.0 GB · feed: rutor · title: x
+2026-09-30 22:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-09-30 22:06 +1h16m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 22:05
+  step 2026-09-30 22:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 22:05 | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-09-30 22:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 22:05 | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 22:05 · size: 1.0 GB · feed: rutor · title: x
+2026-09-30 20:50 +43m0s probe [final] timeout after 3 attempts | attempt: 3
+  step 2026-09-30 16:45 probe_leased/background [normal] | attempt: 1 | attempt: 1
+  step 2026-09-30 16:50 probed/timeout [retry] | attempt: 1 · next try: 17:05 | attempt: 1 · attempts ran out: no · next try: 17:05
+  step 2026-09-30 18:45 probe_leased/background [normal] | attempt: 2 | attempt: 2
+  step 2026-09-30 18:50 probed/timeout [retry] | attempt: 2 · next try: 19:05 | attempt: 2 · attempts ran out: no · next try: 19:05
+  step 2026-09-30 20:45 probe_leased/background [normal] | attempt: 3 | attempt: 3
+  step 2026-09-30 20:50 probed/timeout [final] | attempt: 3 | attempt: 3 · attempts ran out: yes
+  details | attempt: 3 · attempts ran out: yes
+2026-09-30 20:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-09-30 20:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 20:05
+  step 2026-09-30 20:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 20:05 | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-09-30 20:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 20:05 | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 20:05 · size: 1.0 GB · feed: rutor · title: x
+2026-09-30 18:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-09-30 18:06 +1h59m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 18:05
+  step 2026-09-30 18:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 18:05 | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-09-30 18:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 18:05 | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 18:05 · size: 1.0 GB · feed: rutor · title: x
+2026-09-30 16:07 +0s matched [retry] nothing found | asked by: the worker
+  details | asked by: the worker
+2026-09-30 16:06 +1h55m0s feed [normal] 2 times: rutor | size: 1.0 GB · first published: 16:05
+  step 2026-09-30 16:05 feed/already_queued [normal] | feed: rutor · size: 1.0 GB · published: 16:05 | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+  step 2026-09-30 16:06 feed/stored [normal] | feed: rutor · size: 1.0 GB · published: 16:05 | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+  details | published: 16:05 · size: 1.0 GB · feed: rutor · title: x
+2026-09-30 14:11 +0s fetch [retry] stored on the 2nd attempt | files: 1 · size: 1.0 GB
+  step 2026-09-30 14:06 leased/fetch [normal] | attempt: 1 · leased until: 14:07 | attempt: 1 · leased until: 14:07
+  step 2026-09-30 14:08 fetch_failed/timeout [retry] | attempt: 1 · next try: 14:10 · leased: 1 time | attempt: 1 · leased: 1 time · next try: 14:10
+  step 2026-09-30 14:10 leased/fetch [normal] | attempt: 2 · leased until: 14:11 | attempt: 2 · leased until: 14:11
+  step 2026-09-30 14:11 fetched/stored [normal] | files: 1 · size: 1.0 GB | files: 1 · leased: 2 times · name: x · size: 1.0 GB
+  details | files: 1 · leased: 2 times · name: x · size: 1.0 GB
+2026-09-30 14:05 +0s sighted [normal] queued | discovered by: announce
+  details | discovered by: announce
+== ru
+03.10.2026 20:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 03.10.2026 16:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 03.10.2026 16:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 17:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 17:05
+  step 03.10.2026 18:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 03.10.2026 18:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 19:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 19:05
+  step 03.10.2026 20:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 03.10.2026 20:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+03.10.2026 20:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 20:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 20:05
+  step 03.10.2026 20:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 20:05 | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 20:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 20:05 | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 18:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 18:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 18:05
+  step 03.10.2026 18:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 18:05 | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 18:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 18:05 | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 16:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 16:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 16:05
+  step 03.10.2026 16:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 16:05 | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 16:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 16:05 | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 14:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 03.10.2026 10:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 03.10.2026 10:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 11:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 11:05
+  step 03.10.2026 12:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 03.10.2026 12:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 13:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 13:05
+  step 03.10.2026 14:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 03.10.2026 14:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+03.10.2026 14:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 14:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 14:05
+  step 03.10.2026 14:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 14:05 | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 14:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 14:05 | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 12:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 12:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 12:05
+  step 03.10.2026 12:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 12:05 | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 12:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 12:05 | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 10:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 10:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 10:05
+  step 03.10.2026 10:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 10:05 | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 10:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 10:05 | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 08:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 03.10.2026 04:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 03.10.2026 04:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 05:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 05:05
+  step 03.10.2026 06:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 03.10.2026 06:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 07:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 07:05
+  step 03.10.2026 08:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 03.10.2026 08:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+03.10.2026 08:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 08:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 08:05
+  step 03.10.2026 08:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 08:05 | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 08:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 08:05 | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 06:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 06:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 06:05
+  step 03.10.2026 06:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 06:05 | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 06:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 06:05 | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 04:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 04:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 04:05
+  step 03.10.2026 04:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 04:05 | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 04:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 04:05 | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 02:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 02.10.2026 22:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 02.10.2026 22:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 23:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 23:05
+  step 03.10.2026 00:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 03.10.2026 00:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 01:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 01:05
+  step 03.10.2026 02:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 03.10.2026 02:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+03.10.2026 02:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 02:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 02:05
+  step 03.10.2026 02:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 02:05 | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 02:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 02:05 | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+03.10.2026 00:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+03.10.2026 00:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 00:05
+  step 03.10.2026 00:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 00:05 | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 03.10.2026 00:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 00:05 | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 22:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 22:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 22:05
+  step 02.10.2026 22:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 22:05 | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 22:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 22:05 | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 20:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 02.10.2026 16:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 02.10.2026 16:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 17:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 17:05
+  step 02.10.2026 18:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 02.10.2026 18:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 19:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 19:05
+  step 02.10.2026 20:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 02.10.2026 20:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+02.10.2026 20:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 20:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 20:05
+  step 02.10.2026 20:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 20:05 | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 20:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 20:05 | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 18:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 18:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 18:05
+  step 02.10.2026 18:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 18:05 | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 18:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 18:05 | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 16:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 16:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 16:05
+  step 02.10.2026 16:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 16:05 | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 16:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 16:05 | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 14:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 02.10.2026 10:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 02.10.2026 10:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 11:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 11:05
+  step 02.10.2026 12:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 02.10.2026 12:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 13:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 13:05
+  step 02.10.2026 14:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 02.10.2026 14:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+02.10.2026 14:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 14:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 14:05
+  step 02.10.2026 14:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 14:05 | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 14:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 14:05 | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 12:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 12:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 12:05
+  step 02.10.2026 12:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 12:05 | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 12:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 12:05 | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 10:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 10:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 10:05
+  step 02.10.2026 10:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 10:05 | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 10:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 10:05 | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 08:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 02.10.2026 04:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 02.10.2026 04:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 05:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 05:05
+  step 02.10.2026 06:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 02.10.2026 06:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 07:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 07:05
+  step 02.10.2026 08:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 02.10.2026 08:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+02.10.2026 08:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 08:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 08:05
+  step 02.10.2026 08:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 08:05 | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 08:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 08:05 | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 06:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 06:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 06:05
+  step 02.10.2026 06:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 06:05 | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 06:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 06:05 | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 04:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 04:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 04:05
+  step 02.10.2026 04:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 04:05 | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 04:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 04:05 | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 02:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 01.10.2026 22:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 01.10.2026 22:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 23:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 23:05
+  step 02.10.2026 00:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 02.10.2026 00:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 01:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 01:05
+  step 02.10.2026 02:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 02.10.2026 02:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+02.10.2026 02:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 02:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 02:05
+  step 02.10.2026 02:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 02:05 | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 02:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 02:05 | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+02.10.2026 00:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+02.10.2026 00:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 00:05
+  step 02.10.2026 00:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 00:05 | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 02.10.2026 00:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 00:05 | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 22:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 22:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 22:05
+  step 01.10.2026 22:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 22:05 | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 22:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 22:05 | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 20:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 01.10.2026 16:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 01.10.2026 16:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 17:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 17:05
+  step 01.10.2026 18:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 01.10.2026 18:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 19:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 19:05
+  step 01.10.2026 20:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 01.10.2026 20:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+01.10.2026 20:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 20:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 20:05
+  step 01.10.2026 20:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 20:05 | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 20:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 20:05 | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 18:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 18:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 18:05
+  step 01.10.2026 18:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 18:05 | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 18:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 18:05 | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 16:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 16:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 16:05
+  step 01.10.2026 16:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 16:05 | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 16:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 16:05 | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 14:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 01.10.2026 10:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 01.10.2026 10:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 11:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 11:05
+  step 01.10.2026 12:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 01.10.2026 12:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 13:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 13:05
+  step 01.10.2026 14:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 01.10.2026 14:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+01.10.2026 14:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 14:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 14:05
+  step 01.10.2026 14:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 14:05 | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 14:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 14:05 | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 14:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 12:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 12:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 12:05
+  step 01.10.2026 12:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 12:05 | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 12:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 12:05 | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 12:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 10:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 10:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 10:05
+  step 01.10.2026 10:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 10:05 | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 10:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 10:05 | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 10:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 08:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 01.10.2026 04:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 01.10.2026 04:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 05:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 05:05
+  step 01.10.2026 06:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 01.10.2026 06:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 07:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 07:05
+  step 01.10.2026 08:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 01.10.2026 08:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+01.10.2026 08:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 08:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 08:05
+  step 01.10.2026 08:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 08:05 | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 08:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 08:05 | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 08:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 06:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 06:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 06:05
+  step 01.10.2026 06:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 06:05 | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 06:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 06:05 | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 06:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 04:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 04:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 04:05
+  step 01.10.2026 04:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 04:05 | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 04:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 04:05 | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 04:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 02:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 30.09.2026 22:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 30.09.2026 22:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 23:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 23:05
+  step 01.10.2026 00:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 01.10.2026 00:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 01:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 01:05
+  step 01.10.2026 02:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 01.10.2026 02:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+01.10.2026 02:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 02:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 02:05
+  step 01.10.2026 02:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 02:05 | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 02:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 02:05 | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 02:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+01.10.2026 00:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+01.10.2026 00:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 00:05
+  step 01.10.2026 00:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 00:05 | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 01.10.2026 00:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 00:05 | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 00:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+30.09.2026 22:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+30.09.2026 22:06 +1h16m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 22:05
+  step 30.09.2026 22:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 22:05 | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 30.09.2026 22:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 22:05 | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 22:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+30.09.2026 20:50 +43m0s probe [final] таймаут после 3 попыток | попытка: 3
+  step 30.09.2026 16:45 probe_leased/background [normal] | попытка: 1 | попытка: 1
+  step 30.09.2026 16:50 probed/timeout [retry] | попытка: 1 · следующая попытка: 17:05 | попытка: 1 · попытки исчерпаны: нет · следующая попытка: 17:05
+  step 30.09.2026 18:45 probe_leased/background [normal] | попытка: 2 | попытка: 2
+  step 30.09.2026 18:50 probed/timeout [retry] | попытка: 2 · следующая попытка: 19:05 | попытка: 2 · попытки исчерпаны: нет · следующая попытка: 19:05
+  step 30.09.2026 20:45 probe_leased/background [normal] | попытка: 3 | попытка: 3
+  step 30.09.2026 20:50 probed/timeout [final] | попытка: 3 | попытка: 3 · попытки исчерпаны: да
+  details | попытка: 3 · попытки исчерпаны: да
+30.09.2026 20:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+30.09.2026 20:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 20:05
+  step 30.09.2026 20:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 20:05 | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 30.09.2026 20:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 20:05 | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 20:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+30.09.2026 18:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+30.09.2026 18:06 +1h59m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 18:05
+  step 30.09.2026 18:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 18:05 | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 30.09.2026 18:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 18:05 | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 18:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+30.09.2026 16:07 +0s matched [retry] ничего не найдено | кто запросил: фоновая обработка
+  details | кто запросил: фоновая обработка
+30.09.2026 16:06 +1h55m0s feed [normal] 2 раза: rutor | размер: 1,0 ГБ · первая публикация: 16:05
+  step 30.09.2026 16:05 feed/already_queued [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 16:05 | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  step 30.09.2026 16:06 feed/stored [normal] | фид: rutor · размер: 1,0 ГБ · опубликована: 16:05 | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+  details | опубликована: 16:05 · размер: 1,0 ГБ · фид: rutor · заголовок: x
+30.09.2026 14:11 +0s fetch [retry] сохранены со 2-й попытки | файлов: 1 · размер: 1,0 ГБ
+  step 30.09.2026 14:06 leased/fetch [normal] | попытка: 1 · выдана до: 14:07 | попытка: 1 · выдана до: 14:07
+  step 30.09.2026 14:08 fetch_failed/timeout [retry] | попытка: 1 · следующая попытка: 14:10 · выдана: 1 раз | попытка: 1 · выдана: 1 раз · следующая попытка: 14:10
+  step 30.09.2026 14:10 leased/fetch [normal] | попытка: 2 · выдана до: 14:11 | попытка: 2 · выдана до: 14:11
+  step 30.09.2026 14:11 fetched/stored [normal] | файлов: 1 · размер: 1,0 ГБ | файлов: 1 · выдана: 2 раза · название: x · размер: 1,0 ГБ
+  details | файлов: 1 · выдана: 2 раза · название: x · размер: 1,0 ГБ
+30.09.2026 14:05 +0s sighted [normal] поставлена в очередь | обнаружена через: announce
+  details | обнаружена через: announce

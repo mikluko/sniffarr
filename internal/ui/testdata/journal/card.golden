@@ -1,0 +1,60 @@
+== en
+2026-10-19 00:07 +2h2m0s probe [normal] tracks read | audio track probability: Russian 100% · tracks: 4 · downloaded: 4.0 MB
+  step 2026-10-18 23:05 probe_wanted/search [normal] | searched by: TMDB 693134 · query: dune part two · search type: movie | searched by: TMDB 693134 · query: dune part two · search type: movie
+  step 2026-10-19 00:05 probe_leased/search [normal] | attempt: 1 · leased until: 00:15 · may download: 64.0 MB | attempt: 1 · leased until: 00:15 · may download: 64.0 MB
+  step 2026-10-19 00:07 probed/tracks [normal] | audio track probability: Russian 100% · tracks: 4 · downloaded: 4.0 MB | audio track probability: Russian 100% · downloaded: 4.0 MB · format: matroska · file: Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv · tracks: video V_MPEGH/ISO/HEVC, audio rus A_EAC3, audio eng A_EAC3, subtitle rus S_TEXT/UTF8
+  details | audio track probability: Russian 100% · downloaded: 4.0 MB · format: matroska · file: Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv · tracks: video V_MPEGH/ISO/HEVC, audio rus A_EAC3, audio eng A_EAC3, subtitle rus S_TEXT/UTF8
+  track video||V_MPEGH/ISO/HEVC
+  track audio|rus|A_EAC3
+  track audio|eng|A_EAC3
+  track subtitle|rus|S_TEXT/UTF8
+2026-10-18 22:05 +58m0s matched [normal] by Radarr/Sonarr | TMDB ID: 693134 · type: movie · asked by: Radarr/Sonarr
+  details | time of the Radarr/Sonarr event: 19:05 · previous work ID: 41 · TMDB ID: 693134 · asked by: Radarr/Sonarr · type: movie
+2026-10-18 21:07 +0s matched [normal] by an earlier match of the title | TMDB ID: 318846 · confidence: 0.8 · matched by: TMDB search
+  details | confidence: 0.8 · match made: 2026-10-17 15:05 · matched by: TMDB search · TMDB ID: 318846 · type: movie
+2026-10-18 21:06 +0s classified [normal] by Jev | audio track probability: Russian 88% · source: web · source confidence: 0.8
+  details | audio track probability: Russian 88% · source: web · source confidence: 0.8 · asked by: the worker
+2026-10-18 21:05 +0s classified [normal] kind taken from a sibling | kind: movie · kind taken from: 3c1e5a07 </t/3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13>
+  details | kind taken from: 3c1e5a07 </t/3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13> · kind: movie
+2026-10-18 21:05 +0s fetch [retry] stored on the 2nd attempt | files: 14 · size: 24.8 GB · queued: 20:59
+  step 2026-10-18 21:00 leased/fetch [normal] | attempt: 1 · leased until: 21:01 | attempt: 1 · leased until: 21:01
+  step 2026-10-18 21:02 fetch_failed/timeout [retry] | attempt: 1 · next try: 21:03 · leased: 2 times | attempt: 1 · leased: 2 times · next try: 21:03
+  step 2026-10-18 21:03 leased/fetch [normal] | attempt: 2 · leased until: 21:04 | attempt: 2 · leased until: 21:04
+  step 2026-10-18 21:05 fetched/stored [normal] | files: 14 · size: 24.8 GB · queued: 20:59 | discovered by: announce · files: 14 · leased: 2 times · name: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · queued: 20:59 · size: 24.8 GB
+  details | discovered by: announce · files: 14 · leased: 2 times · name: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · queued: 20:59 · size: 24.8 GB
+2026-10-18 20:59 +0s sighted [normal] queued | discovered by: announce
+  details | discovered by: announce
+2026-10-18 20:58 +0s feed [normal] 2 times: rutracker, rutor | size: 24.8 GB · first published: 20:56
+  step 2026-10-18 20:57 feed/queued [normal] | feed: rutracker · size: 24.8 GB · published: 20:56 | category: f-1457 · published: 20:56 · size: 24.8 GB · feed: rutracker · title: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · page: rutracker <https://rutracker.example/t/6543210>
+  step 2026-10-18 20:58 feed/already_queued [normal] | feed: rutor · size: 24.8 GB · published: 20:58 | published: 20:58 · size: 24.8 GB · feed: rutor · title: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · page: rutor <https://rutor.example/torrent/987654>
+  details | published: 20:58 · size: 24.8 GB · feed: rutor · title: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · page: rutor <https://rutor.example/torrent/987654>
+== ru
+19.10.2026 00:07 +2h2m0s probe [normal] дорожки прочитаны | вероятность звуковой дорожки: русская 100% · дорожки: 4 · скачано: 4,0 МБ
+  step 18.10.2026 23:05 probe_wanted/search [normal] | искали по: TMDB 693134 · запрос: dune part two · тип поиска: фильм | искали по: TMDB 693134 · запрос: dune part two · тип поиска: фильм
+  step 19.10.2026 00:05 probe_leased/search [normal] | попытка: 1 · выдана до: 00:15 · можно скачать: 64,0 МБ | попытка: 1 · выдана до: 00:15 · можно скачать: 64,0 МБ
+  step 19.10.2026 00:07 probed/tracks [normal] | вероятность звуковой дорожки: русская 100% · дорожки: 4 · скачано: 4,0 МБ | вероятность звуковой дорожки: русская 100% · скачано: 4,0 МБ · формат: matroska · файл: Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv · дорожки: видео V_MPEGH/ISO/HEVC, звук rus A_EAC3, звук eng A_EAC3, субтитры rus S_TEXT/UTF8
+  details | вероятность звуковой дорожки: русская 100% · скачано: 4,0 МБ · формат: matroska · файл: Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv · дорожки: видео V_MPEGH/ISO/HEVC, звук rus A_EAC3, звук eng A_EAC3, субтитры rus S_TEXT/UTF8
+  track video||V_MPEGH/ISO/HEVC
+  track audio|rus|A_EAC3
+  track audio|eng|A_EAC3
+  track subtitle|rus|S_TEXT/UTF8
+18.10.2026 22:05 +58m0s matched [normal] по Radarr/Sonarr | TMDB ID: 693134 · тип: фильм · кто запросил: Radarr/Sonarr
+  details | время события Radarr/Sonarr: 19:05 · ID прежнего произведения: 41 · TMDB ID: 693134 · кто запросил: Radarr/Sonarr · тип: фильм
+18.10.2026 21:07 +0s matched [normal] по прежнему сопоставлению названия | TMDB ID: 318846 · уверенность: 0,8 · чем сопоставлено: поиск TMDB
+  details | уверенность: 0,8 · сопоставлено: 17.10.2026 15:05 · чем сопоставлено: поиск TMDB · TMDB ID: 318846 · тип: фильм
+18.10.2026 21:06 +0s classified [normal] Jev | вероятность звуковой дорожки: русская 88% · источник: web · уверенность в источнике: 0,8
+  details | вероятность звуковой дорожки: русская 88% · источник: web · уверенность в источнике: 0,8 · кто запросил: фоновая обработка
+18.10.2026 21:05 +0s classified [normal] вид взят у раздачи того же названия | вид: фильм · вид взят у: 3c1e5a07 </t/3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13>
+  details | вид взят у: 3c1e5a07 </t/3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13> · вид: фильм
+18.10.2026 21:05 +0s fetch [retry] сохранены со 2-й попытки | файлов: 14 · размер: 24,8 ГБ · в очереди с: 20:59
+  step 18.10.2026 21:00 leased/fetch [normal] | попытка: 1 · выдана до: 21:01 | попытка: 1 · выдана до: 21:01
+  step 18.10.2026 21:02 fetch_failed/timeout [retry] | попытка: 1 · следующая попытка: 21:03 · выдана: 2 раза | попытка: 1 · выдана: 2 раза · следующая попытка: 21:03
+  step 18.10.2026 21:03 leased/fetch [normal] | попытка: 2 · выдана до: 21:04 | попытка: 2 · выдана до: 21:04
+  step 18.10.2026 21:05 fetched/stored [normal] | файлов: 14 · размер: 24,8 ГБ · в очереди с: 20:59 | обнаружена через: announce · файлов: 14 · выдана: 2 раза · название: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · в очереди с: 20:59 · размер: 24,8 ГБ
+  details | обнаружена через: announce · файлов: 14 · выдана: 2 раза · название: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · в очереди с: 20:59 · размер: 24,8 ГБ
+18.10.2026 20:59 +0s sighted [normal] поставлена в очередь | обнаружена через: announce
+  details | обнаружена через: announce
+18.10.2026 20:58 +0s feed [normal] 2 раза: rutracker, rutor | размер: 24,8 ГБ · первая публикация: 20:56
+  step 18.10.2026 20:57 feed/queued [normal] | фид: rutracker · размер: 24,8 ГБ · опубликована: 20:56 | категория: f-1457 · опубликована: 20:56 · размер: 24,8 ГБ · фид: rutracker · заголовок: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · страница: rutracker <https://rutracker.example/t/6543210>
+  step 18.10.2026 20:58 feed/already_queued [normal] | фид: rutor · размер: 24,8 ГБ · опубликована: 20:58 | опубликована: 20:58 · размер: 24,8 ГБ · фид: rutor · заголовок: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · страница: rutor <https://rutor.example/torrent/987654>
+  details | опубликована: 20:58 · размер: 24,8 ГБ · фид: rutor · заголовок: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · страница: rutor <https://rutor.example/torrent/987654>

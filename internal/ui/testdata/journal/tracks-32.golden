@@ -1,0 +1,76 @@
+== en
+2026-10-20 13:08 +0s probe [normal] tracks read | audio track probability: Russian 97% · tracks: 40 · downloaded: 8.0 MB
+  step 2026-10-20 13:05 probe_wanted/request [normal] |  | 
+  step 2026-10-20 13:06 probe_leased/request [normal] | attempt: 1 · leased until: 13:16 · may download: 64.0 MB | attempt: 1 · leased until: 13:16 · may download: 64.0 MB
+  step 2026-10-20 13:08 probed/tracks [normal] | audio track probability: Russian 97% · tracks: 40 · downloaded: 8.0 MB | audio track probability: Russian 97% · downloaded: 8.0 MB · format: matroska · file: Show.S01.mkv · tracks: video V_MPEGH/ISO/HEVC, audio rus A_EAC3, audio eng A_EAC3, audio ukr A_EAC3, audio kaz A_EAC3, audio ger A_EAC3, audio spa A_EAC3, audio fre A_EAC3, audio ita A_EAC3, audio rus A_EAC3, audio eng A_EAC3, audio ukr A_EAC3, audio kaz A_EAC3, audio ger A_EAC3, audio spa A_EAC3, audio fre A_EAC3, audio ita A_EAC3, subtitle rus S_TEXT/UTF8, subtitle eng S_TEXT/UTF8, subtitle ukr S_TEXT/UTF8, subtitle kaz S_TEXT/UTF8, subtitle ger S_TEXT/UTF8, subtitle spa S_TEXT/UTF8, subtitle fre S_TEXT/UTF8, subtitle ita S_TEXT/UTF8, subtitle rus S_TEXT/UTF8, subtitle eng S_TEXT/UTF8, subtitle ukr S_TEXT/UTF8, subtitle kaz S_TEXT/UTF8, subtitle ger S_TEXT/UTF8, subtitle spa S_TEXT/UTF8, subtitle fre S_TEXT/UTF8 · tracks in all: 40
+  details | audio track probability: Russian 97% · downloaded: 8.0 MB · format: matroska · file: Show.S01.mkv · tracks: video V_MPEGH/ISO/HEVC, audio rus A_EAC3, audio eng A_EAC3, audio ukr A_EAC3, audio kaz A_EAC3, audio ger A_EAC3, audio spa A_EAC3, audio fre A_EAC3, audio ita A_EAC3, audio rus A_EAC3, audio eng A_EAC3, audio ukr A_EAC3, audio kaz A_EAC3, audio ger A_EAC3, audio spa A_EAC3, audio fre A_EAC3, audio ita A_EAC3, subtitle rus S_TEXT/UTF8, subtitle eng S_TEXT/UTF8, subtitle ukr S_TEXT/UTF8, subtitle kaz S_TEXT/UTF8, subtitle ger S_TEXT/UTF8, subtitle spa S_TEXT/UTF8, subtitle fre S_TEXT/UTF8, subtitle ita S_TEXT/UTF8, subtitle rus S_TEXT/UTF8, subtitle eng S_TEXT/UTF8, subtitle ukr S_TEXT/UTF8, subtitle kaz S_TEXT/UTF8, subtitle ger S_TEXT/UTF8, subtitle spa S_TEXT/UTF8, subtitle fre S_TEXT/UTF8 · tracks in all: 40
+  track video||V_MPEGH/ISO/HEVC
+  track audio|rus|A_EAC3
+  track audio|eng|A_EAC3
+  track audio|ukr|A_EAC3
+  track audio|kaz|A_EAC3
+  track audio|ger|A_EAC3
+  track audio|spa|A_EAC3
+  track audio|fre|A_EAC3
+  track audio|ita|A_EAC3
+  track audio|rus|A_EAC3
+  track audio|eng|A_EAC3
+  track audio|ukr|A_EAC3
+  track audio|kaz|A_EAC3
+  track audio|ger|A_EAC3
+  track audio|spa|A_EAC3
+  track audio|fre|A_EAC3
+  track audio|ita|A_EAC3
+  track subtitle|rus|S_TEXT/UTF8
+  track subtitle|eng|S_TEXT/UTF8
+  track subtitle|ukr|S_TEXT/UTF8
+  track subtitle|kaz|S_TEXT/UTF8
+  track subtitle|ger|S_TEXT/UTF8
+  track subtitle|spa|S_TEXT/UTF8
+  track subtitle|fre|S_TEXT/UTF8
+  track subtitle|ita|S_TEXT/UTF8
+  track subtitle|rus|S_TEXT/UTF8
+  track subtitle|eng|S_TEXT/UTF8
+  track subtitle|ukr|S_TEXT/UTF8
+  track subtitle|kaz|S_TEXT/UTF8
+  track subtitle|ger|S_TEXT/UTF8
+  track subtitle|spa|S_TEXT/UTF8
+  track subtitle|fre|S_TEXT/UTF8
+== ru
+20.10.2026 13:08 +0s probe [normal] дорожки прочитаны | вероятность звуковой дорожки: русская 97% · дорожки: 40 · скачано: 8,0 МБ
+  step 20.10.2026 13:05 probe_wanted/request [normal] |  | 
+  step 20.10.2026 13:06 probe_leased/request [normal] | попытка: 1 · выдана до: 13:16 · можно скачать: 64,0 МБ | попытка: 1 · выдана до: 13:16 · можно скачать: 64,0 МБ
+  step 20.10.2026 13:08 probed/tracks [normal] | вероятность звуковой дорожки: русская 97% · дорожки: 40 · скачано: 8,0 МБ | вероятность звуковой дорожки: русская 97% · скачано: 8,0 МБ · формат: matroska · файл: Show.S01.mkv · дорожки: видео V_MPEGH/ISO/HEVC, звук rus A_EAC3, звук eng A_EAC3, звук ukr A_EAC3, звук kaz A_EAC3, звук ger A_EAC3, звук spa A_EAC3, звук fre A_EAC3, звук ita A_EAC3, звук rus A_EAC3, звук eng A_EAC3, звук ukr A_EAC3, звук kaz A_EAC3, звук ger A_EAC3, звук spa A_EAC3, звук fre A_EAC3, звук ita A_EAC3, субтитры rus S_TEXT/UTF8, субтитры eng S_TEXT/UTF8, субтитры ukr S_TEXT/UTF8, субтитры kaz S_TEXT/UTF8, субтитры ger S_TEXT/UTF8, субтитры spa S_TEXT/UTF8, субтитры fre S_TEXT/UTF8, субтитры ita S_TEXT/UTF8, субтитры rus S_TEXT/UTF8, субтитры eng S_TEXT/UTF8, субтитры ukr S_TEXT/UTF8, субтитры kaz S_TEXT/UTF8, субтитры ger S_TEXT/UTF8, субтитры spa S_TEXT/UTF8, субтитры fre S_TEXT/UTF8 · всего дорожек: 40
+  details | вероятность звуковой дорожки: русская 97% · скачано: 8,0 МБ · формат: matroska · файл: Show.S01.mkv · дорожки: видео V_MPEGH/ISO/HEVC, звук rus A_EAC3, звук eng A_EAC3, звук ukr A_EAC3, звук kaz A_EAC3, звук ger A_EAC3, звук spa A_EAC3, звук fre A_EAC3, звук ita A_EAC3, звук rus A_EAC3, звук eng A_EAC3, звук ukr A_EAC3, звук kaz A_EAC3, звук ger A_EAC3, звук spa A_EAC3, звук fre A_EAC3, звук ita A_EAC3, субтитры rus S_TEXT/UTF8, субтитры eng S_TEXT/UTF8, субтитры ukr S_TEXT/UTF8, субтитры kaz S_TEXT/UTF8, субтитры ger S_TEXT/UTF8, субтитры spa S_TEXT/UTF8, субтитры fre S_TEXT/UTF8, субтитры ita S_TEXT/UTF8, субтитры rus S_TEXT/UTF8, субтитры eng S_TEXT/UTF8, субтитры ukr S_TEXT/UTF8, субтитры kaz S_TEXT/UTF8, субтитры ger S_TEXT/UTF8, субтитры spa S_TEXT/UTF8, субтитры fre S_TEXT/UTF8 · всего дорожек: 40
+  track video||V_MPEGH/ISO/HEVC
+  track audio|rus|A_EAC3
+  track audio|eng|A_EAC3
+  track audio|ukr|A_EAC3
+  track audio|kaz|A_EAC3
+  track audio|ger|A_EAC3
+  track audio|spa|A_EAC3
+  track audio|fre|A_EAC3
+  track audio|ita|A_EAC3
+  track audio|rus|A_EAC3
+  track audio|eng|A_EAC3
+  track audio|ukr|A_EAC3
+  track audio|kaz|A_EAC3
+  track audio|ger|A_EAC3
+  track audio|spa|A_EAC3
+  track audio|fre|A_EAC3
+  track audio|ita|A_EAC3
+  track subtitle|rus|S_TEXT/UTF8
+  track subtitle|eng|S_TEXT/UTF8
+  track subtitle|ukr|S_TEXT/UTF8
+  track subtitle|kaz|S_TEXT/UTF8
+  track subtitle|ger|S_TEXT/UTF8
+  track subtitle|spa|S_TEXT/UTF8
+  track subtitle|fre|S_TEXT/UTF8
+  track subtitle|ita|S_TEXT/UTF8
+  track subtitle|rus|S_TEXT/UTF8
+  track subtitle|eng|S_TEXT/UTF8
+  track subtitle|ukr|S_TEXT/UTF8
+  track subtitle|kaz|S_TEXT/UTF8
+  track subtitle|ger|S_TEXT/UTF8
+  track subtitle|spa|S_TEXT/UTF8
+  track subtitle|fre|S_TEXT/UTF8
