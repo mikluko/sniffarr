@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -155,6 +156,16 @@ func TestJournalDetailKeepsNumbers(t *testing.T) {
 		return journal(ctx, tx, hash(1), t0, JournalProbed, ProbeTracks, Detail("big", int64(1<<62), "ratio", 0.25, "at", t0))
 	}))
 	require.JSONEq(t, `{"big":4611686018427387904,"ratio":0.25,"at":`+unix(t0)+`}`, entry(t, s, hash(1), JournalProbed, ProbeTracks).Detail, "numbers as written, none through float64")
+}
+
+func TestJournalDetailNonFinite(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	require.NoError(t, s.tx(ctx, func(tx *sql.Tx) error {
+		return journal(ctx, tx, hash(1), t0, JournalClassified, LayerJev, Detail("confidence", math.NaN(), "ratio", math.Inf(1),
+			"audio", map[string]float64{"ru": math.NaN(), "en": 0.5}, "kind", "movie"))
+	}), "a value JSON cannot hold fails neither the row nor the change it rides with")
+	require.JSONEq(t, `{"audio":{"en":0.5},"kind":"movie"}`, entry(t, s, hash(1), JournalClassified, LayerJev).Detail)
 }
 
 func TestJournalProbedTracksBounded(t *testing.T) {

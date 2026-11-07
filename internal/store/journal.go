@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -99,8 +100,9 @@ type JournalEntry struct {
 const maxDetailString = 1 << 10
 
 // Detail builds an entry's particulars from key-value pairs, leaving out a
-// value that is "", 0, nil, empty or the zero time; a time is written in
-// Unix seconds.
+// value that is "", 0, nil, empty, the zero time or a float JSON cannot
+// hold (NaN, ±Inf), which would otherwise fail the change the entry rides
+// with; a time is written in Unix seconds.
 func Detail(kv ...any) map[string]any {
 	d := make(map[string]any, len(kv)/2)
 	for i := 0; i+1 < len(kv); i += 2 {
@@ -121,7 +123,7 @@ func Detail(kv ...any) map[string]any {
 				continue
 			}
 		case float64:
-			if x == 0 {
+			if x == 0 || !finite(x) {
 				continue
 			}
 		case time.Time:
@@ -130,9 +132,16 @@ func Detail(kv ...any) map[string]any {
 			}
 			v = x.Unix()
 		case map[string]float64:
-			if len(x) == 0 {
+			m := make(map[string]float64, len(x))
+			for k, f := range x {
+				if finite(f) {
+					m[k] = f
+				}
+			}
+			if len(m) == 0 {
 				continue
 			}
+			v = m
 		case []string:
 			if len(x) == 0 {
 				continue
@@ -141,6 +150,10 @@ func Detail(kv ...any) map[string]any {
 		d[kv[i].(string)] = v
 	}
 	return d
+}
+
+func finite(f float64) bool {
+	return !math.IsNaN(f) && !math.IsInf(f, 0)
 }
 
 // clipped returns the detail as decoded JSON with clip applied to every
