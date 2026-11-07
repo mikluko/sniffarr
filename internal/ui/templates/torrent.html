@@ -132,7 +132,7 @@
   <div class="tm-poster tm-none" aria-hidden="true">{{.T "tmdb.noposter"}}</div>
   {{end}}
   <div class="tm-body">
-    <h2 class="tm-title"><a class="tm-stretch" href="{{$w.Path}}">{{$m.Title}}</a>{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h2>
+    <h2 class="tm-title"><a class="tm-stretch" href="{{.WorkURL $w.Path}}">{{$m.Title}}</a>{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h2>
     {{if $m.ShowOriginal}}<div class="tm-orig">{{$m.OriginalTitle}}</div>{{end}}
     <div class="tm-facts">{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}{{if $m.Genres}} · {{.List $m.Genres}}{{end}}</div>
     {{if $m.Votes}}<div class="tm-facts">TMDB {{.Rating $m.Rating}} <span class="mu">· {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span></div>{{end}}

@@ -75,9 +75,9 @@
   {{range .Results.Rows}}
     <tr id="t-{{.InfoHash}}">
       <td class="tn"><span class="tw">
-        {{- with .Work}}{{if .TMDB.HasPoster}}<a href="{{.Path}}" class="thl"><img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="32" height="48" alt="{{.TMDB.Title}}" loading="lazy" referrerpolicy="no-referrer"></a>
+        {{- with .Work}}{{if .TMDB.HasPoster}}<a href="{{$.WorkURL .Path}}" class="thl"><img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="32" height="48" alt="{{.TMDB.Title}}" loading="lazy" referrerpolicy="no-referrer"></a>
         {{- else}}{{template "tph" (tipArgs "—" ($.T "torrents.noposter"))}}{{end}}{{else}}{{template "tph" (tipArgs "?" ($.T "torrents.unmatched"))}}{{end}}
-        <span class="tw-t"><a href="/t/{{.InfoHash}}" class="tname">{{.Name}}</a>{{with .Work}}<a class="orig" href="{{.Path}}">{{.TMDB.Title}}{{if .TMDB.Year}} · {{.TMDB.Year}}{{end}}</a>{{end}}</span></span></td>
+        <span class="tw-t"><a href="/t/{{.InfoHash}}" class="tname">{{.Name}}</a>{{with .Work}}<a class="orig" href="{{$.WorkURL .Path}}">{{.TMDB.Title}}{{if .TMDB.Year}} · {{.TMDB.Year}}{{end}}</a>{{end}}</span></span></td>
       <td class="r pe">{{$.Num .Peers}}</td>
       <td class="r">{{$.Size .Size}}</td>
       <td>{{if .Quality}}{{$.T (concat "quality." .Quality)}}{{else}}<span class="mu">—</span>{{end}}</td>
@@ -92,10 +92,10 @@
 <div class="tlist">
   {{range .Results.Rows}}
   <div class="trow">
-    {{- with .Work}}{{if .TMDB.HasPoster}}<a href="{{.Path}}" class="thl"><img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="32" height="48" alt="{{.TMDB.Title}}" loading="lazy" referrerpolicy="no-referrer"></a>
+    {{- with .Work}}{{if .TMDB.HasPoster}}<a href="{{$.WorkURL .Path}}" class="thl"><img class="th" src="{{tmdbImg posterThumb .TMDB.PosterPath}}" width="32" height="48" alt="{{.TMDB.Title}}" loading="lazy" referrerpolicy="no-referrer"></a>
     {{- else}}{{template "tph" (tipArgs "—" ($.T "torrents.noposter"))}}{{end}}{{else}}{{template "tph" (tipArgs "?" ($.T "torrents.unmatched"))}}{{end}}
     <a href="/t/{{.InfoHash}}" class="tname">{{.Name}}</a><span class="pe">{{$.Num .Peers}}</span>
-    {{with .Work}}<a class="orig" href="{{.Path}}">{{.TMDB.Title}}{{if .TMDB.Year}} · {{.TMDB.Year}}{{end}}</a>{{end}}
+    {{with .Work}}<a class="orig" href="{{$.WorkURL .Path}}">{{.TMDB.Title}}{{if .TMDB.Year}} · {{.TMDB.Year}}{{end}}</a>{{end}}
     <span class="tmeta mu">{{$.Size .Size}}{{with .Quality}} · {{$.T (concat "quality." .)}}{{end}} · {{$.T (concat "kind." .Kind)}} · {{$.T (concat "source." .Source)}}
       {{- $r := .}}{{range $.VoiceLangs}}{{$a := audioOf $r.Audio .}}{{if or $a.Marker $a.Probability}} · {{.}} {{if $a.Marker}}<b>{{$.AudioCell $a}}</b>{{else}}{{$.AudioCell $a}}{{end}}{{end}}{{end}}</span>
   </div>

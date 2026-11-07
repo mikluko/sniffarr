@@ -308,6 +308,8 @@
   "audio.script": "Письменность",
   "work.back.movie": "Топ фильмов",
   "work.back.series": "Топ сериалов",
+  "work.back.torrents": "К результатам",
+  "work.back.torrent": "К раздаче",
   "work.releases": "Релизы",
   "work.noreleases": "Релизов у нас пока нет: найдено только в TMDB.",
   "work.nomatch": "Под выбранные фильтры релизов нет.",

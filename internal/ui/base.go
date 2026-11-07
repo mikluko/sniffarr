@@ -16,7 +16,7 @@ import (
 type Base struct {
 	Lang       string       // "ru" | "en"
 	Langs      []string     // switcher entries
-	Nav        string       // "data" | "torrents" | "top" | "" (card, title page)
+	Nav        string       // "torrents" | "top" select that header tab; "data" is the logo's page, which selects none; "" is any other
 	VoiceLangs []string     // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
 	Path       string       // current path+query, for the language switcher
 	Seerr      string       // base URL of a Seerr the cards link titles to; "" links none

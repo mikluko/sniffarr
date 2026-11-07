@@ -144,7 +144,7 @@ func SampleWork(b Base, id string, f ReleaseFilters) WorkPage {
 	if w.Rank == 0 && s.rels > 0 {
 		w.Rank = i + 1
 	}
-	p := WorkPage{Base: b, Work: w, Audio: sampleAudio(s, i, b.VoiceLangs)}
+	p := WorkPage{Base: b, Back: "/top?kind=" + w.Kind, Work: w, Audio: sampleAudio(s, i, b.VoiceLangs)}
 	if s.rels == 0 {
 		return p
 	}

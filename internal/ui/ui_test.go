@@ -67,7 +67,7 @@ func TestRenderAll(t *testing.T) {
 		{"work-series-multi", "work", "/tv/106379", "", func(b Base) any { multi(&b); return SampleWork(b, SampleFalloutID, ReleaseFilters{}) }},
 		{"work-tmdbonly", "work", "/movie/1930", "", func(b Base) any { return SampleWork(b, SampleTMDBOnlyID, ReleaseFilters{}) }},
 		{"work-nolangs", "work", "/movie/900001", "", func(b Base) any { b.VoiceLangs = nil; return SampleWork(b, SampleSpiderID, ReleaseFilters{}) }},
-		{"torrent-poster", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "poster") }},
+		{"torrent-poster", "torrent", "/t/x", "", func(b Base) any { b.Nav = "torrents"; return SampleTorrent(b, false, "poster") }},
 		{"torrent-noposter", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "noposter") }},
 		{"torrent-unmatched", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "unmatched") }},
 		{"torrent-unchecked", "torrent", "/t/x", "", func(b Base) any { return SampleTorrent(b, false, "unchecked") }},
