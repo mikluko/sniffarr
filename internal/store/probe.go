@@ -104,7 +104,8 @@ type ProbeCandidate struct {
 	Wanted bool
 	// Priority is the queue priority its task was leased at.
 	Priority int
-	// Attempts is how many probes of it failed since one last read it.
+	// Attempts is how many probes of it have failed since the last one that
+	// did not.
 	Attempts int
 }
 
@@ -241,7 +242,10 @@ func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d ti
 		}
 		return journal(ctx, tx, c.Hash, now, JournalProbeLeased, probeLeaseOutcome(c), Detail("attempt", c.Attempts+1, "max_bytes", b.MaxBytes, "used", b.Used, "reserved", b.Reserved))
 	})
-	return c, ok, err
+	if err != nil {
+		return ProbeCandidate{}, false, err
+	}
+	return c, ok, nil
 }
 
 // leaseProbe leases the probe LeaseProbe takes and returns it with how many

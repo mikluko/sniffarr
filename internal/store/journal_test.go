@@ -568,6 +568,14 @@ func TestJournalProbeLeasedRequest(t *testing.T) {
 	_, ok = leaseNext(t, s, t0.Add(3*time.Hour), false)
 	require.True(t, ok)
 	require.Equal(t, []string{"request/2", "retry/3"}, leasedProbes(t, s, h), "its failure ends the request")
+
+	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0.Add(4*time.Hour)))
+	_, err = s.RequestProbe(ctx, []Hash{h}, t0.Add(5*time.Hour))
+	require.NoError(t, err)
+	c, ok := leaseNext(t, s, t0.Add(5*time.Hour), false)
+	require.True(t, ok)
+	require.Zero(t, c.Attempts)
+	require.Equal(t, []string{"request/2", "retry/3", "request/1"}, leasedProbes(t, s, h), "a probe that did not fail starts the count over")
 }
 
 func TestJournalProbeLeasedRequestInFlight(t *testing.T) {
@@ -636,6 +644,48 @@ func TestJournalProbeLeasedAfterMove(t *testing.T) {
 			require.Equal(t, tc.want, leasedProbes(t, s, h), "the first lease since a move ahead is journaled; a move to where it is keeps the count")
 		})
 	}
+}
+
+func TestJournalProbeLeaseFails(t *testing.T) {
+	ctx := context.Background()
+	// failing opens a store with a probeable release, queued for a probe by
+	// a search when searched, whose probe_leased entries fail to write.
+	failing := func(t *testing.T, searched bool) (*Store, Hash) {
+		t.Helper()
+		s := open(t)
+		h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+		if searched {
+			require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0))
+		}
+		_, err := s.w.ExecContext(ctx, `CREATE TRIGGER probe_leased_fails BEFORE INSERT ON torrent_journal WHEN NEW.kind = '`+JournalProbeLeased+`'
+			BEGIN SELECT RAISE(ABORT, 'probe_leased'); END`)
+		require.NoError(t, err)
+		return s, h
+	}
+	lease := func(t *testing.T, s *Store) {
+		t.Helper()
+		c, ok, err := s.LeaseProbe(ctx, 7, t0, 10*time.Minute, true, ProbeBudget{})
+		require.Error(t, err)
+		require.False(t, ok)
+		require.Equal(t, ProbeCandidate{}, c, "no candidate with the error")
+	}
+
+	t.Run("queued by its lease", func(t *testing.T) {
+		s, _ := failing(t, false)
+		lease(t, s)
+		var n int
+		require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM task_queue WHERE kind = 'probe'").Scan(&n))
+		require.Zero(t, n, "the task is not queued")
+	})
+	t.Run("queued by a search", func(t *testing.T) {
+		s, h := failing(t, true)
+		lease(t, s)
+		var leased bool
+		var leases int
+		require.NoError(t, s.r.QueryRowContext(ctx, "SELECT lease_owner IS NOT NULL, leases FROM task_queue WHERE kind = 'probe' AND infohash = ?", h[:]).Scan(&leased, &leases))
+		require.False(t, leased, "the task is free")
+		require.Zero(t, leases, "its count unchanged")
+	})
 }
 
 func TestJournalDeleted(t *testing.T) {
