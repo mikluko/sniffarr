@@ -5,6 +5,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"go.uber.org/fx"
 
@@ -21,11 +22,12 @@ type Config struct {
 }
 
 // Module provides *database.DB, *store.Store and *store.Tasks from Config;
-// the database closes at stop, and the queue's leases are freed at start.
+// the database closes at stop. Migrations and the freeing of the queue's
+// leases run as they are provided, outside the start and its deadline.
 var Module = fx.Module("db", fx.Provide(open, newStore, newQueue))
 
-func open(lc fx.Lifecycle, cfg Config) (*database.DB, error) {
-	db, err := database.Open(context.Background(), cfg.Path, database.Options{Meter: cfg.Store.Meter})
+func open(lc fx.Lifecycle, cfg Config, log *slog.Logger) (*database.DB, error) {
+	db, err := database.Open(context.Background(), cfg.Path, database.Options{Meter: cfg.Store.Meter, Log: log})
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", cfg.Path, err)
 	}
@@ -41,16 +43,14 @@ func newStore(db *database.DB, cfg Config) (*store.Store, error) {
 	return s, nil
 }
 
-func newQueue(lc fx.Lifecycle, db *database.DB, cfg Config) (*store.Tasks, error) {
-	q, err := store.NewTasks(context.Background(), db, cfg.Tasks)
+func newQueue(db *database.DB, cfg Config) (*store.Tasks, error) {
+	ctx := context.Background()
+	q, err := store.NewTasks(ctx, db, cfg.Tasks)
 	if err != nil {
 		return nil, fmt.Errorf("queue: %w", err)
 	}
-	lc.Append(fx.StartHook(func(ctx context.Context) error {
-		if err := q.Reset(ctx); err != nil {
-			return fmt.Errorf("reset leases: %w", err)
-		}
-		return nil
-	}))
+	if err := q.Reset(ctx); err != nil {
+		return nil, fmt.Errorf("reset leases: %w", err)
+	}
 	return q, nil
 }

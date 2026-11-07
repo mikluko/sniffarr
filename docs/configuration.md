@@ -68,9 +68,11 @@ the same to each.
 | `SNIFFARR_PROBE_ATTEMPTS`          | `3`              | Failed probes after which a release is probed again only with more peers than at its last probe                       |
 | `SNIFFARR_PROBE_BACKOFF`           | `6h`             | Wait before repeating a failed probe, doubled per failure                                                              |
 
-The database runs in WAL mode and its schema migrates on start; leases left
-over from a previous run are freed on start. Once a minute the API truncates
-the WAL when it has reached 1 GiB, waiting up to 10 seconds for readers; a
+The database runs in WAL mode. Before the API listens, its schema migrates,
+each migration logged as it begins and as it ends with how long it took, and
+leases left over from a previous run are freed; however long that takes, it
+leaves the API unready rather than failing its start. Once a minute the API
+truncates the WAL when it has reached 1 GiB, waiting up to 10 seconds for readers; a
 reader that outlasts the wait is logged with the frames it pins. The WAL's
 size is the metric `sniffarr.db.wal.size`. A torrent keeps its true file
 count, but only its largest files are stored and searched. Once a minute the
