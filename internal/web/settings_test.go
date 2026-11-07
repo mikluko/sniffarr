@@ -11,6 +11,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
@@ -21,11 +22,12 @@ import (
 // failures calls, and counts the calls.
 type settingsAPI struct {
 	sniffarrv1connect.UnimplementedBrowseServiceHandler
-	failures int
-	tags     []string
-	probes   bool
-	features []*sniffarrv1.FeatureState
-	calls    int
+	failures  int
+	tags      []string
+	probes    bool
+	features  []*sniffarrv1.FeatureState
+	retention time.Duration
+	calls     int
 }
 
 func (a *settingsAPI) Settings(context.Context, *connect.Request[sniffarrv1.SettingsRequest]) (*connect.Response[sniffarrv1.SettingsResponse], error) {
@@ -33,7 +35,11 @@ func (a *settingsAPI) Settings(context.Context, *connect.Request[sniffarrv1.Sett
 	if a.calls <= a.failures {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("not yet"))
 	}
-	return connect.NewResponse(&sniffarrv1.SettingsResponse{AudioLanguages: a.tags, Probes: a.probes, Features: a.features}), nil
+	res := &sniffarrv1.SettingsResponse{AudioLanguages: a.tags, Probes: a.probes, Features: a.features}
+	if a.retention > 0 {
+		res.JournalRetention = durationpb.New(a.retention)
+	}
+	return connect.NewResponse(res), nil
 }
 
 func TestObtainSettings(t *testing.T) {
@@ -42,13 +48,13 @@ func TestObtainSettings(t *testing.T) {
 	russian, err := audio.Parse("ru")
 	require.NoError(t, err)
 
-	api := &settingsAPI{failures: 2, tags: []string{"ru"}, probes: true, features: []*sniffarrv1.FeatureState{
+	api := &settingsAPI{failures: 2, tags: []string{"ru"}, probes: true, retention: time.Hour, features: []*sniffarrv1.FeatureState{
 		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, On: true},
 		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, On: true, Works: true, Values: []string{"rutor"}},
 	}}
 	got, err := ObtainSettings(ctx, api, time.Millisecond, log)
 	require.NoError(t, err)
-	require.Equal(t, Settings{Languages: russian, Probes: true, Classifier: true, Feeds: true}, got, "on, whether working or not")
+	require.Equal(t, Settings{Languages: russian, Probes: true, Classifier: true, Feeds: true, JournalRetention: time.Hour}, got, "on, whether working or not")
 	require.Equal(t, 3, api.calls, "two failures, then the answer")
 
 	api = &settingsAPI{}
@@ -124,8 +130,9 @@ func TestWatch(t *testing.T) {
 	require.False(t, probe(), "the API the UI started with does not probe")
 	require.True(t, voice())
 
-	api.set(&sniffarrv1.SettingsResponse{AudioLanguages: []string{"ru"}, Probes: true}, nil)
+	api.set(&sniffarrv1.SettingsResponse{AudioLanguages: []string{"ru"}, Probes: true, JournalRetention: durationpb.New(time.Hour)}, nil)
 	require.Eventually(t, probe, 5*time.Second, time.Millisecond, "an API that started later probes")
+	require.Equal(t, time.Hour, h.s.settings().JournalRetention, "the journal's retention comes with the settings")
 
 	failing := api.count()
 	api.set(nil, connect.NewError(connect.CodeUnavailable, errors.New("restarting")))

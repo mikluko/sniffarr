@@ -744,9 +744,12 @@ type SettingsResponse struct {
 	Probes bool `protobuf:"varint,2,opt,name=probes,proto3" json:"probes,omitempty"`
 	// The optional features, one per Feature value but FEATURE_UNSPECIFIED,
 	// in the enum's order, read at the request.
-	Features      []*FeatureState `protobuf:"bytes,3,rep,name=features,proto3" json:"features,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Features []*FeatureState `protobuf:"bytes,3,rep,name=features,proto3" json:"features,omitempty"`
+	// How long the journal keeps an entry, counted from the entry's at;
+	// absent when the server's configuration does not say.
+	JournalRetention *durationpb.Duration `protobuf:"bytes,4,opt,name=journal_retention,json=journalRetention,proto3" json:"journal_retention,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SettingsResponse) Reset() {
@@ -796,6 +799,13 @@ func (x *SettingsResponse) GetProbes() bool {
 func (x *SettingsResponse) GetFeatures() []*FeatureState {
 	if x != nil {
 		return x.Features
+	}
+	return nil
+}
+
+func (x *SettingsResponse) GetJournalRetention() *durationpb.Duration {
+	if x != nil {
+		return x.JournalRetention
 	}
 	return nil
 }
@@ -3471,11 +3481,12 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\x14RequestMatchResponse\x12\x16\n" +
 	"\x06titles\x18\x01 \x01(\x05R\x06titles\x12.\n" +
 	"\x05works\x18\x02 \x03(\v2\x18.sniffarr.v1.WorkSummaryR\x05works\"\x11\n" +
-	"\x0fSettingsRequest\"\x8a\x01\n" +
+	"\x0fSettingsRequest\"\xd2\x01\n" +
 	"\x10SettingsResponse\x12'\n" +
 	"\x0faudio_languages\x18\x01 \x03(\tR\x0eaudioLanguages\x12\x16\n" +
 	"\x06probes\x18\x02 \x01(\bR\x06probes\x125\n" +
-	"\bfeatures\x18\x03 \x03(\v2\x19.sniffarr.v1.FeatureStateR\bfeatures\"\x96\x01\n" +
+	"\bfeatures\x18\x03 \x03(\v2\x19.sniffarr.v1.FeatureStateR\bfeatures\x12F\n" +
+	"\x11journal_retention\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x10journalRetention\"\x96\x01\n" +
 	"\fFeatureState\x12.\n" +
 	"\afeature\x18\x01 \x01(\x0e2\x14.sniffarr.v1.FeatureR\afeature\x12\x0e\n" +
 	"\x02on\x18\x02 \x01(\bR\x02on\x12\x14\n" +
@@ -3796,16 +3807,16 @@ var file_sniffarr_v1_browse_proto_goTypes = []any{
 	(*SourceCount)(nil),           // 45: sniffarr.v1.SourceCount
 	(*AudioCounts)(nil),           // 46: sniffarr.v1.AudioCounts
 	(*RejectionCount)(nil),        // 47: sniffarr.v1.RejectionCount
-	(Kind)(0),                     // 48: sniffarr.v1.Kind
-	(*TMDBWork)(nil),              // 49: sniffarr.v1.TMDBWork
-	(Quality)(0),                  // 50: sniffarr.v1.Quality
-	(VideoSource)(0),              // 51: sniffarr.v1.VideoSource
-	(*Release)(nil),               // 52: sniffarr.v1.Release
-	(Layer)(0),                    // 53: sniffarr.v1.Layer
-	(Source)(0),                   // 54: sniffarr.v1.Source
-	(*File)(nil),                  // 55: sniffarr.v1.File
-	(*timestamppb.Timestamp)(nil), // 56: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 57: google.protobuf.Duration
+	(*durationpb.Duration)(nil),   // 48: google.protobuf.Duration
+	(Kind)(0),                     // 49: sniffarr.v1.Kind
+	(*TMDBWork)(nil),              // 50: sniffarr.v1.TMDBWork
+	(Quality)(0),                  // 51: sniffarr.v1.Quality
+	(VideoSource)(0),              // 52: sniffarr.v1.VideoSource
+	(*Release)(nil),               // 53: sniffarr.v1.Release
+	(Layer)(0),                    // 54: sniffarr.v1.Layer
+	(Source)(0),                   // 55: sniffarr.v1.Source
+	(*File)(nil),                  // 56: sniffarr.v1.File
+	(*timestamppb.Timestamp)(nil), // 57: google.protobuf.Timestamp
 }
 var file_sniffarr_v1_browse_proto_depIdxs = []int32{
 	5,  // 0: sniffarr.v1.RefreshPeersRequest.releases:type_name -> sniffarr.v1.Releases
@@ -3813,99 +3824,100 @@ var file_sniffarr_v1_browse_proto_depIdxs = []int32{
 	5,  // 2: sniffarr.v1.RequestMatchRequest.releases:type_name -> sniffarr.v1.Releases
 	15, // 3: sniffarr.v1.RequestMatchResponse.works:type_name -> sniffarr.v1.WorkSummary
 	14, // 4: sniffarr.v1.SettingsResponse.features:type_name -> sniffarr.v1.FeatureState
-	0,  // 5: sniffarr.v1.FeatureState.feature:type_name -> sniffarr.v1.Feature
-	48, // 6: sniffarr.v1.WorkSummary.kind:type_name -> sniffarr.v1.Kind
-	49, // 7: sniffarr.v1.WorkSummary.tmdb:type_name -> sniffarr.v1.TMDBWork
-	48, // 8: sniffarr.v1.SearchTitlesRequest.kind:type_name -> sniffarr.v1.Kind
-	15, // 9: sniffarr.v1.SearchTitlesResponse.works:type_name -> sniffarr.v1.WorkSummary
-	15, // 10: sniffarr.v1.TitleResponse.work:type_name -> sniffarr.v1.WorkSummary
-	21, // 11: sniffarr.v1.TitleResponse.ranks:type_name -> sniffarr.v1.WindowRanks
-	33, // 12: sniffarr.v1.TitleResponse.peers:type_name -> sniffarr.v1.PeerCounts
-	16, // 13: sniffarr.v1.TitleResponse.audio:type_name -> sniffarr.v1.WorkAudio
-	21, // 14: sniffarr.v1.TitleResponse.peaks:type_name -> sniffarr.v1.WindowRanks
-	50, // 15: sniffarr.v1.TitleReleasesRequest.quality:type_name -> sniffarr.v1.Quality
-	51, // 16: sniffarr.v1.TitleReleasesRequest.source:type_name -> sniffarr.v1.VideoSource
-	3,  // 17: sniffarr.v1.TitleReleasesRequest.voice:type_name -> sniffarr.v1.Voice
-	1,  // 18: sniffarr.v1.TitleReleasesRequest.sort:type_name -> sniffarr.v1.Sort
-	52, // 19: sniffarr.v1.TitleReleasesResponse.releases:type_name -> sniffarr.v1.Release
-	48, // 20: sniffarr.v1.TorrentsRequest.kind:type_name -> sniffarr.v1.Kind
-	50, // 21: sniffarr.v1.TorrentsRequest.quality:type_name -> sniffarr.v1.Quality
-	3,  // 22: sniffarr.v1.TorrentsRequest.voice:type_name -> sniffarr.v1.Voice
-	51, // 23: sniffarr.v1.TorrentsRequest.source:type_name -> sniffarr.v1.VideoSource
-	53, // 24: sniffarr.v1.TorrentsRequest.layer:type_name -> sniffarr.v1.Layer
-	1,  // 25: sniffarr.v1.TorrentsRequest.sort:type_name -> sniffarr.v1.Sort
-	26, // 26: sniffarr.v1.TorrentsResponse.rows:type_name -> sniffarr.v1.TorrentRow
-	52, // 27: sniffarr.v1.TorrentRow.release:type_name -> sniffarr.v1.Release
-	15, // 28: sniffarr.v1.TorrentRow.work:type_name -> sniffarr.v1.WorkSummary
-	52, // 29: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
-	54, // 30: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
-	55, // 31: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
-	33, // 32: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
-	15, // 33: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkSummary
-	32, // 34: sniffarr.v1.CardResponse.rules:type_name -> sniffarr.v1.RuleHit
-	31, // 35: sniffarr.v1.CardResponse.journal:type_name -> sniffarr.v1.JournalEntry
-	31, // 36: sniffarr.v1.JournalResponse.entries:type_name -> sniffarr.v1.JournalEntry
-	56, // 37: sniffarr.v1.JournalEntry.at:type_name -> google.protobuf.Timestamp
-	56, // 38: sniffarr.v1.HomeResponse.computed_at:type_name -> google.protobuf.Timestamp
-	48, // 39: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
-	2,  // 40: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
-	3,  // 41: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
-	38, // 42: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
-	56, // 43: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
-	56, // 44: sniffarr.v1.TopResponse.history_since:type_name -> google.protobuf.Timestamp
-	15, // 45: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.WorkSummary
-	16, // 46: sniffarr.v1.TopEntry.audio:type_name -> sniffarr.v1.WorkAudio
-	51, // 47: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
-	56, // 48: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
-	56, // 49: sniffarr.v1.TopEntry.debut:type_name -> google.protobuf.Timestamp
-	57, // 50: sniffarr.v1.TopEntry.on_chart:type_name -> google.protobuf.Duration
-	43, // 51: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
-	44, // 52: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
-	45, // 53: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
-	46, // 54: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
-	47, // 55: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
-	56, // 56: sniffarr.v1.StatsResponse.computed_at:type_name -> google.protobuf.Timestamp
-	41, // 57: sniffarr.v1.StatsResponse.queue_fetches:type_name -> sniffarr.v1.TaskQueue
-	41, // 58: sniffarr.v1.StatsResponse.queue_lookups:type_name -> sniffarr.v1.TaskQueue
-	41, // 59: sniffarr.v1.StatsResponse.queue_probes:type_name -> sniffarr.v1.TaskQueue
-	57, // 60: sniffarr.v1.StatsResponse.counts_interval:type_name -> google.protobuf.Duration
-	42, // 61: sniffarr.v1.TaskQueue.levels:type_name -> sniffarr.v1.TaskLevel
-	57, // 62: sniffarr.v1.TaskLevel.eta:type_name -> google.protobuf.Duration
-	48, // 63: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
-	53, // 64: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
-	51, // 65: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
-	4,  // 66: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
-	17, // 67: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
-	19, // 68: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
-	22, // 69: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
-	24, // 70: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
-	27, // 71: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
-	29, // 72: sniffarr.v1.BrowseService.Journal:input_type -> sniffarr.v1.JournalRequest
-	39, // 73: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
-	34, // 74: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
-	36, // 75: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
-	12, // 76: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
-	6,  // 77: sniffarr.v1.BrowseService.RefreshPeers:input_type -> sniffarr.v1.RefreshPeersRequest
-	8,  // 78: sniffarr.v1.BrowseService.RequestProbe:input_type -> sniffarr.v1.RequestProbeRequest
-	10, // 79: sniffarr.v1.BrowseService.RequestMatch:input_type -> sniffarr.v1.RequestMatchRequest
-	18, // 80: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
-	20, // 81: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
-	23, // 82: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
-	25, // 83: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
-	28, // 84: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
-	30, // 85: sniffarr.v1.BrowseService.Journal:output_type -> sniffarr.v1.JournalResponse
-	40, // 86: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
-	35, // 87: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
-	37, // 88: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
-	13, // 89: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
-	7,  // 90: sniffarr.v1.BrowseService.RefreshPeers:output_type -> sniffarr.v1.RefreshPeersResponse
-	9,  // 91: sniffarr.v1.BrowseService.RequestProbe:output_type -> sniffarr.v1.RequestProbeResponse
-	11, // 92: sniffarr.v1.BrowseService.RequestMatch:output_type -> sniffarr.v1.RequestMatchResponse
-	80, // [80:93] is the sub-list for method output_type
-	67, // [67:80] is the sub-list for method input_type
-	67, // [67:67] is the sub-list for extension type_name
-	67, // [67:67] is the sub-list for extension extendee
-	0,  // [0:67] is the sub-list for field type_name
+	48, // 5: sniffarr.v1.SettingsResponse.journal_retention:type_name -> google.protobuf.Duration
+	0,  // 6: sniffarr.v1.FeatureState.feature:type_name -> sniffarr.v1.Feature
+	49, // 7: sniffarr.v1.WorkSummary.kind:type_name -> sniffarr.v1.Kind
+	50, // 8: sniffarr.v1.WorkSummary.tmdb:type_name -> sniffarr.v1.TMDBWork
+	49, // 9: sniffarr.v1.SearchTitlesRequest.kind:type_name -> sniffarr.v1.Kind
+	15, // 10: sniffarr.v1.SearchTitlesResponse.works:type_name -> sniffarr.v1.WorkSummary
+	15, // 11: sniffarr.v1.TitleResponse.work:type_name -> sniffarr.v1.WorkSummary
+	21, // 12: sniffarr.v1.TitleResponse.ranks:type_name -> sniffarr.v1.WindowRanks
+	33, // 13: sniffarr.v1.TitleResponse.peers:type_name -> sniffarr.v1.PeerCounts
+	16, // 14: sniffarr.v1.TitleResponse.audio:type_name -> sniffarr.v1.WorkAudio
+	21, // 15: sniffarr.v1.TitleResponse.peaks:type_name -> sniffarr.v1.WindowRanks
+	51, // 16: sniffarr.v1.TitleReleasesRequest.quality:type_name -> sniffarr.v1.Quality
+	52, // 17: sniffarr.v1.TitleReleasesRequest.source:type_name -> sniffarr.v1.VideoSource
+	3,  // 18: sniffarr.v1.TitleReleasesRequest.voice:type_name -> sniffarr.v1.Voice
+	1,  // 19: sniffarr.v1.TitleReleasesRequest.sort:type_name -> sniffarr.v1.Sort
+	53, // 20: sniffarr.v1.TitleReleasesResponse.releases:type_name -> sniffarr.v1.Release
+	49, // 21: sniffarr.v1.TorrentsRequest.kind:type_name -> sniffarr.v1.Kind
+	51, // 22: sniffarr.v1.TorrentsRequest.quality:type_name -> sniffarr.v1.Quality
+	3,  // 23: sniffarr.v1.TorrentsRequest.voice:type_name -> sniffarr.v1.Voice
+	52, // 24: sniffarr.v1.TorrentsRequest.source:type_name -> sniffarr.v1.VideoSource
+	54, // 25: sniffarr.v1.TorrentsRequest.layer:type_name -> sniffarr.v1.Layer
+	1,  // 26: sniffarr.v1.TorrentsRequest.sort:type_name -> sniffarr.v1.Sort
+	26, // 27: sniffarr.v1.TorrentsResponse.rows:type_name -> sniffarr.v1.TorrentRow
+	53, // 28: sniffarr.v1.TorrentRow.release:type_name -> sniffarr.v1.Release
+	15, // 29: sniffarr.v1.TorrentRow.work:type_name -> sniffarr.v1.WorkSummary
+	53, // 30: sniffarr.v1.CardResponse.release:type_name -> sniffarr.v1.Release
+	55, // 31: sniffarr.v1.CardResponse.discovery:type_name -> sniffarr.v1.Source
+	56, // 32: sniffarr.v1.CardResponse.files:type_name -> sniffarr.v1.File
+	33, // 33: sniffarr.v1.CardResponse.peers:type_name -> sniffarr.v1.PeerCounts
+	15, // 34: sniffarr.v1.CardResponse.work:type_name -> sniffarr.v1.WorkSummary
+	32, // 35: sniffarr.v1.CardResponse.rules:type_name -> sniffarr.v1.RuleHit
+	31, // 36: sniffarr.v1.CardResponse.journal:type_name -> sniffarr.v1.JournalEntry
+	31, // 37: sniffarr.v1.JournalResponse.entries:type_name -> sniffarr.v1.JournalEntry
+	57, // 38: sniffarr.v1.JournalEntry.at:type_name -> google.protobuf.Timestamp
+	57, // 39: sniffarr.v1.HomeResponse.computed_at:type_name -> google.protobuf.Timestamp
+	49, // 40: sniffarr.v1.TopRequest.kind:type_name -> sniffarr.v1.Kind
+	2,  // 41: sniffarr.v1.TopRequest.window:type_name -> sniffarr.v1.Window
+	3,  // 42: sniffarr.v1.TopRequest.voice:type_name -> sniffarr.v1.Voice
+	38, // 43: sniffarr.v1.TopResponse.entries:type_name -> sniffarr.v1.TopEntry
+	57, // 44: sniffarr.v1.TopResponse.computed_at:type_name -> google.protobuf.Timestamp
+	57, // 45: sniffarr.v1.TopResponse.history_since:type_name -> google.protobuf.Timestamp
+	15, // 46: sniffarr.v1.TopEntry.work:type_name -> sniffarr.v1.WorkSummary
+	16, // 47: sniffarr.v1.TopEntry.audio:type_name -> sniffarr.v1.WorkAudio
+	52, // 48: sniffarr.v1.TopEntry.sources:type_name -> sniffarr.v1.VideoSource
+	57, // 49: sniffarr.v1.TopEntry.first_seen:type_name -> google.protobuf.Timestamp
+	57, // 50: sniffarr.v1.TopEntry.debut:type_name -> google.protobuf.Timestamp
+	48, // 51: sniffarr.v1.TopEntry.on_chart:type_name -> google.protobuf.Duration
+	43, // 52: sniffarr.v1.StatsResponse.kinds:type_name -> sniffarr.v1.KindCount
+	44, // 53: sniffarr.v1.StatsResponse.layers:type_name -> sniffarr.v1.LayerCount
+	45, // 54: sniffarr.v1.StatsResponse.sources:type_name -> sniffarr.v1.SourceCount
+	46, // 55: sniffarr.v1.StatsResponse.audio:type_name -> sniffarr.v1.AudioCounts
+	47, // 56: sniffarr.v1.StatsResponse.rejected:type_name -> sniffarr.v1.RejectionCount
+	57, // 57: sniffarr.v1.StatsResponse.computed_at:type_name -> google.protobuf.Timestamp
+	41, // 58: sniffarr.v1.StatsResponse.queue_fetches:type_name -> sniffarr.v1.TaskQueue
+	41, // 59: sniffarr.v1.StatsResponse.queue_lookups:type_name -> sniffarr.v1.TaskQueue
+	41, // 60: sniffarr.v1.StatsResponse.queue_probes:type_name -> sniffarr.v1.TaskQueue
+	48, // 61: sniffarr.v1.StatsResponse.counts_interval:type_name -> google.protobuf.Duration
+	42, // 62: sniffarr.v1.TaskQueue.levels:type_name -> sniffarr.v1.TaskLevel
+	48, // 63: sniffarr.v1.TaskLevel.eta:type_name -> google.protobuf.Duration
+	49, // 64: sniffarr.v1.KindCount.kind:type_name -> sniffarr.v1.Kind
+	54, // 65: sniffarr.v1.LayerCount.layer:type_name -> sniffarr.v1.Layer
+	52, // 66: sniffarr.v1.SourceCount.source:type_name -> sniffarr.v1.VideoSource
+	4,  // 67: sniffarr.v1.RejectionCount.reason:type_name -> sniffarr.v1.Rejection
+	17, // 68: sniffarr.v1.BrowseService.SearchTitles:input_type -> sniffarr.v1.SearchTitlesRequest
+	19, // 69: sniffarr.v1.BrowseService.Title:input_type -> sniffarr.v1.TitleRequest
+	22, // 70: sniffarr.v1.BrowseService.TitleReleases:input_type -> sniffarr.v1.TitleReleasesRequest
+	24, // 71: sniffarr.v1.BrowseService.Torrents:input_type -> sniffarr.v1.TorrentsRequest
+	27, // 72: sniffarr.v1.BrowseService.Card:input_type -> sniffarr.v1.CardRequest
+	29, // 73: sniffarr.v1.BrowseService.Journal:input_type -> sniffarr.v1.JournalRequest
+	39, // 74: sniffarr.v1.BrowseService.Stats:input_type -> sniffarr.v1.StatsRequest
+	34, // 75: sniffarr.v1.BrowseService.Home:input_type -> sniffarr.v1.HomeRequest
+	36, // 76: sniffarr.v1.BrowseService.Top:input_type -> sniffarr.v1.TopRequest
+	12, // 77: sniffarr.v1.BrowseService.Settings:input_type -> sniffarr.v1.SettingsRequest
+	6,  // 78: sniffarr.v1.BrowseService.RefreshPeers:input_type -> sniffarr.v1.RefreshPeersRequest
+	8,  // 79: sniffarr.v1.BrowseService.RequestProbe:input_type -> sniffarr.v1.RequestProbeRequest
+	10, // 80: sniffarr.v1.BrowseService.RequestMatch:input_type -> sniffarr.v1.RequestMatchRequest
+	18, // 81: sniffarr.v1.BrowseService.SearchTitles:output_type -> sniffarr.v1.SearchTitlesResponse
+	20, // 82: sniffarr.v1.BrowseService.Title:output_type -> sniffarr.v1.TitleResponse
+	23, // 83: sniffarr.v1.BrowseService.TitleReleases:output_type -> sniffarr.v1.TitleReleasesResponse
+	25, // 84: sniffarr.v1.BrowseService.Torrents:output_type -> sniffarr.v1.TorrentsResponse
+	28, // 85: sniffarr.v1.BrowseService.Card:output_type -> sniffarr.v1.CardResponse
+	30, // 86: sniffarr.v1.BrowseService.Journal:output_type -> sniffarr.v1.JournalResponse
+	40, // 87: sniffarr.v1.BrowseService.Stats:output_type -> sniffarr.v1.StatsResponse
+	35, // 88: sniffarr.v1.BrowseService.Home:output_type -> sniffarr.v1.HomeResponse
+	37, // 89: sniffarr.v1.BrowseService.Top:output_type -> sniffarr.v1.TopResponse
+	13, // 90: sniffarr.v1.BrowseService.Settings:output_type -> sniffarr.v1.SettingsResponse
+	7,  // 91: sniffarr.v1.BrowseService.RefreshPeers:output_type -> sniffarr.v1.RefreshPeersResponse
+	9,  // 92: sniffarr.v1.BrowseService.RequestProbe:output_type -> sniffarr.v1.RequestProbeResponse
+	11, // 93: sniffarr.v1.BrowseService.RequestMatch:output_type -> sniffarr.v1.RequestMatchResponse
+	81, // [81:94] is the sub-list for method output_type
+	68, // [68:81] is the sub-list for method input_type
+	68, // [68:68] is the sub-list for extension type_name
+	68, // [68:68] is the sub-list for extension extendee
+	0,  // [0:68] is the sub-list for field type_name
 }
 
 func init() { file_sniffarr_v1_browse_proto_init() }

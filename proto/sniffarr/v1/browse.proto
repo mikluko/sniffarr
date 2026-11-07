@@ -137,6 +137,9 @@ message SettingsResponse {
   // The optional features, one per Feature value but FEATURE_UNSPECIFIED,
   // in the enum's order, read at the request.
   repeated FeatureState features = 3;
+  // How long the journal keeps an entry, counted from the entry's at;
+  // absent when the server's configuration does not say.
+  google.protobuf.Duration journal_retention = 4;
 }
 
 // Feature is an optional feature of the server, off unless configured.

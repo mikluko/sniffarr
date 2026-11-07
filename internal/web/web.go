@@ -69,6 +69,10 @@ type Config struct {
 	// Feeds is whether the API reads tracker feeds, as ObtainSettings
 	// returns it; false labels the feeds' priority as off.
 	Feeds bool
+	// JournalRetention is how long the API keeps a journal entry, as
+	// ObtainSettings returns it; 0 leaves it unsaid. Handler.Apply and
+	// Handler.Watch replace it while the UI runs.
+	JournalRetention time.Duration
 	// Locales tells the locale of the person an access token was issued to;
 	// when nil, the language is only the one picked on the page.
 	Locales Locales
@@ -138,7 +142,7 @@ func New(cfg Config) (*Handler, error) {
 	}
 	s := &server{cfg: cfg, ui: r}
 	h := &Handler{s: s}
-	h.Apply(Settings{Languages: cfg.Languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds})
+	h.Apply(Settings{Languages: cfg.Languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds, JournalRetention: cfg.JournalRetention})
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", r.Static())
 	mux.HandleFunc("GET /{$}", s.data)
@@ -192,6 +196,7 @@ func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	b.Seerr = s.cfg.SeerrURL
 	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
 	b.Probes, b.Classifier, b.Feeds = c.Probes, c.Classifier, c.Feeds
+	b.JournalRetention = c.JournalRetention
 	return b
 }
 

@@ -4,7 +4,8 @@ With `-ui`, sniffarr serves a web UI on `SNIFFARR_UI_ADDR`, in English or
 Russian. The UI touches no database: it reads `BrowseService`, in-process
 when `-api` is on and over the network at
 `SNIFFARR_URL` otherwise. At start it asks `Settings` for the API's audio
-languages and which optional features are on, retrying every 5 seconds until
+languages, which optional features are on and how long the journal keeps
+an entry, retrying every 5 seconds until
 the API answers, and listens only then. It asks again every minute and a
 change shows on the next page, so the order the UI and the API start in does
 not matter; an answer that fails or names an audio language the UI does not

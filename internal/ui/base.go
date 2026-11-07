@@ -29,6 +29,9 @@ type Base struct {
 	Loc        *time.Location
 	Now        time.Time
 
+	// JournalRetention is how long the API keeps a journal entry; 0 when unknown.
+	JournalRetention time.Duration
+
 	msgs map[string]string
 }
 

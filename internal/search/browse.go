@@ -72,6 +72,9 @@ type Browser struct {
 	// Feeds are the names of the feeds read that Settings reports; nil
 	// when none is.
 	Feeds []string
+	// JournalRetention is how long the journal keeps an entry, which
+	// Settings reports when above 0.
+	JournalRetention time.Duration
 	// Counts, when set, holds the counts Stats and Home serve; nil computes
 	// them at every call.
 	Counts *Counts
@@ -100,12 +103,16 @@ func (b *Browser) Settings(ctx context.Context, _ *connect.Request[sniffarrv1.Se
 	feature := func(f sniffarrv1.Feature, on, works bool, setting string, values []string) *sniffarrv1.FeatureState {
 		return &sniffarrv1.FeatureState{Feature: f, On: on, Works: on && works, Setting: setting, Values: slices.Clone(values)}
 	}
-	return connect.NewResponse(&sniffarrv1.SettingsResponse{AudioLanguages: slices.Clone(b.Languages), Probes: b.Probes, Features: []*sniffarrv1.FeatureState{
+	res := &sniffarrv1.SettingsResponse{AudioLanguages: slices.Clone(b.Languages), Probes: b.Probes, Features: []*sniffarrv1.FeatureState{
 		feature(sniffarrv1.Feature_FEATURE_CLASSIFIER, b.Classifier, !spent, "TYPESAFE_API_KEY", nil),
 		feature(sniffarrv1.Feature_FEATURE_PROBES, b.Probes, b.probers() > 0, "-probe", nil),
 		feature(sniffarrv1.Feature_FEATURE_AUDIO, len(b.Languages) > 0, true, "SNIFFARR_AUDIO_LANGUAGES", b.Languages),
 		feature(sniffarrv1.Feature_FEATURE_FEEDS, len(b.Feeds) > 0, true, "SNIFFARR_FEEDS", b.Feeds),
-	}}), nil
+	}}
+	if b.JournalRetention > 0 {
+		res.JournalRetention = durationpb.New(b.JournalRetention)
+	}
+	return connect.NewResponse(res), nil
 }
 
 // budgetSpent reports whether the classifier is on and has spent the

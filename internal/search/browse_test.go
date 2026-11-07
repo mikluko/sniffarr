@@ -264,6 +264,10 @@ func TestBrowserSettings(t *testing.T) {
 	res, err = (&Browser{Probes: true}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
 	require.NoError(t, err)
 	require.True(t, res.Msg.GetProbes())
+	require.Nil(t, res.Msg.GetJournalRetention(), "no retention, none reported")
+	res, err = (&Browser{JournalRetention: 30 * 24 * time.Hour}).Settings(ctx, connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+	require.NoError(t, err)
+	require.Equal(t, 30*24*time.Hour, res.Msg.GetJournalRetention().AsDuration())
 }
 
 func TestBrowserSettingsFeatures(t *testing.T) {

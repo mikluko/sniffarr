@@ -28,6 +28,9 @@ type Settings struct {
 	Classifier bool
 	// Feeds is whether it reads tracker feeds.
 	Feeds bool
+	// JournalRetention is how long its journal keeps an entry; 0 when it
+	// does not say.
+	JournalRetention time.Duration
 }
 
 // ObtainSettings asks the browse API for its settings, retrying after
@@ -61,7 +64,7 @@ func settingsOf(msg *sniffarrv1.SettingsResponse) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("the API's audio languages %q: %w", tags, err)
 	}
-	out := Settings{Languages: langs, Probes: msg.GetProbes()}
+	out := Settings{Languages: langs, Probes: msg.GetProbes(), JournalRetention: msg.GetJournalRetention().AsDuration()}
 	for _, f := range msg.GetFeatures() {
 		switch f.GetFeature() {
 		case sniffarrv1.Feature_FEATURE_CLASSIFIER:
@@ -92,7 +95,7 @@ func (h *Handler) Watch(ctx context.Context, interval time.Duration) {
 		}
 		if !reflect.DeepEqual(next, h.s.settings().Settings) {
 			h.Apply(next)
-			log.InfoContext(ctx, "settings changed", "languages", audio.Tags(next.Languages), "probes", next.Probes, "classifier", next.Classifier, "feeds", next.Feeds)
+			log.InfoContext(ctx, "settings changed", "languages", audio.Tags(next.Languages), "probes", next.Probes, "classifier", next.Classifier, "feeds", next.Feeds, "journal_retention", next.JournalRetention)
 		}
 	}
 }
