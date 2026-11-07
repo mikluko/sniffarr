@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -64,6 +65,33 @@ func peers(k sketch.Key, first, n int) []byte {
 		s.Add(k.Hash(netip.AddrPortFrom(netip.AddrFrom4([4]byte{10, byte(i >> 16), byte(i >> 8), byte(i)}), 6881)))
 	}
 	return s.Bytes()
+}
+
+// titleMatcher matches Heat's title key to the movie 949 and any other to
+// nothing.
+type titleMatcher struct{ store *store.Store }
+
+func (f titleMatcher) Matchable(ctx context.Context, keys []string) ([]store.TitleKey, error) {
+	return f.store.UnmatchedTitles(ctx, keys, now.Add(time.Second), len(keys))
+}
+
+func (f titleMatcher) Match(ctx context.Context, k store.TitleKey, trigger string) error {
+	found := store.Found{Trigger: trigger}
+	if k.Key == names.Parse(heat).Key {
+		found.Hit, found.Confidence, found.Layer = &store.Hit{Type: store.TypeMovie, TMDBID: 949, Lang: "en", Title: "Heat", Year: 1995}, 1, store.LayerTMDB
+	}
+	_, _, err := f.store.RecordMatch(ctx, k.Key, found, now)
+	return err
+}
+
+// failingBrowse fails RequestMatch with code.
+type failingBrowse struct {
+	sniffarrv1connect.BrowseServiceClient
+	code connect.Code
+}
+
+func (f failingBrowse) RequestMatch(context.Context, *connect.Request[sniffarrv1.RequestMatchRequest]) (*connect.Response[sniffarrv1.RequestMatchResponse], error) {
+	return nil, connect.NewError(f.code, errors.New("failed"))
 }
 
 // titleSearch answers TMDB searches for "alien" with Alien and Aliens.
@@ -188,7 +216,7 @@ func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 func browse(t *testing.T, st *store.Store, tasks *store.Tasks, tags []string) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
-	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Languages: tags, Now: func() time.Time { return now },
+	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Languages: tags, Now: func() time.Time { return now },
 		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }, Interval: 5 * time.Minute}}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b))
 	var p http.Protocols
@@ -551,6 +579,37 @@ func TestRequests(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, post(t, h, "/t/"+hexOf(99)+"/peers", "act-peers").Code)
 	require.Equal(t, http.StatusNotFound, post(t, h, "/t/"+hexOf(1)+"/seed", "act-seed").Code)
 	require.Equal(t, http.StatusNotFound, post(t, h, "/movie/1/peers", "act-peers").Code)
+}
+
+func TestRequestMatch(t *testing.T) {
+	h := handler(t, nil)
+	button := `<button id="act-match" type="submit">Match now</button>`
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(7), "")), button, "a title never looked up")
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(6), "")), button, "a title TMDB found nothing for")
+	require.NotContains(t, page(t, get(t, h, "/t/"+hexOf(1), "")), button, "not a matched one")
+	require.NotContains(t, page(t, get(t, h, "/movie/348", "")), button, "nor a work's")
+
+	frag := fragment(t, post(t, h, "/t/"+hexOf(6)+"/match", "act-answer"), "act-answer")
+	require.Equal(t, `<div id="act-answer" class="act-ans" role="status">TMDB still finds nothing.</div>`+"\n"+
+		`<button id="act-match" type="submit" disabled hx-swap-oob="true">Match now</button>`, strings.TrimSpace(frag))
+	frag = fragment(t, post(t, h, "/t/"+hexOf(7)+"/match", "act-answer"), "act-answer")
+	require.Contains(t, frag, `>Matched to <a href="/movie/949">Heat</a> 1995.</div>`)
+	body := page(t, get(t, h, "/t/"+hexOf(7), ""))
+	require.NotContains(t, body, button, "matched now")
+	require.Contains(t, body, `<a class="tm-stretch" href="/movie/949">Heat</a>`)
+	require.Contains(t, body, `<td>title matched</td>`, "journaled")
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(7)+"?lang=ru", "")), "кто запросил: запрос", "with the trigger")
+	w := post(t, h, "/t/"+hexOf(6)+"/match", "")
+	require.Equal(t, http.StatusSeeOther, w.Code, "without htmx, back to the card")
+
+	for code, want := range map[connect.Code]string{connect.CodeResourceExhausted: "budget", connect.CodeFailedPrecondition: "off", connect.CodeUnavailable: "unavailable"} {
+		s := &server{cfg: Config{Browse: failingBrowse{code: code}}}
+		got, err := s.requestMatch(context.Background(), nil, "en")
+		require.NoError(t, err)
+		require.Equal(t, want, got.Failure)
+	}
+	_, err := (&server{cfg: Config{Browse: failingBrowse{code: connect.CodeInternal}}}).requestMatch(context.Background(), nil, "en")
+	require.Error(t, err, "any other failure is the page's")
 }
 
 func TestTMDBWork(t *testing.T) {

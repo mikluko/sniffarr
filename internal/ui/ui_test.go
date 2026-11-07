@@ -68,6 +68,12 @@ func TestRenderAll(t *testing.T) {
 		{"act-peers", "torrent", "/t/x/peers", "act-answer", func(b Base) any { return Requested{Base: b, Action: "peers", Releases: 1} }},
 		{"act-probe", "torrent", "/t/x/probe", "act-answer", func(b Base) any { return Requested{Base: b, Action: "probe", Releases: 1} }},
 		{"act-probe-unreadable", "torrent", "/t/x/probe", "act-answer", func(b Base) any { return Requested{Base: b, Action: "probe"} }},
+		{"act-match", "torrent", "/t/x/match", "act-answer", func(b Base) any {
+			w := sampleMovies[1].summary(b.Lang, 2)
+			return Requested{Base: b, Action: "match", Titles: 1, Work: &w}
+		}},
+		{"act-match-none", "torrent", "/t/x/match", "act-answer", func(b Base) any { return Requested{Base: b, Action: "match", Titles: 1} }},
+		{"act-match-budget", "torrent", "/t/x/match", "act-answer", func(b Base) any { return Requested{Base: b, Action: "match", Failure: "budget"} }},
 		{"act-peers-work", "work", "/movie/1/peers", "act-answer", func(b Base) any { return Requested{Base: b, Action: "peers", Releases: 95} }},
 		{"data", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleData(b) }},
 		{"data-frag", "data", "/", "data", func(b Base) any { return SampleData(b) }},

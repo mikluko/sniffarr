@@ -56,13 +56,15 @@
   {{- end}}
 {{- end}}
 
-{{/* Buttons of a card: look up the peers of its releases, probe them; a probe needs peers.
-     A button is disabled while its request runs; the answer, the fragment "act", takes the
-     line under them and leaves the button disabled. */}}
+{{/* Buttons of a card: look up the peers of its releases, probe them, and, for a release
+     matched to no work, look its title up on TMDB; a probe needs peers. A button is disabled
+     while its request runs; the answer, the fragment "act", takes the line under them and
+     leaves the button disabled. */}}
 {{define "acts"}}{{$b := .B}}
 <div class="acts">
   {{template "actform" (actArgs $b .Path "peers" false)}}
   {{template "actform" (actArgs $b .Path "probe" (not .Peers))}}
+  {{if .Match}}{{template "actform" (actArgs $b .Path "match" false)}}{{end}}
   <div id="act-answer" class="act-ans" role="status">{{if not .Peers}}{{$b.T "act.probe_nopeers"}}{{end}}</div>
 </div>
 {{end}}
@@ -78,9 +80,17 @@
 {{define "copy"}}<span class="tip ic"><button type="button" class="ic" data-copy="{{.Value}}" data-done="{{.B.T "card.copied"}}" aria-label="{{.Label}}">{{icon "copy"}}</button><span class="tipb" role="status">{{.Label}}</span></span>{{end}}
 
 {{define "act"}}<div id="act-answer" class="act-ans" role="status">
-  {{- if and (eq .Action "probe") (eq .Releases 0)}}{{.T "act.probe_unreadable"}}
+  {{- if eq .Action "match"}}{{template "matched" .}}
+  {{- else if and (eq .Action "probe") (eq .Releases 0)}}{{.T "act.probe_unreadable"}}
   {{- else}}{{if gt .Releases 1}}{{.Fmt (concat "act.done." .Action "_n") (.Count (int64 .Releases) "act.releases")}}{{else}}{{.T (concat "act.done." .Action)}}{{end}} {{template "queue" .Base}}{{end -}}
 </div>
 {{template "actbutton" (actOOB .Base .Action)}}{{end}}
+
+{{define "matched"}}
+  {{- if .Failure}}{{.T (concat "act.match_failed." .Failure)}}
+  {{- else if .Work}}{{.T "act.matched"}} <a href="{{.Work.Path}}">{{.Work.TMDB.Title}}</a>{{with .Work.TMDB.Year}} {{.}}{{end}}.
+  {{- else if .Titles}}{{.T "act.match_none"}}
+  {{- else}}{{.T "act.match_nokey"}}{{end}}
+{{- end}}
 
 {{define "queue"}}{{.T "act.queue.before"}}<a href="/">{{.T "act.queue.page"}}</a>{{.T "act.queue.after"}}{{end}}

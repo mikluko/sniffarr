@@ -63,11 +63,12 @@ type tipArgs struct {
 }
 
 // actsArgs are the buttons of the card at Path, whose releases have Peers
-// over 7 days.
+// over 7 days; Match adds the one asking for a TMDB lookup.
 type actsArgs struct {
 	B     Base
 	Path  string
 	Peers int64
+	Match bool
 }
 
 // actButton is the button of the card at Path asking for Action, disabled
@@ -144,8 +145,8 @@ func New() (*Renderer, error) {
 		"limitArgs": func(b Base, done, pace, limit int64) limitArgs {
 			return limitArgs{B: b, Done: done, Pace: pace, Limit: limit}
 		},
-		"actsArgs": func(b Base, path string, peers int64) actsArgs {
-			return actsArgs{B: b, Path: path, Peers: peers}
+		"actsArgs": func(b Base, path string, peers int64, match ...bool) actsArgs {
+			return actsArgs{B: b, Path: path, Peers: peers, Match: len(match) > 0 && match[0]}
 		},
 		"actArgs": func(b Base, path, action string, off bool) actButton {
 			return actButton{B: b, Path: path, Action: action, Off: off}

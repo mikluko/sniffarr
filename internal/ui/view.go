@@ -245,12 +245,17 @@ type Release struct {
 // ---------- torrent card ----------
 
 // Requested answers a card's button: Action, "peers" or "probe", was asked
-// for Releases releases. It is the htmx fragment "act": the line under the
-// buttons, and the pressed button, disabled.
+// for Releases releases; or "match" looked Titles title keys up, finding
+// Work, or failed for Failure, "budget", "off" or "unavailable". It is the
+// htmx fragment "act": the line under the buttons, and the pressed button,
+// disabled.
 type Requested struct {
 	Base
 	Action   string
 	Releases int
+	Titles   int
+	Work     *WorkSummary
+	Failure  string
 }
 
 type TorrentPage struct {
@@ -288,6 +293,12 @@ type Torrent struct {
 	Journal []JournalEntry
 
 	Files FileList
+}
+
+// Matchable reports whether the card offers to look the torrent's title up
+// on TMDB now: a movie or series with a title, matched to no work.
+func (t Torrent) Matchable() bool {
+	return t.Work == nil && t.TMDBQuery != "" && (t.Kind.Value == "movie" || t.Kind.Value == "series")
 }
 
 type Answer struct {

@@ -29,7 +29,7 @@
     <tr><th>{{$.T "col.last"}}</th><td>{{$.TimeFull .LastSeen}}</td></tr>
     <tr><th>{{$.T "card.via"}}</th><td>{{$.T (concat "via." .DiscoveredVia)}}</td></tr>
   </table>
-  {{template "acts" (actsArgs $.Base (concat "/t/" .InfoHash) .Peers.Week)}}
+  {{template "acts" (actsArgs $.Base (concat "/t/" .InfoHash) .Peers.Week .Matchable)}}
 </section>
 
 <section class="col wide">

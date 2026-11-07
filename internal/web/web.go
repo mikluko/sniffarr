@@ -903,25 +903,27 @@ func (s *server) requestWork(kind string) http.HandlerFunc {
 	}
 }
 
-// request asks the API for the action of the path, peers or probe, of the
-// releases r names on the page of the card at path. It answers an htmx
-// request for an "act-" target with the fragment "act", and sends any other
-// back to the card.
+// request asks the API for the action of the path, peers, probe or match,
+// of the releases r names on the page of the card at path. It answers an
+// htmx request for an "act-" target with the fragment "act", and sends any
+// other back to the card.
 func (s *server) request(w http.ResponseWriter, req *http.Request, page, path string, r *sniffarrv1.Releases) {
-	action := req.PathValue("action")
-	var n int32
+	action, lang := req.PathValue("action"), s.lang(w, req)
+	var ans ui.Requested
 	var err error
 	switch action {
 	case "peers":
 		var res *connect.Response[sniffarrv1.RefreshPeersResponse]
 		if res, err = s.cfg.Browse.RefreshPeers(req.Context(), connect.NewRequest(&sniffarrv1.RefreshPeersRequest{Releases: r})); err == nil {
-			n = res.Msg.GetReleases()
+			ans.Releases = int(res.Msg.GetReleases())
 		}
 	case "probe":
 		var res *connect.Response[sniffarrv1.RequestProbeResponse]
 		if res, err = s.cfg.Browse.RequestProbe(req.Context(), connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: r})); err == nil {
-			n = res.Msg.GetReleases()
+			ans.Releases = int(res.Msg.GetReleases())
 		}
+	case "match":
+		ans, err = s.requestMatch(req.Context(), r, lang)
 	default:
 		http.NotFound(w, req)
 		return
@@ -938,5 +940,27 @@ func (s *server) request(w http.ResponseWriter, req *http.Request, page, path st
 		http.Redirect(w, req, path, http.StatusSeeOther)
 		return
 	}
-	s.render(w, req, page, ui.Requested{Base: s.base(req, s.lang(w, req), ""), Action: action, Releases: int(n)})
+	ans.Base, ans.Action = s.base(req, lang, ""), action
+	s.render(w, req, page, ans)
+}
+
+// matchFailures name the RequestMatch errors the card's answer explains.
+var matchFailures = map[connect.Code]string{connect.CodeResourceExhausted: "budget", connect.CodeFailedPrecondition: "off", connect.CodeUnavailable: "unavailable"}
+
+// requestMatch asks RequestMatch to look the titles of r up and answers
+// with what it found, or with why it could not look; any other error is
+// returned.
+func (s *server) requestMatch(ctx context.Context, r *sniffarrv1.Releases, lang string) (ui.Requested, error) {
+	res, err := s.cfg.Browse.RequestMatch(ctx, connect.NewRequest(&sniffarrv1.RequestMatchRequest{Releases: r, Lang: lang}))
+	if f, ok := matchFailures[connect.CodeOf(err)]; ok && err != nil {
+		return ui.Requested{Failure: f}, nil
+	}
+	if err != nil {
+		return ui.Requested{}, err
+	}
+	ans := ui.Requested{Titles: int(res.Msg.GetTitles())}
+	if ws := res.Msg.GetWorks(); len(ws) > 0 {
+		ans.Work = summary(ws[0])
+	}
+	return ans, nil
 }
