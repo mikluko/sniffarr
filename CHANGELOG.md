@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The API logs each migration as it begins and as it ends, with how long it took.
+
 ### Changed
 
 - Torznab titles carry every voice label of the Russian track, even one the release name already has, as in `HIN.DUB [Dub, RUS]`.
@@ -15,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Torznab titles write `[RUS, -]` instead of a bare `[RUS]`, which Radarr read as the release group.
 - A Russian word in a subtitle file's path no longer marks a release as having Russian audio; stored markers from subtitle paths alone are cleared.
+- A slow or locked database no longer fails the API's start: leftover leases are freed before it.
+- The Helm chart gives the API an hour to start before its liveness probe runs, so a long migration is no longer killed.
 
 ## [0.42.0] - 2026-11-07
 
