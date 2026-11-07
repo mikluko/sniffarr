@@ -57,7 +57,7 @@ func TestQuestions(t *testing.T) {
 	require.ElementsMatch(t, []string{"source"}, slices.Collect(maps.Keys(questions(false, nil))), "no audio language, no audio question")
 }
 
-type fakeTypeSafe struct {
+type fakeEndpoint struct {
 	*httptest.Server
 	requests, kindAsked atomic.Int64
 	// status is answered for a request whose name contains the key.
@@ -66,8 +66,8 @@ type fakeTypeSafe struct {
 	overload atomic.Int64
 }
 
-func newFake(t *testing.T) *fakeTypeSafe {
-	f := &fakeTypeSafe{status: map[string]int{}}
+func newFake(t *testing.T) *fakeEndpoint {
+	f := &fakeEndpoint{status: map[string]int{}}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.requests.Add(1)
 		if r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer key" {
@@ -122,7 +122,7 @@ func newFake(t *testing.T) *fakeTypeSafe {
 	return f
 }
 
-func (f *fakeTypeSafe) client() *Client {
+func (f *fakeEndpoint) client() *Client {
 	c := New("key")
 	c.Languages = russian
 	c.URL = f.URL + "/v1/systemone"
@@ -150,21 +150,21 @@ func TestChoose(t *testing.T) {
 	require.ErrorContains(t, err, "incomplete answer", "a choice outside the options")
 
 	s := setup(t)
-	jev := &Jev{Store: s, Classifier: f.client(), DailyTokens: 400, Log: slog.New(slog.DiscardHandler)}
-	_, err = jev.Choose(ctx, in)
+	cl := &Classifier{Store: s, Model: f.client(), DailyTokens: 400, Log: slog.New(slog.DiscardHandler)}
+	_, err = cl.Choose(ctx, in)
 	require.NoError(t, err)
 	n, err := s.TokensUsed(ctx, day(time.Now()))
 	require.NoError(t, err)
 	require.EqualValues(t, 400, n, "the budget is shared with classification")
-	_, err = jev.Choose(ctx, in)
+	_, err = cl.Choose(ctx, in)
 	require.ErrorIs(t, err, ErrBudget)
 	require.EqualValues(t, 3, f.requests.Load())
 
-	jev.DailyTokens = 1000
-	ok, err := jev.UnderBudgetLeaving(ctx, 50)
+	cl.DailyTokens = 1000
+	ok, err := cl.UnderBudgetLeaving(ctx, 50)
 	require.NoError(t, err)
 	require.True(t, ok)
-	ok, err = jev.UnderBudgetLeaving(ctx, 70)
+	ok, err = cl.UnderBudgetLeaving(ctx, 70)
 	require.NoError(t, err)
 	require.False(t, ok, "400 spent reaches 1000 less a 70% reserve")
 }
@@ -219,9 +219,9 @@ func setup(t *testing.T, names ...string) *store.Store {
 	return s
 }
 
-func worker(s *store.Store, c Classifier) *Worker {
-	jev := &Jev{Store: s, Classifier: c, Log: slog.New(slog.DiscardHandler)}
-	return &Worker{Store: s, Jev: jev, Concurrency: 2, Poll: 10 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}
+func worker(s *store.Store, c Model) *Worker {
+	cl := &Classifier{Store: s, Model: c, Log: slog.New(slog.DiscardHandler)}
+	return &Worker{Store: s, Classifier: cl, Concurrency: 2, Poll: 10 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}
 }
 
 func TestWorker(t *testing.T) {
@@ -258,7 +258,7 @@ func TestWorkerBudget(t *testing.T) {
 	s := setup(t, "Heat.1995", "Ronin.1998", "Collateral.2004")
 	w := worker(s, f.client())
 	w.Concurrency = 1
-	w.Jev.DailyTokens = 1500
+	w.Classifier.DailyTokens = 1500
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error)
 	go func() { done <- w.Run(ctx) }()
@@ -278,7 +278,7 @@ func TestWorkerReserve(t *testing.T) {
 	s := setup(t, "Heat.1995", "Ronin.1998", "Collateral.2004", "Thief.1981")
 	w := worker(s, f.client())
 	w.Concurrency = 1
-	w.Jev.DailyTokens = 3000
+	w.Classifier.DailyTokens = 3000
 	w.Reserve = 50
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error)
@@ -295,24 +295,24 @@ func TestWorkerReserve(t *testing.T) {
 
 	p, err := s.Unclassified(context.Background(), 0, 10, 1)
 	require.NoError(t, err)
-	require.NoError(t, w.Jev.Classify(context.Background(), p[0], store.TriggerSearch), "Search spends the reserve")
-	require.ErrorIs(t, w.Jev.Classify(context.Background(), p[1], store.TriggerSearch), ErrBudget)
+	require.NoError(t, w.Classifier.Classify(context.Background(), p[0], store.TriggerSearch), "Search spends the reserve")
+	require.ErrorIs(t, w.Classifier.Classify(context.Background(), p[1], store.TriggerSearch), ErrBudget)
 	require.EqualValues(t, 3, f.requests.Load())
 }
 
-func TestJevAsksKindOnlyWhenUnknown(t *testing.T) {
+func TestClassifierAsksKindOnlyWhenUnknown(t *testing.T) {
 	ctx := context.Background()
 	f := newFake(t)
 	s := setup(t, "Heat.1995")
 	_, _, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{9}, Name: "Ronin.S01E01", Size: 1 << 30, Discovery: "sample", SeenAt: time.Now(),
 		Kind: "series", KindLayer: store.LayerRules})
 	require.NoError(t, err)
-	jev := &Jev{Store: s, Classifier: f.client(), Log: slog.New(slog.DiscardHandler)}
+	cl := &Classifier{Store: s, Model: f.client(), Log: slog.New(slog.DiscardHandler)}
 
 	p, err := s.Pending(ctx, []int64{1, 2}, MaxFiles)
 	require.NoError(t, err)
 	for _, p := range p {
-		require.NoError(t, jev.Classify(ctx, p, store.TriggerWorker))
+		require.NoError(t, cl.Classify(ctx, p, store.TriggerWorker))
 	}
 	require.EqualValues(t, 2, f.requests.Load())
 	require.EqualValues(t, 1, f.kindAsked.Load(), "only Heat's kind was unknown")
@@ -328,8 +328,8 @@ func TestJevAsksKindOnlyWhenUnknown(t *testing.T) {
 	require.Equal(t, "movie", r.Kind)
 	require.Equal(t, store.LayerJev, r.KindLayer)
 
-	jev.DailyTokens = 1
-	require.ErrorIs(t, jev.Classify(ctx, store.Pending{ID: 1, Name: "Heat.1995"}, store.TriggerWorker), ErrBudget)
+	cl.DailyTokens = 1
+	require.ErrorIs(t, cl.Classify(ctx, store.Pending{ID: 1, Name: "Heat.1995"}, store.TriggerWorker), ErrBudget)
 	require.EqualValues(t, 2, f.requests.Load(), "no request once the budget is spent")
 }
 

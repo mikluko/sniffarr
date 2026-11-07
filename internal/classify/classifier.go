@@ -21,7 +21,8 @@ import (
 // tokens a torrent, some 1,500 torrents a day.
 const DefaultDailyTokens = 2000000
 
-// ErrBudget is returned by Jev.Classify once the day's token budget is spent.
+// ErrBudget is returned by Classifier.Classify once the day's token budget
+// is spent.
 var ErrBudget = errors.New("daily token budget spent")
 
 // Store is the part of the store classification uses.
@@ -33,18 +34,18 @@ type Store interface {
 	AddTokens(ctx context.Context, day string, n int64) error
 }
 
-// Classifier answers what a torrent is, and choice questions.
-type Classifier interface {
+// Model answers what a torrent is, and choice questions.
+type Model interface {
 	Classify(ctx context.Context, in Input) (Result, error)
 	Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, error)
 }
 
-// Jev classifies stored torrents with the Classifier, within a daily token
+// Classifier classifies stored torrents with the Model, within a daily token
 // budget, and records the answers in the Store. It is safe for concurrent
 // use; concurrent calls for one torrent share a single request.
-type Jev struct {
-	Store      Store
-	Classifier Classifier
+type Classifier struct {
+	Store Store
+	Model Model
 	// DailyTokens caps the classifier tokens spent per UTC day; 0 is no cap.
 	// Requests in flight when the cap is reached may overshoot it.
 	DailyTokens int64
@@ -62,7 +63,7 @@ type metrics struct {
 	classifications, tokens, errors metric.Int64Counter
 }
 
-func (j *Jev) metrics() *metrics {
+func (j *Classifier) metrics() *metrics {
 	j.metricsOnce.Do(func() {
 		mp := j.Meter
 		if mp == nil {
@@ -86,7 +87,7 @@ func (j *Jev) metrics() *metrics {
 	return j.m
 }
 
-func (j *Jev) now() time.Time {
+func (j *Classifier) now() time.Time {
 	if j.Now != nil {
 		return j.Now()
 	}
@@ -107,18 +108,18 @@ func errorKind(k string) metric.AddOption {
 // returns ErrBudget, without a request, once the day's budget is spent. A
 // torrent the classifier refuses as malformed is marked failed and never
 // asked about again.
-func (j *Jev) Classify(ctx context.Context, p store.Pending, trigger string) error {
+func (j *Classifier) Classify(ctx context.Context, p store.Pending, trigger string) error {
 	_, err, _ := j.group.Do(strconv.FormatInt(p.ID, 10), func() (any, error) {
 		return nil, j.classify(ctx, p, trigger)
 	})
 	return err
 }
 
-func (j *Jev) classify(ctx context.Context, p store.Pending, trigger string) error {
+func (j *Classifier) classify(ctx context.Context, p store.Pending, trigger string) error {
 	if ok, err := j.UnderBudget(ctx); err != nil || !ok {
 		return errors.Join(err, ErrBudget)
 	}
-	r, err := j.Classifier.Classify(ctx, Input{Name: p.Name, Size: p.Size, Files: p.Files, AskKind: !p.KindKnown})
+	r, err := j.Model.Classify(ctx, Input{Name: p.Name, Size: p.Size, Files: p.Files, AskKind: !p.KindKnown})
 	var apiErr *APIError
 	switch {
 	case ctx.Err() != nil:
@@ -159,11 +160,11 @@ func (j *Jev) classify(ctx context.Context, p store.Pending, trigger string) err
 // Choose asks the classifier a choice question within the day's budget,
 // and records the tokens spent. It returns ErrBudget, without a request,
 // once the budget is spent.
-func (j *Jev) Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, error) {
+func (j *Classifier) Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, error) {
 	if ok, err := j.UnderBudget(ctx); err != nil || !ok {
 		return ChoiceResult{}, errors.Join(err, ErrBudget)
 	}
-	r, err := j.Classifier.Choose(ctx, in)
+	r, err := j.Model.Choose(ctx, in)
 	if err != nil {
 		return ChoiceResult{}, err
 	}
@@ -175,13 +176,13 @@ func (j *Jev) Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, error) 
 }
 
 // UnderBudget reports whether today's budget has room.
-func (j *Jev) UnderBudget(ctx context.Context) (bool, error) {
+func (j *Classifier) UnderBudget(ctx context.Context) (bool, error) {
 	return j.UnderBudgetLeaving(ctx, 0)
 }
 
 // UnderBudgetLeaving reports whether today's budget has room outside reserve
 // percent of DailyTokens.
-func (j *Jev) UnderBudgetLeaving(ctx context.Context, reserve int) (bool, error) {
+func (j *Classifier) UnderBudgetLeaving(ctx context.Context, reserve int) (bool, error) {
 	if j.DailyTokens <= 0 {
 		return true, nil
 	}
@@ -189,7 +190,7 @@ func (j *Jev) UnderBudgetLeaving(ctx context.Context, reserve int) (bool, error)
 }
 
 // under reports whether fewer than limit tokens were spent today.
-func (j *Jev) under(ctx context.Context, limit int64) (bool, error) {
+func (j *Classifier) under(ctx context.Context, limit int64) (bool, error) {
 	used, err := j.Store.TokensUsed(ctx, day(j.now()))
 	return used < limit, err
 }

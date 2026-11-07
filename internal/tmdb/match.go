@@ -50,7 +50,7 @@ type Store interface {
 // is asked for it by; the first one's details are the work's.
 var languages = []struct{ lang, tag string }{{"en", "en-US"}, {"ru", "ru-RU"}}
 
-// Chooser answers a choice question; classify.Jev is one.
+// Chooser answers a choice question; classify.Classifier is one.
 type Chooser interface {
 	Choose(ctx context.Context, in classify.ChoiceInput) (classify.ChoiceResult, error)
 }

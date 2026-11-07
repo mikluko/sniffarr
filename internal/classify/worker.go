@@ -21,9 +21,9 @@ const DefaultSearchReserve = 25
 // the audio languages.
 type Worker struct {
 	Store       Store
-	Jev         *Jev
+	Classifier  *Classifier
 	Concurrency int
-	// Reserve is the percentage of Jev.DailyTokens the Worker leaves for
+	// Reserve is the percentage of Classifier.DailyTokens the Worker leaves for
 	// Search to spend.
 	Reserve int
 	// Poll is how long the Worker waits when nothing is left to classify or
@@ -78,7 +78,7 @@ func (w *Worker) classifyAll(ctx context.Context, batch []store.Pending) bool {
 		}
 		wg.Go(func() {
 			defer func() { <-sem }()
-			err := w.Jev.Classify(ctx, p, store.TriggerWorker)
+			err := w.Classifier.Classify(ctx, p, store.TriggerWorker)
 			var apiErr *APIError
 			if err == nil || ctx.Err() != nil || errors.Is(err, ErrBudget) || errors.As(err, &apiErr) && apiErr.Permanent() {
 				return
@@ -95,7 +95,7 @@ func (w *Worker) classifyAll(ctx context.Context, batch []store.Pending) bool {
 
 // underBudget reports whether today's budget has room outside the Reserve.
 func (w *Worker) underBudget(ctx context.Context) (bool, error) {
-	return w.Jev.UnderBudgetLeaving(ctx, w.Reserve)
+	return w.Classifier.UnderBudgetLeaving(ctx, w.Reserve)
 }
 
 // waitBudget returns once the day's budget has room outside the Reserve,
@@ -109,7 +109,7 @@ func (w *Worker) waitBudget(ctx context.Context) error {
 	if ok {
 		return ctx.Err()
 	}
-	t := w.Jev.now()
+	t := w.Classifier.now()
 	midnight := t.UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
 	w.Log.Info("background share of the daily token budget spent", "until", midnight)
 	return sleep(ctx, midnight.Sub(t))

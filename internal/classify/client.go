@@ -1,6 +1,7 @@
-// Package classify asks TypeSafe's Jev, or a model serving its API, what a
-// torrent is, whether it carries an audio track in each audio language, and
-// what kind of video copy it is, and records the answers.
+// Package classify asks a System One endpoint, TypeSafe's Jev or another
+// model serving its API, what a torrent is, whether it carries an audio
+// track in each audio language, and what kind of video copy it is, and
+// records the answers.
 package classify
 
 import (
@@ -24,7 +25,7 @@ import (
 // DefaultURL is TypeSafe's evaluation endpoint.
 const DefaultURL = "https://api.typesafe.ai/v1/systemone"
 
-// Client calls a Jev-compatible evaluation endpoint, TypeSafe's by default.
+// Client calls a System One evaluation endpoint, TypeSafe's by default.
 type Client struct {
 	// Key is sent as a bearer token; empty sends no Authorization header.
 	Key   string
@@ -85,7 +86,7 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("typesafe: %d %s: %s", e.Status, http.StatusText(e.Status), e.Body)
+	return fmt.Sprintf("classifier: %d %s: %s", e.Status, http.StatusText(e.Status), e.Body)
 }
 
 // Permanent reports whether repeating the same request cannot succeed.
@@ -187,7 +188,7 @@ func (c *Client) Classify(ctx context.Context, in Input) (Result, error) {
 	}
 	kind, source := r.Answers["kind"], r.Answers["source"]
 	if in.AskKind && kind.Choice == "" || source.Choice == "" {
-		return Result{}, errors.New("typesafe: incomplete answer")
+		return Result{}, errors.New("classifier: incomplete answer")
 	}
 	out := Result{
 		Source:           source.Choice,
@@ -197,7 +198,7 @@ func (c *Client) Classify(ctx context.Context, in Input) (Result, error) {
 	for _, l := range c.Languages {
 		a := r.Answers[audioQuestion(l)]
 		if a.Noul == nil {
-			return Result{}, errors.New("typesafe: incomplete answer")
+			return Result{}, errors.New("classifier: incomplete answer")
 		}
 		if out.Audio == nil {
 			out.Audio = map[string]float64{}
@@ -244,7 +245,7 @@ func (c *Client) Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, erro
 	}
 	a := r.Answers["choice"]
 	if _, ok := in.Options[a.Choice]; !ok {
-		return ChoiceResult{}, errors.New("typesafe: incomplete answer")
+		return ChoiceResult{}, errors.New("classifier: incomplete answer")
 	}
 	return ChoiceResult{Choice: a.Choice, Confidence: a.Confidence, Tokens: r.Usage.InputTokens + r.Usage.OutputTokens}, nil
 }
@@ -288,7 +289,7 @@ func (c *Client) post(ctx context.Context, body []byte) (response, error) {
 	}
 	var r response
 	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
-		return response{}, fmt.Errorf("typesafe: decode answer: %w", err)
+		return response{}, fmt.Errorf("classifier: decode answer: %w", err)
 	}
 	return r, nil
 }

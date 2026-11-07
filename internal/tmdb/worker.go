@@ -16,7 +16,7 @@ import (
 // DefaultConcurrency is the default Worker.Concurrency.
 const DefaultConcurrency = 2
 
-// Budget is the classifier budget the Chooser spends; classify.Jev is one.
+// Budget is the classifier budget the Chooser spends; classify.Classifier is one.
 type Budget interface {
 	UnderBudgetLeaving(ctx context.Context, reserve int) (bool, error)
 }

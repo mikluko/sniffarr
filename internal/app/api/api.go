@@ -153,10 +153,10 @@ const workerPoll = 10 * time.Second
 // classifiers are the layers above rules and reuse; each is nil without its
 // key.
 type classifiers struct {
-	endpoint endpoint
-	jev      *classify.Jev
-	matcher  *tmdb.Matcher
-	lazy     *search.Lazy
+	endpoint   endpoint
+	classifier *classify.Classifier
+	matcher    *tmdb.Matcher
+	lazy       *search.Lazy
 }
 
 // endpoint is where the classifier is asked, and on what terms.
@@ -191,13 +191,13 @@ func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 		client := classify.New(e.key)
 		client.URL = e.url
 		client.Languages = cfg.Languages
-		c.jev = &classify.Jev{Store: s, Classifier: client, DailyTokens: e.dailyTokens, Log: log}
-		c.lazy.Classifier = c.jev
+		c.classifier = &classify.Classifier{Store: s, Model: client, DailyTokens: e.dailyTokens, Log: log}
+		c.lazy.Classifier = c.classifier
 	}
 	if cfg.TMDBKey != "" {
 		c.matcher = &tmdb.Matcher{Client: tmdb.NewClient(cfg.TMDBKey, cfg.TMDBRate), Store: s, Retry: cfg.TMDBRetry, Log: log}
-		if c.jev != nil {
-			c.matcher.Chooser = c.jev
+		if c.classifier != nil {
+			c.matcher.Chooser = c.classifier
 		}
 		c.lazy.TMDB = c.matcher
 	}
@@ -242,7 +242,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		Arr:               rec,
 		Probe:             cfg.Probe,
 		Probes:            cfg.Probes,
-		Classifier:        c.jev != nil,
+		Classifier:        c.classifier != nil,
 		ClassifierSetting: c.endpoint.setting,
 		Feeds:             cfg.Feeds.Sources,
 		JournalRetention:  cfg.RetentionJournal,
@@ -283,14 +283,14 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		return nil
 	})
 	app.Go(lc, sd, log, "counts", func(ctx context.Context) error { return counts.Run(ctx) })
-	if c.jev != nil {
-		w := &classify.Worker{Store: s, Jev: c.jev, Concurrency: cfg.ClassifyConcurrency, Reserve: cfg.SearchReserve, Poll: workerPoll, Log: log}
+	if c.classifier != nil {
+		w := &classify.Worker{Store: s, Classifier: c.classifier, Concurrency: cfg.ClassifyConcurrency, Reserve: cfg.SearchReserve, Poll: workerPoll, Log: log}
 		app.Go(lc, sd, log, "classify worker", w.Run)
 	}
 	if c.matcher != nil {
 		w := &tmdb.Worker{Matcher: c.matcher, Concurrency: cfg.TMDBConcurrency, Reserve: cfg.SearchReserve, Poll: workerPoll, Log: log}
-		if c.jev != nil {
-			w.Budget = c.jev
+		if c.classifier != nil {
+			w.Budget = c.classifier
 		}
 		app.Go(lc, sd, log, "tmdb worker", w.Run)
 	}
