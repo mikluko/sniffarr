@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-beta.5] - 2026-11-07
+
 ### Changed
 
 - The API keeps its last counts in the database and, after a restart, serves them and answers `/readyz` at once, until its first computation replaces them; the data page marks them stale by their age.
@@ -795,7 +797,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.4...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.5...HEAD
+[0.44.0-beta.5]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.4...v0.44.0-beta.5
 [0.44.0-beta.4]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.3...v0.44.0-beta.4
 [0.44.0-beta.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.2...v0.44.0-beta.3
 [0.44.0-beta.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.1...v0.44.0-beta.2
