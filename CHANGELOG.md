@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The magnet link on the release card opens the torrent in a client and carries its name; it led nowhere.
+- The probe button says when a release has no file a probe can read, rather than reporting a probe that never runs.
+- Releases that had failed probes before a successful one, probed before 0.43.0, get their full number of probe attempts.
+- A probe that reads more than 128 tracks is recorded as unknown, so a crafted file header cannot stall the database.
 
 ## [0.43.0] - 2026-11-07
 
