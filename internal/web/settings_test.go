@@ -12,11 +12,26 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
+	"github.com/mikluko/sniffarr/internal/latest"
 )
+
+func TestSettingsOfLatestRelease(t *testing.T) {
+	published := time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC)
+	url := "https://sarak.sh/mikluko/sniffarr/releases/tag/v0.46.0"
+	got, err := settingsOf(&sniffarrv1.SettingsResponse{LatestRelease: &sniffarrv1.ProjectRelease{
+		Version: "0.46.0", Published: timestamppb.New(published), Url: url}})
+	require.NoError(t, err)
+	require.Equal(t, latest.Release{Version: "0.46.0", Published: published, URL: url}, got.Latest)
+
+	got, err = settingsOf(&sniffarrv1.SettingsResponse{})
+	require.NoError(t, err)
+	require.Zero(t, got.Latest, "an API that knows no release announces none")
+}
 
 // settingsAPI answers Settings with tags and probes after failing the first
 // failures calls, and counts the calls.

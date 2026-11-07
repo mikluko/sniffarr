@@ -30,6 +30,13 @@ func Outdated(running, latest string) bool {
 	return rel.minor > run.minor+1
 }
 
+// Prerelease reports whether v is a MAJOR.MINOR.PATCH version with a
+// pre-release, such as "0.44.0-alpha.4".
+func Prerelease(v string) bool {
+	s, ok := parseSemver(v)
+	return ok && s.pre
+}
+
 // semver is a version's numbers and whether it is a pre-release.
 type semver struct {
 	major, minor, patch int

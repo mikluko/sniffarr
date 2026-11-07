@@ -31,3 +31,9 @@ func TestOutdated(t *testing.T) {
 		})
 	}
 }
+
+func TestPrerelease(t *testing.T) {
+	require.True(t, Prerelease("0.44.0-alpha.4"))
+	require.False(t, Prerelease("0.44.0"))
+	require.False(t, Prerelease(Dev))
+}

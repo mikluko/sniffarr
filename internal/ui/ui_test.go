@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mikluko/sniffarr/internal/latest"
 	"github.com/mikluko/sniffarr/internal/version"
 )
 
@@ -92,6 +93,11 @@ func TestRenderAll(t *testing.T) {
 		{"data-frag", "data", "/", "data", func(b Base) any { return SampleData(b) }},
 		{"data-stale", "data", "/", "", func(b Base) any { b.Nav = "data"; return SampleDataStale(b) }},
 		{"data-noprobes", "data", "/", "", func(b Base) any { b.Nav, b.Probes = "data", false; return SampleData(b) }},
+		{"data-update", "data", "/", "", func(b Base) any {
+			b.Nav, b.Build.Version = "data", "0.44.0"
+			b.Latest = latest.Release{Version: "0.46.0", Published: time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC), URL: "https://sarak.sh/mikluko/sniffarr/releases/tag/v0.46.0"}
+			return SampleData(b)
+		}},
 		{"notfound", "notfound", "/stats/old", "", func(b Base) any { return NotFoundPage{Base: b, Asked: "/stats/old"} }},
 		{"act-probe-noprobers", "torrent", "/t/x/probe", "act-answer", func(b Base) any { return Requested{Base: b, Action: "probe", Releases: 1, NoProbers: true} }},
 	}
@@ -137,8 +143,8 @@ func TestRenderAll(t *testing.T) {
 
 var sampleBuild = version.Info{Version: "0.44.0-alpha.2", Commit: "1a2b3c4", Built: time.Date(2026, 11, 7, 14, 2, 0, 0, time.UTC)}
 
-// The footer of every page names the build; its tooltip gives the build time
-// in UTC and the commit, and is left out while either is unknown.
+// The footer of every page names the build and links the project page; its
+// tooltip adds the build time in UTC and the commit while both are known.
 func TestRenderFooterVersion(t *testing.T) {
 	r, err := New()
 	if err != nil {
@@ -160,15 +166,51 @@ func TestRenderFooterVersion(t *testing.T) {
 		"notfound": func(b Base) any { return NotFoundPage{Base: b, Asked: "/x"} },
 	}
 	for page, data := range pages {
-		checkBody(t, "ru/"+page, render("ru", sampleBuild, page, data), nil, []string{
-			`<span class="ver"><span class="tip" tabindex="0" aria-label="sniffarr 0.44.0-alpha.2: Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.">sniffarr 0.44.0-alpha.2<span class="tipb" aria-hidden="true">Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.</span></span></span>`,
+		checkBody(t, "ru/"+page, render("ru", sampleBuild, page, data), []string{`class="tip upd"`}, []string{
+			`<span class="ver"><a class="tip vl" href="https://sarak.sh/mikluko/sniffarr" rel="noreferrer" target="_blank" aria-label="sniffarr 0.44.0-alpha.2: Страница проекта. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.">sniffarr 0.44.0-alpha.2<span class="tipb" aria-hidden="true">Страница проекта. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.</span></a></span>`,
 		})
 		checkBody(t, "en/"+page, render("en", sampleBuild, page, data), nil, []string{
-			`aria-label="sniffarr 0.44.0-alpha.2: Built Nov 7, 2026, 14:02 UTC, commit 1a2b3c4."`,
+			`aria-label="sniffarr 0.44.0-alpha.2: Project page. Built Nov 7, 2026, 14:02 UTC, commit 1a2b3c4."`,
 		})
-		checkBody(t, "dev/"+page, render("en", version.Info{Version: "dev"}, page, data), []string{`class="tip" tabindex="0" aria-label="sniffarr dev`}, []string{
-			`<span class="ver">sniffarr dev</span>`,
+		checkBody(t, "dev/"+page, render("en", version.Info{Version: "dev"}, page, data), nil, []string{
+			`aria-label="sniffarr dev: Project page.">sniffarr dev<span class="tipb" aria-hidden="true">Project page.</span></a></span>`,
 		})
+	}
+}
+
+// The footer announces a newer stable release left of the version when
+// version.Outdated holds, linking its notes.
+func TestRenderFooterUpdate(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := func(v string) latest.Release {
+		return latest.Release{Version: v, Published: time.Date(2026, 12, 1, 9, 0, 0, 0, time.UTC), URL: "https://sarak.sh/mikluko/sniffarr/releases/tag/v" + v}
+	}
+	render := func(lang, build string, rel latest.Release) string {
+		t.Helper()
+		req := httptest.NewRequest("GET", "/", nil)
+		b := r.Base(req, lang, "", []string{"ru"}, time.FixedZone("CEST", 2*3600))
+		b.Build, b.Latest = version.Info{Version: build}, rel
+		w := httptest.NewRecorder()
+		if err := r.Render(w, req, "notfound", NotFoundPage{Base: b, Asked: "/x"}); err != nil {
+			t.Fatal(err)
+		}
+		return w.Body.String()
+	}
+	checkBody(t, "stable behind", render("ru", "0.44.0", release("0.46.0")), nil, []string{
+		`<span class="ver"><a class="tip upd" href="https://sarak.sh/mikluko/sniffarr/releases/tag/v0.46.0" rel="noreferrer" target="_blank" aria-label="вышла 0.46.0: Эта версия отстала от последнего релиза больше чем на одну минорную: 0.44.0, последний 0.46.0 от 01.12.2026. Ссылка на заметки к релизу."><i class="mk" aria-hidden="true"></i>вышла 0.46.0<span class="tipb" aria-hidden="true">Эта версия отстала от последнего релиза больше чем на одну минорную: 0.44.0, последний 0.46.0 от 01.12.2026. Ссылка на заметки к релизу.</span></a><a class="tip vl"`,
+	})
+	checkBody(t, "pre-release", render("en", "0.44.0-alpha.4", release("0.44.0")), nil, []string{
+		`<i class="mk" aria-hidden="true"></i>0.44.0 is out<span class="tipb" aria-hidden="true">This build is the pre-release 0.44.0-alpha.4, and the stable release 0.44.0 came out on Dec 1, 2026. Links to the release notes.</span>`,
+	})
+	for name, body := range map[string]string{
+		"one minor":  render("ru", "0.44.0", release("0.45.0")),
+		"dev":        render("ru", "dev", release("0.46.0")),
+		"no release": render("ru", "0.44.0", latest.Release{}),
+	} {
+		checkBody(t, name, body, []string{`class="tip upd"`}, []string{`class="tip vl"`})
 	}
 }
 

@@ -31,7 +31,8 @@ func TestNotFound(t *testing.T) {
 	require.Contains(t, body, `<a class="btn" href="/">Home</a>`)
 	require.NotContains(t, body, `aria-current="page"`, "no tab is chosen")
 	require.Contains(t, body, "This product uses the TMDB API")
-	require.Contains(t, body, "sniffarr "+version.Get().Version+"</", "the footer names the build")
+	require.Contains(t, body, `href="https://sarak.sh/mikluko/sniffarr"`, "the footer links the project page")
+	require.Contains(t, body, ">sniffarr "+version.Get().Version+"<span", "the footer names the build")
 
 	body = notFound(t, get(t, h, "/stats/old?lang=ru", ""))
 	require.Contains(t, body, `<h1>Дратути</h1>`)

@@ -13,6 +13,7 @@ import (
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
+	"github.com/mikluko/sniffarr/internal/latest"
 )
 
 // DefaultBackoff is the wait between attempts of ObtainSettings.
@@ -31,6 +32,8 @@ type Settings struct {
 	// JournalRetention is how long its journal keeps an entry; 0 when it
 	// does not say.
 	JournalRetention time.Duration
+	// Latest is the latest stable release it knows; zero when none.
+	Latest latest.Release
 }
 
 // ObtainSettings asks the browse API for its settings, retrying after
@@ -65,6 +68,9 @@ func settingsOf(msg *sniffarrv1.SettingsResponse) (Settings, error) {
 		return Settings{}, fmt.Errorf("the API's audio languages %q: %w", tags, err)
 	}
 	out := Settings{Languages: langs, Probes: msg.GetProbes(), JournalRetention: msg.GetJournalRetention().AsDuration()}
+	if r := msg.GetLatestRelease(); r != nil {
+		out.Latest = latest.Release{Version: r.GetVersion(), Published: r.GetPublished().AsTime(), URL: r.GetUrl()}
+	}
 	for _, f := range msg.GetFeatures() {
 		switch f.GetFeature() {
 		case sniffarrv1.Feature_FEATURE_CLASSIFIER:
@@ -95,7 +101,7 @@ func (h *Handler) Watch(ctx context.Context, interval time.Duration) {
 		}
 		if !reflect.DeepEqual(next, h.s.settings().Settings) {
 			h.Apply(next)
-			log.InfoContext(ctx, "settings changed", "languages", audio.Tags(next.Languages), "probes", next.Probes, "classifier", next.Classifier, "feeds", next.Feeds, "journal_retention", next.JournalRetention)
+			log.InfoContext(ctx, "settings changed", "languages", audio.Tags(next.Languages), "probes", next.Probes, "classifier", next.Classifier, "feeds", next.Feeds, "journal_retention", next.JournalRetention, "latest", next.Latest.Version)
 		}
 	}
 }

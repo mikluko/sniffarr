@@ -186,8 +186,17 @@ h2.tm-title{margin:0;font-size:18px;line-height:1.3;letter-spacing:-.01em;color:
 .attr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:11px;padding-top:8px}
 .attr img{height:12px;width:auto;display:block}
 .attr>span:not(.ver){flex:1 1 200px;min-width:0}
-.attr .ver{margin-left:auto;white-space:nowrap;font-size:12px}
-.ver .tip{text-decoration:none}
+.attr .ver{margin-left:auto;white-space:nowrap;font-size:12px;display:inline-flex;gap:16px;align-items:center}
+.ver .tip{text-decoration:none;cursor:pointer}
+.ver a.vl{color:var(--muted-foreground)}
+.ver a.vl:hover{color:var(--foreground)}
+.ver a.upd{color:var(--warn)}
+.ver .mk{display:inline-block;width:8px;height:8px;background:var(--warn);margin-right:6px}
+@media (max-width:640px){
+  .attr .ver{position:relative}
+  .ver a.upd{position:static}
+  .ver a.upd .tipb::before{display:none}
+}
 .ver .tipb{left:auto;right:0}
 .ver .tipb::before{left:auto;right:12px}
 

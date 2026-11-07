@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mikluko/sniffarr/internal/latest"
 	"github.com/mikluko/sniffarr/internal/version"
 )
 
@@ -31,6 +32,9 @@ type Base struct {
 
 	// JournalRetention is how long the API keeps a journal entry; 0 when unknown.
 	JournalRetention time.Duration
+
+	// Latest is the latest stable release the API knows; zero when none.
+	Latest latest.Release
 
 	msgs map[string]string
 }

@@ -25,6 +25,7 @@ import (
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"github.com/mikluko/sniffarr/internal/audio"
+	"github.com/mikluko/sniffarr/internal/latest"
 	"github.com/mikluko/sniffarr/internal/names"
 	"github.com/mikluko/sniffarr/internal/ui"
 	"github.com/mikluko/sniffarr/internal/version"
@@ -73,6 +74,10 @@ type Config struct {
 	// ObtainSettings returns it; 0 leaves it unsaid. Handler.Apply and
 	// Handler.Watch replace it while the UI runs.
 	JournalRetention time.Duration
+	// Latest is the latest stable release the API knows, as ObtainSettings
+	// returns it; zero announces none. Handler.Apply and Handler.Watch
+	// replace it while the UI runs.
+	Latest latest.Release
 	// Locales tells the locale of the person an access token was issued to;
 	// when nil, the language is only the one picked on the page.
 	Locales Locales
@@ -142,7 +147,7 @@ func New(cfg Config) (*Handler, error) {
 	}
 	s := &server{cfg: cfg, ui: r}
 	h := &Handler{s: s}
-	h.Apply(Settings{Languages: cfg.Languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds, JournalRetention: cfg.JournalRetention})
+	h.Apply(Settings{Languages: cfg.Languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds, JournalRetention: cfg.JournalRetention, Latest: cfg.Latest})
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", r.Static())
 	mux.HandleFunc("GET /{$}", s.data)
@@ -198,6 +203,7 @@ func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
 	b.Probes, b.Classifier, b.Feeds = c.Probes, c.Classifier, c.Feeds
 	b.JournalRetention = c.JournalRetention
+	b.Latest = c.Latest
 	return b
 }
 
