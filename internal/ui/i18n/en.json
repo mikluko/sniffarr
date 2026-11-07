@@ -310,5 +310,5 @@
   "journal.outcome.probed.no_peers": "no peers",
   "journal.outcome.probed.timeout": "timeout",
   "journal.outcome.deleted.idle": "unmatched and unseen for a while",
-  "journal.outcome.deleted.expired": "unseen"
+  "journal.outcome.deleted.expired": "unseen for a while"
 }
