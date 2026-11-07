@@ -621,14 +621,14 @@ func TestJournalProbeLeasedOncePerAttempt(t *testing.T) {
 			}
 			lease := func(at time.Time) {
 				t.Helper()
-				c, ok, err := s.LeaseProbe(ctx, 7, at, 10*time.Minute, tc.background, ProbeBudget{MaxBytes: 64 << 20, Used: 1 << 20, Reserved: 128 << 20})
+				c, ok, err := s.LeaseProbe(ctx, 7, at, 10*time.Minute, tc.background, 64<<20)
 				require.NoError(t, err)
 				require.True(t, ok)
 				require.Equal(t, h, c.Hash)
 			}
 
 			lease(t0)
-			require.JSONEq(t, `{"attempt":1,"max_bytes":67108864,"used":1048576,"reserved":134217728}`, entry(t, s, h, JournalProbeLeased, tc.outcome).Detail)
+			require.JSONEq(t, `{"attempt":1,"max_bytes":67108864}`, entry(t, s, h, JournalProbeLeased, tc.outcome).Detail, "nothing of the day's other probes")
 			lease(t0.Add(10 * time.Minute))
 			require.Equal(t, []string{tc.outcome + "/1"}, leasedProbes(t, s, h), "a lease again after one expired is the same attempt")
 			require.NoError(t, q.Reset(ctx))
@@ -729,7 +729,7 @@ func TestJournalProbeLeasedAfterMove(t *testing.T) {
 			h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
 			lease := func(at time.Time) {
 				t.Helper()
-				c, ok, err := s.LeaseProbe(ctx, 7, at, 10*time.Minute, true, ProbeBudget{})
+				c, ok, err := s.LeaseProbe(ctx, 7, at, 10*time.Minute, true, 0)
 				require.NoError(t, err)
 				require.True(t, ok)
 				require.Equal(t, h, c.Hash)
@@ -764,7 +764,7 @@ func TestJournalProbeLeaseFails(t *testing.T) {
 	}
 	lease := func(t *testing.T, s *Store) {
 		t.Helper()
-		c, ok, err := s.LeaseProbe(ctx, 7, t0, 10*time.Minute, true, ProbeBudget{})
+		c, ok, err := s.LeaseProbe(ctx, 7, t0, 10*time.Minute, true, 0)
 		require.Error(t, err)
 		require.False(t, ok)
 		require.Equal(t, ProbeCandidate{}, c, "no candidate with the error")

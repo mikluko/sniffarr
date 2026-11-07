@@ -47,7 +47,7 @@ func nextProbe(t *testing.T, s *Store, now time.Time, background bool) (ProbeCan
 // leaseNext leases the next probe at now for 1000 hours.
 func leaseNext(t *testing.T, s *Store, now time.Time, background bool) (ProbeCandidate, bool) {
 	t.Helper()
-	c, ok, err := s.LeaseProbe(context.Background(), 1, now, 1000*time.Hour, background, ProbeBudget{})
+	c, ok, err := s.LeaseProbe(context.Background(), 1, now, 1000*time.Hour, background, 0)
 	require.NoError(t, err)
 	return c, ok
 }

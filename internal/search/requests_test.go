@@ -59,7 +59,7 @@ func TestBrowserRequestProbe(t *testing.T) {
 	res, err := b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byWork("m693134")}))
 	require.NoError(t, err)
 	require.Equal(t, int32(3), res.Msg.GetReleases())
-	c, ok, err := b.Store.LeaseProbe(ctx, 1, now, time.Minute, false, store.ProbeBudget{})
+	c, ok, err := b.Store.LeaseProbe(ctx, 1, now, time.Minute, false, 0)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Contains(t, []store.Hash{hash(1), hash(2), hash(4)}, c.Hash, "a probed release too")

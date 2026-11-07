@@ -85,8 +85,7 @@ func (s *Service) ProbeTask(ctx context.Context, _ *connect.Request[sniffarrv1.P
 	if !cfg.admits(traffic.Rx, reserved, true) {
 		return res, nil
 	}
-	c, ok, err := s.Store.LeaseProbe(ctx, s.owners.Add(1), now, or(cfg.Lease, DefaultProbeLease), cfg.admits(traffic.Rx, reserved, false),
-		store.ProbeBudget{MaxBytes: cfg.maxBytes(), Used: traffic.Rx, Reserved: reserved})
+	c, ok, err := s.Store.LeaseProbe(ctx, s.owners.Add(1), now, or(cfg.Lease, DefaultProbeLease), cfg.admits(traffic.Rx, reserved, false), cfg.maxBytes())
 	if err != nil {
 		return nil, s.internal(ctx, "lease probe", err)
 	}

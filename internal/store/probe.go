@@ -109,13 +109,6 @@ type ProbeCandidate struct {
 	Attempts int
 }
 
-// ProbeBudget is the piece data a probe lease is journaled with, in bytes:
-// MaxBytes the most the probe may download, Used what probes downloaded on
-// the day, Reserved what the unexpired leases held before it.
-type ProbeBudget struct {
-	MaxBytes, Used, Reserved int64
-}
-
 // ProbeWant is the search that returned the releases WantProbe records.
 type ProbeWant struct {
 	// T is the Torznab function: "search", "movie" or "tvsearch".
@@ -230,9 +223,10 @@ func (s *Store) ProbeLeases(ctx context.Context, now time.Time) (int, error) {
 // else the one due a probe again with the most, which it queues at
 // PrioritySample. Each is a movie or a series with peers and a stored file
 // of a format a probe reads. The first lease of each attempt, and the first
-// after a request or a search moved it ahead, is journaled with b; a lease
-// after one expired or was freed is not.
-func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d time.Duration, background bool, b ProbeBudget) (c ProbeCandidate, ok bool, err error) {
+// after a request or a search moved it ahead, is journaled with maxBytes,
+// the most piece data the probe may download; a lease after one expired or
+// was freed is not.
+func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d time.Duration, background bool, maxBytes int64) (c ProbeCandidate, ok bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var leases int
 		c, leases, err = leaseProbe(ctx, tx, owner, now, d, background)
@@ -240,7 +234,7 @@ func (s *Store) LeaseProbe(ctx context.Context, owner int64, now time.Time, d ti
 		if err != nil || leases != 1 {
 			return err
 		}
-		return journal(ctx, tx, c.Hash, now, JournalProbeLeased, probeLeaseOutcome(c), Detail("attempt", c.Attempts+1, "max_bytes", b.MaxBytes, "used", b.Used, "reserved", b.Reserved))
+		return journal(ctx, tx, c.Hash, now, JournalProbeLeased, probeLeaseOutcome(c), Detail("attempt", c.Attempts+1, "max_bytes", maxBytes))
 	})
 	if err != nil {
 		return ProbeCandidate{}, false, err

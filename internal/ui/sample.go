@@ -383,7 +383,7 @@ func sampleJournal(at time.Time, name string) []JournalEntry {
 		{At: at.Add(time.Minute), Kind: "classified", Outcome: "jev", Detail: map[string]any{"kind": "movie", "kind_confidence": 0.93, "source": "web",
 			"source_confidence": 0.8, "audio": map[string]any{"ru": 0.88}, "trigger": "worker"}},
 		{At: at.Add(2 * time.Minute), Kind: "matched", Outcome: "tmdb", Detail: map[string]any{"work": 42.0, "tmdb_id": 318846.0, "type": "movie", "confidence": 0.8, "trigger": "worker"}},
-		{At: at.Add(3 * time.Hour), Kind: "probe_leased", Outcome: "background", Detail: map[string]any{"attempt": 1.0, "max_bytes": 67108864.0, "used": 65498251264.0}},
+		{At: at.Add(3 * time.Hour), Kind: "probe_leased", Outcome: "background", Detail: map[string]any{"attempt": 1.0, "max_bytes": 67108864.0}},
 		{At: at.Add(3*time.Hour + 2*time.Minute), Kind: "probed", Outcome: "tracks", Detail: map[string]any{"path": "Dune.Part.Two.2024.2160p.WEB-DL.HDR.mkv", "format": "mkv",
 			"downloaded": 4194304.0, "tracks": []any{"video::hevc", "audio:rus:eac3", "audio:eng:eac3", "subtitles:rus:subrip"}, "audio": map[string]any{"ru": 1.0}}},
 	}
