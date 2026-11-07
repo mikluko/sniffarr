@@ -216,6 +216,39 @@ func (b Base) Moved(rank, prev int) string {
 	return "0"
 }
 
+// New reports whether a work whose place in the previous window was prev
+// is new to the top: it had no place then, or one below the top's Limit.
+func (p TopPage) New(prev int) bool { return prev == 0 || prev > p.Limit }
+
+// PrevPlace is the tooltip of a work's place prev in the previous window,
+// 0 for none: "В прошлом окне: 9 787-е место." / "Not in the previous window.".
+func (b Base) PrevPlace(prev int) string {
+	if prev == 0 {
+		return b.T("top.prev_none")
+	}
+	n := b.Num(int64(prev))
+	if !b.ru() {
+		n += ordinal(prev)
+	}
+	return b.Fmt("top.prev_place", n)
+}
+
+// ordinal is the English suffix of the ordinal n: "st", "nd", "rd" or "th".
+func ordinal(n int) string {
+	if n%100 >= 11 && n%100 <= 13 {
+		return "th"
+	}
+	switch n % 10 {
+	case 1:
+		return "st"
+	case 2:
+		return "nd"
+	case 3:
+		return "rd"
+	}
+	return "th"
+}
+
 // SourceList joins translated source keys: "WEB, ремукс".
 func (b Base) SourceList(keys []string) string {
 	if len(keys) == 0 {

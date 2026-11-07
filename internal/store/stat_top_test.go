@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"testing"
@@ -171,6 +172,34 @@ func TestComputeTop(t *testing.T) {
 	ws, err = s.Works(ctx, []int64{dune})
 	require.NoError(t, err)
 	require.Zero(t, ws[dune].PeersWeek)
+}
+
+func TestComputeTopPrevRankBelowTop(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	k, err := s.HashKey(ctx)
+	require.NoError(t, err)
+	var sketches []PeerSketch
+	for i := range TopSize + 2 {
+		b := byte(i + 1)
+		_, _, err := s.Insert(ctx, named(b, fmt.Sprintf("Film%03d 2020 1080p WEB-DL", i), "movie", silent))
+		require.NoError(t, err)
+		matchTo(t, s, fmt.Sprintf("y:film%03d 2020", i), TypeMovie, 1000+i, fmt.Sprintf("Film %d", i))
+		peers := 10
+		if i == TopSize+1 {
+			peers = 1
+			sketches = append(sketches, PeerSketch{Hash: hash(b), Hour: t0, Sketch: sketchOf(k, 50_000, 500)})
+		}
+		sketches = append(sketches, PeerSketch{Hash: hash(b), Hour: t0.Add(-30 * time.Hour), Sketch: sketchOf(k, 100*i, peers)})
+	}
+	_, _, err = s.MergePeers(ctx, sketches)
+	require.NoError(t, err)
+	require.NoError(t, s.ComputeTop(ctx, t0))
+
+	top, total, _, err := s.Top(ctx, "movie", WindowDay, VoiceAny, "", 10, 0)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total, "only the last film has peers today")
+	require.Equal(t, TopSize+2, top[0].PrevRank, "its place the day before counts every work, not the previous top")
 }
 
 func TestTopSummaries(t *testing.T) {

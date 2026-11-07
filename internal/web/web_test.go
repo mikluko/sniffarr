@@ -359,7 +359,7 @@ func TestTop(t *testing.T) {
 	require.Contains(t, body, `<a href="/movie/348">Alien</a> <span class="mu">1979</span>`, "a row leads to its work")
 	require.Contains(t, body, `<img class="th" src="https://image.tmdb.org/t/p/w92/p.jpg" width="28" height="42"`, "its poster")
 	require.Contains(t, body, `<td class="r mu">1</td>`, "its place")
-	require.Contains(t, body, `<td class="r dl">—</td>`, "no peers the week before")
+	require.Contains(t, body, `<td class="r dl"><b><span class="tip" tabindex="0" aria-label="new: Not in the previous window.">new<`, "no peers the week before")
 	require.Contains(t, body, `<td class="r rl" data-l="releases">2</td>`, "both title keys")
 	require.Contains(t, body, "explicit in 1 of 2 <span class=\"mu\">(Rus)</span>", "the audio summary")
 	require.Less(t, strings.Index(body, "/movie/348"), strings.Index(body, "/movie/8195"), "more peers first")
@@ -372,7 +372,7 @@ func TestTop(t *testing.T) {
 	body = page(t, get(t, h, "/top?kind=series&win=24h&all=1", ""))
 	require.Contains(t, body, `aria-current="page">Series</a>`)
 	require.Contains(t, body, `<a href="/tv/95396">Severance</a>`)
-	require.Contains(t, body, `<td class="r dl">0</td>`, "first the day before too, with more peers then")
+	require.Contains(t, body, `<td class="r dl mu">0</td>`, "first the day before too, with more peers then")
 	require.Contains(t, body, "web", "its source")
 	require.NotContains(t, body, ">Show all 100</a>", "every work is listed")
 

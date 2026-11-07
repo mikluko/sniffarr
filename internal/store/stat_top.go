@@ -217,7 +217,7 @@ func kindTop(ctx context.Context, conn *sql.Conn, kind string, w Window, vc topV
 	if err != nil || len(top) == 0 {
 		return nil, err
 	}
-	before, err := ranks(ctx, conn, "SELECT work FROM prevw WHERE type = ? AND peers > 0 ORDER BY peers DESC, work", TypeOf(kind))
+	before, err := prevRanks(ctx, conn, kind, top)
 	if err != nil {
 		return nil, err
 	}
@@ -225,6 +225,30 @@ func kindTop(ctx context.Context, conn *sql.Conn, kind string, w Window, vc topV
 		top[i].prev = before[top[i].work]
 	}
 	return top, nil
+}
+
+// prevRanks returns, by work, the places of the works of top that had
+// peers in the window before, among every work of the kind in temp table
+// prevw, 1 first. It sorts the whole of prevw's kind but returns only the
+// works of top.
+func prevRanks(ctx context.Context, conn *sql.Conn, kind string, top []topRow) (map[int64]int, error) {
+	args := []any{TypeOf(kind)}
+	for _, r := range top {
+		args = append(args, r.work)
+	}
+	out := map[int64]int{}
+	err := eachOn(ctx, conn, func(rows *sql.Rows) error {
+		var work int64
+		var place int
+		if err := rows.Scan(&work, &place); err != nil {
+			return err
+		}
+		out[work] = place
+		return nil
+	}, `SELECT work, place FROM (
+		SELECT work, row_number() OVER (ORDER BY peers DESC, work) AS place FROM prevw WHERE type = ? AND peers > 0)
+		WHERE work IN (`+strings.TrimSuffix(strings.Repeat("?,", len(top)), ",")+")", args...)
+	return out, err
 }
 
 // summarizeTops sets, on conn, the summary of every row over the releases
@@ -275,25 +299,6 @@ func (s *Store) writeTops(ctx context.Context, rows []topRow, now time.Time) err
 		}
 		return nil
 	})
-}
-
-// ranks returns, by the IDs the query selects on conn, their places in its
-// order, 1 first.
-func ranks(ctx context.Context, conn *sql.Conn, query string, args ...any) (map[int64]int, error) {
-	rows, err := conn.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[int64]int{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out[id] = len(out) + 1
-	}
-	return out, rows.Err()
 }
 
 // counts returns the pairs of IDs and counts the query selects on conn.

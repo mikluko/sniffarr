@@ -375,3 +375,7 @@ a.btn:hover{background:var(--muted);text-decoration:none}
   #releases .rtab .ml{display:inline}
   #releases .rtab td.au b{color:var(--foreground)}
 }
+
+/* top, handoff v7: the ± column */
+.dl .tipb{left:auto;right:0}
+.dl .tipb::before{left:auto;right:12px}
