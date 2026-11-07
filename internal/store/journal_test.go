@@ -38,7 +38,8 @@ func entries(t *testing.T, s *Store, h Hash) []string {
 	return out
 }
 
-// entry returns the one entry of the hash of the kind and outcome.
+// entry returns the one entry of the hash of the kind and outcome, its ID
+// left out.
 func entry(t *testing.T, s *Store, h Hash, kind, outcome string) JournalEntry {
 	t.Helper()
 	got, err := s.Journal(context.Background(), h, 1000)
@@ -46,6 +47,7 @@ func entry(t *testing.T, s *Store, h Hash, kind, outcome string) JournalEntry {
 	var found []JournalEntry
 	for _, e := range got {
 		if e.Kind == kind && e.Outcome == outcome {
+			e.ID = 0
 			found = append(found, e)
 		}
 	}
@@ -70,20 +72,60 @@ func TestJournalOrderAndLimit(t *testing.T) {
 	got, err := s.Journal(ctx, hash(1), 10)
 	require.NoError(t, err)
 	require.Equal(t, []JournalEntry{
-		{Hash: hash(1), At: t0.Add(-time.Hour), Kind: JournalArr, Outcome: EventGrab},
-		{Hash: hash(1), At: t0, Kind: JournalSighted, Outcome: "queued", Detail: `{"discovery":"announce"}`},
-		{Hash: hash(1), At: t0.Add(time.Second), Kind: JournalSighted, Outcome: "promoted", Detail: `{"discovery":"announce"}`},
-		{Hash: hash(1), At: t0.Add(2 * time.Second), Kind: JournalSighted, Outcome: "revived", Detail: `{"discovery":"announce"}`},
+		{ID: 4, Hash: hash(1), At: t0.Add(-time.Hour), Kind: JournalArr, Outcome: EventGrab},
+		{ID: 1, Hash: hash(1), At: t0, Kind: JournalSighted, Outcome: "queued", Detail: `{"discovery":"announce"}`},
+		{ID: 2, Hash: hash(1), At: t0.Add(time.Second), Kind: JournalSighted, Outcome: "promoted", Detail: `{"discovery":"announce"}`},
+		{ID: 3, Hash: hash(1), At: t0.Add(2 * time.Second), Kind: JournalSighted, Outcome: "revived", Detail: `{"discovery":"announce"}`},
 	}, got, "in time order, an entry written later of an earlier time first; zero values left out of the detail")
 	got, err = s.Journal(ctx, hash(1), 2)
 	require.NoError(t, err)
 	require.Equal(t, []string{"promoted", "revived"}, []string{got[0].Outcome, got[1].Outcome}, "the newest ones within the limit")
 	got, err = s.Journal(ctx, hash(2), 10)
 	require.NoError(t, err)
-	require.Equal(t, []JournalEntry{{Hash: hash(2), At: t0, Kind: JournalFetched, Outcome: "duplicate"}}, got, "no detail reads as empty")
+	require.Equal(t, []JournalEntry{{ID: 5, Hash: hash(2), At: t0, Kind: JournalFetched, Outcome: "duplicate"}}, got, "no detail reads as empty")
 	got, err = s.Journal(ctx, hash(3), 10)
 	require.NoError(t, err)
 	require.Empty(t, got)
+}
+
+func TestJournalPage(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	require.NoError(t, s.tx(ctx, func(tx *sql.Tx) error {
+		for i, at := range []time.Duration{0, time.Second, -time.Hour, 2 * time.Second, 2 * time.Second} {
+			if err := journal(ctx, tx, hash(1), t0.Add(at), JournalSighted, "queued", Detail("n", i+1)); err != nil {
+				return err
+			}
+		}
+		return journal(ctx, tx, hash(2), t0, JournalFetched, "duplicate", nil)
+	}))
+	ids := func(p JournalPage) []int64 {
+		out := make([]int64, len(p.Entries))
+		for i, e := range p.Entries {
+			out[i] = e.ID
+		}
+		return out
+	}
+	p, err := s.JournalPage(ctx, hash(1), 0, 2)
+	require.NoError(t, err)
+	require.Equal(t, []int64{4, 5}, ids(p), "the newest, ordered by time, then by writing")
+	require.Equal(t, JournalPage{Entries: p.Entries, Total: 5, Older: 3}, p)
+	p, err = s.JournalPage(ctx, hash(1), 4, 2)
+	require.NoError(t, err)
+	require.Equal(t, []int64{1, 2}, ids(p), "those before the entry")
+	require.Equal(t, 5, p.Total)
+	require.Equal(t, 1, p.Older)
+	p, err = s.JournalPage(ctx, hash(1), 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, []int64{3}, ids(p), "an entry written later of an earlier time comes before")
+	require.Zero(t, p.Older)
+	p, err = s.JournalPage(ctx, hash(1), 6, 2)
+	require.NoError(t, err)
+	require.Empty(t, p.Entries, "before an entry of another hash, none")
+	require.Equal(t, 5, p.Total)
+	p, err = s.JournalPage(ctx, hash(3), 0, 2)
+	require.NoError(t, err)
+	require.Equal(t, JournalPage{}, p)
 }
 
 func TestJournalDetailBounded(t *testing.T) {
@@ -251,9 +293,13 @@ func TestSweepJournal(t *testing.T) {
 
 func TestJournalPlans(t *testing.T) {
 	s := open(t)
-	for query, want := range map[string]string{
-		journalSweep: "INDEX torrent_journal_at (at<?)",
-		journalQuery: "INDEX torrent_journal_infohash (infohash=?)",
+	for _, c := range []struct {
+		query string
+		args  []any
+		want  []string
+	}{
+		{journalSweep, []any{0, 1}, []string{"INDEX torrent_journal_at (at<?)"}},
+		{journalQuery, []any{0, 0, 1}, []string{"INDEX torrent_journal_infohash (infohash=?)", "SCALAR SUBQUERY", "INTEGER PRIMARY KEY (rowid=?)"}},
 	} {
 		var plan []string
 		require.NoError(t, s.each(context.Background(), func(rows *sql.Rows) error {
@@ -264,9 +310,11 @@ func TestJournalPlans(t *testing.T) {
 			}
 			plan = append(plan, d)
 			return nil
-		}, "EXPLAIN QUERY PLAN "+query, 0, 1))
-		require.Len(t, plan, 1, query)
-		require.Contains(t, plan[0], want)
+		}, "EXPLAIN QUERY PLAN "+c.query, c.args...))
+		require.Len(t, plan, len(c.want), c.query)
+		for i, w := range c.want {
+			require.Contains(t, plan[i], w)
+		}
 	}
 }
 
@@ -680,7 +728,7 @@ func TestJournalProbeWanted(t *testing.T) {
 	search(t0.Add(25 * time.Hour))
 	got, err := s.Journal(ctx, queued, 1)
 	require.NoError(t, err)
-	require.Equal(t, JournalEntry{Hash: queued, At: t0.Add(25 * time.Hour), Kind: JournalProbeWanted, Outcome: "search", Detail: `{"query":"x","t":"movie"}`}, got[0],
+	require.Equal(t, JournalEntry{ID: got[0].ID, Hash: queued, At: t0.Add(25 * time.Hour), Kind: JournalProbeWanted, Outcome: "search", Detail: `{"query":"x","t":"movie"}`}, got[0],
 		"a day after the last it is")
 	require.Len(t, entries(t, s, probed), 2)
 	require.Len(t, entries(t, s, spent), 2)

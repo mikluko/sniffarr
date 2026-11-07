@@ -167,6 +167,8 @@ func TestBrowserCard(t *testing.T) {
 	require.Equal(t, "stored", res.Msg.GetJournal()[0].GetOutcome())
 	require.Equal(t, now.Add(-time.Hour), res.Msg.GetJournal()[0].GetAt().AsTime())
 	require.Contains(t, res.Msg.GetJournal()[0].GetDetail(), `"name":"Alien.1979.Rus.1080p"`)
+	require.NotZero(t, res.Msg.GetJournal()[0].GetId())
+	require.Equal(t, int64(1), res.Msg.GetJournalTotal())
 
 	h = hash(3)
 	res, err = b.Card(ctx, connect.NewRequest(&sniffarrv1.CardRequest{Infohash: h[:]}))
@@ -189,10 +191,12 @@ func TestBrowserJournal(t *testing.T) {
 	require.Len(t, res.Msg.GetEntries(), 2)
 	require.Equal(t, []string{"fetched/stored", "classified/jev"}, []string{
 		res.Msg.GetEntries()[0].GetKind() + "/" + res.Msg.GetEntries()[0].GetOutcome(), res.Msg.GetEntries()[1].GetKind() + "/" + res.Msg.GetEntries()[1].GetOutcome()}, "oldest first")
+	require.Equal(t, int64(2), res.Msg.GetTotal())
 	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Limit: 1}))
 	require.NoError(t, err)
 	require.Len(t, res.Msg.GetEntries(), 1)
 	require.Equal(t, store.JournalClassified, res.Msg.GetEntries()[0].GetKind(), "the newest within the limit")
+	require.Equal(t, int64(2), res.Msg.GetTotal(), "the total of all")
 
 	h = hash(10)
 	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:]}))

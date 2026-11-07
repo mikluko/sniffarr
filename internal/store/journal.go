@@ -105,6 +105,8 @@ const journalWantedFor = 24 * time.Hour
 
 // JournalEntry is one event of a torrent's life.
 type JournalEntry struct {
+	// ID is the entry's own, unique across the journal.
+	ID   int64
 	Hash Hash
 	// At is when the store recorded the event; for a grab or an import
 	// Radarr or Sonarr reports, when it happened.
@@ -298,24 +300,62 @@ func wantedSince(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) (bool, e
 	return recent, err
 }
 
-// journalQuery selects, given a hash and a limit, the hash's newest entries.
-const journalQuery = "SELECT at, kind, outcome, detail FROM torrent_journal WHERE infohash = ? ORDER BY at DESC, id DESC LIMIT ?"
+// journalQuery selects, given a hash, the ID of an entry of it or 0, and a
+// limit, the hash's newest entries before the entry, or of all for 0.
+const journalQuery = `SELECT id, at, kind, outcome, detail FROM torrent_journal WHERE infohash = ?1
+	AND (?2 = 0 OR (at, id) < (SELECT at, id FROM torrent_journal WHERE id = ?2 AND infohash = ?1))
+	ORDER BY at DESC, id DESC LIMIT ?3`
 
 // Journal returns the newest entries of the hash, up to limit, oldest
 // first, in the order of their times and, at one time, of their writing.
 func (s *Store) Journal(ctx context.Context, h Hash, limit int) ([]JournalEntry, error) {
+	return s.journalBefore(ctx, h, 0, limit)
+}
+
+// JournalPage is a page of an infohash's journal.
+type JournalPage struct {
+	// Entries are the page's, oldest first.
+	Entries []JournalEntry
+	// Total is how many entries the infohash's journal holds.
+	Total int
+	// Older is how many of them come before the page's oldest.
+	Older int
+}
+
+// JournalPage returns the newest entries of the hash before the entry of ID
+// before, or of all for 0, up to limit, in the order Journal returns them.
+// An ID not of the hash's entries pages to none.
+func (s *Store) JournalPage(ctx context.Context, h Hash, before int64, limit int) (JournalPage, error) {
+	var p JournalPage
+	var err error
+	if p.Entries, err = s.journalBefore(ctx, h, before, limit); err != nil {
+		return JournalPage{}, err
+	}
+	if err := s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_journal WHERE infohash = ?", h[:]).Scan(&p.Total); err != nil {
+		return JournalPage{}, err
+	}
+	if limit > 0 && len(p.Entries) == limit {
+		oldest := p.Entries[0]
+		err = s.r.QueryRowContext(ctx, "SELECT count(*) FROM torrent_journal WHERE infohash = ? AND (at, id) < (?, ?)",
+			h[:], oldest.At.Unix(), oldest.ID).Scan(&p.Older)
+	}
+	return p, err
+}
+
+// journalBefore returns the entries JournalPage pages to.
+func (s *Store) journalBefore(ctx context.Context, h Hash, before int64, limit int) ([]JournalEntry, error) {
 	var out []JournalEntry
 	err := s.each(ctx, func(rows *sql.Rows) error {
 		e := JournalEntry{Hash: h}
 		var at int64
 		var d sql.NullString
-		if err := rows.Scan(&at, &e.Kind, &e.Outcome, &d); err != nil {
+		if err := rows.Scan(&e.ID, &at, &e.Kind, &e.Outcome, &d); err != nil {
 			return err
 		}
 		e.At, e.Detail = time.Unix(at, 0).UTC(), d.String
 		out = append(out, e)
 		return nil
-	}, journalQuery, h[:], limit)
+	}, journalQuery, h[:], before, limit)
 	slices.Reverse(out)
 	return out, err
 }

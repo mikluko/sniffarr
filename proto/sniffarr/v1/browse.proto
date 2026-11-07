@@ -378,6 +378,8 @@ message CardResponse {
   // The newest 200 entries of the release's journal, oldest first: ordered
   // by at, then by writing.
   repeated JournalEntry journal = 11;
+  // How many entries the release's journal holds in all.
+  int64 journal_total = 12;
 }
 
 message JournalRequest {
@@ -390,6 +392,8 @@ message JournalRequest {
 message JournalResponse {
   // The entries, oldest first.
   repeated JournalEntry entries = 1;
+  // How many entries the infohash's journal holds in all.
+  int64 total = 2;
 }
 
 // JournalEntry is one event of a torrent's life, as the store recorded it.
@@ -410,6 +414,8 @@ message JournalEntry {
   // The event's particulars as the text of a JSON object, its strings not
   // escaped for HTML; empty for none.
   string detail = 4;
+  // The entry's ID, unique across the journal.
+  int64 id = 5;
 }
 
 // RuleHit is a rule and the fragment that made it fire.
