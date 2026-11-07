@@ -142,7 +142,8 @@ const probeDue = `p.outcome = '` + ProbeFailed + `' AND p.retry_at <= ? AND ` + 
 // its probe is done or its failures ran out without its peers growing; a
 // failed one waits out its backoff. A release already queued at PriorityArr
 // or behind moves to PriorityArr and to the time; a requested one stays as
-// it is. Every stored release is journaled as wanted, at most once a day.
+// it is. Each release it queues or moves is journaled as wanted, at most
+// once a day.
 func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at time.Time) error {
 	if len(hashes) == 0 {
 		return nil
@@ -154,19 +155,17 @@ func (s *Store) WantProbe(ctx context.Context, hashes []Hash, w ProbeWant, at ti
 	}
 	args = append(args, probeArgs()...)
 	return s.tx(ctx, func(tx *sql.Tx) error {
-		stored, err := hashesOf(tx.QueryContext(ctx, "SELECT infohash FROM torrent_releases WHERE infohash IN ("+placeholders(len(hashes))+")", args[2:2+len(hashes)]...))
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
+		queued, err := hashesOf(tx.QueryContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at, not_before)
 			SELECT 'probe', t.infohash, ?1, ?2, coalesce(p.retry_at * 1000, 0) FROM torrent_releases t LEFT JOIN probe_releases p ON p.torrent_id = t.id
 			WHERE t.infohash IN (`+placeholders(len(hashes))+`) AND (p.outcome IS NULL OR p.outcome = '`+ProbeFailed+`' AND `+probeGrown+`) AND `+probeReadable+`
 			ON CONFLICT (kind, infohash) DO UPDATE SET priority = excluded.priority, queued_at = excluded.queued_at
-			WHERE task_queue.priority >= excluded.priority`, args...); err != nil {
+			WHERE task_queue.priority >= excluded.priority
+			RETURNING infohash`, args...))
+		if err != nil {
 			return err
 		}
 		d := Detail("t", w.T, "query", w.Query, "id", w.ID, "season", w.Season, "episode", w.Episode)
-		for _, h := range stored {
+		for _, h := range queued {
 			recent, err := wantedSince(ctx, tx, h, at)
 			if err != nil || recent {
 				if err != nil {

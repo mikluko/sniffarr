@@ -388,16 +388,48 @@ func TestJournalProbes(t *testing.T) {
 	require.NoError(t, s.JournalFeed(ctx, h, t0, "queued", Detail("source", "rutracker", "title", "Alien", "published_at", t0)))
 	require.JSONEq(t, `{"source":"rutracker","title":"Alien","published_at":`+unix(t0)+`}`, entry(t, s, h, JournalFeed, "queued").Detail)
 
-	require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0.Add(23*time.Hour)))
-	require.Len(t, entries(t, s, h), 7, "wanted again within a day is not journaled")
 	require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0.Add(25*time.Hour)))
-	got, err := s.Journal(ctx, h, 1)
-	require.NoError(t, err)
-	require.Equal(t, "probe_wanted/search", got[0].Kind+"/"+got[0].Outcome, "a day after the last it is")
+	require.Len(t, entries(t, s, h), 7, "a search does not want a probe done")
 	n, err := s.RequestProbe(ctx, []Hash{h, hash(9)}, t0.Add(26*time.Hour))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 	require.Equal(t, JournalEntry{Hash: h, At: t0.Add(26 * time.Hour), Kind: JournalProbeWanted, Outcome: "request"}, entry(t, s, h, JournalProbeWanted, "request"))
+}
+
+func TestJournalProbeWanted(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	queued := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	probed := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	spent := insertProbeable(t, s, 4, "Brazil.1985.1080p", 5, "Brazil.1985.1080p.mkv")
+	unreadable := insertProbeable(t, s, 5, "Ronin.1998.DVDRip", 5, "Ronin.1998.DVDRip.avi")
+	requested := insertProbeable(t, s, 6, "Fargo.1996.1080p", 5, "Fargo.1996.1080p.mkv")
+	require.NoError(t, s.ProbeDone(ctx, probed, Probe{Outcome: ProbeUnknown}, t0))
+	final, err := s.ProbeFailed(ctx, spent, ProbeTimeout, 0, t0, 1, time.Hour)
+	require.NoError(t, err)
+	require.True(t, final)
+	_, err = s.RequestProbe(ctx, []Hash{requested}, t0)
+	require.NoError(t, err)
+	search := func(at time.Time) {
+		t.Helper()
+		require.NoError(t, s.WantProbe(ctx, []Hash{queued, probed, spent, unreadable, requested}, ProbeWant{T: "movie", Query: "x"}, at))
+	}
+
+	search(t0)
+	require.Equal(t, []string{"fetched/stored", "probe_wanted/search"}, entries(t, s, queued))
+	require.Equal(t, []string{"fetched/stored", "probed/unknown"}, entries(t, s, probed), "a search that queues no probe is not journaled")
+	require.Equal(t, []string{"fetched/stored", "probed/timeout"}, entries(t, s, spent), "nor one of a release whose attempts ran out")
+	require.Equal(t, []string{"fetched/stored"}, entries(t, s, unreadable), "nor one of a release a probe cannot read")
+	require.Equal(t, []string{"fetched/stored", "probe_wanted/request"}, entries(t, s, requested), "nor one of a release requested")
+	search(t0.Add(23 * time.Hour))
+	require.Len(t, entries(t, s, queued), 2, "wanted again within a day is not journaled")
+	search(t0.Add(25 * time.Hour))
+	got, err := s.Journal(ctx, queued, 1)
+	require.NoError(t, err)
+	require.Equal(t, JournalEntry{Hash: queued, At: t0.Add(25 * time.Hour), Kind: JournalProbeWanted, Outcome: "search", Detail: `{"query":"x","t":"movie"}`}, got[0],
+		"a day after the last it is")
+	require.Len(t, entries(t, s, probed), 2)
+	require.Len(t, entries(t, s, spent), 2)
 }
 
 // leasedProbes returns the hash's probe_leased entries as outcome/attempt,
