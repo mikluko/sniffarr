@@ -106,8 +106,33 @@ type TorrentsPage struct {
 	Q       string
 	Filters Filters
 	Results Results
+	// ResetURL is the page with the query and the sort but no filter.
+	ResetURL string
 }
 
+// LayerLabel names the layer that decided the row's kind, with the
+// classifier's confidence when it decided.
+func (p TorrentsPage) LayerLabel(r Row) string {
+	s := p.T("layer." + r.Layer)
+	if r.Layer == "classifier" && r.Confidence != nil {
+		s += " " + p.Prob(r.Confidence)
+	}
+	return s
+}
+
+// LayerTip says how the layer decided the row's kind; "" for a layer that
+// did not.
+func (p TorrentsPage) LayerTip(r Row) string {
+	switch {
+	case r.Layer == "classifier" && r.Confidence != nil:
+		return p.Fmt("torrents.layer_tip.classifier", p.Prob(r.Confidence))
+	case r.Layer == "rules" || r.Layer == "title_repeat":
+		return p.T("torrents.layer_tip." + r.Layer)
+	}
+	return ""
+}
+
+// Filters is the torrents page's filters and sort.
 type Filters struct {
 	Kind      string // "" = all, else a Kinds value
 	Matched   string // "" = all, "yes" = matched to a title, "no" = not matched
@@ -118,6 +143,24 @@ type Filters struct {
 	Layer     string
 	MinSizeGB string // raw input, echoed back
 	Sort      string // Sorts value, "" = peers
+}
+
+// VoiceSet reports whether the voice filter narrows the results.
+func (f Filters) VoiceSet() bool { return f.Voice != "" && f.Voice != "any" }
+
+// Set is how many filters narrow the results; the sort and the voice
+// filter's language are none.
+func (f Filters) Set() int {
+	n := 0
+	for _, v := range []string{f.Kind, f.Matched, f.Quality, f.Source, f.Layer, f.MinSizeGB} {
+		if v != "" {
+			n++
+		}
+	}
+	if f.VoiceSet() {
+		n++
+	}
+	return n
 }
 
 type Results struct {

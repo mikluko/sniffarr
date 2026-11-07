@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"net/url"
 	"sort"
 	"time"
 )
@@ -61,7 +62,15 @@ func SampleTorrents(b Base, q string, f Filters) TorrentsPage {
 		}
 		rows = append(rows, r)
 	}
-	return TorrentsPage{Base: b, Q: q, Filters: f, Results: Results{Total: int64(len(rows)), Shown: len(rows), Rows: rows}}
+	return TorrentsPage{Base: b, Q: q, Filters: f, Results: Results{Total: int64(len(rows)), Shown: len(rows), Rows: rows}, ResetURL: sampleReset(q)}
+}
+
+// sampleReset is the torrents page of the query q with no filter.
+func sampleReset(q string) string {
+	if q == "" {
+		return "/torrents"
+	}
+	return "/torrents?q=" + url.QueryEscape(q)
 }
 
 func SampleTop(b Base, kind string, all bool) TopPage {

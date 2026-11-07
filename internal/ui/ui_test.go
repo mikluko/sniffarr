@@ -35,6 +35,10 @@ func TestRenderAll(t *testing.T) {
 	multi := func(b *Base) { b.VoiceLangs = []string{"ru", "uk"} }
 	cases := []tc{
 		{"torrents", "torrents", "/torrents", "", func(b Base) any { b.Nav = "torrents"; return SampleTorrents(b, "", Filters{}) }},
+		{"torrents-filtered", "torrents", "/torrents?q=spider&kind=movie&quality=1080p", "", func(b Base) any {
+			b.Nav = "torrents"
+			return SampleTorrents(b, "spider", Filters{Kind: "movie", Quality: "1080p"})
+		}},
 		{"torrents-unmatched", "torrents", "/torrents?matched=no", "torrents", func(b Base) any { return SampleTorrents(b, "", Filters{Matched: "no"}) }},
 		{"torrents-explicit", "torrents", "/torrents?voice=explicit", "torrents", func(b Base) any { return SampleTorrents(b, "", Filters{Voice: "explicit"}) }},
 		{"torrents-nolangs", "torrents", "/torrents", "", func(b Base) any { b.VoiceLangs = nil; return SampleTorrents(b, "", Filters{}) }},
@@ -790,5 +794,92 @@ func TestActsProbes(t *testing.T) {
 	}
 	if !strings.Contains(off, `id="act-peers"`) {
 		t.Error("the peers button goes with it")
+	}
+}
+
+// Filters.Set counts the filters that narrow the results, not the sort, the
+// voice filter's language or its "any".
+func TestFiltersSet(t *testing.T) {
+	for _, c := range []struct {
+		f    Filters
+		want int
+	}{
+		{Filters{}, 0},
+		{Filters{VoiceLang: "ru", Voice: "any", Sort: "size"}, 0},
+		{Filters{Kind: "movie", Quality: "1080p"}, 2},
+		{Filters{Matched: "no", Source: "web", Layer: "rules", MinSizeGB: "1", Voice: "explicit"}, 5},
+	} {
+		if got := c.f.Set(); got != c.want {
+			t.Errorf("%+v: %d, want %d", c.f, got, c.want)
+		}
+	}
+}
+
+// The torrents page: the layer that decided the kind with its meaning in a
+// tooltip, the first sighting in the last one's tooltip, the placeholders
+// for a poster, the filters set bordered and counted, and the phone's list
+// with the dub of each configured language.
+func TestTorrentsMarkup(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loc := time.FixedZone("CEST", 2*3600)
+	req := httptest.NewRequest("GET", "/torrents", nil)
+	b := r.Base(req, "ru", "torrents", []string{"ru"}, loc)
+	b.Now = time.Date(2026, 10, 20, 14, 5, 0, 0, loc)
+	render := func(p TorrentsPage) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		if err := r.Render(w, req, "torrents", p); err != nil {
+			t.Fatal(err)
+		}
+		return w.Body.String()
+	}
+	tip := func(label, text string) string {
+		return `<span class="tip" tabindex="0" aria-label="` + template.HTMLEscapeString(label+": "+text) + `">` +
+			template.HTMLEscapeString(label) + `<span class="tipb" aria-hidden="true">` + template.HTMLEscapeString(text) + `</span></span>`
+	}
+	ph := func(mark, text string) string {
+		return `<span class="th th-ph tip" tabindex="0" aria-label="` + text + `">` + mark + `<span class="tipb" aria-hidden="true">` + text + `</span></span>`
+	}
+	body := render(SampleTorrents(b, "", Filters{}))
+	for _, want := range []string{
+		tip("классификатор 0,93", "Вид определил классификатор, уверенность 0,93."),
+		tip("правила", "Вид определён правилами по имени и файлам."),
+		tip("повтор по названию", "Вид взят у раздачи с тем же названием."),
+		tip("20.10 14:00", "Впервые: 25.08"),
+		ph("?", "Не сопоставлено с фильмом или сериалом."),
+		ph("—", "Сопоставлено, постера в TMDB нет."),
+		`<span class="tmeta mu">3,0` + " " + `ГБ · 1080p · сериал · web · ru <b>LostFilm</b></span>`,
+		`<span class="tmeta mu">400` + " " + `МБ · прочее · прочее</span>`,
+		`<span>1–11 из 11</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %s", want)
+		}
+	}
+	for _, not := range []string{`class="set"`, `class="tfreset"`, `<span class="mu"> · `} {
+		if strings.Contains(body, not) {
+			t.Errorf("%s without a filter set", not)
+		}
+	}
+
+	body = render(SampleTorrents(b, "spider", Filters{Kind: "movie", Quality: "1080p"}))
+	for _, want := range []string{
+		`<select name="kind" class="set">`,
+		`<select name="quality" class="set">`,
+		`<select name="matched">`,
+		`Фильтры<span class="mu"> · 2</span></button>`,
+		`<a class="tfreset" href="/torrents?q=spider"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("filtered: no %s", want)
+		}
+	}
+
+	b.VoiceLangs = nil
+	if body := render(SampleTorrents(b, "", Filters{})); strings.Contains(body, " · ru ") {
+		t.Error("a dub in the phone's list without dub languages")
 	}
 }

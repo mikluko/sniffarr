@@ -518,7 +518,8 @@ func (s *server) torrents(w http.ResponseWriter, req *http.Request) {
 		}
 		results.Rows = append(results.Rows, row)
 	}
-	s.render(w, req, "torrents", ui.TorrentsPage{Base: s.base(req, lang, "torrents"), Q: q, Filters: f, Results: results})
+	s.render(w, req, "torrents", ui.TorrentsPage{Base: s.base(req, lang, "torrents"), Q: q, Filters: f, Results: results,
+		ResetURL: link("/torrents", 0, "q", q, "", "sort", f.Sort, "peers")})
 }
 
 // top serves GET /top: the movies or series with the most peers over a
