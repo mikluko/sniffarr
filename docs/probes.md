@@ -1,8 +1,19 @@
 # Probes
 
 A probe reads the track list of a stored release's main video file from its
-container header, which lies in the file's first pieces. Only `-fetch` with
-`-probe-dir` probes, and the API hands out the tasks.
+container header, which lies in the file's first pieces. Probes are off
+unless `-probe` is given: `-api` with it queues probes and hands out the
+tasks, and `-fetch` with it takes them. Turn probes on by giving `-probe` to
+the process that runs `-api` and to the fetchers that are to probe, with
+`-probe-dir` naming where the pieces are kept; without `-probe-dir` they are
+kept in a fresh temporary directory, removed at stop, so nothing seeded
+survives a restart. The Helm chart's `probe.enabled` does both.
+
+With probes off, Torznab searches and `RequestProbe` queue no probe,
+`RequestProbe` fails with `FAILED_PRECONDITION`, `ProbeTask` hands out
+none, the API's maintenance drops the probes queued, and `Settings` tells
+the web UI, which hides its probe button, meter and queue. Tracks and
+probabilities stored by earlier probes stay, in the Torznab titles too.
 
 The fetcher finds the torrent's peers with `get_peers`, fetches its
 metadata by BEP 9, and picks the largest file ending in `.mkv`, `.webm`,
@@ -75,7 +86,8 @@ leaves the probability as it was. Jev does not override a probe. The
 language's studios named in its tracks, as `MVO LostFilm`, join the
 release's studios for the language.
 
-What a probe downloaded is seeded back. The pieces stay in `-probe-dir` and
+What a probe downloaded is seeded back. The pieces stay in the probe
+directory and
 the torrent in the client, which uploads them to its peers and announces
 itself on the DHT for the torrent every 30 minutes. The fetcher removes a
 torrent and deletes its pieces once it has uploaded as much as it
@@ -84,5 +96,5 @@ oldest first, while the torrents kept hold more than `-seed-max-size` of
 piece data. It looks every minute, and tells the API by `ProbeUpload` what
 the torrents uploaded since the last look; a report the API refuses goes
 with the next. The seeded torrents, what each downloaded and uploaded, and
-which pieces are complete survive a restart. Metadata fetches upload
-nothing.
+which pieces are complete survive a restart when it is `-probe-dir`.
+Metadata fetches upload nothing.

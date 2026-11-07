@@ -11,7 +11,7 @@ as a public index. Peer IP addresses are never sent to the server or stored:
 peers are counted in HyperLogLog sketches of keyed hashes, from which no
 address comes back. The sniffer fetches metadata only: it never downloads
 pieces, never uploads, and never announces itself into a swarm. The fetcher
-does so only with `-probe-dir`: it downloads the first pieces of a stored
+does so only with `-probe`: it downloads the first pieces of a stored
 release's main video file to read its tracks, and seeds them back; see
 [Probes](docs/probes.md).
 

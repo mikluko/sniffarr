@@ -49,8 +49,8 @@ others out, as the chart's `api.networkPolicy` does.
   hour, hashed with the key; the server returns how many sketches it merged
   and how many it dropped for an infohash it has not stored.
 - `ProbeTask` leases the next release to probe and the most piece data its
-  probe may download, or nothing while there is none or the day's budget is
-  spent.
+  probe may download, or nothing while there is none, the day's budget is
+  spent, or probes are off.
 - `ProbeResult` records a probe's outcome: the file's path, format and
   tracks, or why there are none, and the piece data it downloaded.
 - `ProbeUpload` records the piece data a fetcher uploaded to the swarms of
@@ -88,7 +88,7 @@ others out, as the chart's `api.networkPolicy` does.
 | `Top`           | `kind` (movie or series), `window`, `voice` and `voice_language` (the first audio language by default), `offset`, `limit`, `lang`                                                | `entries`: rank, `work`, peers, `prev_rank` in the window before, `audio`, sources and first sighting of the releases the voice admits, as of `computed_at`; `total`, `computed_at` |
 | `Stats`         | `hours`                                                                                                                                                                          | counts by kind (movie, series, other, unknown; music, books and software are other), layer, source and audio language, rejections by reason, pending, tokens spent today and the day's limit, piece data probes downloaded today, the day's limit on it, and what the fetchers uploaded back today, new torrents per clock hour over the `hours` asked for, the current hour first, `computed_at`; `queue_fetches`, `queue_lookups` and `queue_probes`, read at the request: per kind, `per_minute`, its pace over the last 15 minutes since the API started, and `levels`, the tasks queued at each priority, P0 first, with `eta`, how long until the priority and those ahead are done at that pace, absent while it is 0 and tasks are queued |
 | `Home`          |                                                                                                                                                                                  | stored, new in 24 hours and pending, `computed_at`                                                                                         |
-| `Settings`      |                                                                                                                                                                                  | the API's audio languages, BCP-47 tags in its order, empty while the audio extension is off; the web UI asks it at start                  |
+| `Settings`      |                                                                                                                                                                                  | the API's audio languages, BCP-47 tags in its order, empty while the audio extension is off, and `probes`, whether the API probes; the web UI asks it at start |
 | `RefreshPeers`  | `releases`: an `infohash`, or a `work` for every release of it                                                                                                                  | `releases` to be looked up: a fetcher looks for their peers on the DHT, and the peers found count from its next send of sketches            |
 | `RequestProbe`  | `releases`, as for `RefreshPeers`                                                                                                                                                | `releases` to be probed, ahead of searched ones and whatever their last probe, 0 when none has a file a probe reads; see [Probes](probes.md) |
 | `RequestMatch`  | `releases`, as for `RefreshPeers`; `lang`                                                                                                                                        | `titles` looked up on TMDB at once, the title keys of movies and series among the releases' that no work is matched to, whatever their last lookup, ahead of the background matcher and within TMDB's rate and the classifier's budget as a search's; `works` the releases belong to once that is done |
@@ -102,7 +102,8 @@ every `SNIFFARR_STATS_INTERVAL`, as of `computed_at`; only `tokens_used_day`,
 of TMDB's search for `SearchTitles`. A work's `id` that is not one fails
 with `INVALID_ARGUMENT`, one of no stored work with `NOT_FOUND`;
 `RefreshPeers`, `RequestProbe` and `RequestMatch` fail with `NOT_FOUND`
-when they name no stored release; `RequestMatch` fails with
+when they name no stored release; `RequestProbe` fails with
+`FAILED_PRECONDITION` while probes are off; `RequestMatch` fails with
 `RESOURCE_EXHAUSTED` once the
 classifier's daily budget is spent, and `UNAVAILABLE` when TMDB fails. An `infohash` that is not 20 bytes fails `Card` and
 `Journal` with `INVALID_ARGUMENT`, as a negative `limit` fails `Journal`;

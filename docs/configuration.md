@@ -12,6 +12,7 @@ the same to each.
 | `-ui`                | off     | Serve the web UI                                                                                                    |
 | `-sniff`             | off     | Walk the DHT and report infohashes                                                                                  |
 | `-fetch`             | off     | Take fetch tasks and return metadata                                                                                |
+| `-probe`             | off     | Probe stored releases for their tracks: `-api` queues probes, `-fetch` takes them; see [Probes](probes.md)          |
 | `-log-level`         | `info`  | Level to log at: `debug`, `info`, `warn` or `error`                                                                 |
 | `SNIFFARR_LOG_LEVEL` |         | The level when `-log-level` is not given; the flag wins when both are set                                           |
 | `SNIFFARR_URL`       |         | Base URL of the API, such as `http://sniffarr-api:8080`; required by `-ui`, `-sniff` and `-fetch` without `-api`, and must be unset with it |
@@ -116,11 +117,14 @@ recomputes the tops of works and every torrent's peers over the last 7 days.
 | `-peer-wait`     | `8s`    | How long to look for a torrent's peers on the DHT      |
 | `-min-peers`     | `1`     | Peers needed within `-peer-wait` to fetch the metadata |
 | `-walkers`       | `16`    | `sample_infohashes` queries at once                    |
-| `-probe-dir`     |         | Directory of the pieces `-fetch` probes and seeds; empty probes nothing, and it needs `-fetch` |
+| `-probe-dir`     |         | Directory of the pieces `-fetch` probes and seeds; empty is a fresh temporary directory, removed at stop; it needs `-fetch` |
 | `-probers`       | `4`     | Probes at once                                         |
 | `-probe-timeout` | `10m`   | How long one probe may take, from looking for peers to the tracks |
 | `-seed-max-size` | `200GiB` | Piece data kept for seeding, units as `SNIFFARR_PROBE_MAX_BYTES`; the oldest torrents go first beyond it |
 | `-seed-max-age`  | `168h`  | How long a probed torrent is seeded at most            |
+
+`-probe-dir`, `-probers`, `-probe-timeout`, `-seed-max-size` and
+`-seed-max-age` need `-probe`; given without it, sniffarr refuses to start.
 
 With `-upnp` the node asks the gateways it finds on the local network to
 forward the port it listens on, TCP and UDP. Without `-sniff` the node is

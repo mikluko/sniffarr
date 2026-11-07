@@ -4,9 +4,11 @@ With `-ui`, sniffarr serves a web UI on `SNIFFARR_UI_ADDR`, in English or
 Russian. The UI touches no database: it reads `BrowseService`, in-process
 when `-api` is on and over the network at
 `SNIFFARR_URL` otherwise. At start it asks `Settings` for the API's audio
-languages, retrying every 5 seconds until the API answers, and listens only
-then; the languages are kept for the life of the process, so a change of the
-API's needs the UI restarted.
+languages and whether it probes, retrying every 5 seconds until the API
+answers, and listens only then; both are kept for the life of the process,
+so a change of the API's needs the UI restarted. While the API does not
+probe, the UI leaves out the probe button, the probe meter and the probe
+queue card, and answers the probe routes with 404.
 
 | Route               | Page                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

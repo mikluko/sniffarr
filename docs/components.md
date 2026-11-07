@@ -17,8 +17,13 @@ until SIGINT or SIGTERM.
 - `-fetch` takes tasks from the ingest API, finds each torrent's peers with
   `get_peers` on its own DHT node, fetches the metadata from them by BEP 9,
   and returns the name, size and file list, with the peers counted in
-  sketches. With `-probe-dir` it also takes probe tasks, reading the tracks
+  sketches. With `-probe` it also takes probe tasks, reading the tracks
   of stored releases.
+
+Probes are off unless `-probe` is given, and the flag means the same to
+every component in the process: `-api` queues probes and hands them out,
+and `-fetch` takes them. The web UI follows the API's `Settings`, not the
+flag. With probes off, results stored by earlier probes still show.
 
 `-ui`, `-sniff` and `-fetch` are clients of the API. In a process with `-api`
 they reach it over an in-process connection; without `-api` they dial
