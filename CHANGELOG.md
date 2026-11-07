@@ -13,10 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The footer of every page of the web UI shows its version, with the build time and commit in a tooltip.
 - The image takes the build arguments `VERSION`, `COMMIT` and `BUILD_TIME`, which the release sets, as it sets them for the archives and packages; a build without them reads `dev`.
 - A movie or series page links back to the top, the search results or the release it was reached from.
+- The top reads as a chart: the change against the previous window ("=", "new", "re-entry"), time in the top, peak and debut, from a history of places kept from this version on; a work already in the top when the history began shows its debut as "≤ date".
+- `BrowseService.Top` returns each entry's `debut`, `on_chart`, `peak` and `reentry`, and `history_since`; `Title` returns `peaks` per window.
 
 ### Changed
 
 - The header's tabs are Torrents and Top; the logo leads to the data page, which selects no tab, and a movie or series page selects none.
+
+### Removed
+
+- The top's audio and sources columns.
 
 ### Fixed
 
