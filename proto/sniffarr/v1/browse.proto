@@ -242,6 +242,9 @@ message TitleResponse {
   // One entry per audio language the server is configured with, in its
   // order.
   repeated WorkAudio audio = 4;
+  // The work's best places in the top of its kind among all voices since
+  // the history of each top began, 0 where it was never in it.
+  WindowRanks peaks = 5;
 }
 
 // WindowRanks are places in the tops over each window.
@@ -486,6 +489,11 @@ message TopResponse {
   int64 total = 2;
   // When the top was computed; absent while it never was.
   google.protobuf.Timestamp computed_at = 3;
+  // When the history of the top's places began, at its first computation
+  // since the server keeps one; absent while it has none. An entry whose
+  // debut is this time was in the top already then, so its debut, on_chart
+  // and peak count from it.
+  google.protobuf.Timestamp history_since = 4;
 }
 
 // TopEntry is one work of a top, over the releases the voice admits.
@@ -511,6 +519,17 @@ message TopEntry {
   // under the same kind and voice, among every work with a peer then; absent
   // when it had none.
   optional int32 prev_rank = 9;
+  // When the work first entered the top since its history began; absent
+  // for a top computed before it.
+  google.protobuf.Timestamp debut = 10;
+  // The work's time in the top over every stay since its history began, a
+  // stay lasting from the computation it entered at to the last it was in.
+  google.protobuf.Duration on_chart = 11;
+  // The work's best place in the top since its history began; 0 for a top
+  // computed before it.
+  int32 peak = 12;
+  // Whether the work's current stay in the top follows an earlier one.
+  bool reentry = 13;
 }
 
 message StatsRequest {

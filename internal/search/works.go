@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
@@ -180,6 +181,10 @@ func (b *Browser) Title(ctx context.Context, req *connect.Request[sniffarrv1.Tit
 	if err != nil {
 		return nil, b.internal(ctx, "title", err)
 	}
+	peaks, err := b.Store.Peaks(ctx, id)
+	if err != nil {
+		return nil, b.internal(ctx, "title", err)
+	}
 	peers, err := b.Store.WorkPeers(ctx, id, b.now())
 	if err != nil {
 		return nil, b.internal(ctx, "title", err)
@@ -187,6 +192,7 @@ func (b *Browser) Title(ctx context.Context, req *connect.Request[sniffarrv1.Tit
 	s := sums[id]
 	return connect.NewResponse(&sniffarrv1.TitleResponse{Work: summary(s, lang), Audio: workAudio(s.Audio),
 		Ranks: &sniffarrv1.WindowRanks{Day: int32(ranks[0]), Week: int32(ranks[1]), Month: int32(ranks[2])},
+		Peaks: &sniffarrv1.WindowRanks{Day: int32(peaks[0]), Week: int32(peaks[1]), Month: int32(peaks[2])},
 		Peers: &sniffarrv1.PeerCounts{Day: peers.Day, Week: peers.Week, Month: peers.Month}}), nil
 }
 
@@ -277,22 +283,38 @@ func (b *Browser) Top(ctx context.Context, req *connect.Request[sniffarrv1.TopRe
 	if err != nil {
 		return nil, b.internal(ctx, "top", err)
 	}
+	since, err := b.Store.TopSince(ctx, kind, window, voice, vl)
+	if err != nil {
+		return nil, b.internal(ctx, "top", err)
+	}
 	res := &sniffarrv1.TopResponse{Total: total}
 	if !at.IsZero() {
 		res.ComputedAt = timestamppb.New(at)
 	}
+	if !since.IsZero() {
+		res.HistorySince = timestamppb.New(since)
+	}
 	for _, e := range entries {
-		pe := &sniffarrv1.TopEntry{Rank: int32(e.Rank), Work: summary(e.Work, lang), Peers: e.Peers, Audio: workAudio(e.Work.Audio)}
-		if !e.Work.FirstSeen.IsZero() {
-			pe.FirstSeen = timestamppb.New(e.Work.FirstSeen)
-		}
-		if e.PrevRank > 0 {
-			pe.PrevRank = new(int32(e.PrevRank))
-		}
-		for _, s := range e.Work.Sources {
-			pe.Sources = append(pe.Sources, sources[s])
-		}
-		res.Entries = append(res.Entries, pe)
+		res.Entries = append(res.Entries, topEntry(e, lang))
 	}
 	return connect.NewResponse(res), nil
+}
+
+// topEntry is e with its work's texts in lang.
+func topEntry(e store.TopEntry, lang string) *sniffarrv1.TopEntry {
+	pe := &sniffarrv1.TopEntry{Rank: int32(e.Rank), Work: summary(e.Work, lang), Peers: e.Peers, Audio: workAudio(e.Work.Audio),
+		Peak: int32(e.Peak), Reentry: e.Reentry}
+	if !e.Work.FirstSeen.IsZero() {
+		pe.FirstSeen = timestamppb.New(e.Work.FirstSeen)
+	}
+	if !e.Debut.IsZero() {
+		pe.Debut, pe.OnChart = timestamppb.New(e.Debut), durationpb.New(e.OnChart)
+	}
+	if e.PrevRank > 0 {
+		pe.PrevRank = new(int32(e.PrevRank))
+	}
+	for _, s := range e.Work.Sources {
+		pe.Sources = append(pe.Sources, sources[s])
+	}
+	return pe
 }
