@@ -138,7 +138,7 @@ func (r *Recorder) Record(ctx context.Context, source string, e Event) (string, 
 	if ok {
 		se.Hash = &h
 	}
-	rec, err := r.Store.RecordArr(ctx, se)
+	rec, err := r.Store.RecordArr(ctx, se, r.now())
 	if err != nil {
 		return "", fmt.Errorf("record event: %w", err)
 	}

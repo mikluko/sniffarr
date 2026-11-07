@@ -76,7 +76,8 @@ const journalWantedFor = 24 * time.Hour
 
 // JournalEntry is one event of a torrent's life.
 type JournalEntry struct {
-	Hash    Hash
+	Hash Hash
+	// At is when the store recorded the event.
 	At      time.Time
 	Kind    string
 	Outcome string

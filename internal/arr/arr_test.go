@@ -145,6 +145,8 @@ func TestWebhookIgnores(t *testing.T) {
 func TestWebhookGrabStored(t *testing.T) {
 	ctx := context.Background()
 	f := setup(t)
+	now := time.Now().Truncate(time.Second)
+	f.rec.Now = func() time.Time { return now }
 	s := f.rec.Store
 	_, _, err := s.Insert(ctx, store.Torrent{Hash: hash(1), Name: "Alien.1979.1080p.BluRay.x264-GRP", Size: 8 << 30, Discovery: store.Sample, SeenAt: time.Now(),
 		Kind: "movie", KindLayer: store.LayerRules, TitleKey: "y:alien 1979"})
@@ -174,7 +176,8 @@ func TestWebhookGrabStored(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, journal, 3, "stored, grabbed, matched; the duplicate adds nothing")
 	require.Equal(t, store.JournalArr, journal[1].Kind)
-	require.JSONEq(t, `{"app":"radarr","source":"webhook","indexer":"Tracker (Prowlarr)","title":"Alien.1979.1080p.BluRay.x264-GRP","size":8589934592,"work":`+strconv.FormatInt(r.Work, 10)+`}`, journal[1].Detail)
+	require.JSONEq(t, `{"app":"radarr","source":"webhook","indexer":"Tracker (Prowlarr)","title":"Alien.1979.1080p.BluRay.x264-GRP","size":8589934592,"work":`+strconv.FormatInt(r.Work, 10)+
+		`,"event_at":`+strconv.FormatInt(now.Unix(), 10)+`}`, journal[1].Detail)
 
 	var rm metricdata.ResourceMetrics
 	require.NoError(t, f.reader.Collect(ctx, &rm))

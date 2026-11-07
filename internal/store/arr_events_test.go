@@ -38,7 +38,7 @@ func TestRecordArrStoredRelease(t *testing.T) {
 	other, _, err := s.RecordMatch(ctx, "y:alien 1979", Found{Hit: &Hit{Type: TypeMovie, TMDBID: 999, Title: "Alien Resurrection"}, Confidence: 0.8, Layer: LayerJev}, t0)
 	require.NoError(t, err)
 
-	r, err := s.RecordArr(ctx, grab(1, "abc", t0))
+	r, err := s.RecordArr(ctx, grab(1, "abc", t0), t0)
 	require.NoError(t, err)
 	require.True(t, r.New)
 	require.True(t, r.Stored)
@@ -75,7 +75,7 @@ func TestRecordArrStoredRelease(t *testing.T) {
 func TestRecordArrPendingRelease(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	r, err := s.RecordArr(ctx, grab(1, "abc", t0))
+	r, err := s.RecordArr(ctx, grab(1, "abc", t0), t0)
 	require.NoError(t, err)
 	require.False(t, r.Stored)
 	require.NotZero(t, r.Work)
@@ -101,20 +101,20 @@ func TestRecordArrDedupe(t *testing.T) {
 	s := open(t)
 	e := grab(1, "abc", t0)
 	e.TMDBID = 0
-	r, err := s.RecordArr(ctx, e)
+	r, err := s.RecordArr(ctx, e, t0)
 	require.NoError(t, err)
 	require.True(t, r.New)
 	require.Zero(t, r.Work)
 
 	e = grab(1, "abc", t0.Add(time.Minute))
-	r, err = s.RecordArr(ctx, e)
+	r, err = s.RecordArr(ctx, e, t0.Add(time.Minute))
 	require.NoError(t, err)
 	require.False(t, r.New, "one app, event and key is one event")
 	require.NotZero(t, r.Work)
 
 	imp := grab(1, "abc", t0)
 	imp.Event = EventImport
-	r2, err := s.RecordArr(ctx, imp)
+	r2, err := s.RecordArr(ctx, imp, t0)
 	require.NoError(t, err)
 	require.True(t, r2.New, "an import is another event")
 
@@ -134,16 +134,16 @@ func TestGrabsWeek(t *testing.T) {
 		if i == 1 {
 			e.Hash = nil
 		}
-		r, err := s.RecordArr(ctx, e)
+		r, err := s.RecordArr(ctx, e, now)
 		require.NoError(t, err)
 		work = r.Work
 	}
 	imp := grab(1, "a", now)
 	imp.Event = EventImport
-	_, err := s.RecordArr(ctx, imp)
+	_, err := s.RecordArr(ctx, imp, now)
 	require.NoError(t, err)
 	tv := ArrEvent{App: AppSonarr, Event: EventGrab, Key: "x", Type: TypeTV, TMDBID: 348, At: now}
-	_, err = s.RecordArr(ctx, tv)
+	_, err = s.RecordArr(ctx, tv, now)
 	require.NoError(t, err)
 
 	sums, err := s.Summaries(ctx, []int64{work})
@@ -163,7 +163,7 @@ func TestArrLookups(t *testing.T) {
 
 	for i, at := range []time.Time{t0, t0.Add(time.Hour)} {
 		_, err := s.RecordArr(ctx, ArrEvent{App: AppSonarr, Event: EventGrab, Key: string(rune('a' + i)), Type: TypeTV, TMDBID: 1396,
-			IDs: []ExternalID{{Provider: ProviderTVDB, ID: "81189"}}, At: at})
+			IDs: []ExternalID{{Provider: ProviderTVDB, ID: "81189"}}, At: at}, at)
 		require.NoError(t, err)
 	}
 	latest, ok, err := s.LatestArr(ctx, AppSonarr, EventGrab)

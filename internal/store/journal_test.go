@@ -395,53 +395,69 @@ func TestJournalArr(t *testing.T) {
 		_, _, err := s.Insert(ctx, x)
 		require.NoError(t, err)
 	}
-	e := grab(1, "abc", t0)
-	e.Source, e.Season, e.Episode = "webhook", 0, 0
-	rec, err := s.RecordArr(ctx, e)
+	grabbed, now := t0.Add(-90*24*time.Hour), t0.Add(time.Hour)
+	e := grab(1, "abc", grabbed)
+	e.Source, e.Season, e.Episode = "history", 0, 0
+	rec, err := s.RecordArr(ctx, e, now)
 	require.NoError(t, err)
 	require.True(t, rec.New)
 	w := strconv.FormatInt(rec.Work, 10)
-	require.JSONEq(t, `{"app":"radarr","source":"webhook","indexer":"tracker","title":"Alien.1979.1080p.BluRay","size":1073741824,"work":`+w+`}`,
-		entry(t, s, hash(1), JournalArr, EventGrab).Detail)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr"}`, entry(t, s, hash(1), JournalMatched, LayerArr).Detail)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr"}`, entry(t, s, hash(2), JournalMatched, LayerArr).Detail, "the key's other release follows")
-	_, err = s.RecordArr(ctx, e)
+	got := entry(t, s, hash(1), JournalArr, EventGrab)
+	require.JSONEq(t, `{"app":"radarr","source":"history","indexer":"tracker","title":"Alien.1979.1080p.BluRay","size":1073741824,"work":`+w+`,"event_at":`+unix(grabbed)+`}`, got.Detail)
+	require.Equal(t, now, got.At, "recorded now, whenever the grab was")
+	matched := `{"work":` + w + `,"tmdb_id":348,"type":"movie","trigger":"arr","event_at":` + unix(grabbed) + `}`
+	for _, h := range []Hash{hash(1), hash(2)} {
+		got := entry(t, s, h, JournalMatched, LayerArr)
+		require.JSONEq(t, matched, got.Detail, "the key's other release follows")
+		require.Equal(t, now, got.At)
+	}
+	_, err = s.RecordArr(ctx, e, now.Add(time.Minute))
 	require.NoError(t, err)
 	require.Equal(t, []string{"fetched/stored", "arr/grab", "matched/arr"}, entries(t, s, hash(1)), "a duplicate event writes nothing")
+	swept, err := s.SweepJournal(ctx, now.Add(-30*24*time.Hour), 100)
+	require.NoError(t, err)
+	require.Zero(t, swept, "a grab older than the retention is not swept once recorded")
 
-	pending := grab(3, "def", t0)
+	later := now.Add(time.Hour)
+	pending := grab(3, "def", grabbed)
 	pending.Source = "history"
-	_, err = s.RecordArr(ctx, pending)
+	_, err = s.RecordArr(ctx, pending, now)
 	require.NoError(t, err)
 	require.Equal(t, []string{"arr/grab"}, entries(t, s, hash(3)), "the torrent is not stored yet")
-	_, _, err = s.Insert(ctx, titled(3, "Alien.1979.720p", "y:alien 1979"))
+	stored := titled(3, "Alien.1979.720p", "y:alien 1979")
+	stored.SeenAt = later
+	_, _, err = s.Insert(ctx, stored)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr","pending":true}`, entry(t, s, hash(3), JournalMatched, LayerArr).Detail)
+	got = entry(t, s, hash(3), JournalMatched, LayerArr)
+	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr","pending":true,"event_at":`+unix(grabbed)+`}`, got.Detail)
+	require.Equal(t, later, got.At, "applied as the torrent is stored")
 	require.Equal(t, []string{"arr/grab", "fetched/stored", "matched/arr"}, entries(t, s, hash(3)))
 
 	for _, x := range []Torrent{titled(5, "Aliens.1986.1080p", "y:aliens 1986"), titled(6, "Aliens.1986.720p", "y:aliens 1986")} {
 		_, _, err := s.Insert(ctx, x)
 		require.NoError(t, err)
 	}
-	_, err = s.RecordArr(ctx, grab(7, "ghi", t0))
+	_, err = s.RecordArr(ctx, grab(7, "ghi", grabbed), now)
 	require.NoError(t, err)
 	_, _, err = s.Insert(ctx, titled(7, "Aliens.1986.2160p", "y:aliens 1986"))
 	require.NoError(t, err)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr","pending":true}`, entry(t, s, hash(7), JournalMatched, LayerArr).Detail)
-	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr"}`, entry(t, s, hash(5), JournalMatched, LayerArr).Detail, "the sibling's row is not pending")
+	require.JSONEq(t, `{"work":`+w+`,"tmdb_id":348,"type":"movie","trigger":"arr","pending":true,"event_at":`+unix(grabbed)+`}`, entry(t, s, hash(7), JournalMatched, LayerArr).Detail)
+	require.JSONEq(t, matched, entry(t, s, hash(5), JournalMatched, LayerArr).Detail, "the sibling's row is not pending")
 
 	hashless := grab(8, "jkl", t0)
 	hashless.Hash = nil
-	rec, err = s.RecordArr(ctx, hashless)
+	rec, err = s.RecordArr(ctx, hashless, t0)
 	require.NoError(t, err)
 	require.True(t, rec.New)
-	rec, err = s.RecordArr(ctx, grab(8, "jkl", t0.Add(time.Minute)))
+	rec, err = s.RecordArr(ctx, grab(8, "jkl", t0.Add(time.Minute)), t0.Add(2*time.Minute))
 	require.NoError(t, err)
 	require.False(t, rec.New)
-	_, err = s.RecordArr(ctx, grab(8, "jkl", t0.Add(2*time.Minute)))
+	_, err = s.RecordArr(ctx, grab(8, "jkl", t0.Add(3*time.Minute)), t0.Add(3*time.Minute))
 	require.NoError(t, err)
 	require.Equal(t, []string{"arr/grab"}, entries(t, s, hash(8)), "journaled once the event has its hash, and once")
-	require.Equal(t, t0.Add(time.Minute), entry(t, s, hash(8), JournalArr, EventGrab).At)
+	got = entry(t, s, hash(8), JournalArr, EventGrab)
+	require.Equal(t, t0.Add(2*time.Minute), got.At)
+	require.Contains(t, got.Detail, `"event_at":`+unix(t0.Add(time.Minute)))
 }
 
 func TestJournalProbes(t *testing.T) {

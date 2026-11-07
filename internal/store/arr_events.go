@@ -63,8 +63,9 @@ type ArrRecorded struct {
 // it lacks; with an infohash too, it points the stored torrent of the hash
 // at the work, and matches the torrent's title key to the work under
 // LayerArr. Insert does the same for a torrent stored later. The event is
-// journaled on its infohash once, when it first has one.
-func (s *Store) RecordArr(ctx context.Context, e ArrEvent) (ArrRecorded, error) {
+// journaled on its infohash once, when it first has one; its entries are
+// written at now, with the event's own time as event_at.
+func (s *Store) RecordArr(ctx context.Context, e ArrEvent, now time.Time) (ArrRecorded, error) {
 	var r ArrRecorded
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var work any
@@ -95,15 +96,15 @@ func (s *Store) RecordArr(ctx context.Context, e ArrEvent) (ArrRecorded, error) 
 			return nil
 		}
 		if !hashed {
-			if err := journal(ctx, tx, *e.Hash, e.At, JournalArr, e.Event, Detail("app", e.App, "source", e.Source, "indexer", e.Indexer, "title", e.Title,
-				"size", e.Size, "season", e.Season, "episode", e.Episode, "work", r.Work)); err != nil {
+			if err := journal(ctx, tx, *e.Hash, now, JournalArr, e.Event, Detail("app", e.App, "source", e.Source, "indexer", e.Indexer, "title", e.Title,
+				"size", e.Size, "season", e.Season, "episode", e.Episode, "work", r.Work, "event_at", e.At)); err != nil {
 				return err
 			}
 		}
 		if r.Work == 0 {
 			return tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM torrent_releases WHERE infohash = ?)", e.Hash[:]).Scan(&r.Stored)
 		}
-		r.Stored, err = applyArr(ctx, tx, *e.Hash, r.Work, e.At, false)
+		r.Stored, err = applyArr(ctx, tx, *e.Hash, r.Work, e.At, now, e.At, false)
 		return err
 	})
 	return r, err
@@ -129,11 +130,12 @@ func ensureWork(ctx context.Context, tx *sql.Tx, typ string, tmdbID int, ids []E
 }
 
 // applyArr points the stored torrent of the hash at the work and matches
-// its title key, if it has one, to the work under LayerArr, which points
-// every torrent of the key at it; it reports whether the torrent is stored.
-// Every torrent it points elsewhere is journaled, and the torrent of the
-// hash as pending when the work comes from an event recorded before it.
-func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at time.Time, pending bool) (bool, error) {
+// its title key, if it has one, to the work under LayerArr at the time,
+// which points every torrent of the key at it; it reports whether the
+// torrent is stored. Every torrent it points elsewhere is journaled at now
+// with eventAt, the time of the event the work comes from, and the torrent
+// of the hash as pending when that event was recorded before it.
+func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at, now, eventAt time.Time, pending bool) (bool, error) {
 	var key sql.NullString
 	var before sql.NullInt64
 	err := tx.QueryRowContext(ctx, "SELECT title_key, work FROM torrent_releases WHERE infohash = ?", h[:]).Scan(&key, &before)
@@ -148,7 +150,7 @@ func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at time.Time,
 	if err := tx.QueryRowContext(ctx, "SELECT type, tmdb_id FROM tmdb_works WHERE id = ?", work).Scan(&typ, &tmdbID); err != nil {
 		return false, err
 	}
-	d := Detail("work", work, "tmdb_id", tmdbID, "type", typ, "trigger", TriggerArr)
+	d := Detail("work", work, "tmdb_id", tmdbID, "type", typ, "trigger", TriggerArr, "event_at", eventAt)
 	own := d
 	if pending {
 		own = maps.Clone(d)
@@ -160,7 +162,7 @@ func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at time.Time,
 		}
 	}
 	if pending || before.Int64 != work {
-		if err := journal(ctx, tx, h, at, JournalMatched, LayerArr, own); err != nil {
+		if err := journal(ctx, tx, h, now, JournalMatched, LayerArr, own); err != nil {
 			return false, err
 		}
 	}
@@ -176,21 +178,21 @@ func applyArr(ctx context.Context, tx *sql.Tx, h Hash, work int64, at time.Time,
 	if err != nil {
 		return false, err
 	}
-	return true, journalEach(ctx, tx, siblings, journalFanOut, at, JournalMatched, LayerArr, d)
+	return true, journalEach(ctx, tx, siblings, journalFanOut, now, JournalMatched, LayerArr, d)
 }
 
 // applyPendingArr applies, as RecordArr does, the work of the latest event
 // with a work that has the hash, if there is one.
 func applyPendingArr(ctx context.Context, tx *sql.Tx, h Hash, at time.Time) error {
-	var work int64
-	err := tx.QueryRowContext(ctx, "SELECT work FROM arr_events WHERE infohash = ? AND work IS NOT NULL ORDER BY at DESC, id DESC LIMIT 1", h[:]).Scan(&work)
+	var work, happened int64
+	err := tx.QueryRowContext(ctx, "SELECT work, at FROM arr_events WHERE infohash = ? AND work IS NOT NULL ORDER BY at DESC, id DESC LIMIT 1", h[:]).Scan(&work, &happened)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	_, err = applyArr(ctx, tx, h, work, at, true)
+	_, err = applyArr(ctx, tx, h, work, at, at, time.Unix(happened, 0), true)
 	return err
 }
 
