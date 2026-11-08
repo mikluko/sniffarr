@@ -96,8 +96,7 @@
     {{- else}}{{template "tph" (tipArgs "—" ($.T "torrents.noposter"))}}{{end}}{{else}}{{template "tph" (tipArgs "?" ($.T "torrents.unmatched"))}}{{end}}
     <a href="/t/{{.InfoHash}}" class="tname">{{.Name}}</a><span class="pe">{{$.Num .Peers}}</span>
     {{with .Work}}<a class="orig" href="{{$.WorkURL .Path}}">{{.TMDB.Title}}{{if .TMDB.Year}} · {{.TMDB.Year}}{{end}}</a>{{end}}
-    <span class="tmeta mu">{{$.Size .Size}}{{with .Quality}} · {{$.T (concat "quality." .)}}{{end}} · {{$.T (concat "kind." .Kind)}} · {{$.T (concat "source." .Source)}}
-      {{- $r := .}}{{range $.VoiceLangs}}{{$a := audioOf $r.Audio .}}{{if or $a.Marker $a.Probability}} · {{.}} {{if $a.Marker}}<b>{{$.AudioCell $a}}</b>{{else}}{{$.AudioCell $a}}{{end}}{{end}}{{end}}</span>
+    <span class="tmeta mu">{{range $i, $p := $.Meta .}}{{if $i}} · {{end}}{{with $p.Label}}{{.}} {{end}}{{if $p.Strong}}<b>{{$p.Text}}</b>{{else}}{{$p.Text}}{{end}}{{end}}</span>
   </div>
   {{end}}
 </div>

@@ -219,6 +219,13 @@ func TestTorrentsMarkup(t *testing.T) {
 	if body := render(undecided); !strings.Contains(body, tip("неизвестно", "Вид ещё не определён.")) {
 		t.Error("no tooltip on a kind no layer decided")
 	}
+	bare := SampleTorrents(b, "", Filters{})
+	bare.Results.Rows[0].Quality, bare.Results.Rows[0].Source = "", "none"
+	zero := 0.0
+	bare.Results.Rows[0].Audio = []Audio{{Lang: "ru", Probability: &zero}}
+	if body := render(bare); !strings.Contains(body, "<span class=\"tmeta mu\">22,0 ГБ · фильм</span>") {
+		t.Error("a meta line with empty fields keeps their separators or a dub nobody asserts")
+	}
 	for _, not := range []string{`class="set"`, `class="tfreset"`, `<span class="mu"> · `, `· —`} {
 		if strings.Contains(body, not) {
 			t.Errorf("%s without a filter set", not)
