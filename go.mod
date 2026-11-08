@@ -143,6 +143,7 @@ require (
 	zombiezen.com/go/sqlite v1.4.2 // indirect
 )
 
-// anacrolix/torrent#1193: a v2 torrent with empty files panics in mustGetOnlyFile once its info is
-// set. The fork carries the fix, anacrolix/torrent#1194, until it lands.
-replace github.com/anacrolix/torrent => github.com/mikluko/torrent v1.61.1-0.20261108154127-74d7dda83d4d
+// The fork's sniffarr branch carries fixes for two panics on setting a v2 torrent's info, until
+// they land: empty files (anacrolix/torrent#1193, #1194) and pieces without a hash yet
+// (anacrolix/torrent#1195).
+replace github.com/anacrolix/torrent => github.com/mikluko/torrent v1.61.1-0.20261108161222-724cf8862b3d
