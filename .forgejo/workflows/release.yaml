@@ -144,6 +144,8 @@ jobs:
       - uses: https://github.com/actions/setup-go@v7
         with:
           go-version-file: go.mod
+          # GitHub release downloads, the default, fail from the runners with 5xx.
+          go-download-base-url: https://go.dev/dl
       - name: Build
         env:
           VERSION: ${{ needs.plan.outputs.version }}
