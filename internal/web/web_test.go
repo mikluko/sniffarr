@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -917,7 +918,7 @@ func TestCharts(t *testing.T) {
 	require.Equal(t, "20.10", daily.Bars[29].Label)
 	require.True(t, daily.Bars[29].Partial)
 	require.EqualValues(t, 2, daily.Bars[29].Value, "today in the zone runs from 21:00 UTC yesterday")
-	require.EqualValues(t, 3, daily.Bars[29].Projected, "the mean of 2 over the last 24 hours and 2 by 15:00, 3.2 by midnight")
+	require.EqualValues(t, 3, daily.Bars[29].Projected, "2 over the last 24 hours at 0.16, 2 by 15:00, 3.2 by midnight, at 0.84")
 	require.Equal(t, int64(5), daily.YTicks[0], "the scale holds the projection, 3 over the bars' 2")
 	require.EqualValues(t, 1, daily.Bars[28].Value)
 	require.EqualValues(t, 1, daily.Bars[27].Value, "Sunday")
@@ -929,7 +930,7 @@ func TestCharts(t *testing.T) {
 	require.Equal(t, "19.10", weekly.Bars[25].Label, "the Monday of this week")
 	require.True(t, weekly.Bars[25].Partial)
 	require.EqualValues(t, 3, weekly.Bars[25].Value)
-	require.EqualValues(t, 8, weekly.Bars[25].Projected, "the mean of 3 over the last 7 days and 3 a day and five eighths in, 13 a week")
+	require.EqualValues(t, 7, weekly.Bars[25].Projected, "3 over the last 7 days at 0.55, 3 a day and five eighths in, 13 a week, at 0.45")
 	require.EqualValues(t, 1, weekly.Bars[24].Value)
 	require.Equal(t, "12.10", weekly.Bars[24].Label)
 	require.False(t, weekly.Bars[24].Partial)
@@ -939,6 +940,21 @@ func TestCharts(t *testing.T) {
 	require.Equal(t, "Oct 20, 15:00", hourly.Bars[47].Label, "labels in the page's locale")
 	require.Equal(t, "Oct 20", daily.Bars[29].Label)
 	require.Equal(t, "Oct 19", weekly.Bars[25].Label)
+}
+
+func TestProjection(t *testing.T) {
+	require.Zero(t, periodWeight(0))
+	require.InDelta(t, 0.75, periodWeight(0.5), 1e-9, "the period outweighs the window by the middle")
+	require.InDelta(t, 1, periodWeight(1), 1e-9)
+	require.InDelta(t, 1, periodWeight(2), 1e-9, "past the end is the end")
+	require.Zero(t, periodWeight(-1))
+	for d := 0.05; d < 1; d += 0.05 {
+		require.Greater(t, periodWeight(d), periodWeight(d-0.05))
+	}
+	require.Equal(t, 5.0, projection(5, 1, 0), "nothing of the period has passed")
+	require.InDelta(t, 0.25*4+0.75*6, projection(4, 3, 0.5), 1e-9)
+	require.InDelta(t, 9.0/8*math.Log(9), projection(0, 1, 1e-9), 1e-6, "one sighting in the first instant stays bounded")
+	require.InDelta(t, 7, projection(100, 7, 1), 1e-9, "a finished period is its count")
 }
 
 // locales knows the token "ru-token" as a person with the locale ru.

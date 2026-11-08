@@ -29,8 +29,8 @@ type Bar struct {
 	Label      string // leads the bar's tooltip
 	Value      int64
 	Partial    bool // the period is not over: drawn lighter, out of Max and Min
-	// Projected is what the unfinished period comes to at its pace so far,
-	// 0 for none; PY and PH outline it.
+	// Projected is what the unfinished period is projected to come to, 0 for
+	// none; PY and PH outline it.
 	Projected int64
 	PY, PH    float64
 }

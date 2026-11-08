@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed probe that a request or a search ordered is retried by a message scheduled on `sniffarr.orders.probe.retry.<infohash>`.
 - `RequestProbe` journals every request, and orders the probe of a release without peers at once.
 - A Torznab search orders no probe of a release without peers.
+- The projection of the current hour, day and week on the data page weighs the period's pace so far against the count over the same length of time ending now, the period's weight rising from none at its start to three quarters halfway and all at its end, from the period's first moment.
 
 ### Fixed
 

@@ -937,9 +937,7 @@ func (s *server) noProbers(ctx context.Context) bool {
 // charts folds counts per clock hour, the latest first, into bars for the
 // last 48 hours, the last 30 calendar days and the last 26 calendar weeks,
 // Monday first, in b's zone, labelled by b.Time and b.Date; the last bar of
-// each is the current, unfinished period, outlined up to a projection: the
-// mean of the count over the same length of time ending now and of the
-// period's pace so far, the latter once a tenth of it has passed.
+// each is the current, unfinished period, outlined up to its projection.
 func charts(b ui.Base, now time.Time, hours []int64) (hourly, daily, weekly ui.Chart) {
 	const nh, nd, nw = 48, 30, 26
 	loc := b.Loc
@@ -970,11 +968,7 @@ func charts(b ui.Base, now time.Time, hours []int64) (hourly, daily, weekly ui.C
 	}
 	pace := func(v int64, start, end time.Time) int64 {
 		period := end.Sub(start)
-		r := rolling(period)
-		if done := float64(now.Sub(start)) / float64(period); done >= 0.1 {
-			r = (r + float64(v)/done) / 2
-		}
-		return int64(math.Round(r))
+		return int64(math.Round(projection(rolling(period), v, float64(now.Sub(start))/float64(period))))
 	}
 	dv, wv := dayWeekTotals(hours, first, today, week, loc, nd, nw)
 	var hv []int64
@@ -987,6 +981,26 @@ func charts(b ui.Base, now time.Time, hours []int64) (hourly, daily, weekly ui.C
 	return ui.NewBarChart(hv, hl, 12, true, pace(hv[len(hv)-1], first, first.Add(time.Hour))),
 		ui.NewBarChart(dv, dl, 7, true, pace(dv[nd-1], today, today.AddDate(0, 0, 1))),
 		ui.NewBarChart(wv, wl, 4, true, pace(wv[nw-1], week, week.AddDate(0, 0, 7)))
+}
+
+// projection is what an unfinished period comes to: the count over the
+// same length of time ending now, rolling, weighed against the period's own
+// pace, v by the share done, whose weight periodWeight gives.
+func projection(rolling float64, v int64, done float64) float64 {
+	w := periodWeight(done)
+	if w == 0 {
+		return rolling
+	}
+	return (1-w)*rolling + w*float64(v)/done
+}
+
+// periodWeight is the weight of a period's own pace once the share done of
+// it has passed: 0 at its start, 3/4 halfway, 1 at its end, rising as
+// 1-9^-done scaled to reach 1. It falls to 0 as fast as done, so the pace
+// over a sliver of the period stays bounded.
+func periodWeight(done float64) float64 {
+	done = min(max(done, 0), 1)
+	return (1 - math.Pow(9, -done)) * 9 / 8
 }
 
 // dayWeekTotals sums counts per clock hour, the latest at first, into the nd
