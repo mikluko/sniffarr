@@ -199,7 +199,7 @@ func TestInProgress(t *testing.T) {
 	require.Equal(t, 2, info.NumAckPending)
 	cancel()
 	require.ErrorIs(t, <-done, context.Canceled)
-	batch, err := c.FetchNoWait(5)
+	batch, err := c.Fetch(5, jetstream.FetchMaxWait(200*time.Millisecond))
 	require.NoError(t, err)
 	var back []uint64
 	for m := range batch.Messages() {
