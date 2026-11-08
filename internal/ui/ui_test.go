@@ -835,8 +835,8 @@ func TestTorrentMagnetHref(t *testing.T) {
 	}
 }
 
-// Every page preloads both faces at the versioned URLs its @font-face rules
-// name, and those URLs serve the font for a year.
+// Every page preloads both faces at the versioned URLs of libarr's /ui/ its
+// @font-face rules name, and those URLs serve the font for a year.
 func TestFonts(t *testing.T) {
 	r, err := New()
 	if err != nil {
@@ -849,7 +849,7 @@ func TestFonts(t *testing.T) {
 	}
 	body := w.Body.String()
 	for _, f := range []string{"fonts/jetbrains-mono-400.woff2", "fonts/jetbrains-mono-600.woff2"} {
-		u := r.Static().URL(f)
+		u := r.shared.URL(f)
 		if !strings.Contains(u, "?v=") {
 			t.Fatalf("%s has no version: %q", f, u)
 		}
@@ -860,13 +860,13 @@ func TestFonts(t *testing.T) {
 			t.Errorf("no @font-face of %s; want %s", f, want)
 		}
 		sw := httptest.NewRecorder()
-		r.Static().ServeHTTP(sw, httptest.NewRequest("GET", u, nil))
+		r.Shared().ServeHTTP(sw, httptest.NewRequest("GET", u, nil))
 		if sw.Code != 200 || sw.Header().Get("Content-Type") != "font/woff2" || sw.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
 			t.Errorf("%s: %d %q %q", u, sw.Code, sw.Header().Get("Content-Type"), sw.Header().Get("Cache-Control"))
 		}
 	}
 	sw := httptest.NewRecorder()
-	r.Static().ServeHTTP(sw, httptest.NewRequest("GET", "/static/fonts/OFL.txt", nil))
+	r.Shared().ServeHTTP(sw, httptest.NewRequest("GET", "/ui/fonts/OFL.txt", nil))
 	if sw.Code != 200 {
 		t.Errorf("OFL.txt: %d", sw.Code)
 	}
@@ -930,7 +930,7 @@ func TestCopyButtons(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := w.Body.String()
-	svg, err := r.Icon("copy")
+	svg, err := r.shared.Icon("copy")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -951,7 +951,7 @@ func TestIcons(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"copy", "refresh", "search"} {
-		svg, err := r.Icon(name)
+		svg, err := r.shared.Icon(name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -961,7 +961,7 @@ func TestIcons(t *testing.T) {
 			}
 		}
 	}
-	if _, err := r.Icon("nope"); err == nil {
+	if _, err := r.shared.Icon("nope"); err == nil {
 		t.Error("an unknown icon is not an error")
 	}
 }
@@ -1006,7 +1006,7 @@ func TestDataMarkup(t *testing.T) {
 		}
 		return w.Body.String()
 	}
-	svg, err := r.Icon("refresh")
+	svg, err := r.shared.Icon("refresh")
 	if err != nil {
 		t.Fatal(err)
 	}

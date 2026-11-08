@@ -57,7 +57,6 @@ Proposals, not code; see [CONTRIBUTING](CONTRIBUTING.md).
 ## License
 
 MIT; see [LICENSE](LICENSE). The web UI ships JetBrains Mono under the SIL
-Open Font License 1.1, in
-[internal/ui/static/fonts/OFL.txt](internal/ui/static/fonts/OFL.txt), and
-Lucide icons under the ISC License, in
-[internal/ui/icons/LICENSE](internal/ui/icons/LICENSE).
+Open Font License 1.1 and Lucide icons under the ISC License, both from
+[libarr](https://sarak.sh/mikluko/libarr)'s `ui` package, which carries
+their license files.

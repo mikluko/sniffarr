@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,7 +17,7 @@ import (
 	"sarak.sh/mikluko/libarr/version"
 )
 
-//go:embed templates/*.html static i18n/*.json icons/*.svg
+//go:embed templates/*.html static i18n/*.json
 var files embed.FS
 
 // Page names and the fragments (htmx targets) each one can return alone.
@@ -115,7 +116,6 @@ type Renderer struct {
 	msgs   map[string]map[string]string
 	static *static.Files
 	shared *libui.Assets
-	icons  map[string]template.HTML
 }
 
 func New() (*Renderer, error) {
@@ -130,13 +130,8 @@ func New() (*Renderer, error) {
 	if r.shared, err = libui.New("/ui/"); err != nil {
 		return nil, err
 	}
-	if r.icons, err = loadIcons(); err != nil {
-		return nil, err
-	}
 	funcs := template.FuncMap{
 		"static":      r.static.URL,
-		"shared":      r.shared.URL,
-		"icon":        r.Icon,
 		"kinds":       func() []string { return Kinds },
 		"sources":     func() []string { return Sources },
 		"voiceModes":  func() []string { return VoiceModes },
@@ -191,6 +186,7 @@ func New() (*Renderer, error) {
 		"pathEscape":  url.PathEscape,
 		"queryEscape": url.QueryEscape,
 	}
+	maps.Copy(funcs, r.shared.FuncMapNamed("shared", "icon"))
 	for name := range pages {
 		t, err := template.New("layout.html").Funcs(funcs).ParseFS(files,
 			"templates/layout.html", "templates/chart.html", "templates/"+name+".html")
@@ -275,41 +271,14 @@ func (r *Renderer) RenderStatus(w http.ResponseWriter, req *http.Request, page s
 	return err
 }
 
-// loadIcons reads every icons/<name>.svg, keyed by name.
-func loadIcons() (map[string]template.HTML, error) {
-	paths, err := fs.Glob(files, "icons/*.svg")
-	if err != nil {
-		return nil, err
-	}
-	icons := map[string]template.HTML{}
-	for _, p := range paths {
-		b, err := files.ReadFile(p)
-		if err != nil {
-			return nil, err
-		}
-		icons[strings.TrimSuffix(strings.TrimPrefix(p, "icons/"), ".svg")] = template.HTML(strings.TrimSpace(string(b)))
-	}
-	return icons, nil
-}
-
-// Icon returns the inline SVG of the icon name, drawn in currentColor and
-// hidden from assistive technology; an unknown name is an error.
-func (r *Renderer) Icon(name string) (template.HTML, error) {
-	svg, ok := r.icons[name]
-	if !ok {
-		return "", fmt.Errorf("no icon %q", name)
-	}
-	return svg, nil
-}
-
-// Static serves /static/: app.css, app.js, the fonts and the vendored htmx
-// and idiomorph, at the versioned URLs its URL gives.
+// Static serves /static/: app.css, app.js and the TMDB logo, at the
+// versioned URLs its URL gives.
 func (r *Renderer) Static() *static.Files {
 	return r.static
 }
 
 // Shared serves /ui/, libarr's design system, of which the pages load
-// app.js.
+// app.js, the fonts, htmx and idiomorph.
 func (r *Renderer) Shared() http.Handler {
 	return r.shared.Handler()
 }

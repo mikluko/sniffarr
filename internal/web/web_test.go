@@ -878,7 +878,7 @@ func TestData(t *testing.T) {
 	require.NotContains(t, body, "Grafana")
 	frag := fragment(t, get(t, h, "/", "data"), "data")
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<main id="data"`))
-	require.Equal(t, http.StatusOK, get(t, h, "/static/vendor/htmx.min.js", "").Code)
+	require.Equal(t, http.StatusOK, get(t, h, "/ui/vendor/htmx.min.js", "").Code)
 }
 
 func TestCharts(t *testing.T) {
