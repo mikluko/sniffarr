@@ -266,7 +266,8 @@ seconds the start of every process has. At start the API connects
 to it in process and creates or updates the pipeline's streams: sightings,
 on a subject per discovery, `sniffarr.sightings.announce` and
 `sniffarr.sightings.sample`, which drop a sighting repeated within 5 minutes
-under the same `Nats-Msg-Id` header, the infohash in hex, and keep one
+under the same `Nats-Msg-Id` header, the discovery and the infohash in hex,
+so an announce after a sample of the same infohash is kept, and keep one
 nobody consumed for a day, fetch and probe orders on a subject per
 priority, P0 to P3, and fetch and probe results. The order and result
 streams are work queues without limits: a message stays until a consumer

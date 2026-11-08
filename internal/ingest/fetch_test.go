@@ -168,7 +168,7 @@ func TestSight(t *testing.T) {
 	require.NoError(t, err)
 	info, err := stream.Info(ctx)
 	require.NoError(t, err)
-	require.Equal(t, uint64(4), info.State.Msgs, "every sighting but the duplicates is on the stream")
+	require.Equal(t, uint64(5), info.State.Msgs, "every sighting but the repeated sample of 3 is on the stream; the announce of 1 is not a duplicate of its sample")
 
 	f.run(t)
 	q := f.queued(t)

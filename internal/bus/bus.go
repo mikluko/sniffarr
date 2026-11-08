@@ -130,8 +130,10 @@ func Ensure(ctx context.Context, js jetstream.JetStream) error {
 }
 
 // SightingMsg returns the message of a sighting of h by the discovery,
-// store.Announce or store.Sample, its Nats-Msg-Id the infohash in hex, and
-// false for another discovery.
+// store.Announce or store.Sample, its Nats-Msg-Id the discovery and the
+// infohash in hex, and false for another discovery. A sighting is a
+// duplicate only of one by the same discovery, so an announce after a sample
+// of the same infohash is kept.
 func SightingMsg(h [20]byte, discovery string) (*nats.Msg, bool) {
 	var subject string
 	switch discovery {
@@ -143,6 +145,6 @@ func SightingMsg(h [20]byte, discovery string) (*nats.Msg, bool) {
 		return nil, false
 	}
 	m := &nats.Msg{Subject: subject, Header: nats.Header{}, Data: h[:]}
-	m.Header.Set(jetstream.MsgIDHeader, hex.EncodeToString(h[:]))
+	m.Header.Set(jetstream.MsgIDHeader, discovery+":"+hex.EncodeToString(h[:]))
 	return m, true
 }
