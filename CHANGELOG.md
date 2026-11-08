@@ -10,13 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The metric `sniffarr.dht.sample_queries` counts the `sample_infohashes` queries the sniff sends, by `sniffarr.dht.outcome`: `answered`, `timeout` or `error`.
-- With the chart's `api.nats.enabled`, the sniff, fetch and probe pods get `SNIFFARR_NATS_URL`, the `<release>-api` Service port `nats`, and `SNIFFARR_NATS_PASSWORD` from `api.existingSecret`.
-- `-sniff` publishes its sightings to the API's NATS server, in process with `-api` and otherwise at `SNIFFARR_NATS_URL` with `SNIFFARR_NATS_PASSWORD`, and the API queues them from there in batches, announced ones first; without either it reports to `Sight` as before.
-- The API names the stored infohashes among the sightings it takes on `sniffarr.stored`, to which the NATS user `worker` may subscribe.
+- With `SNIFFARR_NATS_URL`, the NATS server `-api` embeds connects to that upstream server as a leaf node, with `SNIFFARR_NATS_PASSWORD` or the `.creds` file `SNIFFARR_NATS_CREDS`, its streams kept in its own JetStream domain, `sniffarr`.
 
 ### Changed
 
-- **Breaking:** sightings go to `sniffarr.sightings.announce` and `sniffarr.sightings.sample`, by discovery, in place of `sniffarr.sightings`.
+- **Breaking:** `SNIFFARR_NATS_PASSWORD` is the password of the leaf node's user at `SNIFFARR_NATS_URL`, refused without it.
+- `IngestService.Sight` publishes the sightings to the API's sightings stream, from which the API queues them in batches, announced ones first, and `SightResponse.known` counts the repeats the stream drops within 5 minutes, not the queued infohashes.
+- **Breaking:** `IngestService.Sight` refuses `SOURCE_ARR`.
 - The start of `-api` allows up to 5 minutes for the NATS server to recover its store, on top of the 15 seconds the start of every process has.
 
 ### Fixed
@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A name with a year and a resolution but no source or encoding tag, `Movie.2026.720p`, is no longer taken for a movie by the rules; `WEB-DLRip` counts as a source tag.
 - The rules read a release's video source from its name, `UHD.Bluray.REMUX` as remux and `WEB-DLRip` as web, so the card and the source filters no longer show none for it, and stored releases get theirs at the first start.
 - A work's TMDB vote count agrees with its number in the web UI, as in "3 192 голоса" and "1 vote".
+
+### Removed
+
+- **Breaking:** the NATS server's listener for workers, with `SNIFFARR_NATS_ADDR`, the user `worker`, and the chart's `api.nats.enabled` and port `nats`.
 
 ## [0.45.0] - 2026-11-08
 

@@ -207,11 +207,13 @@ func newChecker(cfg Config, log *slog.Logger) *latest.Checker {
 	return &latest.Checker{HTTP: &http.Client{Timeout: releaseTimeout}, Log: log}
 }
 
-// newIngest returns the ingest service the API serves, whose Intake takes the
-// sightings stream.
-func newIngest(cfg Config, s *store.Store, q *store.Tasks, log *slog.Logger) *ingest.Service {
-	return &ingest.Service{Store: s, Tasks: q, Log: log, Lease: cfg.Lease, Attempts: cfg.Attempts, Backoff: cfg.Backoff,
+// newIngest returns the ingest service the API serves, whose Sight publishes
+// to the sightings stream, from b's start, and whose Intake takes it.
+func newIngest(lc fx.Lifecycle, cfg Config, s *store.Store, q *store.Tasks, b *broker.Broker, log *slog.Logger) *ingest.Service {
+	ing := &ingest.Service{Store: s, Tasks: q, Log: log, Lease: cfg.Lease, Attempts: cfg.Attempts, Backoff: cfg.Backoff,
 		Scripts: cfg.Scripts, Languages: cfg.Languages, Probe: cfg.Probe, Probes: cfg.Probes}
+	lc.Append(fx.StartHook(func() { ing.JetStream = b.JetStream }))
+	return ing
 }
 
 func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logger) *arr.Recorder {

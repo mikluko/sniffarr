@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"math"
-	"net"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -20,7 +19,6 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/app/db"
 	"sarak.sh/mikluko/sniffarr/internal/app/dht"
 	"sarak.sh/mikluko/sniffarr/internal/app/fetch"
-	"sarak.sh/mikluko/sniffarr/internal/app/natsconn"
 	"sarak.sh/mikluko/sniffarr/internal/app/sniff"
 	"sarak.sh/mikluko/sniffarr/internal/app/ui"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
@@ -57,7 +55,6 @@ type config struct {
 	client   client.Config
 	dht      dht.Config
 	sniff    sniff.Config
-	nats     natsconn.Config
 	fetch    fetch.Config
 	logLevel slog.Level
 	// waitAPI is -wait-api: wait for the API at client.URL to serve this
@@ -82,10 +79,6 @@ const defaultStatsInterval = 5 * time.Minute
 
 // defaultUIAddr is the UI's listen address when SNIFFARR_UI_ADDR is unset.
 const defaultUIAddr = ":8081"
-
-// defaultNATSAddr is the workers' NATS listen address when
-// SNIFFARR_NATS_ADDR is unset.
-const defaultNATSAddr = ":4222"
 
 // load reads the configuration from args and lookup, writing flag usage and
 // errors to output. Each component's variables are read only when it is on.
@@ -176,9 +169,6 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	if c.client, err = loadClient(c.on, getenv); err != nil {
 		return c, err
 	}
-	if c.nats, err = loadNATS(c.on, getenv); err != nil {
-		return c, err
-	}
 	if c.on.ui {
 		c.ui = ui.Config{Addr: or(getenv("SNIFFARR_UI_ADDR"), defaultUIAddr), OIDCIssuer: getenv("SNIFFARR_OIDC_ISSUER"), SeerrURL: getenv("SNIFFARR_SEERR_URL")}
 		if c.ui.RadarrURL, err = rootURL(getenv, "SNIFFARR_RADARR_URL"); err != nil {
@@ -266,30 +256,6 @@ func loadClient(on components, getenv func(string) string) (client.Config, error
 		return c, errors.New("SNIFFARR_URL: want an http or https URL")
 	}
 	c.URL = u
-	return c, nil
-}
-
-// loadNATS reads where -sniff publishes its sightings: in this process with
-// -api, where SNIFFARR_NATS_URL must be unset, else at SNIFFARR_NATS_URL as
-// the user worker with SNIFFARR_NATS_PASSWORD. Without either, -sniff
-// reports to Sight.
-func loadNATS(on components, getenv func(string) string) (natsconn.Config, error) {
-	var c natsconn.Config
-	raw := getenv("SNIFFARR_NATS_URL")
-	switch {
-	case !on.sniff || raw == "":
-		return c, nil
-	case on.api:
-		return c, errors.New("SNIFFARR_NATS_URL is set, but -api runs the NATS server in this process: unset it")
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "nats" && u.Scheme != "tls" || u.Host == "" {
-		return c, errors.New("SNIFFARR_NATS_URL: want a nats or tls URL with a host")
-	}
-	if c.Password = getenv("SNIFFARR_NATS_PASSWORD"); c.Password == "" {
-		return c, errors.New("SNIFFARR_NATS_URL is set without SNIFFARR_NATS_PASSWORD, the password of the user worker")
-	}
-	c.URL = raw
 	return c, nil
 }
 
@@ -392,25 +358,33 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 }
 
 // loadBroker reads the embedded NATS server's settings: its store, nats
-// beside the database unless SNIFFARR_NATS_DIR is set, and the workers'
-// listener, on only with SNIFFARR_NATS_PASSWORD.
+// beside the database unless SNIFFARR_NATS_DIR is set, and the upstream it
+// connects to as a leaf node, none unless SNIFFARR_NATS_URL is set.
 func loadBroker(getenv func(string) string, dbPath string) (broker.Config, error) {
-	b := broker.Config{Dir: or(getenv("SNIFFARR_NATS_DIR"), filepath.Join(filepath.Dir(dbPath), "nats"))}
-	addr := getenv("SNIFFARR_NATS_ADDR")
-	if b.Password = getenv("SNIFFARR_NATS_PASSWORD"); b.Password == "" {
-		if addr != "" {
-			return b, errors.New("SNIFFARR_NATS_ADDR: the workers' listener is off without SNIFFARR_NATS_PASSWORD")
-		}
+	b := broker.Config{Dir: or(getenv("SNIFFARR_NATS_DIR"), filepath.Join(filepath.Dir(dbPath), "nats")),
+		Password: getenv("SNIFFARR_NATS_PASSWORD"), Creds: getenv("SNIFFARR_NATS_CREDS")}
+	raw := getenv("SNIFFARR_NATS_URL")
+	switch {
+	case raw == "" && b.Password != "":
+		return b, errors.New("SNIFFARR_NATS_PASSWORD is set without SNIFFARR_NATS_URL")
+	case raw == "" && b.Creds != "":
+		return b, errors.New("SNIFFARR_NATS_CREDS is set without SNIFFARR_NATS_URL")
+	case b.Password != "" && b.Creds != "":
+		return b, errors.New("SNIFFARR_NATS_PASSWORD and SNIFFARR_NATS_CREDS are both set: set one")
+	case raw == "":
 		return b, nil
 	}
-	b.Addr = or(addr, defaultNATSAddr)
-	_, port, err := net.SplitHostPort(b.Addr)
-	if err == nil {
-		_, err = strconv.ParseUint(port, 10, 16)
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "nats-leaf" && u.Scheme != "tls" && u.Scheme != "nats" || u.Host == "" {
+		return b, errors.New("SNIFFARR_NATS_URL: want a nats-leaf, tls or nats URL with a host")
 	}
-	if err != nil {
-		return b, errors.New("SNIFFARR_NATS_ADDR: want host:port, the host optional and the port 0 to 65535")
+	if _, ok := u.User.Password(); ok {
+		return b, errors.New("SNIFFARR_NATS_URL carries a password: set SNIFFARR_NATS_PASSWORD")
 	}
+	if b.Password != "" && u.User.Username() == "" {
+		return b, errors.New("SNIFFARR_NATS_PASSWORD is set, but SNIFFARR_NATS_URL names no user")
+	}
+	b.Upstream = u
 	return b, nil
 }
 

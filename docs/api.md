@@ -34,9 +34,9 @@ error and a 404 included, carries the header `Server: sniffarr/<version>`
 | `sniffarr.v1.BrowseService` | `RequestProbe`  |
 | `sniffarr.v1.BrowseService` | `RequestMatch`  |
 
-- `Sight` is client-streaming: it queues every infohash the server has neither
-  stored, rejected nor queued, and returns how many were new and how many
-  known, and, per infohash sent, whether it is a stored torrent.
+- `Sight` is client-streaming: it takes sampled and announced infohashes,
+  hands them to the queue's intake, and returns how many were new and how
+  many known, and, per infohash sent, whether it is a stored torrent.
 - `Fetch` is bidirectional: the client grants credit, one unit per task it can
   take, the server answers with a task per unit, and the client returns each
   task's result, metadata or a failure, on the same stream. A task with

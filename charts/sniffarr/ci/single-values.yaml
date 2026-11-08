@@ -9,8 +9,6 @@ single:
 
 api:
   existingSecret: sniffarr-tokens
-  nats:
-    enabled: true
   env:
     SNIFFARR_AUDIO_LANGUAGES: ru,en
   persistence:

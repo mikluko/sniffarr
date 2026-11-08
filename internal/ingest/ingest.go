@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/metric"
 
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/names"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
@@ -29,7 +31,7 @@ const (
 	DefaultPoll     = time.Second
 )
 
-// sightBatch is how many sightings Sight stores in one transaction.
+// sightBatch is how many sightings Sight checks and publishes at once.
 const sightBatch = 500
 
 // maxCredit caps the credit one Fetch stream may hold.
@@ -54,6 +56,8 @@ type Service struct {
 	// Poll is how often a Fetch stream with credit looks for free tasks
 	// besides when hashes are queued or released; DefaultPoll.
 	Poll time.Duration
+	// JetStream is the connection Sight publishes sightings on.
+	JetStream jetstream.JetStream
 	// IntakeBatch is how many sightings Intake takes at once;
 	// DefaultIntakeBatch.
 	IntakeBatch int
@@ -107,18 +111,13 @@ func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffa
 		if len(batch) == 0 {
 			return nil
 		}
-		queued, known, stored, err := s.sight(ctx, batch)
+		known, stored, err := s.sight(ctx, batch)
 		if err != nil {
 			return err
 		}
-		res.New += int64(queued)
+		res.New += int64(len(batch) - known)
 		res.Known += int64(known)
 		res.Stored = append(res.Stored, stored...)
-		s.metrics().sightings.Add(ctx, int64(queued), resultNew)
-		s.metrics().sightings.Add(ctx, int64(known), resultKnown)
-		if queued > 0 {
-			s.wake.notify()
-		}
 		batch = batch[:0]
 		return nil
 	}
@@ -148,34 +147,48 @@ func (s *Service) Sight(ctx context.Context, stream *connect.ClientStream[sniffa
 	return connect.NewResponse(&res), nil
 }
 
-// sight enqueues the sightings of hashes neither stored nor rejected, and
-// returns how many it queued, how many were known, and, per sighting in
-// order, whether its hash is a stored torrent.
-func (s *Service) sight(ctx context.Context, batch []store.Sighting) (queued, known int, stored []bool, err error) {
+// sight publishes the sightings to the sightings stream and waits for the
+// server's acknowledgements; it returns how many of them the stream drops as
+// duplicates or the intake drops, and, per sighting in order, whether its
+// hash is a stored torrent. It writes nothing to the store, and counts the
+// duplicates as known sightings, which the intake never sees.
+func (s *Service) sight(ctx context.Context, batch []store.Sighting) (known int, stored []bool, err error) {
 	hashes := make([]store.Hash, len(batch))
 	for i, g := range batch {
-		hashes[i] = store.Hash(g.Hash)
+		hashes[i] = g.Hash
 	}
-	isStored, rejected, err := s.Store.Known(ctx, hashes, s.now())
+	held, err := s.Store.Screen(ctx, hashes, s.now())
 	if err != nil {
-		return 0, 0, nil, s.internal(ctx, "known", err)
+		return 0, nil, s.internal(ctx, "screen", err)
 	}
-	stored = make([]bool, len(batch))
-	fresh := batch[:0:0]
+	acks := make([]jetstream.PubAckFuture, len(batch))
 	for i, g := range batch {
-		h := store.Hash(g.Hash)
-		stored[i] = isStored[h]
-		if isStored[h] || rejected[h] {
-			known++
-		} else {
-			fresh = append(fresh, g)
+		m, _ := bus.SightingMsg(g.Hash, g.Discovery)
+		if acks[i], err = s.JetStream.PublishMsgAsync(m); err != nil {
+			return 0, nil, s.internal(ctx, "publish", err)
 		}
 	}
-	queued, queuedBefore, err := s.Tasks.Enqueue(ctx, fresh, s.now())
-	if err != nil {
-		return 0, 0, nil, s.internal(ctx, "enqueue", err)
+	stored = make([]bool, len(batch))
+	duplicates := 0
+	for i, g := range batch {
+		select {
+		case ack := <-acks[i].Ok():
+			switch {
+			case ack.Duplicate:
+				duplicates++
+				known++
+			case drops(held[g.Hash], g.Discovery):
+				known++
+			}
+		case err := <-acks[i].Err():
+			return 0, nil, s.internal(ctx, "publish", err)
+		case <-ctx.Done():
+			return 0, nil, connect.NewError(connect.CodeCanceled, ctx.Err())
+		}
+		stored[i] = held[g.Hash].Stored
 	}
-	return queued, known + queuedBefore, stored, nil
+	s.metrics().sightings.Add(ctx, int64(duplicates), resultKnown)
+	return known, stored, nil
 }
 
 // store passes fetched metadata through the rules, stores or rejects it, and
@@ -290,8 +303,6 @@ func discovery(src sniffarrv1.Source) (string, error) {
 		return store.Sample, nil
 	case sniffarrv1.Source_SOURCE_ANNOUNCE:
 		return store.Announce, nil
-	case sniffarrv1.Source_SOURCE_ARR:
-		return store.Arr, nil
 	}
 	return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("source %v", src))
 }

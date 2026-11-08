@@ -130,9 +130,6 @@ func TestIntakeDrops(t *testing.T) {
 		_, err = f.db.W.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (task_dead_key(?), ?)", infohash(b), f.now.Add(time.Hour).UnixMilli())
 		require.NoError(t, err)
 	}
-	stored, err := f.nc.SubscribeSync(bus.SubjectStored)
-	require.NoError(t, err)
-
 	f.sight(t, store.Sample, 1, 2, 3, 5)
 	f.sight(t, store.Announce, 4)
 	_, err = f.js.Publish(ctx, bus.SubjectSightSample, []byte("short"))
@@ -144,12 +141,9 @@ func TestIntakeDrops(t *testing.T) {
 	require.Equal(t, int64(store.PriorityAnnounce), q[4][0], "an announce revives the dead 4")
 	require.Equal(t, int64(store.PrioritySample), q[5][0])
 
-	m, err := stored.NextMsg(5 * time.Second)
-	require.NoError(t, err)
-	require.Equal(t, infohash(1), m.Data, "the stored hash is named to the sniffers")
 	r, err := f.st.Get(ctx, store.Hash{1})
 	require.NoError(t, err)
-	require.True(t, r.LastSeen.After(seen), "and its last sighting moves")
+	require.True(t, r.LastSeen.After(seen), "the stored hash's last sighting moves")
 
 	var revived int
 	require.NoError(t, f.db.R.QueryRowContext(ctx, "SELECT count(*) FROM torrent_journal WHERE infohash = ? AND outcome = 'revived'", infohash(4)).Scan(&revived))

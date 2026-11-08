@@ -243,9 +243,12 @@ func (x *SightRequest) GetSource() Source {
 
 type SightResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Infohashes queued by the stream.
+	// Sightings neither in known: those the server queues unless already
+	// queued.
 	New int64 `protobuf:"varint,1,opt,name=new,proto3" json:"new,omitempty"`
-	// Infohashes already stored, rejected or queued.
+	// Sightings of infohashes stored, rejected, or kept out of the queue and
+	// not announced, and those the sightings stream dropped as a repeat of
+	// the same infohash within its duplicates window.
 	Known int64 `protobuf:"varint,2,opt,name=known,proto3" json:"known,omitempty"`
 	// One entry per request of the stream, in order: whether its infohash was
 	// a stored torrent when the server handled it. Rejected and queued

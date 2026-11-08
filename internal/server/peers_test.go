@@ -129,9 +129,10 @@ func TestSightStored(t *testing.T) {
 	f.torrent(2, rot13.String("Ovt.Cnpxntr.KKK.1080c"), "video.mp4")
 	f.finish()
 
+	pastDedupe()
 	res, err = sight(t, ingest, sniffarrv1.Source_SOURCE_ANNOUNCE, 1, 2, 3, 9, 1)
 	require.NoError(t, err)
-	require.Equal(t, []bool{true, false, false, false, true}, res.GetStored(), "the stored torrent is flagged, the rejected, leased and new ones are not")
-	require.Equal(t, int64(1), res.GetNew())
-	require.Equal(t, int64(4), res.GetKnown())
+	require.Equal(t, []bool{true, false, false, false, true}, res.GetStored(), "the stored torrent is flagged, the rejected, queued and new ones are not")
+	require.Equal(t, int64(2), res.GetNew(), "the queued 3 and the new 9")
+	require.Equal(t, int64(3), res.GetKnown(), "the stored 1, twice, and the rejected 2")
 }

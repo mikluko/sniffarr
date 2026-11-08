@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -23,6 +24,8 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/arr"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/bus"
+	"sarak.sh/mikluko/sniffarr/internal/bus/bustest"
 	"sarak.sh/mikluko/sniffarr/internal/rot13"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	"sarak.sh/mikluko/sniffarr/internal/store"
@@ -51,15 +54,107 @@ func start(t *testing.T, cfg Config, qopts ...store.TaskOptions) (*httptest.Serv
 	if cfg.Counts != nil {
 		cfg.Counts.Store = s
 	}
+	js := sightings(t)
+	cfg.JetStream = js
+	cfg.Ingest = cfg.ingestService()
+	cfg.Ingest.IntakeWait = 10 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- cfg.Ingest.Intake(ctx, js) }()
+	t.Cleanup(func() {
+		cancel()
+		require.ErrorIs(t, <-done, context.Canceled)
+	})
 	h, err := New(cfg)
 	require.NoError(t, err)
-	srv := httptest.NewUnstartedServer(h)
+	srv := httptest.NewUnstartedServer(drainedSight(t, h, js))
 	srv.Config.Protocols = Protocols()
 	srv.Start()
 	t.Cleanup(srv.Close)
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)
 	return srv, &http.Client{Transport: &http.Transport{Protocols: &p}}
+}
+
+// dedupe is the sightings stream's duplicates window in these tests.
+const dedupe = 100 * time.Millisecond
+
+// sightings returns a connection to a server with the bus topology whose
+// sightings stream has the duplicates window dedupe.
+func sightings(t *testing.T) jetstream.JetStream {
+	t.Helper()
+	js, err := jetstream.New(bustest.Conn(t))
+	require.NoError(t, err)
+	stream, err := js.Stream(t.Context(), bus.StreamSightings)
+	require.NoError(t, err)
+	cfg := stream.CachedInfo().Config
+	cfg.Duplicates = dedupe
+	_, err = js.UpdateStream(t.Context(), cfg)
+	require.NoError(t, err)
+	return js
+}
+
+// pastDedupe waits until the sightings published so far are out of the
+// duplicates window.
+func pastDedupe() { time.Sleep(3 * dedupe) }
+
+// drainedSight has h answer a Sight only once the intake has taken every
+// sighting on js, so a test sees the queue as Sight left it.
+func drainedSight(t *testing.T, h http.Handler, js jetstream.JetStream) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == sniffarrv1connect.IngestServiceSightProcedure {
+			w = &drainingWriter{ResponseWriter: w, drain: func() { drained(t, js) }}
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// drainingWriter calls drain before every write.
+type drainingWriter struct {
+	http.ResponseWriter
+	drain func()
+}
+
+func (w *drainingWriter) WriteHeader(code int) {
+	w.drain()
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *drainingWriter) Write(b []byte) (int, error) {
+	w.drain()
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *drainingWriter) Flush() { w.ResponseWriter.(http.Flusher).Flush() }
+
+func (w *drainingWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// drained waits until neither sightings consumer has a message pending or
+// unacknowledged.
+func drained(t *testing.T, js jetstream.JetStream) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for {
+		idle := true
+		for _, name := range []string{bus.ConsumerAnnounce, bus.ConsumerSample} {
+			c, err := js.Consumer(ctx, bus.StreamSightings, name)
+			if err != nil {
+				t.Errorf("consumer %s: %v", name, err)
+				return
+			}
+			info := c.CachedInfo()
+			idle = idle && info.NumPending == 0 && info.NumAckPending == 0
+		}
+		if idle {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Error("the intake did not take the sightings")
+			return
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 }
 
 func hash(b byte) []byte {
@@ -462,6 +557,7 @@ func TestFetchNoPeers(t *testing.T) {
 	res, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), res.GetKnown(), "dropped at the first report, and a sample leaves it dead")
+	pastDedupe()
 	res, err = sight(t, ingest, sniffarrv1.Source_SOURCE_ANNOUNCE, 1)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), res.GetNew(), "an announce revives it")

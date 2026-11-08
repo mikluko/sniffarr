@@ -25,8 +25,9 @@ the same to each.
 | `SNIFFARR_DB`                      |                  | Path of the SQLite database; required                                                                                  |
 | `SNIFFARR_ADDR`                    | `:8080`          | Listen address                                                                                                         |
 | `SNIFFARR_NATS_DIR`                | `nats` beside `SNIFFARR_DB` | JetStream store directory of the embedded NATS server, created when missing                                 |
-| `SNIFFARR_NATS_PASSWORD`           |                  | Password of the NATS user `worker`; set, it opens the workers' listener at `SNIFFARR_NATS_ADDR`, unset or empty, the server listens on no port |
-| `SNIFFARR_NATS_ADDR`               | `:4222`          | Listen address of the workers' NATS listener, port `0` picking a free one; refused without `SNIFFARR_NATS_PASSWORD`    |
+| `SNIFFARR_NATS_URL`                |                  | Leafnode URL of an upstream NATS server the embedded one connects to as a leaf node, a `nats-leaf`, `tls` or `nats` URL such as `nats-leaf://sniffarr@hub:7422`, with the user name if any and no password; unset, the server runs standalone |
+| `SNIFFARR_NATS_PASSWORD`           |                  | Password of the user in `SNIFFARR_NATS_URL`; refused without `SNIFFARR_NATS_URL`, without a user in it, or with `SNIFFARR_NATS_CREDS` |
+| `SNIFFARR_NATS_CREDS`              |                  | Path of the `.creds` file the leaf node authenticates with, in place of a password; refused without `SNIFFARR_NATS_URL` |
 | `SNIFFARR_CLASSIFY_URL`            | `https://api.typesafe.ai/v1/systemone` | Classifier endpoint serving the System One protocol, `POST /v1/systemone`; another endpoint than the default turns the classifier on, with or without a key, and has no daily token limit |
 | `SNIFFARR_CLASSIFY_API_KEY`        |                  | Key sent to `SNIFFARR_CLASSIFY_URL` as a bearer token; with the default endpoint and no key the classifier is off, and only rules and reuse classify |
 | `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |
@@ -125,16 +126,6 @@ recomputes the tops of works and every torrent's peers over the last 7 days.
 `-probe-dir`, `-probers`, `-probe-timeout`, `-seed-max-size` and
 `-seed-max-age` need `-probe`; given without it, sniffarr refuses to start.
 
-| Variable                 | Default | Meaning                                                                                                   |
-| ------------------------ | ------- | --------------------------------------------------------------------------------------------------------- |
-| `SNIFFARR_NATS_URL`      |         | The API's NATS server, such as `nats://sniffarr-api:4222`, a `nats` or `tls` URL, to which `-sniff` publishes its sightings; unset, `-sniff` reports them to `Sight`; must be unset with `-api`, where `-sniff` publishes in process |
-| `SNIFFARR_NATS_PASSWORD` |         | Password of the NATS user `worker` at `SNIFFARR_NATS_URL`; required with it                                |
-
-`-fetch` alone reads neither. A sniffer whose server is unreachable at
-start starts all the same and connects once the server answers; the
-sightings it publishes before then are dropped. A sighting the server does
-not acknowledge within 30 seconds is not sent again.
-
 With `-upnp` the node asks the gateways it finds on the local network to
 forward the port it listens on, TCP and UDP. Without `-sniff` the node is
 passive by BEP 43: it answers no DHT query and asks other nodes to keep it out
@@ -169,9 +160,8 @@ and send them to the API's `Peers` every 3 minutes, and at once when 100,000
 sketches wait; a send that fails is retried, and while the API is unreachable
 the oldest unsent batch makes room for new sketches. `-sniff` counts an
 announcing peer only for an infohash `Sight` has reported as a stored torrent,
-or, publishing over NATS, one the API's intake has named on
-`sniffarr.stored`, remembering up to 1,000,000 of them, so a torrent's first
-announce before that answer is not counted; `-fetch` counts the peers of every torrent it fetched,
+remembering up to 1,000,000 of them, so a torrent's first announce before that
+answer is not counted; `-fetch` counts the peers of every torrent it fetched,
 and the API drops the sketches of those it rejected. The key comes from the
 API's `HashKey` at start, and peers seen before it arrives are not counted.
 

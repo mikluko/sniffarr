@@ -1,6 +1,7 @@
 // Package broker runs the NATS server with JetStream that the API process
-// embeds, with the bus topology on it, the API's in-process connection, and
-// a listener for the worker user when one is configured.
+// embeds, with the bus topology on it and the API's in-process connection.
+// The server listens on no port; it may connect to an upstream server as a
+// leaf node.
 package broker
 
 import (
@@ -9,8 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
-	"strconv"
+	"net/url"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -26,12 +26,20 @@ import (
 type Config struct {
 	// Dir is the JetStream store directory, created when missing.
 	Dir string
-	// Addr is the listen address for workers, port 0 picking a free one;
-	// empty listens on none.
-	Addr string
-	// Password is the password of bus.WorkerUser; required with Addr.
+	// Upstream, unless nil, is the leafnode URL of the server the embedded
+	// one connects to as a leaf node, with the user name it connects as, if
+	// any.
+	Upstream *url.URL
+	// Password is the password of Upstream's user.
 	Password string
+	// Creds is the .creds file the leaf node authenticates with, in place
+	// of a user and password.
+	Creds string
 }
+
+// Domain is the JetStream domain of the embedded server, which keeps its
+// streams apart from those of an upstream server.
+const Domain = "sniffarr"
 
 // Broker is the embedded server and the API's connection to it; Conn and
 // JetStream are set from start to stop.
@@ -39,6 +47,7 @@ type Broker struct {
 	Conn      *nats.Conn
 	JetStream jetstream.JetStream
 	srv       *server.Server
+	password  string
 	closed    chan struct{}
 }
 
@@ -72,11 +81,7 @@ func (b *Broker) start(ctx context.Context, cfg Config, log *slog.Logger) (err e
 	t0 := time.Now()
 	log = log.With("component", "nats")
 	password := rand.Text()
-	opts, err := options(cfg, password)
-	if err != nil {
-		return fmt.Errorf("nats: %w", err)
-	}
-	srv, err := server.NewServer(opts)
+	srv, err := server.NewServer(options(cfg, password))
 	if err != nil {
 		return fmt.Errorf("nats: %w", err)
 	}
@@ -95,10 +100,9 @@ func (b *Broker) start(ctx context.Context, cfg Config, log *slog.Logger) (err e
 	if err := ready(ctx, srv, fatal); err != nil {
 		return fmt.Errorf("nats: %w", err)
 	}
-	b.srv, b.closed = srv, make(chan struct{})
+	b.srv, b.password, b.closed = srv, password, make(chan struct{})
 	closed := b.closed
-	b.Conn, err = nats.Connect("", nats.InProcessServer(srv), nats.UserInfo(apiUser, password), nats.Name("sniffarr-api"),
-		nats.ClosedHandler(func(*nats.Conn) { close(closed) }))
+	b.Conn, err = b.Connect(nats.Name("sniffarr-api"), nats.ClosedHandler(func(*nats.Conn) { close(closed) }))
 	if err != nil {
 		return fmt.Errorf("nats: connect: %w", err)
 	}
@@ -109,11 +113,17 @@ func (b *Broker) start(ctx context.Context, cfg Config, log *slog.Logger) (err e
 		return fmt.Errorf("nats: %w", err)
 	}
 	attrs := []any{"dir", cfg.Dir, "start", time.Since(t0).Round(time.Millisecond)}
-	if a := srv.Addr(); a != nil {
-		attrs = append(attrs, "addr", a.String())
+	if cfg.Upstream != nil {
+		attrs = append(attrs, "upstream", cfg.Upstream.Redacted())
 	}
 	log.Info("nats", attrs...)
 	return nil
+}
+
+// Connect returns another in-process connection to the server, from start to
+// stop, as the API's user; the caller closes it.
+func (b *Broker) Connect(opts ...nats.Option) (*nats.Conn, error) {
+	return nats.Connect("", append([]nats.Option{nats.InProcessServer(b.srv), nats.UserInfo(apiUser, b.password)}, opts...)...)
 }
 
 // stop drains the API's connection, until ctx ends, then shuts the server
@@ -161,49 +171,31 @@ func readyWait(ctx context.Context) time.Duration {
 	return RecoveryBudget
 }
 
-// options returns the server's options for cfg: JetStream in cfg.Dir, no
-// signal handling, no monitoring port, the API's user in process only, and,
-// with cfg.Addr, a listener for bus.WorkerUser limited to the bus's subjects.
-func options(cfg Config, apiPassword string) (*server.Options, error) {
+// options returns the server's options for cfg: JetStream in cfg.Dir in
+// Domain, no listener, no signal handling, the API's user in process only,
+// and, with cfg.Upstream, one leaf node remote.
+func options(cfg Config, apiPassword string) *server.Options {
 	opts := &server.Options{
-		ServerName: "sniffarr-api",
-		JetStream:  true,
-		StoreDir:   cfg.Dir,
-		NoSigs:     true,
-		DontListen: cfg.Addr == "",
+		ServerName:      "sniffarr-api",
+		JetStream:       true,
+		JetStreamDomain: Domain,
+		StoreDir:        cfg.Dir,
+		NoSigs:          true,
+		DontListen:      true,
 		Users: []*server.User{{
 			Username:               apiUser,
 			Password:               apiPassword,
 			AllowedConnectionTypes: map[string]struct{}{jwt.ConnectionTypeInProcess: {}},
 		}},
 	}
-	if cfg.Addr == "" {
-		return opts, nil
+	if cfg.Upstream != nil {
+		u := *cfg.Upstream
+		if cfg.Password != "" {
+			u.User = url.UserPassword(u.User.Username(), cfg.Password)
+		}
+		opts.LeafNode.Remotes = []*server.RemoteLeafOpts{{URLs: []*url.URL{&u}, Credentials: cfg.Creds, TLS: u.Scheme == "tls"}}
 	}
-	if cfg.Password == "" {
-		return nil, errors.New("a listen address without a worker password")
-	}
-	host, port, err := net.SplitHostPort(cfg.Addr)
-	if err != nil {
-		return nil, err
-	}
-	if opts.Port, err = strconv.Atoi(port); err != nil {
-		return nil, fmt.Errorf("port %q", port)
-	}
-	if opts.Port == 0 {
-		opts.Port = server.RANDOM_PORT
-	}
-	opts.Host = host
-	opts.Users = append(opts.Users, &server.User{
-		Username: bus.WorkerUser,
-		Password: cfg.Password,
-		Permissions: &server.Permissions{
-			Publish:   &server.SubjectPermission{Allow: bus.WorkerPublish()},
-			Subscribe: &server.SubjectPermission{Allow: bus.WorkerSubscribe()},
-		},
-		AllowedConnectionTypes: map[string]struct{}{jwt.ConnectionTypeStandard: {}},
-	})
-	return opts, nil
+	return opts
 }
 
 // logger routes the server's log to a slog.Logger: notices at Info, debug

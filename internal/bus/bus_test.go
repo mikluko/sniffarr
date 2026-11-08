@@ -34,7 +34,6 @@ func TestStreams(t *testing.T) {
 		}
 	}
 	require.Len(t, seen, 4+2*Priorities)
-	require.NotContains(t, seen, SubjectStored, "the stored hashes are not kept")
 }
 
 func TestConsumers(t *testing.T) {

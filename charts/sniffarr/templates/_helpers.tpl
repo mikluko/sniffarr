@@ -50,30 +50,6 @@ capabilities:
 {{- end }}
 {{- end }}
 
-{{- /* sniffarr.natsEnv is SNIFFARR_NATS_PASSWORD from api.existingSecret while api.nats.enabled, else nothing. */}}
-{{- define "sniffarr.natsEnv" -}}
-{{- $api := .Values.api }}
-{{- if $api.nats.enabled }}
-{{- if not $api.existingSecret }}
-{{- fail "api.nats.enabled takes SNIFFARR_NATS_PASSWORD from api.existingSecret, which is empty" }}
-{{- end }}
-- name: SNIFFARR_NATS_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ $api.existingSecret }}
-      key: SNIFFARR_NATS_PASSWORD
-{{- end }}
-{{- end }}
-
-{{- /* sniffarr.natsWorkerEnv is SNIFFARR_NATS_URL, the <release>-api Service port nats, and sniffarr.natsEnv while api.nats.enabled, else nothing. */}}
-{{- define "sniffarr.natsWorkerEnv" -}}
-{{- if .Values.api.nats.enabled }}
-- name: SNIFFARR_NATS_URL
-  value: {{ printf "nats://%s-api:4222" .Release.Name | quote }}
-{{ include "sniffarr.natsEnv" . | trim }}
-{{- end }}
-{{- end }}
-
 {{- /*
 sniffarr.waitAPI is the init container wait-api, sniffarr -wait-api against url, when
 waitForAPI.enabled, else nothing. It takes root and url.
@@ -487,9 +463,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
-            {{- end }}
-            {{- with include "sniffarr.natsWorkerEnv" $root | trim }}
-            {{- . | nindent 12 }}
             {{- end }}
             {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
             {{- . | nindent 12 }}

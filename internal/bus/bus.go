@@ -1,6 +1,5 @@
 // Package bus declares the pipeline's NATS JetStream topology: its streams,
-// their literal subjects, the durable consumers workers take orders from, and
-// what the worker user may publish and subscribe to. No subject carries an
+// their literal subjects and their durable consumers. No subject carries an
 // infohash or another per-entity token; that travels in the payload.
 package bus
 
@@ -16,19 +15,14 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
-// Subjects of the sightings sniffers report, one per discovery, and of the
-// results workers return.
+// Subjects of the sightings, one per discovery, and of the fetch and probe
+// results.
 const (
 	SubjectSightAnnounce = "sniffarr.sightings.announce"
 	SubjectSightSample   = "sniffarr.sightings.sample"
 	SubjectFetchResults  = "sniffarr.results.fetch"
 	SubjectProbeResults  = "sniffarr.results.probe"
 )
-
-// SubjectStored is a subject outside every stream on which the API names
-// the sighted infohashes it found stored, 20 bytes each, for the sniffers'
-// peer counts.
-const SubjectStored = "sniffarr.stored"
 
 // Durable consumers of the sightings stream the API's intake takes from,
 // one per discovery subject.
@@ -79,13 +73,6 @@ const SightingsDuplicates = 5 * time.Minute
 // SightingsMaxAge is how long a sighting no one consumed is kept; the DHT
 // sights a live infohash again.
 const SightingsMaxAge = 24 * time.Hour
-
-// WorkerUser is the user name workers connect as.
-const WorkerUser = "worker"
-
-// WorkerInbox is the inbox prefix workers must connect with, by
-// nats.CustomInboxPrefix: the only one they may subscribe under.
-const WorkerInbox = "_INBOX_worker"
 
 // Streams returns the configurations of every stream. The order and result
 // streams are work queues without limits, so nothing is dropped unconsumed.
@@ -140,29 +127,6 @@ func Ensure(ctx context.Context, js jetstream.JetStream) error {
 		}
 	}
 	return nil
-}
-
-// WorkerPublish returns the subjects the worker user may publish to: the
-// sightings and results, and, for each order consumer, its next-message
-// requests, its info requests and the acknowledgements of its messages.
-func WorkerPublish() []string {
-	subjects := []string{SubjectSightAnnounce, SubjectSightSample, SubjectFetchResults, SubjectProbeResults}
-	for _, stream := range []string{StreamFetchOrders, StreamProbeOrders} {
-		for _, c := range OrderConsumers {
-			subjects = append(subjects,
-				"$JS.API.CONSUMER.MSG.NEXT."+stream+"."+c,
-				"$JS.API.CONSUMER.INFO."+stream+"."+c,
-				"$JS.ACK."+stream+"."+c+".>",
-			)
-		}
-	}
-	return subjects
-}
-
-// WorkerSubscribe returns the subjects the worker user may subscribe to: its
-// inboxes and SubjectStored.
-func WorkerSubscribe() []string {
-	return []string{WorkerInbox + ".>", SubjectStored}
 }
 
 // SightingMsg returns the message of a sighting of h by the discovery,

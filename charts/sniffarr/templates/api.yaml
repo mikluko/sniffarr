@@ -70,9 +70,6 @@ spec:
             {{- with include "sniffarr.env" (dict "root" . "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
-            {{- with include "sniffarr.natsEnv" . | trim }}
-            {{- . | nindent 12 }}
-            {{- end }}
           {{- with $v.existingSecret }}
           envFrom:
             - secretRef:
@@ -81,10 +78,6 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-            {{- if $v.nats.enabled }}
-            - name: nats
-              containerPort: 4222
-            {{- end }}
           startupProbe:
             httpGet:
               path: /healthz
@@ -162,11 +155,6 @@ spec:
     - name: http
       port: 8080
       targetPort: http
-    {{- if $v.nats.enabled }}
-    - name: nats
-      port: 4222
-      targetPort: nats
-    {{- end }}
 {{- if $v.networkPolicy.enabled }}
 ---
 apiVersion: networking.k8s.io/v1

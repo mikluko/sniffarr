@@ -16,6 +16,7 @@ import (
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
@@ -140,32 +141,39 @@ func TestResultJournals(t *testing.T) {
 	require.Equal(t, []string{"fetched/stored", "peers_wanted/request"}, journal(t, st, store.Hash{4}), "the request is journaled, the lookup is not")
 }
 
-func TestSightStoredFlags(t *testing.T) {
-	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
+func TestSight(t *testing.T) {
+	f := newIntakeFixture(t)
+	ctx := t.Context()
+	seen := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	_, _, err := f.st.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Heat.1995.1080p", Size: 8 << 30, Discovery: store.Sample, SeenAt: seen})
 	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	st, err := store.New(ctx, db, store.Options{})
+	_, err = f.st.Reject(ctx, store.Hash{2}, rules.Adult, "xxx", 1<<30, seen)
 	require.NoError(t, err)
-	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
+	_, err = f.db.W.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (task_dead_key(?), ?)", infohash(4), f.now.Add(time.Hour).UnixMilli())
 	require.NoError(t, err)
-	now := time.Now()
-	_, _, err = st.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Heat.1995.1080p", Size: 8 << 30, Discovery: store.Sample, SeenAt: now})
-	require.NoError(t, err)
-	_, err = st.Reject(ctx, store.Hash{2}, rules.Adult, "xxx", 1<<30, now)
-	require.NoError(t, err)
-	s := &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), Now: func() time.Time { return now }}
+	f.s.JetStream = f.js
 
 	batch := []store.Sighting{{Hash: store.Hash{3}, Discovery: store.Sample}, {Hash: store.Hash{1}, Discovery: store.Sample},
-		{Hash: store.Hash{2}, Discovery: store.Sample}, {Hash: store.Hash{1}, Discovery: store.Announce}}
-	queued, known, stored, err := s.sight(ctx, batch)
+		{Hash: store.Hash{2}, Discovery: store.Sample}, {Hash: store.Hash{1}, Discovery: store.Announce},
+		{Hash: store.Hash{4}, Discovery: store.Sample}, {Hash: store.Hash{3}, Discovery: store.Sample}}
+	known, stored, err := f.s.sight(ctx, batch)
 	require.NoError(t, err)
-	require.Equal(t, 1, queued)
-	require.Equal(t, 3, known)
-	require.Equal(t, []bool{false, true, false, true}, stored, "stored torrents are flagged, in order; rejected and queued are not")
-	_, _, stored, err = s.sight(ctx, batch[:1])
+	require.Equal(t, 5, known, "stored, rejected, dead and only sampled, or a duplicate in the stream's window")
+	require.Equal(t, []bool{false, true, false, true, false, false}, stored, "stored torrents are flagged, in order")
+	require.Empty(t, f.queued(t), "Sight queues nothing itself")
+	r, err := f.st.Get(ctx, store.Hash{1})
 	require.NoError(t, err)
-	require.Equal(t, []bool{false}, stored, "a queued hash is known but not stored")
+	require.Equal(t, seen.Unix(), r.LastSeen.Unix(), "nor moves a last sighting")
+	stream, err := f.js.Stream(ctx, bus.StreamSightings)
+	require.NoError(t, err)
+	info, err := stream.Info(ctx)
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), info.State.Msgs, "every sighting but the duplicates is on the stream")
+
+	f.run(t)
+	q := f.queued(t)
+	require.Len(t, q, 1)
+	require.Contains(t, q, byte(3), "the intake queues what Sight counted as new")
 }
 
 func TestResultStoresFeatures(t *testing.T) {

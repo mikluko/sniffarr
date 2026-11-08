@@ -53,10 +53,11 @@ const (
 
 // IngestServiceClient is a client for the sniffarr.v1.IngestService service.
 type IngestServiceClient interface {
-	// Sight queues every infohash the server has neither stored, rejected nor
-	// queued, and reports the totals, and which infohashes are stored torrents,
-	// when the client closes the stream. A sighting of a stored torrent moves
-	// its last sighting; an announce sighting moves a queued sample ahead.
+	// Sight publishes every sighting of the stream to the server's sightings
+	// stream, from which the server queues the infohashes it has neither
+	// stored, rejected nor queued, and reports the totals, and which
+	// infohashes are stored torrents, when the client closes the stream. It
+	// takes the sources SOURCE_SAMPLE and SOURCE_ANNOUNCE only.
 	Sight(context.Context) *connect.ClientStreamForClient[v1.SightRequest, v1.SightResponse]
 	// Fetch leases one queued task per unit of credit to the stream, a fetch
 	// or a peer lookup BrowseService.RefreshPeers asked for, and takes the
@@ -189,10 +190,11 @@ func (c *ingestServiceClient) ProbeUpload(ctx context.Context, req *connect.Requ
 
 // IngestServiceHandler is an implementation of the sniffarr.v1.IngestService service.
 type IngestServiceHandler interface {
-	// Sight queues every infohash the server has neither stored, rejected nor
-	// queued, and reports the totals, and which infohashes are stored torrents,
-	// when the client closes the stream. A sighting of a stored torrent moves
-	// its last sighting; an announce sighting moves a queued sample ahead.
+	// Sight publishes every sighting of the stream to the server's sightings
+	// stream, from which the server queues the infohashes it has neither
+	// stored, rejected nor queued, and reports the totals, and which
+	// infohashes are stored torrents, when the client closes the stream. It
+	// takes the sources SOURCE_SAMPLE and SOURCE_ANNOUNCE only.
 	Sight(context.Context, *connect.ClientStream[v1.SightRequest]) (*connect.Response[v1.SightResponse], error)
 	// Fetch leases one queued task per unit of credit to the stream, a fetch
 	// or a peer lookup BrowseService.RefreshPeers asked for, and takes the

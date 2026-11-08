@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/otelconnect"
+	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
 
@@ -25,6 +26,15 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
+// ingestService returns c.Ingest, or else one built from the fetch fields.
+func (c Config) ingestService() *ingest.Service {
+	if c.Ingest != nil {
+		return c.Ingest
+	}
+	return &ingest.Service{Store: c.Store, Tasks: c.Tasks, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, JetStream: c.JetStream,
+		Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Probes: c.Probes, Meter: c.Meter}
+}
+
 // MaxMessage is the largest request message, in bytes, either API accepts.
 const MaxMessage = 32 << 20
 
@@ -36,6 +46,9 @@ type Config struct {
 	Attempts int
 	Backoff  time.Duration
 	Poll     time.Duration
+	// JetStream is the connection IngestService.Sight publishes sightings
+	// on, for the IngestService built from the fetch fields.
+	JetStream jetstream.JetStream
 	// Ingest, when set, is the IngestService served in place of one built
 	// from the fetch fields.
 	Ingest *ingest.Service
@@ -109,12 +122,8 @@ func New(c Config) (http.Handler, error) {
 	traced := func(route string, h http.Handler) {
 		mux.Handle(route, otelhttp.NewHandler(h, route, hopts...))
 	}
-	ingestService := c.Ingest
-	if ingestService == nil {
-		ingestService = &ingest.Service{Store: c.Store, Tasks: c.Tasks, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Probes: c.Probes, Meter: c.Meter}
-	}
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
-		ingestService,
+		c.ingestService(),
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

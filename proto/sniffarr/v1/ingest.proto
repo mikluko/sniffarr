@@ -10,10 +10,11 @@ option go_package = "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffar
 // infohashes they sight, fetchers take them as tasks and return metadata,
 // and both report the peers they see as sketches.
 service IngestService {
-  // Sight queues every infohash the server has neither stored, rejected nor
-  // queued, and reports the totals, and which infohashes are stored torrents,
-  // when the client closes the stream. A sighting of a stored torrent moves
-  // its last sighting; an announce sighting moves a queued sample ahead.
+  // Sight publishes every sighting of the stream to the server's sightings
+  // stream, from which the server queues the infohashes it has neither
+  // stored, rejected nor queued, and reports the totals, and which
+  // infohashes are stored torrents, when the client closes the stream. It
+  // takes the sources SOURCE_SAMPLE and SOURCE_ANNOUNCE only.
   rpc Sight(stream SightRequest) returns (SightResponse);
   // Fetch leases one queued task per unit of credit to the stream, a fetch
   // or a peer lookup BrowseService.RefreshPeers asked for, and takes the
@@ -49,9 +50,12 @@ message SightRequest {
 }
 
 message SightResponse {
-  // Infohashes queued by the stream.
+  // Sightings neither in known: those the server queues unless already
+  // queued.
   int64 new = 1;
-  // Infohashes already stored, rejected or queued.
+  // Sightings of infohashes stored, rejected, or kept out of the queue and
+  // not announced, and those the sightings stream dropped as a repeat of
+  // the same infohash within its duplicates window.
   int64 known = 2;
   // One entry per request of the stream, in order: whether its infohash was
   // a stored torrent when the server handled it. Rejected and queued

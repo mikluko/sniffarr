@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
-	"net"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
@@ -28,29 +27,20 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/bus"
 )
 
-// password is the worker user's password on every server natsload runs.
-const password = "natsload"
-
 // startLimit bounds a server's start, recovery included.
 const startLimit = time.Hour
 
-// node is a running broker with the worker listener on a loopback port.
+// node is a running broker.
 type node struct {
 	app *fx.App
 	b   *broker.Broker
-	url string
 }
 
 // open starts the broker on dir and returns it with the time its start took.
 func open(ctx context.Context, dir string, log *slog.Logger) (*node, time.Duration, error) {
-	port, err := freePort()
-	if err != nil {
-		return nil, 0, err
-	}
-	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
-	n := &node{url: "nats://" + addr}
+	n := &node{}
 	n.app = fx.New(fx.NopLogger,
-		fx.Supply(broker.Config{Dir: dir, Addr: addr, Password: password}, log),
+		fx.Supply(broker.Config{Dir: dir}, log),
 		broker.Module,
 		fx.Populate(&n.b),
 	)
@@ -86,15 +76,6 @@ func (n *node) msgs(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 	return info.State.Msgs, nil
-}
-
-func freePort() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	return port, l.Close()
 }
 
 // fill publishes orders fetch orders of size bytes, each to a priority drawn
@@ -146,7 +127,7 @@ func order(i, size int) []byte {
 
 // drainSpec is how a drain takes orders.
 type drainSpec struct {
-	// workers pull at once, each on its own connection as bus.WorkerUser.
+	// workers pull at once, each on its own in-process connection.
 	workers int
 	// batch is the size of each fetch.
 	batch int
@@ -203,7 +184,7 @@ func drain(ctx context.Context, n *node, s drainSpec) (drainStats, error) {
 	defer cancel()
 	g, gctx := errgroup.WithContext(pullCtx)
 	for range s.workers {
-		g.Go(func() error { return pull(gctx, n.url, s, &c) })
+		g.Go(func() error { return pull(gctx, n, s, &c) })
 	}
 	end, stalled, werr := watch(gctx, n, s, &c, t0, st.Total, before-st.Total)
 	cancel()
@@ -285,8 +266,8 @@ func ackPending(ctx context.Context, n *node, prios int) (int, error) {
 }
 
 // pull is one worker of drain.
-func pull(ctx context.Context, url string, s drainSpec, c *counters) error {
-	nc, err := nats.Connect(url, nats.UserInfo(bus.WorkerUser, password), nats.CustomInboxPrefix(bus.WorkerInbox), nats.Name("natsload"))
+func pull(ctx context.Context, n *node, s drainSpec, c *counters) error {
+	nc, err := n.b.Connect(nats.Name("natsload"))
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,5 @@
 // Package sniff is the discovery component: it walks the DHT and reports the
-// infohashes it reveals, to the sightings stream when there is a NATS
-// connection, else to the ingest API's Sight.
+// infohashes it reveals to the ingest API.
 package sniff
 
 import (
@@ -13,7 +12,6 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/app"
 	"sarak.sh/mikluko/sniffarr/internal/app/dht"
-	"sarak.sh/mikluko/sniffarr/internal/app/natsconn"
 	sniffer "sarak.sh/mikluko/sniffarr/internal/sniff"
 )
 
@@ -36,13 +34,8 @@ func newDiscoverer(ingest sniffarrv1connect.IngestServiceClient, p *sniffer.Peer
 
 func offer(d *sniffer.Discoverer) dht.Offer { return d.Offer }
 
-func run(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, d *sniffer.Discoverer, n *sniffer.Network, nc *natsconn.Conn) {
-	app.Go(lc, sd, log, "discoverer", func(ctx context.Context) error {
-		if c := nc.NATS(); c != nil {
-			return d.Publish(ctx, c)
-		}
-		return d.Run(ctx)
-	})
+func run(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, d *sniffer.Discoverer, n *sniffer.Network) {
+	app.Go(lc, sd, log, "discoverer", d.Run)
 	app.Go(lc, sd, log, "dht walk", func(ctx context.Context) error {
 		n.Sample(ctx, cfg.Walkers, func(h sniffer.Hash) { d.Offer(h, sniffarrv1.Source_SOURCE_SAMPLE) })
 		return nil

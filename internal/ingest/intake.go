@@ -52,7 +52,7 @@ func (s *Service) Intake(ctx context.Context, js jetstream.JetStream) error {
 			cancel()
 		}
 		if err == nil && len(msgs) > 0 {
-			err = s.intake(ctx, js.Conn(), discovery, msgs)
+			err = s.intake(ctx, discovery, msgs)
 		}
 		if err != nil && ctx.Err() == nil {
 			s.Log.WarnContext(ctx, "intake", "err", err)
@@ -80,13 +80,11 @@ func take(batch jetstream.MessageBatch, err error) ([]jetstream.Msg, error) {
 	return msgs, nil
 }
 
-// intake handles one batch of sightings by the discovery: it drops the
-// hashes stored, rejected or, unless announced, dead, moves the last
-// sighting of the stored ones and names them on bus.SubjectStored, queues
-// the fetches of the others, and then acknowledges the batch. A message that
-// is no infohash is terminated; on an error the batch is left for
-// redelivery.
-func (s *Service) intake(ctx context.Context, nc *nats.Conn, discovery string, msgs []jetstream.Msg) error {
+// intake handles one batch of sightings by the discovery: it moves the last
+// sighting of the stored hashes, queues the fetches of those drops keeps,
+// and then acknowledges the batch. A message that is
+// no infohash is terminated; on an error the batch is left for redelivery.
+func (s *Service) intake(ctx context.Context, discovery string, msgs []jetstream.Msg) error {
 	now := s.now()
 	hashes := make([]store.Hash, 0, len(msgs))
 	valid := msgs[:0:0]
@@ -107,26 +105,18 @@ func (s *Service) intake(ctx context.Context, nc *nats.Conn, discovery string, m
 	known := 0
 	for _, h := range hashes {
 		g := held[h]
-		switch {
-		case g.Stored:
+		if g.Stored {
 			stored = append(stored, h)
+		}
+		if drops(g, discovery) {
 			known++
-		case g.Rejected, g.Dead && discovery != store.Announce:
-			known++
-		default:
+		} else {
 			fresh = append(fresh, store.Sighting{Hash: h, Discovery: discovery})
 		}
 	}
 	if len(stored) > 0 {
 		if err := s.Store.Seen(ctx, stored, now); err != nil {
 			return fmt.Errorf("seen: %w", err)
-		}
-		data := make([]byte, 0, len(stored)*len(store.Hash{}))
-		for _, h := range stored {
-			data = append(data, h[:]...)
-		}
-		if err := nc.Publish(bus.SubjectStored, data); err != nil {
-			s.Log.WarnContext(ctx, "intake: name stored", "err", err)
 		}
 	}
 	queued, queuedBefore, err := s.Tasks.Enqueue(ctx, fresh, now)
@@ -144,6 +134,12 @@ func (s *Service) intake(ctx context.Context, nc *nats.Conn, discovery string, m
 		}
 	}
 	return nil
+}
+
+// drops reports whether the intake drops a sighting by the discovery of a
+// hash screened as g: stored, rejected, or dead and not announced.
+func drops(g store.Screened, discovery string) bool {
+	return g.Stored || g.Rejected || g.Dead && discovery != store.Announce
 }
 
 // sleep waits d and reports whether ctx was still going at its end.

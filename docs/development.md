@@ -86,8 +86,8 @@ go run ./hack/natsload -orders 200000 -batches 16 -naks 0,20 -profiles tmp/natsl
 go run ./hack/natsload -orders 5000000 -drain=false
 ```
 
-- **Drains.** `-workers` pullers connect as the user `worker` over
-  loopback, and each fetches up to a batch from the highest priority that
+- **Drains.** `-workers` pullers each connect in process on a connection of
+  their own, and each fetches up to a batch from the highest priority that
   has orders. A puller acks each order, except that on its first delivery a
   share of the orders, set by `-naks`, gets a nak with `-nak-delay`. The
   matrix crosses `-batches` with `-naks`. MaxAckPending is the pullers'
