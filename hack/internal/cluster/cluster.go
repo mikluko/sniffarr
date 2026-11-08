@@ -1,12 +1,17 @@
-package main
+// Package cluster reaches a sniffarr release in Kubernetes from a
+// workstation, through kubectl, for the commands under hack.
+package cluster
 
 import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -20,31 +25,47 @@ const apiPort = "8080"
 // forwardTimeout bounds how long kubectl port-forward takes to listen.
 const forwardTimeout = 30 * time.Second
 
-// kube names the kubectl one context and namespace.
-type kube struct {
-	context   string
-	namespace string
+// Kube names the kube context, the current one when empty, and the
+// namespace kubectl runs in.
+type Kube struct {
+	Context   string
+	Namespace string
 }
 
 // args prefixes args with the context and namespace flags.
-func (k kube) args(args ...string) []string {
+func (k Kube) args(args ...string) []string {
 	var out []string
-	if k.context != "" {
-		out = append(out, "--context", k.context)
+	if k.Context != "" {
+		out = append(out, "--context", k.Context)
 	}
-	return append(append(out, "--namespace", k.namespace), args...)
+	return append(append(out, "--namespace", k.Namespace), args...)
 }
 
-// forward is a running kubectl port-forward listening at url.
-type forward struct {
-	url    string
+// Get runs kubectl get with args and decodes its JSON output into v.
+func (k Kube) Get(ctx context.Context, v any, args ...string) error {
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "kubectl", k.args(append(append([]string{"get"}, args...), "-o", "json")...)...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("kubectl get %s: %v: %s", strings.Join(args, " "), err, bytes.TrimSpace(stderr.Bytes()))
+	}
+	if err := json.Unmarshal(stdout.Bytes(), v); err != nil {
+		return fmt.Errorf("kubectl get %s: %w", strings.Join(args, " "), err)
+	}
+	return nil
+}
+
+// Forward is a running kubectl port-forward listening at URL.
+type Forward struct {
+	URL    string
 	cmd    *exec.Cmd
 	exited chan error
 }
 
-// portForward starts kubectl port-forward to service on a free local port
-// and returns once it listens; the caller must close it.
-func portForward(ctx context.Context, k kube, service string) (*forward, error) {
+// PortForward starts kubectl port-forward to the API's service on a free
+// local port and returns once it listens; the caller must close it.
+func PortForward(ctx context.Context, k Kube, service string) (*Forward, error) {
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return nil, err
@@ -54,35 +75,35 @@ func portForward(ctx context.Context, k kube, service string) (*forward, error) 
 	cmd.Stdout = pw
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		pr.Close()
-		pw.Close()
+		_ = pr.Close()
+		_ = pw.Close()
 		return nil, fmt.Errorf("kubectl port-forward: %w", err)
 	}
-	pw.Close()
+	_ = pw.Close()
 	addr := make(chan string, 1)
 	go scanForward(pr, addr)
-	f := &forward{cmd: cmd, exited: make(chan error, 1)}
+	f := &Forward{cmd: cmd, exited: make(chan error, 1)}
 	go func() { f.exited <- cmd.Wait() }()
 	timer := time.NewTimer(forwardTimeout)
 	defer timer.Stop()
 	select {
 	case a := <-addr:
-		f.url = "http://" + a
+		f.URL = "http://" + a
 		return f, nil
 	case err := <-f.exited:
 		f.exited <- err
 		return nil, fmt.Errorf("kubectl port-forward svc/%s: %v: %s", service, err, bytes.TrimSpace(stderr.Bytes()))
 	case <-timer.C:
-		f.close()
+		f.Close()
 		return nil, fmt.Errorf("kubectl port-forward svc/%s: not listening after %s", service, forwardTimeout)
 	case <-ctx.Done():
-		f.close()
+		f.Close()
 		return nil, ctx.Err()
 	}
 }
 
-// close stops kubectl and waits for it to exit.
-func (f *forward) close() {
+// Close stops kubectl and waits for it to exit.
+func (f *Forward) Close() {
 	_ = f.cmd.Process.Kill()
 	<-f.exited
 }
@@ -90,7 +111,7 @@ func (f *forward) close() {
 // scanForward sends the first IPv4 address r reports listening on, then
 // drains r so that kubectl never blocks writing to it.
 func scanForward(r io.ReadCloser, addr chan<- string) {
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	s := bufio.NewScanner(r)
 	for s.Scan() {
 		if a, ok := parseForward(s.Text()); ok {
@@ -120,4 +141,14 @@ func parseForward(line string) (string, bool) {
 		return "", false
 	}
 	return a, true
+}
+
+// HTTPClient speaks HTTP/2 without TLS to an http:// URL, as the API serves.
+func HTTPClient(u *url.URL) *http.Client {
+	if u.Scheme != "http" {
+		return &http.Client{}
+	}
+	var p http.Protocols
+	p.SetUnencryptedHTTP2(true)
+	return &http.Client{Transport: &http.Transport{Protocols: &p}}
 }

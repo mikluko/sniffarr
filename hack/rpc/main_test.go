@@ -178,30 +178,3 @@ func TestRunUsage(t *testing.T) {
 	err = run(t.Context(), nil, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
 	require.ErrorContains(t, err, "want <Service>/<Method>")
 }
-
-func TestParseForward(t *testing.T) {
-	for line, want := range map[string]string{
-		"Forwarding from 127.0.0.1:54321 -> 8080":   "127.0.0.1:54321",
-		"Forwarding from 127.0.0.1:54321 -> 8080\r": "127.0.0.1:54321",
-		"Forwarding from [::1]:54321 -> 8080":       "",
-		"Handling connection for 54321":             "",
-		"Forwarding from 127.0.0.1:0 -> 8080":       "",
-		"Forwarding from 127.0.0.1:x -> 8080":       "",
-		"Forwarding from 127.0.0.1:54321":           "",
-	} {
-		got, ok := parseForward(line)
-		require.Equal(t, want, got, line)
-		require.Equal(t, want != "", ok, line)
-	}
-}
-
-func TestScanForward(t *testing.T) {
-	r := strings.NewReader("Forwarding from [::1]:4000 -> 8080\nForwarding from 127.0.0.1:4000 -> 8080\nHandling connection for 4000\n")
-	addr := make(chan string, 1)
-	scanForward(nopCloser{r}, addr)
-	require.Equal(t, "127.0.0.1:4000", <-addr)
-}
-
-type nopCloser struct{ *strings.Reader }
-
-func (nopCloser) Close() error { return nil }

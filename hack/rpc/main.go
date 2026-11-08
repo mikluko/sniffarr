@@ -24,6 +24,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/dynamicpb"
 
+	"sarak.sh/mikluko/sniffarr/hack/internal/cluster"
 	_ "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 )
 
@@ -109,12 +110,12 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	base := o.url
 	if base == "" {
-		f, err := portForward(ctx, kube{context: o.context, namespace: o.namespace}, o.release+"-api")
+		f, err := cluster.PortForward(ctx, cluster.Kube{Context: o.context, Namespace: o.namespace}, o.release+"-api")
 		if err != nil {
 			return err
 		}
-		defer f.close()
-		base = f.url
+		defer f.Close()
+		base = f.URL
 	}
 	u, err := url.Parse(base)
 	if err != nil {
@@ -127,7 +128,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 	start := time.Now()
-	resp, err := call(ctx, httpClient(u), target, md, req)
+	resp, err := call(ctx, cluster.HTTPClient(u), target, md, req)
 	if o.verbose {
 		fmt.Fprintf(stderr, "time %s\n", time.Since(start).Round(time.Millisecond))
 	}
@@ -239,16 +240,6 @@ func newRequest(md protoreflect.MethodDescriptor, body []byte) (*dynamicpb.Messa
 		return nil, fmt.Errorf("request %s: %w", md.Input().FullName(), err)
 	}
 	return m, nil
-}
-
-// httpClient speaks HTTP/2 without TLS to an http:// URL, as the API serves.
-func httpClient(u *url.URL) *http.Client {
-	if u.Scheme != "http" {
-		return &http.Client{}
-	}
-	var p http.Protocols
-	p.SetUnencryptedHTTP2(true)
-	return &http.Client{Transport: &http.Transport{Protocols: &p}}
 }
 
 // call sends req to the unary method md at target, the full procedure URL.
