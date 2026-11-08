@@ -656,7 +656,8 @@ func (b Base) journalObject(e JournalEntry, key string, m map[string]any) string
 }
 
 // journalTime writes a moment of an entry at the time by its clock alone when
-// both fall on one day in the zone of Loc, else by TimeFull.
+// both fall on one day in the zone of Loc, by Time in Now's year, else by
+// TimeFull.
 func (b Base) journalTime(at, t time.Time) string {
 	loc := b.Loc
 	if loc == nil {
@@ -665,6 +666,9 @@ func (b Base) journalTime(at, t time.Time) string {
 	y, m, d := t.In(loc).Date()
 	if ay, am, ad := at.In(loc).Date(); !at.IsZero() && y == ay && m == am && d == ad {
 		return t.In(loc).Format("15:04")
+	}
+	if b.thisYear(t) {
+		return b.Time(t)
 	}
 	return b.TimeFull(t)
 }

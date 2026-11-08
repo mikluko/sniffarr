@@ -532,10 +532,11 @@ a.btn:hover{background:var(--muted);text-decoration:none}
 .jrow[open] .jc{transform:rotate(90deg)}
 .jgap{display:block;font-size:11px;white-space:nowrap}
 .jbody{display:flex;flex-direction:column;gap:10px;padding:2px 0 12px 84px}
-.jstep{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;padding:3px 0;font-size:12px}
+.jstep{display:grid;grid-template-columns:24ch minmax(0,1fr);gap:12px;padding:3px 0;font-size:13px}
+.jstep>*{font-size:12px}
 .jstep b{font-weight:600}
-.jkv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 16px;font-size:12px}
-.jkv>span{min-width:0;overflow-wrap:anywhere}
+.jkv{display:grid;grid-template-columns:24ch minmax(0,1fr);gap:2px 12px;font-size:13px}
+.jkv>span{min-width:0;overflow-wrap:anywhere;font-size:12px}
 .jkv>span:nth-child(odd){color:var(--muted-foreground)}
 .jtrk{border-collapse:collapse;align-self:flex-start;font-size:12px}
 .jtrk td{padding:1px 16px 1px 0}

@@ -718,7 +718,7 @@ func TestJournalDetail(t *testing.T) {
 		{"a time on the entry's day in the zone, not in UTC", "en", JournalEntry{Kind: "leased", At: time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC),
 			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 19, 1, 0, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "03:00", ""}}},
 		{"a time on the next day in the zone", "en", JournalEntry{Kind: "leased", At: time.Date(2026, 10, 18, 21, 30, 0, 0, time.UTC),
-			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "Oct 19, 2026, 00:30", ""}}},
+			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "Oct 19, 00:30", ""}}},
 		{"an infohash under any key", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"sibling": "8F3C2A91D07E4B6C5A1E9F20B37D4C8E6A0F1B52"}},
 			[]DetailPair{{"sibling", "8f3c2a91", "/t/8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"}}},
 		{"a tracker page by its source", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker", "url": "https://rutracker.org/forum/viewtopic.php?t=1"}},

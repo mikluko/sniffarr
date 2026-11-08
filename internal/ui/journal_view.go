@@ -22,8 +22,8 @@ type JournalView struct {
 	Tip string
 	// From and To are the times of the oldest and the newest loaded entry.
 	From, To time.Time
-	// Retries and Finals count the loaded entries at those levels; Finals
-	// is 0 where Gone states the failure.
+	// Retries and Finals count the loaded entries at those levels that no
+	// later entry settled; Finals is 0 where Gone states the failure.
 	Retries, Finals int
 	// Total is how many entries the journal holds, Loaded how many of the
 	// newest down to Journal's oldest, and Older how many are older.
@@ -84,7 +84,7 @@ func (p TorrentPage) JournalView() JournalView {
 	if n := len(t.Journal); n > 0 {
 		v.From, v.To, v.Before = t.Journal[0].At, t.Journal[n-1].At, t.Journal[0].ID
 	}
-	v.Retries, v.Finals = failures(rows)
+	v.Retries, v.Finals = failures(t.Journal)
 	if t.JournalOnly && len(rows) > 0 && v.Loaded == int64(len(t.Journal)) {
 		v.Gone, v.Finals = b.journalGone(t.Journal, rows[0]), 0
 		cut := b.JournalRetention - 24*time.Hour
@@ -101,23 +101,29 @@ func (p TorrentPage) JournalView() JournalView {
 	return v
 }
 
-// failures counts the entries of the rows that failed and will be retried,
-// and those that failed for good.
-func failures(rows []JournalRow) (retries, finals int) {
-	count := func(s Severity) {
-		switch s {
-		case SeverityRetry:
-			retries++
-		case SeverityFinal:
-			finals++
+// failures counts the entries that failed and will be retried, and those
+// that failed for good, leaving out a failure a later entry settled: of a
+// fetch or probe, one that ended a chain of its family; of a kind never
+// grouped, any later entry of the kind.
+func failures(es []JournalEntry) (retries, finals int) {
+	settled := map[string]bool{}
+	for i := len(es) - 1; i >= 0; i-- {
+		e := es[i]
+		level := e.Level()
+		task := journalFamily(e.Kind)
+		if task == "" {
+			task = e.Kind
 		}
-	}
-	for _, r := range rows {
-		if len(r.Steps) == 0 {
-			count(r.Severity)
+		if !settled[task] {
+			switch level {
+			case SeverityRetry:
+				retries++
+			case SeverityFinal:
+				finals++
+			}
 		}
-		for _, s := range r.Steps {
-			count(s.Severity)
+		if task == e.Kind || closesChain(e, level) {
+			settled[task] = true
 		}
 	}
 	return retries, finals

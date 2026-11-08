@@ -23,8 +23,8 @@ func TestJournalView(t *testing.T) {
 	rejected := JournalEntry{ID: 3, At: now.Add(-time.Hour), Kind: "fetched", Outcome: "rejected", Detail: map[string]any{"reason": "adult", "name": "xxx", "size": 1073741824.0}}
 
 	v := page(false, sighted, timeout, rejected)
-	if v.Retries != 1 || v.Finals != 1 || v.Gone != nil || v.Cut {
-		t.Errorf("a stored torrent's: %d retries, %d finals, gone %v, cut %v", v.Retries, v.Finals, v.Gone, v.Cut)
+	if v.Retries != 0 || v.Finals != 1 || v.Gone != nil || v.Cut {
+		t.Errorf("a stored torrent's, the timeout settled by the fetch after it: %d retries, %d finals, gone %v, cut %v", v.Retries, v.Finals, v.Gone, v.Cut)
 	}
 	if len(v.Days) != 1 || v.Days[0].Label != "20 октября" || len(v.Days[0].Rows) != 2 || v.Days[0].Rows[0].ID != 3 {
 		t.Errorf("days %+v", v.Days)
@@ -51,7 +51,7 @@ func TestJournalView(t *testing.T) {
 	if v.Gone == nil || *v.Gone != want {
 		t.Errorf("ended by a final failure: %+v, want %+v", v.Gone, want)
 	}
-	if v.Finals != 0 || v.Retries != 1 {
+	if v.Finals != 0 || v.Retries != 0 {
 		t.Errorf("the failure the card states is not counted again: %d finals, %d retries", v.Finals, v.Retries)
 	}
 
@@ -108,6 +108,35 @@ func TestJournalFormats(t *testing.T) {
 		}[c.got]()
 		if got != c.want {
 			t.Errorf("%s %s: %q, want %q", c.lang, c.got, got, c.want)
+		}
+	}
+}
+
+func TestJournalFailuresSettled(t *testing.T) {
+	at := time.Date(2026, 11, 7, 18, 0, 0, 0, time.UTC)
+	e := func(min int, kind, outcome string, detail map[string]any) JournalEntry {
+		return JournalEntry{At: at.Add(time.Duration(min) * time.Minute), Kind: kind, Outcome: outcome, Detail: detail}
+	}
+	noPeers := e(21, "fetch_failed", "no_peers", map[string]any{"dead_until": 1.0})
+	timeout := e(30, "fetch_failed", "timeout", map[string]any{"attempt": 1.0, "retry_at": 1.0})
+	stored := e(73, "fetched", "stored", nil)
+	classifyFailed := e(80, "classified", "failed", nil)
+	classified := e(90, "classified", "classifier", nil)
+	probeTimeout := e(100, "probed", "timeout", map[string]any{"attempt": 1.0, "retry_at": 1.0, "final": false})
+	for _, c := range []struct {
+		name            string
+		es              []JournalEntry
+		retries, finals int
+	}{
+		{"a fetch that failed for good, then stored after a feed queued it", []JournalEntry{noPeers, e(68, "feed", "queued", nil), stored}, 0, 0},
+		{"a timeout after a final failure settles neither", []JournalEntry{noPeers, timeout}, 1, 1},
+		{"retries before a final failure, settled by it", []JournalEntry{timeout, noPeers}, 0, 1},
+		{"a failure of another task is not settled by a fetch", []JournalEntry{classifyFailed, probeTimeout, e(110, "fetched", "stored", nil)}, 1, 1},
+		{"a classification that failed, then made", []JournalEntry{classifyFailed, classified}, 0, 0},
+		{"a probe timeout outstanding", []JournalEntry{stored, probeTimeout}, 1, 0},
+	} {
+		if r, f := failures(c.es); r != c.retries || f != c.finals {
+			t.Errorf("%s: %d retries, %d finals, want %d and %d", c.name, r, f, c.retries, c.finals)
 		}
 	}
 }
