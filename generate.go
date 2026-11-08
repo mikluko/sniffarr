@@ -1,3 +1,3 @@
 package main
 
-//go:generate buf generate
+//go:generate go tool buf generate
