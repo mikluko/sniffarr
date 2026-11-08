@@ -46,7 +46,7 @@ jobs:
           [ -n "$VERSION" ] || { echo "::error::the changelog names no version"; exit 1; }
           [ "$TAGGED" = false ] || { echo "::error::v$VERSION is released; open the next version's entry"; exit 1; }
           case "$VERSION" in *-*) echo "::error::the open entry names a pre-release, $VERSION"; exit 1 ;; esac
-          prev=$(git tag --list "v$VERSION-pre.*" | sed "s|^v$VERSION-pre\.||" | grep -E '^[0-9]+$' | sort -n | tail -1)
+          prev=$(git tag --list "v$VERSION-pre.*" | sed "s|^v$VERSION-pre\.||" | { grep -E '^[0-9]+$' || true; } | sort -n | tail -1)
           echo "version=$VERSION-pre.$(( ${prev:-0} + 1 ))" >>"$GITHUB_OUTPUT"
       - id: draft
         name: Draft
