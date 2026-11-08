@@ -23,6 +23,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/app/db"
 	"sarak.sh/mikluko/sniffarr/internal/app/dht"
 	"sarak.sh/mikluko/sniffarr/internal/app/fetch"
+	"sarak.sh/mikluko/sniffarr/internal/app/natsconn"
 	"sarak.sh/mikluko/sniffarr/internal/app/peers"
 	"sarak.sh/mikluko/sniffarr/internal/app/sniff"
 	"sarak.sh/mikluko/sniffarr/internal/app/ui"
@@ -51,7 +52,7 @@ func options(cfg config, log *slog.Logger) []fx.Option {
 		opts = append(opts, fx.Supply(cfg.dht), dht.Module, peers.Module)
 	}
 	if cfg.on.sniff {
-		opts = append(opts, fx.Supply(cfg.sniff), sniff.Module)
+		opts = append(opts, fx.Supply(cfg.sniff, cfg.nats), natsconn.Module, sniff.Module)
 	}
 	if cfg.on.fetch {
 		opts = append(opts, fx.Supply(cfg.fetch), fetch.Module)

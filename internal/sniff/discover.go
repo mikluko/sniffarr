@@ -27,10 +27,13 @@ type DiscovererConfig struct {
 	StreamFor time.Duration
 	// Backoff is the wait after a failed stream; DefaultBackoff.
 	Backoff time.Duration
+	// PublishPending is how many sightings Publish leaves awaiting the
+	// server's acknowledgement at once; DefaultPublishPending.
+	PublishPending int
 	// Report is the interval of progress logs; DefaultReport.
 	Report time.Duration
 	// Stored, unless nil, is called with every sighted infohash the server
-	// reports as a stored torrent.
+	// reports as a stored torrent; under Publish, those of every sniffer.
 	Stored func(Hash)
 	// Log discards everything when nil.
 	Log *slog.Logger
@@ -38,12 +41,13 @@ type DiscovererConfig struct {
 	Meter metric.MeterProvider
 }
 
-// Discoverer streams the hashes offered to it to the server's Sight.
+// Discoverer streams the hashes offered to it to the server's Sight, or
+// publishes them to the sightings stream.
 type Discoverer struct {
 	cfg       DiscovererConfig
 	recent    *recent[Hash]
 	offers    chan *sniffarrv1.SightRequest
-	stats     struct{ offered, dropped, new, known atomic.Int64 }
+	stats     struct{ offered, dropped, new, known, failed atomic.Int64 }
 	sightings metric.Int64Counter
 }
 
@@ -53,6 +57,7 @@ func NewDiscoverer(cfg DiscovererConfig) *Discoverer {
 	orDefault(&cfg.Remember, DefaultRemember)
 	orDefault(&cfg.StreamFor, DefaultStreamFor)
 	orDefault(&cfg.Backoff, DefaultBackoff)
+	orDefault(&cfg.PublishPending, DefaultPublishPending)
 	orDefault(&cfg.Report, DefaultReport)
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
@@ -65,8 +70,8 @@ func NewDiscoverer(cfg DiscovererConfig) *Discoverer {
 	}
 }
 
-// Offer queues a hash for Sight unless it was offered recently. It never
-// blocks and is safe for concurrent use.
+// Offer queues a hash for Sight or Publish unless it was offered recently.
+// It never blocks and is safe for concurrent use.
 func (d *Discoverer) Offer(h Hash, source sniffarrv1.Source) {
 	if !d.recent.add(h) {
 		return
@@ -115,7 +120,7 @@ func (d *Discoverer) Run(ctx context.Context) error {
 
 func (d *Discoverer) log(msg string) {
 	d.cfg.Log.Info(msg, "offered", d.stats.offered.Load(), "dropped", d.stats.dropped.Load(),
-		"queue", len(d.offers), "new", d.stats.new.Load(), "known", d.stats.known.Load())
+		"queue", len(d.offers), "new", d.stats.new.Load(), "known", d.stats.known.Load(), "failed", d.stats.failed.Load())
 }
 
 // sightSender holds one Sight stream and the sightings sent on it since it

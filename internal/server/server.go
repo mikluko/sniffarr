@@ -35,6 +35,9 @@ type Config struct {
 	Attempts int
 	Backoff  time.Duration
 	Poll     time.Duration
+	// Ingest, when set, is the IngestService served in place of one built
+	// from the fetch fields.
+	Ingest *ingest.Service
 	// Scripts are the writing systems a torrent's name may have letters of;
 	// rules.DefaultScripts when nil.
 	Scripts rules.Scripts
@@ -105,8 +108,12 @@ func New(c Config) (http.Handler, error) {
 	traced := func(route string, h http.Handler) {
 		mux.Handle(route, otelhttp.NewHandler(h, route, hopts...))
 	}
+	ingestService := c.Ingest
+	if ingestService == nil {
+		ingestService = &ingest.Service{Store: c.Store, Tasks: c.Tasks, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Probes: c.Probes, Meter: c.Meter}
+	}
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
-		&ingest.Service{Store: c.Store, Tasks: c.Tasks, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Probes: c.Probes, Meter: c.Meter},
+		ingestService,
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))

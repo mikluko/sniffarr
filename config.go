@@ -20,6 +20,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/app/db"
 	"sarak.sh/mikluko/sniffarr/internal/app/dht"
 	"sarak.sh/mikluko/sniffarr/internal/app/fetch"
+	"sarak.sh/mikluko/sniffarr/internal/app/natsconn"
 	"sarak.sh/mikluko/sniffarr/internal/app/sniff"
 	"sarak.sh/mikluko/sniffarr/internal/app/ui"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
@@ -56,6 +57,7 @@ type config struct {
 	client   client.Config
 	dht      dht.Config
 	sniff    sniff.Config
+	nats     natsconn.Config
 	fetch    fetch.Config
 	logLevel slog.Level
 	// waitAPI is -wait-api: wait for the API at client.URL to serve this
@@ -174,6 +176,9 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	if c.client, err = loadClient(c.on, getenv); err != nil {
 		return c, err
 	}
+	if c.nats, err = loadNATS(c.on, getenv); err != nil {
+		return c, err
+	}
 	if c.on.ui {
 		c.ui = ui.Config{Addr: or(getenv("SNIFFARR_UI_ADDR"), defaultUIAddr), OIDCIssuer: getenv("SNIFFARR_OIDC_ISSUER"), SeerrURL: getenv("SNIFFARR_SEERR_URL")}
 		if c.ui.RadarrURL, err = rootURL(getenv, "SNIFFARR_RADARR_URL"); err != nil {
@@ -261,6 +266,30 @@ func loadClient(on components, getenv func(string) string) (client.Config, error
 		return c, errors.New("SNIFFARR_URL: want an http or https URL")
 	}
 	c.URL = u
+	return c, nil
+}
+
+// loadNATS reads where -sniff publishes its sightings: in this process with
+// -api, where SNIFFARR_NATS_URL must be unset, else at SNIFFARR_NATS_URL as
+// the user worker with SNIFFARR_NATS_PASSWORD. Without either, -sniff
+// reports to Sight.
+func loadNATS(on components, getenv func(string) string) (natsconn.Config, error) {
+	var c natsconn.Config
+	raw := getenv("SNIFFARR_NATS_URL")
+	switch {
+	case !on.sniff || raw == "":
+		return c, nil
+	case on.api:
+		return c, errors.New("SNIFFARR_NATS_URL is set, but -api runs the NATS server in this process: unset it")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "nats" && u.Scheme != "tls" || u.Host == "" {
+		return c, errors.New("SNIFFARR_NATS_URL: want a nats or tls URL with a host")
+	}
+	if c.Password = getenv("SNIFFARR_NATS_PASSWORD"); c.Password == "" {
+		return c, errors.New("SNIFFARR_NATS_URL is set without SNIFFARR_NATS_PASSWORD, the password of the user worker")
+	}
+	c.URL = raw
 	return c, nil
 }
 

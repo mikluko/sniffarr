@@ -54,6 +54,12 @@ type Service struct {
 	// Poll is how often a Fetch stream with credit looks for free tasks
 	// besides when hashes are queued or released; DefaultPoll.
 	Poll time.Duration
+	// IntakeBatch is how many sightings Intake takes at once;
+	// DefaultIntakeBatch.
+	IntakeBatch int
+	// IntakeWait is how long Intake waits for an announced sighting once
+	// none is left of either discovery; DefaultIntakeWait.
+	IntakeWait time.Duration
 	// Scripts are the writing systems a torrent's name may have letters of;
 	// rules.DefaultScripts when nil.
 	Scripts rules.Scripts

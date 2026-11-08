@@ -6,19 +6,35 @@ package bus
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
-// Subjects of the sightings sniffers report and the results workers return.
+// Subjects of the sightings sniffers report, one per discovery, and of the
+// results workers return.
 const (
-	SubjectSightings    = "sniffarr.sightings"
-	SubjectFetchResults = "sniffarr.results.fetch"
-	SubjectProbeResults = "sniffarr.results.probe"
+	SubjectSightAnnounce = "sniffarr.sightings.announce"
+	SubjectSightSample   = "sniffarr.sightings.sample"
+	SubjectFetchResults  = "sniffarr.results.fetch"
+	SubjectProbeResults  = "sniffarr.results.probe"
+)
+
+// SubjectStored is a subject outside every stream on which the API names
+// the sighted infohashes it found stored, 20 bytes each, for the sniffers'
+// peer counts.
+const SubjectStored = "sniffarr.stored"
+
+// Durable consumers of the sightings stream the API's intake takes from,
+// one per discovery subject.
+const (
+	ConsumerAnnounce = "announce"
+	ConsumerSample   = "sample"
 )
 
 // Subjects of the fetch and probe orders, one per priority.
@@ -77,7 +93,7 @@ func Streams() []jetstream.StreamConfig {
 	queue := func(name string, subjects ...string) jetstream.StreamConfig {
 		return jetstream.StreamConfig{Name: name, Subjects: subjects, Retention: jetstream.WorkQueuePolicy, Storage: jetstream.FileStorage}
 	}
-	sightings := queue(StreamSightings, SubjectSightings)
+	sightings := queue(StreamSightings, SubjectSightAnnounce, SubjectSightSample)
 	sightings.Duplicates, sightings.MaxAge = SightingsDuplicates, SightingsMaxAge
 	return []jetstream.StreamConfig{
 		sightings,
@@ -88,7 +104,8 @@ func Streams() []jetstream.StreamConfig {
 	}
 }
 
-// Consumers returns the configurations of the order consumers by stream.
+// Consumers returns the configurations of the sightings and order consumers
+// by stream.
 func Consumers() map[string][]jetstream.ConsumerConfig {
 	orders := func(subjects [Priorities]string) []jetstream.ConsumerConfig {
 		cs := make([]jetstream.ConsumerConfig, Priorities)
@@ -98,6 +115,10 @@ func Consumers() map[string][]jetstream.ConsumerConfig {
 		return cs
 	}
 	return map[string][]jetstream.ConsumerConfig{
+		StreamSightings: {
+			{Durable: ConsumerAnnounce, FilterSubject: SubjectSightAnnounce, AckPolicy: jetstream.AckExplicitPolicy},
+			{Durable: ConsumerSample, FilterSubject: SubjectSightSample, AckPolicy: jetstream.AckExplicitPolicy},
+		},
 		StreamFetchOrders: orders(FetchOrders),
 		StreamProbeOrders: orders(ProbeOrders),
 	}
@@ -125,7 +146,7 @@ func Ensure(ctx context.Context, js jetstream.JetStream) error {
 // sightings and results, and, for each order consumer, its next-message
 // requests, its info requests and the acknowledgements of its messages.
 func WorkerPublish() []string {
-	subjects := []string{SubjectSightings, SubjectFetchResults, SubjectProbeResults}
+	subjects := []string{SubjectSightAnnounce, SubjectSightSample, SubjectFetchResults, SubjectProbeResults}
 	for _, stream := range []string{StreamFetchOrders, StreamProbeOrders} {
 		for _, c := range OrderConsumers {
 			subjects = append(subjects,
@@ -139,7 +160,25 @@ func WorkerPublish() []string {
 }
 
 // WorkerSubscribe returns the subjects the worker user may subscribe to: its
-// inboxes only.
+// inboxes and SubjectStored.
 func WorkerSubscribe() []string {
-	return []string{WorkerInbox + ".>"}
+	return []string{WorkerInbox + ".>", SubjectStored}
+}
+
+// SightingMsg returns the message of a sighting of h by the discovery,
+// store.Announce or store.Sample, its Nats-Msg-Id the infohash in hex, and
+// false for another discovery.
+func SightingMsg(h [20]byte, discovery string) (*nats.Msg, bool) {
+	var subject string
+	switch discovery {
+	case store.Announce:
+		subject = SubjectSightAnnounce
+	case store.Sample:
+		subject = SubjectSightSample
+	default:
+		return nil, false
+	}
+	m := &nats.Msg{Subject: subject, Header: nats.Header{}, Data: h[:]}
+	m.Header.Set(jetstream.MsgIDHeader, hex.EncodeToString(h[:]))
+	return m, true
 }

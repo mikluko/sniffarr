@@ -11,9 +11,10 @@ until SIGINT or SIGTERM.
   component that touches the database.
 - `-ui` serves the web UI, a client of the browse API.
 - `-sniff` walks the DHT for infohashes, by BEP 51 `sample_infohashes` and by
-  the `announce_peer` queries its own DHT node receives, and reports them to
-  the ingest API, with the announcing peers counted in sketches. Its node
-  answers the queries of other nodes in turn.
+  the `announce_peer` queries its own DHT node receives, and reports them,
+  publishing them to the API's NATS server when it has a connection to it,
+  else to the ingest API, with the announcing peers counted in sketches. Its
+  node answers the queries of other nodes in turn.
 - `-fetch` takes tasks from the ingest API, finds each torrent's peers with
   `get_peers` on its own DHT node, fetches the metadata from them by BEP 9,
   and returns the name, size and file list, with the peers counted in
@@ -261,13 +262,29 @@ and shut down cleanly after it stops; no other component runs one. Its
 store is the directory `SNIFFARR_NATS_DIR`, by default `nats` beside the
 SQLite database, so it shares the API's volume. At start the API connects
 to it in process and creates or updates the pipeline's streams: sightings,
-which drop a sighting repeated within 5 minutes under the same
-`Nats-Msg-Id` header and keep one nobody consumed for a day, fetch and
-probe orders on a subject per priority, P0 to P3, and fetch and probe
-results. The order and result streams are work queues without limits: a
-message stays until a consumer acknowledges it. No component publishes or
-consumes them yet. With `SNIFFARR_NATS_PASSWORD` set, the server also
-listens at `SNIFFARR_NATS_ADDR` for the user `worker`, which may publish
-sightings and results, take and acknowledge orders through their durable consumers, and
-subscribe only to its own inboxes, under `_INBOX_worker`. The API's own
-user connects in process only; the server has no monitoring port.
+on a subject per discovery, `sniffarr.sightings.announce` and
+`sniffarr.sightings.sample`, which drop a sighting repeated within 5 minutes
+under the same `Nats-Msg-Id` header, the infohash in hex, and keep one
+nobody consumed for a day, fetch and probe orders on a subject per
+priority, P0 to P3, and fetch and probe results. The order and result
+streams are work queues without limits: a message stays until a consumer
+acknowledges it. No component publishes or consumes the orders and results
+yet. With `SNIFFARR_NATS_PASSWORD` set, the server also listens at
+`SNIFFARR_NATS_ADDR` for the user `worker`, which may publish sightings and
+results, take and acknowledge orders through their durable consumers, and
+subscribe only to its own inboxes, under `_INBOX_worker`, and to
+`sniffarr.stored`. The API's own user connects in process only; the server
+has no monitoring port.
+
+`-sniff` publishes every infohash it sights to the sightings stream when it
+has a connection to the API's NATS server: in process with `-api`, else at
+`SNIFFARR_NATS_URL` as the user `worker`. Without one it reports to the
+ingest API's `Sight` instead. The API's intake takes the sightings in
+batches of 500, every announced one before any sampled one, and checks each
+batch against the store in one read: an infohash stored, rejected, or kept
+out of the queue and sampled is dropped, and any other is queued as `Sight`
+queues it.
+The intake moves the last sighting of a stored infohash, as `Sight` does,
+and names the stored infohashes of the batch on `sniffarr.stored`, from
+which every sniffer learns the stored torrents whose announcing peers it
+counts.

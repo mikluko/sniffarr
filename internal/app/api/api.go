@@ -1,9 +1,10 @@
 // Package api is the API component: the ingest, search and browse services,
-// the Torznab indexer and the Radarr and Sonarr webhook over the store,
-// with the classify and TMDB workers, the imports of the Radarr and Sonarr
-// histories, the store's one-time backfills and maintenance, the WAL's
-// truncation, the rollup of peer sketches, the tops of works, the counts
-// of the browse service and the daily check of the latest release.
+// the intake of the sightings stream, the Torznab indexer and the Radarr and
+// Sonarr webhook over the store, with the classify and TMDB workers, the
+// imports of the Radarr and Sonarr histories, the store's one-time backfills
+// and maintenance, the WAL's truncation, the rollup of peer sketches, the
+// tops of works, the counts of the browse service and the daily check of the
+// latest release.
 package api
 
 import (
@@ -16,6 +17,7 @@ import (
 	"go.uber.org/fx"
 
 	"sarak.sh/mikluko/sniffarr/internal/app"
+	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/arr"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
@@ -110,7 +112,7 @@ const arrTimeout = time.Minute
 // process's own clients, and serves it on Config.Addr from start to stop
 // with its workers.
 var Module = fx.Module("api",
-	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder, newChecker),
+	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder, newChecker, newIngest),
 	fx.Invoke(serve, work),
 )
 
@@ -205,6 +207,13 @@ func newChecker(cfg Config, log *slog.Logger) *latest.Checker {
 	return &latest.Checker{HTTP: &http.Client{Timeout: releaseTimeout}, Log: log}
 }
 
+// newIngest returns the ingest service the API serves, whose Intake takes the
+// sightings stream.
+func newIngest(cfg Config, s *store.Store, q *store.Tasks, log *slog.Logger) *ingest.Service {
+	return &ingest.Service{Store: s, Tasks: q, Log: log, Lease: cfg.Lease, Attempts: cfg.Attempts, Backoff: cfg.Backoff,
+		Scripts: cfg.Scripts, Languages: cfg.Languages, Probe: cfg.Probe, Probes: cfg.Probes}
+}
+
 func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logger) *arr.Recorder {
 	r := &arr.Recorder{Store: s, Tasks: q, Log: log}
 	if c.matcher != nil {
@@ -214,7 +223,7 @@ func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logge
 }
 
 func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts,
-	rec *arr.Recorder, mem *memconn.Listener, chk *latest.Checker) error {
+	rec *arr.Recorder, mem *memconn.Listener, chk *latest.Checker, ing *ingest.Service) error {
 	var releases search.LatestRelease
 	if chk != nil {
 		releases = chk
@@ -229,9 +238,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		Matcher:           matcher,
 		Store:             s,
 		Tasks:             q,
-		Lease:             cfg.Lease,
-		Attempts:          cfg.Attempts,
-		Backoff:           cfg.Backoff,
+		Ingest:            ing,
 		Scripts:           cfg.Scripts,
 		Languages:         cfg.Languages,
 		Log:               log,
@@ -257,7 +264,9 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 	return nil
 }
 
-func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts, rec *arr.Recorder, chk *latest.Checker) {
+func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts, rec *arr.Recorder, chk *latest.Checker,
+	b *broker.Broker, ing *ingest.Service) {
+	app.Go(lc, sd, log, "intake", func(ctx context.Context) error { return ing.Intake(ctx, b.JetStream) })
 	if chk != nil {
 		app.Go(lc, sd, log, "release check", chk.Run)
 	}

@@ -126,8 +126,7 @@ func (s *Store) Known(ctx context.Context, hashes []Hash, seen time.Time) (store
 				args[i] = h[:]
 			}
 			in := placeholders(len(c))
-			if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET last_seen = max(last_seen, ?) WHERE infohash IN ("+in+")",
-				append([]any{seen.Unix()}, args...)...); err != nil {
+			if err := touch(ctx, tx, args, seen); err != nil {
 				return err
 			}
 			rows, err := tx.QueryContext(ctx, "SELECT infohash, 1 FROM torrent_releases WHERE infohash IN ("+in+") UNION ALL SELECT infohash, 0 FROM ingest_rejected WHERE infohash IN ("+in+")",

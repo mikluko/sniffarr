@@ -16,6 +16,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/app/db"
 	"sarak.sh/mikluko/sniffarr/internal/app/dht"
 	"sarak.sh/mikluko/sniffarr/internal/app/fetch"
+	"sarak.sh/mikluko/sniffarr/internal/app/natsconn"
 	"sarak.sh/mikluko/sniffarr/internal/app/sniff"
 	"sarak.sh/mikluko/sniffarr/internal/app/ui"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
@@ -354,6 +355,45 @@ func TestLoadBroker(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tt.want, c.broker)
+		})
+	}
+}
+
+func TestLoadNATS(t *testing.T) {
+	remote := []string{"SNIFFARR_URL", "http://api:8080"}
+	with := func(kv ...string) []string { return append(append([]string{}, remote...), kv...) }
+	tests := []struct {
+		name string
+		args []string
+		env  []string
+		want natsconn.Config
+		err  string
+	}{
+		{name: "none", args: []string{"-sniff"}, env: remote},
+		{name: "url and password", args: []string{"-sniff"}, env: with("SNIFFARR_NATS_URL", "nats://api:4222", "SNIFFARR_NATS_PASSWORD", "pw"),
+			want: natsconn.Config{URL: "nats://api:4222", Password: "pw"}},
+		{name: "tls", args: []string{"-sniff", "-fetch"}, env: with("SNIFFARR_NATS_URL", "tls://api:4222", "SNIFFARR_NATS_PASSWORD", "pw"),
+			want: natsconn.Config{URL: "tls://api:4222", Password: "pw"}},
+		{name: "fetch only reads none", args: []string{"-fetch"}, env: with("SNIFFARR_NATS_URL", "nats://api:4222", "SNIFFARR_NATS_PASSWORD", "pw")},
+		{name: "url without password", args: []string{"-sniff"}, env: with("SNIFFARR_NATS_URL", "nats://api:4222"),
+			err: "SNIFFARR_NATS_URL is set without SNIFFARR_NATS_PASSWORD, the password of the user worker"},
+		{name: "http url", args: []string{"-sniff"}, env: with("SNIFFARR_NATS_URL", "http://api:4222", "SNIFFARR_NATS_PASSWORD", "pw"),
+			err: "SNIFFARR_NATS_URL: want a nats or tls URL with a host"},
+		{name: "no host", args: []string{"-sniff"}, env: with("SNIFFARR_NATS_URL", "nats://", "SNIFFARR_NATS_PASSWORD", "pw"),
+			err: "SNIFFARR_NATS_URL: want a nats or tls URL with a host"},
+		{name: "api in process", args: []string{"-api", "-sniff"}, env: []string{"SNIFFARR_DB", "/data/sniffarr.db", "SNIFFARR_NATS_URL", "nats://api:4222"},
+			err: "SNIFFARR_NATS_URL is set, but -api runs the NATS server in this process: unset it"},
+		{name: "the api's password is its listener's", args: []string{"-api", "-sniff"}, env: []string{"SNIFFARR_DB", "/data/sniffarr.db", "SNIFFARR_NATS_PASSWORD", "pw"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := load(tt.args, env(tt.env...), io.Discard)
+			if tt.err != "" {
+				require.EqualError(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, c.nats)
 		})
 	}
 }

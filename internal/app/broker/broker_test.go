@@ -77,7 +77,7 @@ func TestBrokerTopology(t *testing.T) {
 		}
 	}
 
-	msg := &nats.Msg{Subject: bus.SubjectSightings, Header: nats.Header{}, Data: []byte("x")}
+	msg := &nats.Msg{Subject: bus.SubjectSightAnnounce, Header: nats.Header{}, Data: []byte("x")}
 	msg.Header.Set(jetstream.MsgIDHeader, "a")
 	ack, err := b.JetStream.PublishMsg(t.Context(), msg)
 	require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestBrokerWorker(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("allowed", func(t *testing.T) {
-		for _, subject := range []string{bus.SubjectSightings, bus.SubjectFetchResults, bus.SubjectProbeResults} {
+		for _, subject := range []string{bus.SubjectSightAnnounce, bus.SubjectSightSample, bus.SubjectFetchResults, bus.SubjectProbeResults} {
 			_, err := js.Publish(t.Context(), subject, []byte("x"))
 			require.NoError(t, err, subject)
 		}
@@ -176,6 +176,13 @@ func TestBrokerWorker(t *testing.T) {
 			require.NoError(t, err)
 			require.Zero(t, info.State.Msgs, "acked orders leave the work queue")
 		}
+		stored, err := nc.SubscribeSync(bus.SubjectStored)
+		require.NoError(t, err)
+		require.NoError(t, nc.Flush())
+		require.NoError(t, b.Conn.Publish(bus.SubjectStored, []byte("hashes")))
+		m, err := stored.NextMsg(5 * time.Second)
+		require.NoError(t, err)
+		require.Equal(t, "hashes", string(m.Data))
 		select {
 		case err := <-errs:
 			t.Fatalf("worker error: %v", err)
@@ -193,14 +200,14 @@ func TestBrokerWorker(t *testing.T) {
 			"$JS.API.STREAM.MSG.GET." + bus.StreamSightings,
 			"$JS.API.CONSUMER.CREATE." + bus.StreamFetchOrders + ".x",
 			"$JS.API.CONSUMER.DELETE." + bus.StreamFetchOrders + ".p0",
-			"$JS.API.CONSUMER.MSG.NEXT." + bus.StreamSightings + ".p0",
+			"$JS.API.CONSUMER.MSG.NEXT." + bus.StreamSightings + "." + bus.ConsumerAnnounce,
 			"$JS.API.INFO",
 		} {
 			require.NoError(t, nc.Publish(subject, nil))
 			require.NoError(t, nc.Flush())
 			refused(t, errs, subject)
 		}
-		for _, subject := range []string{"_INBOX.>", bus.SubjectSightings, bus.SubjectFetchP0, ">"} {
+		for _, subject := range []string{"_INBOX.>", bus.SubjectSightAnnounce, bus.SubjectFetchP0, ">"} {
 			_, err := nc.SubscribeSync(subject)
 			require.NoError(t, err)
 			require.NoError(t, nc.Flush())

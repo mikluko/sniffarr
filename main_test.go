@@ -13,12 +13,16 @@ import (
 	"time"
 
 	"github.com/anacrolix/dht/v2"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
 
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/app/broker"
+	"sarak.sh/mikluko/sniffarr/internal/bus"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
@@ -35,6 +39,7 @@ func TestGraph(t *testing.T) {
 		{name: "api, ui, sniff and fetch", args: []string{"-api", "-ui", "-sniff", "-fetch"}, env: apiEnv},
 		{name: "ui", args: []string{"-ui"}, env: remote},
 		{name: "sniff", args: []string{"-sniff"}, env: remote},
+		{name: "sniff over nats", args: []string{"-sniff"}, env: append([]string{"SNIFFARR_NATS_URL", "nats://api:4222", "SNIFFARR_NATS_PASSWORD", "pw"}, remote...)},
 		{name: "fetch", args: []string{"-fetch"}, env: remote},
 		{name: "sniff and fetch", args: []string{"-sniff", "-fetch"}, env: remote},
 		{name: "ui and fetch", args: []string{"-ui", "-fetch"}, env: remote},
@@ -102,9 +107,10 @@ func (r *recorder) outcomes() []any {
 func TestRunWithTelemetryOff(t *testing.T) {
 	t.Setenv("OTEL_SDK_DISABLED", "true")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
-	addr, uiAddr := freeAddr(t), freeAddr(t)
+	addr, uiAddr, natsAddr := freeAddr(t), freeAddr(t), freeAddr(t)
 	cfg, err := load([]string{"-api", "-ui", "-fetch", "-port", "0", "-fetchers", "2", "-peer-wait", "200ms"}, env(
 		"SNIFFARR_DB", filepath.Join(t.TempDir(), "sniffarr.db"), "SNIFFARR_ADDR", addr, "SNIFFARR_UI_ADDR", uiAddr,
+		"SNIFFARR_NATS_ADDR", natsAddr, "SNIFFARR_NATS_PASSWORD", "pw",
 	), io.Discard)
 	require.NoError(t, err)
 	cfg.dht.Network.StartingNodes = func() ([]dht.Addr, error) { return nil, nil }
@@ -143,6 +149,17 @@ func TestRunWithTelemetryOff(t *testing.T) {
 	require.Equal(t, int64(1), res.Msg.GetNew())
 	require.Eventually(t, func() bool { return len(rec.outcomes()) == 1 }, 10*time.Second, 10*time.Millisecond, "the fetcher takes the task over memconn and returns its result")
 	require.Equal(t, []any{"no_peers"}, rec.outcomes(), "a passive node with no routing table finds nobody")
+
+	nc, err := nats.Connect("nats://"+natsAddr, nats.UserInfo(bus.WorkerUser, "pw"), nats.CustomInboxPrefix(bus.WorkerInbox))
+	require.NoError(t, err)
+	defer nc.Close()
+	js, err := jetstream.New(nc)
+	require.NoError(t, err)
+	m, _ := bus.SightingMsg([20]byte{9}, store.Announce)
+	_, err = js.PublishMsg(ctx, m)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(rec.outcomes()) == 2 }, 10*time.Second, 10*time.Millisecond,
+		"a sighting a worker publishes is taken in by the API and fetched")
 
 	cancel()
 	select {
