@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-rc.2] - 2026-11-08
+
+No changes since rc.1.
+
 ## [0.44.0-rc.1] - 2026-11-08
 
 Changes since 0.43.0, the pre-releases taken together: the web UI's new look, a journal of what happens to each infohash, and the chart's API as a StatefulSet.
@@ -905,7 +909,8 @@ Changes since 0.43.0, the pre-releases taken together: the web UI's new look, a 
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-rc.1...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-rc.2...HEAD
+[0.44.0-rc.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-rc.1...v0.44.0-rc.2
 [0.44.0-rc.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.8...v0.44.0-rc.1
 [0.44.0-beta.8]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.7...v0.44.0-beta.8
 [0.44.0-beta.7]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.6...v0.44.0-beta.7
