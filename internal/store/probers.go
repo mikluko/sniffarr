@@ -10,17 +10,16 @@ import (
 // default 10-minute probe timeout while every worker is busy.
 const ProberWindow = 15 * time.Minute
 
-// probers holds when each prober last asked for a probe task. Its zero
-// value is ready to use.
-type probers struct {
+// Probers holds when each prober last asked for a probe task, in memory. Its
+// zero value is ready to use, and it is safe for concurrent use.
+type Probers struct {
 	mu   sync.Mutex
 	seen map[string]time.Time
 }
 
-// ProberSeen records that the prober with the ID asked for a probe task at
-// the time. The record lives in memory and starts over with the process.
-func (q *Tasks) ProberSeen(id string, at time.Time) {
-	p := &q.probers
+// Seen records that the prober with the ID asked for a probe task at the
+// time.
+func (p *Probers) Seen(id string, at time.Time) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.seen == nil {
@@ -31,10 +30,9 @@ func (q *Tasks) ProberSeen(id string, at time.Time) {
 	}
 }
 
-// Probers returns how many probers ProberSeen recorded within ProberWindow
-// before now.
-func (q *Tasks) Probers(now time.Time) int {
-	p := &q.probers
+// Count returns how many probers Seen recorded within ProberWindow before
+// now.
+func (p *Probers) Count(now time.Time) int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	from := now.Add(-ProberWindow)

@@ -148,8 +148,8 @@ const grabs = 7
 // stored: a page of its journal and 3 more entries, on one day.
 const longJournal = ui.JournalPageSize + 3
 
-// handlerTasks is handlerWith returning the API's queue as well.
-func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Tasks) {
+// handlerTasks is handlerWith returning the API's count of probers as well.
+func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Probers) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
@@ -231,12 +231,13 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 	})
 	require.NoError(t, err)
 	require.NoError(t, st.ComputeTop(ctx, now))
-	tasks, err := store.NewTasks(ctx, db, store.TaskOptions{})
-	require.NoError(t, err)
+	probers := &store.Probers{}
 	js, err := jetstream.New(bustest.Conn(t))
 	require.NoError(t, err)
 	fetches := orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes})
 	require.NoError(t, fetches.Start(ctx, js))
+	probes := orders.New(orders.Config{Stream: bus.StreamProbeOrders, Lanes: bus.ProbeLanes})
+	require.NoError(t, probes.Start(ctx, js))
 	for p, bs := range map[int][]byte{store.PriorityArr: {30}, store.PrioritySample: {31, 32}} {
 		l, _ := fetches.Lane(store.TaskFetch, p)
 		for _, b := range bs {
@@ -248,19 +249,19 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 		fetches.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
 	}
 	fetches.Finished(store.TaskPeers, now.Add(-time.Minute))
-	h, err := New(Config{Browse: browse(t, st, tasks, fetches, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier,
+	h, err := New(Config{Browse: browse(t, st, probers, fetches, probes, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier,
 		Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, JournalRetention: 30 * 24 * time.Hour, Now: func() time.Time { return now }})
 	require.NoError(t, err)
-	return h, tasks
+	return h, probers
 }
 
 // browse serves BrowseService over st with the probes and classifier cfg
 // turns on, behind the token "search" in-process, and returns a client
 // holding the token.
-func browse(t *testing.T, st *store.Store, tasks *store.Tasks, fetches *orders.Queue, tags []string, cfg Config) sniffarrv1connect.BrowseServiceClient {
+func browse(t *testing.T, st *store.Store, probers *store.Probers, fetches, probes *orders.Queue, tags []string, cfg Config) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
-	b := &search.Browser{Store: st, Tasks: tasks, Fetches: fetches, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30,
+	b := &search.Browser{Store: st, Fetches: fetches, ProbeOrders: probes, Probers: probers, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30,
 		Probes: cfg.Probes, Classifier: cfg.Classifier, Languages: tags, Now: func() time.Time { return now },
 		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }, Interval: 5 * time.Minute}}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b))
@@ -714,7 +715,7 @@ func post(t *testing.T, h http.Handler, path, target string, header ...string) *
 }
 
 func TestRequests(t *testing.T) {
-	h, tasks := handlerTasks(t, "ru", Config{Probes: true})
+	h, probers := handlerTasks(t, "ru", Config{Probes: true})
 	body := page(t, get(t, h, "/t/"+hexOf(1), ""))
 	require.Contains(t, body, `<form method="post" action="/t/`+hexOf(1)+`/peers" hx-post="/t/`+hexOf(1)+`/peers" hx-target="#act-answer" hx-swap="outerHTML" hx-disabled-elt="find button">`,
 		"the answer goes to the line under the buttons, the button disabled meanwhile")
@@ -733,7 +734,7 @@ func TestRequests(t *testing.T) {
 	frag = fragment(t, post(t, h, "/movie/348/probe", "act-answer"), "act-answer")
 	require.Contains(t, frag, `<div id="act-answer" class="act-ans dw" role="status"><i class="m"></i>Track probe requested at priority P0. No prober is connected now: the probe starts once one is.</div>`,
 		"in amber while no prober is connected")
-	tasks.ProberSeen("a", now)
+	probers.Seen("a", now)
 	frag = fragment(t, post(t, h, "/movie/348/probe", "act-answer"), "act-answer")
 	require.Contains(t, frag, `<div id="act-answer" class="act-ans" role="status">Track probe requested at priority P0.`+queue, "the one release of the title a probe can read")
 	frag = fragment(t, post(t, h, "/t/"+hexOf(2)+"/probe", "act-answer"), "act-answer")
@@ -782,7 +783,7 @@ func TestProbesOff(t *testing.T) {
 // The data page's block of features, with every feature on and with every
 // one off, and the amber states of a feature on and not working.
 func TestFeatures(t *testing.T) {
-	h, tasks := handlerTasks(t, "ru", Config{Probes: true, Classifier: true})
+	h, probers := handlerTasks(t, "ru", Config{Probes: true, Classifier: true})
 	body := page(t, get(t, h, "/", ""))
 	for _, want := range []string{
 		`<span>Classifier</span>`, `<span>working</span>`, `25.0% of the daily limit`,
@@ -793,7 +794,7 @@ func TestFeatures(t *testing.T) {
 	}
 	require.Contains(t, body, `aria-label="Classifier: `, "the classifier's meter")
 	require.Contains(t, body, `/torrents?layer=classifier`, "and its layer")
-	tasks.ProberSeen("a", now)
+	probers.Seen("a", now)
 	require.Contains(t, page(t, get(t, h, "/", "")), "They read tracks from the first pieces of a release.", "a prober connected")
 
 	body = page(t, get(t, handlerWith(t, "", Config{}), "/", ""))

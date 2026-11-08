@@ -74,8 +74,8 @@ type IngestServiceClient interface {
 	// torrent and hour, and reports the totals when the client closes the
 	// stream. A sketch of an infohash that is not stored is dropped.
 	Peers(context.Context) *connect.ClientStreamForClient[v1.PeersRequest, v1.PeersResponse]
-	// ProbeTask leases the next stored release whose main video file is to be
-	// probed for its tracks, or none while there is none or the day's
+	// ProbeTask hands out the next stored release whose main video file is
+	// to be probed for its tracks, or none while there is none or the day's
 	// download budget is spent.
 	ProbeTask(context.Context, *connect.Request[v1.ProbeTaskRequest]) (*connect.Response[v1.ProbeTaskResponse], error)
 	// ProbeResult records the outcome of a probe and the piece data it
@@ -211,8 +211,8 @@ type IngestServiceHandler interface {
 	// torrent and hour, and reports the totals when the client closes the
 	// stream. A sketch of an infohash that is not stored is dropped.
 	Peers(context.Context, *connect.ClientStream[v1.PeersRequest]) (*connect.Response[v1.PeersResponse], error)
-	// ProbeTask leases the next stored release whose main video file is to be
-	// probed for its tracks, or none while there is none or the day's
+	// ProbeTask hands out the next stored release whose main video file is
+	// to be probed for its tracks, or none while there is none or the day's
 	// download budget is spent.
 	ProbeTask(context.Context, *connect.Request[v1.ProbeTaskRequest]) (*connect.Response[v1.ProbeTaskResponse], error)
 	// ProbeResult records the outcome of a probe and the piece data it

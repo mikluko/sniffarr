@@ -12,7 +12,7 @@ the same to each.
 | `-ui`                | off     | Serve the web UI                                                                                                    |
 | `-sniff`             | off     | Walk the DHT and report infohashes                                                                                  |
 | `-fetch`             | off     | Take fetch tasks and return metadata                                                                                |
-| `-probe`             | off     | Probe stored releases for their tracks: `-api` queues probes, `-fetch` takes them; see [Probes](probes.md)          |
+| `-probe`             | off     | Probe stored releases for their tracks: `-api` orders probes, `-fetch` takes them; see [Probes](probes.md)          |
 | `-wait-api`          | off     | Poll `SNIFFARR_URL` every 2s and exit once its `Server` header names this binary's version; runs alone, without the flags above |
 | `-log-level`         | `info`  | Level to log at: `debug`, `info`, `warn` or `error`                                                                 |
 | `SNIFFARR_LOG_LEVEL` |         | The level when `-log-level` is not given; the flag wins when both are set                                           |
@@ -66,13 +66,11 @@ the same to each.
 | `SNIFFARR_PROBE_LEASE`             | `15m`            | How long a fetcher may hold a probe task                                                                               |
 | `SNIFFARR_PROBE_ATTEMPTS`          | `3`              | Failed probes after which a release is probed again only with more peers than at its last probe                       |
 | `SNIFFARR_PROBE_BACKOFF`           | `6h`             | Wait before repeating a failed probe, doubled per failure                                                              |
-| `SNIFFARR_PROBE_BATCH`             | `64`             | Probe tasks one search and one write hand out at most; set it to the probers that may ask at once                     |
 | `SNIFFARR_RELEASE_CHECK`           | `lazy`           | Whether the API reads the latest stable release from the releases feed, `https://sarak.sh/mikluko/sniffarr/releases.rss`, once a day, and when the UI's footer announces it: `lazy` when this build is a later major or more than one minor behind, `eager` when it is behind at all, `no` or `off` asks nothing; a pre-release build is announced under either as soon as its stable release is out |
 
 The database runs in WAL mode. Before the API listens, its schema migrates,
-each migration logged as it begins and as it ends with how long it took, and
-leases left over from a previous run are freed; however long that takes, it
-leaves the API unready rather than failing its start. Once a minute the API
+each migration logged as it begins and as it ends with how long it took;
+however long that takes, it leaves the API unready rather than failing its start. Once a minute the API
 truncates the WAL when it has reached 1 GiB, waiting up to 10 seconds for readers; a
 reader that outlasts the wait is logged with the frames it pins. The WAL's
 size is the metric `sniffarr.db.wal.size`. A torrent keeps its true file

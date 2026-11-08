@@ -61,18 +61,6 @@ func browser(t *testing.T) *Browser {
 	return &Browser{Store: s, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30, Languages: []string{"ru"}, Now: func() time.Time { return now }}
 }
 
-// tasks is an empty queue in a database of its own.
-func tasks(t *testing.T) *store.Tasks {
-	t.Helper()
-	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "tasks.db"), database.Options{Service: "sniffarr"})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
-	require.NoError(t, err)
-	return q
-}
-
 func relNames(rs []*sniffarrv1.Release) []string {
 	var out []string
 	for _, r := range rs {
@@ -380,7 +368,7 @@ func TestBrowserSettingsFeatures(t *testing.T) {
 	require.Equal(t, off, features(&Browser{}), "every feature off, each with its setting")
 
 	b := browser(t)
-	b.Tasks, b.Classifier, b.Probes = tasks(t), true, true
+	b.Probers, b.Classifier, b.Probes = &store.Probers{}, true, true
 	on := []state{
 		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, On: true, Works: true, Setting: "SNIFFARR_CLASSIFY_API_KEY"},
 		{Feature: sniffarrv1.Feature_FEATURE_PROBES, On: true, Setting: "-probe"},
@@ -388,7 +376,7 @@ func TestBrowserSettingsFeatures(t *testing.T) {
 	}
 	require.Equal(t, on, features(b), "probes do not work without a prober")
 
-	b.Tasks.ProberSeen("a", now)
+	b.Probers.Seen("a", now)
 	on[1].Works = true
 	require.Equal(t, on, features(b), "a prober seen")
 
@@ -415,9 +403,9 @@ func TestBrowserStatsProbers(t *testing.T) {
 		return res.Msg.GetProbers()
 	}
 	require.Zero(t, probers(), "no queue")
-	b.Tasks = tasks(t)
-	b.Tasks.ProberSeen("a", now.Add(-store.ProberWindow))
-	b.Tasks.ProberSeen("b", now)
+	b.Probers = &store.Probers{}
+	b.Probers.Seen("a", now.Add(-store.ProberWindow))
+	b.Probers.Seen("b", now)
 	require.Zero(t, probers(), "probes are off")
 	b.Probes = true
 	require.EqualValues(t, 2, probers(), "both within the window")

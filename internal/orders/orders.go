@@ -6,10 +6,12 @@
 package orders
 
 import (
+	"cmp"
 	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -311,19 +313,23 @@ func (q *Queue) Retry(ctx context.Context, o *Order, to bus.Lane, at time.Time) 
 	return err
 }
 
-// Release hands every order owner holds back to the stream.
+// Release hands every order owner holds back to the stream, the earliest
+// published first, so that they are redelivered in the order they were.
 func (q *Queue) Release(owner int64) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	now := q.cfg.Now()
-	n := 0
+	var mine []key
 	for k, o := range q.held {
 		if o.owner == owner {
-			q.handBack(k, o, now)
-			n++
+			mine = append(mine, k)
 		}
 	}
-	if n > 0 {
+	slices.SortFunc(mine, func(a, b key) int { return cmp.Compare(q.held[a].seq, q.held[b].seq) })
+	for _, k := range mine {
+		q.handBack(k, q.held[k], now)
+	}
+	if len(mine) > 0 {
 		q.wake.notify()
 	}
 }
@@ -587,4 +593,17 @@ func (n *notifier) notify() {
 		close(n.ch)
 		n.ch = nil
 	}
+}
+
+// Purge deletes every order on q's stream, scheduled ones too; it is meant
+// for a stream no one hands out from, as orders held or pulled stay so.
+func (q *Queue) Purge(ctx context.Context) error {
+	s, err := q.js.Stream(ctx, q.cfg.Stream)
+	if err != nil {
+		return fmt.Errorf("orders: stream %s: %w", q.cfg.Stream, err)
+	}
+	if err := s.Purge(ctx); err != nil {
+		return fmt.Errorf("orders: purge %s: %w", q.cfg.Stream, err)
+	}
+	return nil
 }

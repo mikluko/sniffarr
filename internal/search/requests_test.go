@@ -68,16 +68,19 @@ func TestBrowserRefreshPeers(t *testing.T) {
 func TestBrowserRequestProbe(t *testing.T) {
 	ctx := context.Background()
 	b := ranked(t)
-	b.Probes = true
+	b.Probes, b.ProbeOrders = true, probeOrders(t)
 	require.NoError(t, b.Store.ProbeDone(ctx, hash(1), store.Probe{Outcome: store.ProbeUnknown}, now))
 	res, err := b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byWork("m693134")}))
 	require.NoError(t, err)
 	require.Equal(t, int32(3), res.Msg.GetReleases())
-	c, ok, err := b.Store.LeaseProbe(ctx, store.ProbeRequest{Owner: 1, Now: now, Lease: time.Minute, Admit: func(int64, int) (bool, bool) { return true, false }})
+	got, err := b.ProbeOrders.Take(1, 10, store.PrioritySample)
 	require.NoError(t, err)
-	require.True(t, ok)
-	require.Contains(t, []store.Hash{hash(1), hash(2), hash(4)}, c.Hash, "a probed release too")
-	require.True(t, c.Wanted)
+	var ordered []store.Hash
+	for _, o := range got {
+		require.Equal(t, store.PriorityRequest, o.Priority)
+		ordered = append(ordered, o.Hash)
+	}
+	require.ElementsMatch(t, []store.Hash{hash(1), hash(2), hash(4)}, ordered, "a probe ordered at P0 for each, a probed release too")
 
 	_, err = b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byHash(99)}))
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(err))
@@ -96,21 +99,16 @@ func TestBrowserRequestProbeOff(t *testing.T) {
 	_, err := b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byWork("m693134")}))
 	require.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err))
 	require.ErrorContains(t, err, "probes are off")
-	_, ok, err := b.Store.LeaseProbe(ctx, store.ProbeRequest{Owner: 1, Now: now, Lease: time.Minute, Admit: func(int64, int) (bool, bool) { return true, false }})
-	require.NoError(t, err)
-	require.False(t, ok, "nothing queued")
 }
 
 func TestBrowserStatsQueue(t *testing.T) {
 	ctx := context.Background()
-	b, db := rankedDB(t)
+	b := ranked(t)
 	res, err := b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
 	require.NoError(t, err)
-	require.Nil(t, res.Msg.GetQueueProbes(), "no queue without Tasks")
+	require.Nil(t, res.Msg.GetQueueProbes(), "no queue without ProbeOrders")
 
-	b.Tasks, err = store.NewTasks(ctx, db, store.TaskOptions{})
-	require.NoError(t, err)
-	b.Probes = true
+	b.Probes, b.ProbeOrders = true, probeOrders(t)
 	_, err = b.RequestProbe(ctx, connect.NewRequest(&sniffarrv1.RequestProbeRequest{Releases: byHash(1)}))
 	require.NoError(t, err)
 	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
@@ -151,13 +149,23 @@ func TestBrowserStatsQueue(t *testing.T) {
 	require.Nil(t, res.Msg.GetQueueFetches().GetLevels()[1].GetEta(), "no pace yet")
 	require.NotNil(t, res.Msg.GetQueueFetches().GetLevels()[0].GetEta(), "nothing to wait for")
 
-	b.Tasks.Finished(store.TaskProbe, now.Add(-time.Minute))
-	b.Tasks.Finished(store.TaskProbe, now.Add(-time.Minute))
+	b.ProbeOrders.Finished(store.TaskProbe, now.Add(-time.Minute))
+	b.ProbeOrders.Finished(store.TaskProbe, now.Add(-time.Minute))
 	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
 	require.NoError(t, err)
 	require.InDelta(t, 2.0, res.Msg.GetQueueProbes().GetPerMinute(), 1e-9)
 	require.Equal(t, 30*time.Second, res.Msg.GetQueueProbes().GetLevels()[3].GetEta().AsDuration())
 	require.Zero(t, res.Msg.GetQueueLookups().GetPerMinute())
+}
+
+// probeOrders returns the hand-out of the probe orders on a bus of its own.
+func probeOrders(t *testing.T) *orders.Queue {
+	t.Helper()
+	js, err := jetstream.New(bustest.Conn(t))
+	require.NoError(t, err)
+	q := orders.New(orders.Config{Stream: bus.StreamProbeOrders, Lanes: bus.ProbeLanes})
+	require.NoError(t, q.Start(t.Context(), js))
+	return q
 }
 
 // fetches returns the hand-out of the fetch orders on a bus of its own.

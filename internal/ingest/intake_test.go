@@ -41,15 +41,12 @@ func newIntakeFixture(t *testing.T) *intakeFixture {
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, st.Close(context.Background())) })
-	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
-	require.NoError(t, err)
 	f := &intakeFixture{st: st, db: db, nc: bustest.Conn(t), now: time.Now().UTC().Truncate(time.Second)}
 	f.js, err = jetstream.New(f.nc)
 	require.NoError(t, err)
 	fetches := orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes})
 	require.NoError(t, fetches.Start(ctx, f.js))
-	f.s = &Service{Store: st, Tasks: q, Fetches: fetches, Log: slog.New(slog.DiscardHandler), IntakeWait: 50 * time.Millisecond, Now: f.clock}
+	f.s = &Service{Store: st, Fetches: fetches, Log: slog.New(slog.DiscardHandler), IntakeWait: 50 * time.Millisecond, Now: f.clock}
 	return f
 }
 

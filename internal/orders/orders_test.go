@@ -313,3 +313,19 @@ func TestLevels(t *testing.T) {
 	require.Equal(t, 16*time.Second, levels[store.TaskFetch].Levels[3].ETA, "eight at P3 or ahead at 30 a minute")
 	require.False(t, levels[store.TaskPeers].Levels[0].Known, "a lookup goes at its own pace")
 }
+
+func TestPurge(t *testing.T) {
+	q, js := fetches(t, Config{})
+	publish(t, q, store.TaskFetch, store.PriorityArr, 1, 2)
+	_, err := q.Publish(t.Context(), laneOf(t, q, store.TaskFetch, store.PriorityArr), []Item{{Hash: store.Hash{3}, At: time.Now().Add(time.Hour)}})
+	require.NoError(t, err)
+	require.NoError(t, q.Purge(t.Context()))
+	s, err := js.Stream(t.Context(), bus.StreamFetchOrders)
+	require.NoError(t, err)
+	info, err := s.Info(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, info.State.Msgs, "the orders and the schedule go")
+	got, err := q.Take(1, 10, store.PrioritySample)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}

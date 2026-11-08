@@ -637,34 +637,40 @@ func TestJournalProbes(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-	require.NoError(t, s.WantProbe(ctx, []Hash{h, hash(9)}, ProbeWant{T: "tvsearch", Query: "alien", ID: "tmdbid:348", Season: 1, Episode: 2}, t0))
+	_, err := s.WantProbe(ctx, []Hash{h, hash(9)}, ProbeWant{T: "tvsearch", Query: "alien", ID: "tmdbid:348", Season: 1, Episode: 2}, t0)
+	require.NoError(t, err)
 	require.JSONEq(t, `{"t":"tvsearch","query":"alien","id":"tmdbid:348","season":1,"episode":2}`, entry(t, s, h, JournalProbeWanted, "search").Detail)
 	require.Empty(t, entries(t, s, hash(9)), "a hash not stored is ignored")
 
-	final, err := s.ProbeFailed(ctx, h, ProbeTimeout, 1<<20, t0, 2, time.Hour)
+	final, _, err := s.ProbeFailed(ctx, h, ProbeTimeout, 1<<20, 1, t0, 2, time.Hour)
 	require.NoError(t, err)
 	require.False(t, final)
 	require.JSONEq(t, `{"attempt":1,"retry_at":`+unix(t0.Add(time.Hour))+`,"final":false,"downloaded":1048576,"peers_week":5}`, entry(t, s, h, JournalProbed, ProbeTimeout).Detail)
-	final, err = s.ProbeFailed(ctx, h, ProbeNoPeers, 0, t0.Add(time.Hour), 2, time.Hour)
+	final, _, err = s.ProbeFailed(ctx, h, ProbeNoPeers, 0, 3, t0.Add(time.Hour), 2, time.Hour)
 	require.NoError(t, err)
 	require.True(t, final)
-	require.JSONEq(t, `{"attempt":2,"final":true,"peers_week":5}`, entry(t, s, h, JournalProbed, ProbeNoPeers).Detail, "a final failure is due at no time")
+	require.JSONEq(t, `{"attempt":2,"final":true,"peers_week":5,"leases":3}`, entry(t, s, h, JournalProbed, ProbeNoPeers).Detail,
+		"a final failure is due at no time; an attempt of three leases")
 
-	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeTracks, Path: "Alien.1979.1080p.mkv", Format: "matroska", Downloaded: 2 << 20, Tracks: []Track{
+	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeTracks, Path: "Alien.1979.1080p.mkv", Format: "matroska", Downloaded: 2 << 20, Leases: 1, Tracks: []Track{
 		{Kind: "video", Codec: "V_MPEG4/ISO/AVC"}, {Kind: "audio", Language: "rus", Codec: "A_AC3"}, {Kind: "subtitle", Language: "eng", Codec: "S_TEXT/UTF8"},
 	}}, t0.Add(4*time.Hour)))
 	require.JSONEq(t, `{"path":"Alien.1979.1080p.mkv","format":"matroska","downloaded":2097152,"tracks":["video::V_MPEG4/ISO/AVC","audio:rus:A_AC3","subtitle:eng:S_TEXT/UTF8"],"audio":{"ru":1}}`,
 		entry(t, s, h, JournalProbed, ProbeTracks).Detail)
-	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown, Downloaded: 3}, t0.Add(5*time.Hour)))
-	require.JSONEq(t, `{"downloaded":3}`, entry(t, s, h, JournalProbed, ProbeUnknown).Detail)
+	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown, Downloaded: 3, Leases: 2}, t0.Add(5*time.Hour)))
+	require.JSONEq(t, `{"downloaded":3,"leases":2}`, entry(t, s, h, JournalProbed, ProbeUnknown).Detail)
 	require.Equal(t, []string{"fetched/stored", "probe_wanted/search", "probed/timeout", "probed/no_peers", "probed/tracks", "probed/unknown"}, entries(t, s, h))
 
-	require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0.Add(25*time.Hour)))
+	_, err = s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0.Add(25*time.Hour))
+	require.NoError(t, err)
 	require.Len(t, entries(t, s, h), 6, "a search does not want a probe done")
-	n, _, err := s.RequestProbe(ctx, []Hash{h, hash(9)}, t0.Add(26*time.Hour))
+	_, n, err := s.RequestProbe(ctx, []Hash{h, hash(9)}, t0.Add(26*time.Hour))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 	require.Equal(t, JournalEntry{Hash: h, At: t0.Add(26 * time.Hour), Kind: JournalProbeWanted, Outcome: "request"}, entry(t, s, h, JournalProbeWanted, "request"))
+	_, _, err = s.RequestProbe(ctx, []Hash{h}, t0.Add(27*time.Hour))
+	require.NoError(t, err)
+	require.Len(t, entries(t, s, h), 8, "every request is journaled")
 }
 
 func TestJournalProbeWanted(t *testing.T) {
@@ -674,24 +680,19 @@ func TestJournalProbeWanted(t *testing.T) {
 	probed := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
 	spent := insertProbeable(t, s, 4, "Brazil.1985.1080p", 5, "Brazil.1985.1080p.mkv")
 	unreadable := insertProbeable(t, s, 5, "Ronin.1998.DVDRip", 5, "Ronin.1998.DVDRip.avi")
-	requested := insertProbeable(t, s, 6, "Fargo.1996.1080p", 5, "Fargo.1996.1080p.mkv")
 	require.NoError(t, s.ProbeDone(ctx, probed, Probe{Outcome: ProbeUnknown}, t0))
-	final, err := s.ProbeFailed(ctx, spent, ProbeTimeout, 0, t0, 1, time.Hour)
-	require.NoError(t, err)
-	require.True(t, final)
-	_, _, err = s.RequestProbe(ctx, []Hash{requested}, t0)
-	require.NoError(t, err)
+	require.True(t, probeFailed(t, s, spent, t0, 1))
 	search := func(at time.Time) {
 		t.Helper()
-		require.NoError(t, s.WantProbe(ctx, []Hash{queued, probed, spent, unreadable, requested}, ProbeWant{T: "movie", Query: "x"}, at))
+		_, err := s.WantProbe(ctx, []Hash{queued, probed, spent, unreadable}, ProbeWant{T: "movie", Query: "x"}, at)
+		require.NoError(t, err)
 	}
 
 	search(t0)
 	require.Equal(t, []string{"fetched/stored", "probe_wanted/search"}, entries(t, s, queued))
-	require.Equal(t, []string{"fetched/stored", "probed/unknown"}, entries(t, s, probed), "a search that queues no probe is not journaled")
+	require.Equal(t, []string{"fetched/stored", "probed/unknown"}, entries(t, s, probed), "a search that orders no probe is not journaled")
 	require.Equal(t, []string{"fetched/stored", "probed/timeout"}, entries(t, s, spent), "nor one of a release whose attempts ran out")
 	require.Equal(t, []string{"fetched/stored"}, entries(t, s, unreadable), "nor one of a release a probe cannot read")
-	require.Equal(t, []string{"fetched/stored", "probe_wanted/request"}, entries(t, s, requested), "nor one of a release requested")
 	search(t0.Add(23 * time.Hour))
 	require.Len(t, entries(t, s, queued), 2, "wanted again within a day is not journaled")
 	search(t0.Add(25 * time.Hour))
@@ -705,263 +706,41 @@ func TestJournalProbeWanted(t *testing.T) {
 	again := insertProbeable(t, s, 7, "Fargo.1996.2160p", 5, "Fargo.1996.2160p.mkv")
 	_, _, err = s.RequestProbe(ctx, []Hash{again}, t0)
 	require.NoError(t, err)
-	_, err = s.ProbeFailed(ctx, again, ProbeTimeout, 0, t0.Add(time.Minute), 3, time.Hour)
+	_, err = s.WantProbe(ctx, []Hash{again}, ProbeWant{T: "movie", Query: "fargo"}, t0.Add(time.Minute))
 	require.NoError(t, err)
-	require.NoError(t, s.WantProbe(ctx, []Hash{again}, ProbeWant{T: "movie", Query: "fargo"}, t0.Add(2*time.Hour)))
-	require.Equal(t, []string{"fetched/stored", "probe_wanted/request", "probed/timeout", "probe_wanted/search"}, entries(t, s, again),
-		"a request within the day does not hide a search that queued the probe again")
+	require.Equal(t, []string{"fetched/stored", "probe_wanted/request", "probe_wanted/search"}, entries(t, s, again), "a request does not hide a search")
 }
 
-// leasedProbes returns the hash's probe_leased entries as outcome/attempt,
-// oldest first.
-func leasedProbes(t *testing.T, s *Store, h Hash) []string {
-	t.Helper()
-	got, err := s.Journal(context.Background(), h, 1000)
-	require.NoError(t, err)
-	var out []string
-	for _, e := range got {
-		if e.Kind != JournalProbeLeased {
-			continue
-		}
-		var d struct{ Attempt int }
-		require.NoError(t, json.Unmarshal([]byte(e.Detail), &d))
-		out = append(out, e.Outcome+"/"+strconv.Itoa(d.Attempt))
-	}
-	return out
-}
-
-// requestRows returns how many probe_wanted/request entries the hash has.
-func requestRows(t *testing.T, s *Store, h Hash) int {
-	t.Helper()
-	got, err := s.Journal(context.Background(), h, 1000)
-	require.NoError(t, err)
-	n := 0
-	for _, e := range got {
-		if e.Kind == JournalProbeWanted && e.Outcome == "request" {
-			n++
-		}
-	}
-	return n
-}
-
-func TestJournalProbeRequestRepeated(t *testing.T) {
+func TestJournalProbeLeased(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-	request := func(at time.Time) {
+	lease := func(priority int, at time.Time) JournalEntry {
 		t.Helper()
-		n, _, err := s.RequestProbe(ctx, []Hash{h}, at)
+		require.NoError(t, s.RecordProbeLease(ctx, ProbeLease{Hash: h, Priority: priority, MaxBytes: 64 << 20, Until: at.Add(10 * time.Minute)}, at))
+		got, err := s.Journal(ctx, h, 1)
 		require.NoError(t, err)
-		require.Equal(t, 1, n, "still counted as stored")
+		return got[0]
 	}
 
-	request(t0)
-	request(t0.Add(time.Minute))
-	require.Equal(t, 1, requestRows(t, s, h), "a request while it waits for its first lease")
+	e := lease(PrioritySample, t0)
+	require.Equal(t, "background", e.Outcome)
+	require.JSONEq(t, `{"attempt":1,"max_bytes":67108864,"lease_until":`+unix(t0.Add(10*time.Minute))+`}`, e.Detail)
+	require.Equal(t, "search", lease(PriorityArr, t0).Outcome)
+	require.Equal(t, "request", lease(PriorityRequest, t0).Outcome)
 
-	_, ok := leaseNext(t, s, t0.Add(2*time.Minute), false)
-	require.True(t, ok)
-	request(t0.Add(3 * time.Minute))
-	require.Equal(t, 2, requestRows(t, s, h), "a request after a lease began")
-	request(t0.Add(4 * time.Minute))
-	require.Equal(t, 2, requestRows(t, s, h), "none since that one")
+	probeFailed(t, s, h, t0, 3)
+	e = lease(PriorityArr, t0.Add(time.Hour))
+	require.Equal(t, "retry", e.Outcome, "a release whose probe failed before")
+	require.Contains(t, e.Detail, `"attempt":2`)
+	require.Equal(t, "request", lease(PriorityRequest, t0.Add(time.Hour)).Outcome, "a request after a failure is a request")
 
-	s2 := open(t)
-	moved := insertProbeable(t, s2, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
-	require.NoError(t, s2.WantProbe(ctx, []Hash{moved}, ProbeWant{T: "movie", Query: "heat"}, t0))
-	_, _, err := s2.RequestProbe(ctx, []Hash{moved}, t0.Add(time.Minute))
-	require.NoError(t, err)
-	require.Equal(t, 1, requestRows(t, s2, moved), "a request that moves a searched probe ahead is the first")
-}
+	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0.Add(2*time.Hour)))
+	require.Contains(t, lease(PriorityRequest, t0.Add(3*time.Hour)).Detail, `"attempt":1`, "a probe that did not fail starts the count over")
 
-func TestJournalProbeLeasedOncePerAttempt(t *testing.T) {
-	ctx := context.Background()
-	for _, tc := range []struct {
-		name       string
-		search     bool
-		background bool
-		outcome    string
-	}{
-		{name: "queued by its first lease", background: true, outcome: "background"},
-		{name: "queued by a search", search: true, outcome: "search"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
-			t.Cleanup(func() { require.NoError(t, db.Close()) })
-			q, err := NewTasks(ctx, db, TaskOptions{})
-			require.NoError(t, err)
-			h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-			if tc.search {
-				require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0))
-			}
-			lease := func(at time.Time) {
-				t.Helper()
-				c, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 7, Now: at, Lease: 10 * time.Minute, MaxBytes: 64 << 20, Admit: admitting(tc.background)})
-				require.NoError(t, err)
-				require.True(t, ok)
-				require.Equal(t, h, c.Hash)
-			}
-
-			lease(t0)
-			require.JSONEq(t, `{"attempt":1,"max_bytes":67108864,"lease_until":`+unix(t0.Add(10*time.Minute))+`}`, entry(t, s, h, JournalProbeLeased, tc.outcome).Detail,
-				"when the lease ends, and nothing of the day's other probes")
-			lease(t0.Add(10 * time.Minute))
-			require.Equal(t, []string{tc.outcome + "/1"}, leasedProbes(t, s, h), "a lease again after one expired is the same attempt")
-			require.NoError(t, q.Reset(ctx))
-			lease(t0.Add(11 * time.Minute))
-			require.Equal(t, []string{tc.outcome + "/1"}, leasedProbes(t, s, h), "so is one after a restart freed it")
-
-			final, err := s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(12*time.Minute), 3, time.Hour)
-			require.NoError(t, err)
-			require.False(t, final)
-			require.Contains(t, entry(t, s, h, JournalProbed, ProbeTimeout).Detail, `"leases":3`, "an attempt of three leases")
-			lease(t0.Add(2 * time.Hour))
-			lease(t0.Add(2*time.Hour + 10*time.Minute))
-			require.Equal(t, []string{tc.outcome + "/1", "retry/2"}, leasedProbes(t, s, h), "a failure starts the next attempt")
-			require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0.Add(2*time.Hour+20*time.Minute)))
-			require.JSONEq(t, `{"leases":2}`, entry(t, s, h, JournalProbed, ProbeUnknown).Detail, "the leases of its own attempt")
-		})
-	}
-}
-
-func TestJournalProbeLeasedRequest(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-	_, err := s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0, 3, time.Hour)
-	require.NoError(t, err)
-	_, _, err = s.RequestProbe(ctx, []Hash{h}, t0.Add(time.Minute))
-	require.NoError(t, err)
-	_, ok := leaseNext(t, s, t0.Add(time.Minute), false)
-	require.True(t, ok)
-	require.Equal(t, []string{"request/2"}, leasedProbes(t, s, h), "a request after a failure is a request")
-
-	_, err = s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(2*time.Minute), 3, time.Hour)
-	require.NoError(t, err)
-	_, ok = leaseNext(t, s, t0.Add(3*time.Hour), false)
-	require.True(t, ok)
-	require.Equal(t, []string{"request/2", "retry/3"}, leasedProbes(t, s, h), "its failure ends the request")
-
-	require.NoError(t, s.ProbeDone(ctx, h, Probe{Outcome: ProbeUnknown}, t0.Add(4*time.Hour)))
-	_, _, err = s.RequestProbe(ctx, []Hash{h}, t0.Add(5*time.Hour))
-	require.NoError(t, err)
-	c, ok := leaseNext(t, s, t0.Add(5*time.Hour), false)
-	require.True(t, ok)
-	require.Zero(t, c.Attempts)
-	require.Equal(t, []string{"request/2", "retry/3", "request/1"}, leasedProbes(t, s, h), "a probe that did not fail starts the count over")
-}
-
-func TestJournalProbeLeasedRequestInFlight(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	searched := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-	requested := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
-	require.NoError(t, s.WantProbe(ctx, []Hash{searched}, ProbeWant{T: "movie", Query: "alien"}, t0))
-	_, _, err := s.RequestProbe(ctx, []Hash{requested}, t0)
-	require.NoError(t, err)
-	for range 2 {
-		_, ok := leaseNext(t, s, t0, false)
-		require.True(t, ok)
-	}
-	_, _, err = s.RequestProbe(ctx, []Hash{searched, requested}, t0.Add(time.Minute))
-	require.NoError(t, err)
-	for _, h := range []Hash{searched, requested} {
-		_, err = s.ProbeFailed(ctx, h, ProbeTimeout, 0, t0.Add(2*time.Minute), 3, time.Hour)
-		require.NoError(t, err)
-	}
-	for range 2 {
-		_, ok := leaseNext(t, s, t0.Add(3*time.Minute), false)
-		require.True(t, ok)
-	}
-	for _, h := range []Hash{searched, requested} {
-		require.NotContains(t, entry(t, s, h, JournalProbed, ProbeTimeout).Detail, "retry_at", "kept due at once by the request")
-	}
-	require.Equal(t, []string{"search/1", "request/2"}, leasedProbes(t, s, searched), "a request made while the attempt was in flight outlives its failure")
-	require.Equal(t, []string{"request/1", "request/2"}, leasedProbes(t, s, requested), "and so does one made again")
-}
-
-func TestJournalProbeLeasedAfterMove(t *testing.T) {
-	ctx := context.Background()
-	type move func(*Store, Hash, time.Time) error
-	request := func(s *Store, h Hash, at time.Time) error {
-		_, _, err := s.RequestProbe(ctx, []Hash{h}, at)
-		return err
-	}
-	search := func(s *Store, h Hash, at time.Time) error {
-		return s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, at)
-	}
-	for _, tc := range []struct {
-		name  string
-		moves []move
-		want  []string
-	}{
-		{name: "requested twice", moves: []move{request, request}, want: []string{"background/1", "request/1"}},
-		{name: "searched twice", moves: []move{search, search}, want: []string{"background/1", "search/1"}},
-		{name: "requested, then searched", moves: []move{request, search}, want: []string{"background/1", "request/1"}},
-		{name: "searched, then requested", moves: []move{search, request}, want: []string{"background/1", "search/1", "request/1"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			s := open(t)
-			h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-			lease := func(at time.Time) {
-				t.Helper()
-				c, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 7, Now: at, Lease: 10 * time.Minute})
-				require.NoError(t, err)
-				require.True(t, ok)
-				require.Equal(t, h, c.Hash)
-			}
-			at := t0
-			lease(at)
-			for _, m := range tc.moves {
-				at = at.Add(20 * time.Minute)
-				require.NoError(t, m(s, h, at))
-				lease(at)
-			}
-			require.Equal(t, tc.want, leasedProbes(t, s, h), "the first lease since a move ahead is journaled; a move to where it is keeps the count")
-		})
-	}
-}
-
-func TestJournalProbeLeaseFails(t *testing.T) {
-	ctx := context.Background()
-	// failing opens a store with a probeable release, queued for a probe by
-	// a search when searched, whose probe_leased entries fail to write.
-	failing := func(t *testing.T, searched bool) (*Store, Hash) {
-		t.Helper()
-		s := open(t)
-		h := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-		if searched {
-			require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0))
-		}
-		_, err := s.w.ExecContext(ctx, `CREATE TRIGGER probe_leased_fails BEFORE INSERT ON torrent_journal WHEN NEW.kind = '`+JournalProbeLeased+`'
-			BEGIN SELECT RAISE(ABORT, 'probe_leased'); END`)
-		require.NoError(t, err)
-		return s, h
-	}
-	lease := func(t *testing.T, s *Store) {
-		t.Helper()
-		c, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 7, Now: t0, Lease: 10 * time.Minute})
-		require.Error(t, err)
-		require.False(t, ok)
-		require.Equal(t, ProbeCandidate{}, c, "no candidate with the error")
-	}
-
-	t.Run("queued by its lease", func(t *testing.T) {
-		s, _ := failing(t, false)
-		lease(t, s)
-		var n int
-		require.NoError(t, s.r.QueryRowContext(ctx, "SELECT count(*) FROM task_queue WHERE kind = 'probe'").Scan(&n))
-		require.Zero(t, n, "the task is not queued")
-	})
-	t.Run("queued by a search", func(t *testing.T) {
-		s, h := failing(t, true)
-		lease(t, s)
-		var leased bool
-		var leases int
-		require.NoError(t, s.r.QueryRowContext(ctx, "SELECT lease_owner IS NOT NULL, leases FROM task_queue WHERE kind = 'probe' AND infohash = ?", h[:]).Scan(&leased, &leases))
-		require.False(t, leased, "the task is free")
-		require.Zero(t, leases, "its count unchanged")
-	})
+	n := len(entries(t, s, hash(9)))
+	require.NoError(t, s.RecordProbeLease(ctx, ProbeLease{Hash: hash(9)}, t0))
+	require.Len(t, entries(t, s, hash(9)), n, "a hash not stored is ignored")
 }
 
 func TestJournalDeleted(t *testing.T) {

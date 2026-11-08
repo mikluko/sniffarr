@@ -31,8 +31,8 @@ service IngestService {
   // torrent and hour, and reports the totals when the client closes the
   // stream. A sketch of an infohash that is not stored is dropped.
   rpc Peers(stream PeersRequest) returns (PeersResponse);
-  // ProbeTask leases the next stored release whose main video file is to be
-  // probed for its tracks, or none while there is none or the day's
+  // ProbeTask hands out the next stored release whose main video file is
+  // to be probed for its tracks, or none while there is none or the day's
   // download budget is spent.
   rpc ProbeTask(ProbeTaskRequest) returns (ProbeTaskResponse);
   // ProbeResult records the outcome of a probe and the piece data it

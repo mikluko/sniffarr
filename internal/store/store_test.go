@@ -32,7 +32,6 @@ func open(t *testing.T) *Store {
 	t.Helper()
 	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	t.Cleanup(func() { require.NoError(t, s.Close(context.Background())) })
 	checkJournal(t, db)
 	return s
 }
@@ -310,14 +309,14 @@ func TestMigrateModules(t *testing.T) {
 	require.NoError(t, err)
 
 	names := schema(t, db)
-	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "task_queue", "task_dead", "task_backlog",
+	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "task_dead", "task_backlog",
 		"ingest_rejected", "ingest_token_usage", "stat_peers_by_hour", "stat_peers_by_day", "stat_top", "tmdb_works", "tmdb_ids", "state",
 		"torrent_releases_fts_data", "torrent_releases_fts_idx", "torrent_releases_fts_docsize", "torrent_releases_fts_config", "torrent_journal",
 		"stat_top_history"} {
 		require.Contains(t, names, "table "+name)
 	}
 	for _, name := range names {
-		for _, gone := range []string{"torrents", "files", "audio", "queue", "dead", "rejected", "token_usage", "peers_hour", "peers_day", "top", "settings"} {
+		for _, gone := range []string{"torrents", "files", "audio", "queue", "dead", "rejected", "token_usage", "peers_hour", "peers_day", "top", "settings", "task_queue"} {
 			require.NotEqual(t, "table "+gone, name)
 			require.NotEqual(t, "index "+gone, name)
 		}
@@ -326,7 +325,6 @@ func TestMigrateModules(t *testing.T) {
 	wantIndexes := []string{
 		"torrent_releases_unclassified", "torrent_releases_last_seen", "torrent_releases_title_key", "torrent_releases_background",
 		"torrent_releases_titled", "torrent_releases_work", "torrent_releases_peers_week", "torrent_releases_size",
-		"task_queue_order", "task_queue_lease_owner", "task_queue_lease_until", "task_queue_queued_at", "task_queue_evict",
 		"task_dead_until", "stat_peers_by_hour_hour", "stat_peers_by_day_day", "stat_top_work", "tmdb_ids_id", "tmdb_works_details",
 		"tmdb_matches_work", "torrent_releases_idle", "torrent_releases_counts", "torrent_releases_first_seen", "ingest_rejected_reason",
 		"arr_events_work", "arr_events_infohash", "arr_events_latest",
@@ -350,7 +348,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 31, version)
+	require.Equal(t, 32, version)
 	var kept []byte
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT value FROM state WHERE key = 'peer_hash_key'").Scan(&kept))
 	require.Equal(t, []byte{0}, kept, "the settings rows move to state")
@@ -375,7 +373,7 @@ func TestMigrateModules(t *testing.T) {
 	tokens, err := s.TokensUsed(ctx, "2026-10-01")
 	require.NoError(t, err)
 	require.EqualValues(t, 500, tokens)
-	for table, want := range map[string]int{"task_backlog": 1, "task_queue": 0, "task_dead": 1, "ingest_rejected": 1, "stat_peers_by_hour": 1, "stat_peers_by_day": 1,
+	for table, want := range map[string]int{"task_backlog": 1, "task_dead": 1, "ingest_rejected": 1, "stat_peers_by_hour": 1, "stat_peers_by_day": 1,
 		"stat_top": 0, "tmdb_works": 1, "tmdb_matches": 1, "tmdb_ids": 0} {
 		var n int
 		require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&n))

@@ -58,12 +58,14 @@ type LatestRelease interface {
 // Browser implements sniffarrv1connect.BrowseServiceHandler.
 type Browser struct {
 	Store *store.Store
-	// Tasks, when set, has Stats report the probe queue.
-	Tasks *store.Tasks
 	// Fetches, when set, has Stats report the fetch orders and peer lookups,
 	// and RefreshPeers order the lookups; without it RefreshPeers answers
 	// FAILED_PRECONDITION.
 	Fetches *orders.Queue
+	// ProbeOrders, when set, has Stats report the probe orders, and
+	// RequestProbe order probes; Probers counts who asks for them.
+	ProbeOrders *orders.Queue
+	Probers     *store.Probers
 	// TMDB, when set, has SearchTitles search TMDB as well as the store.
 	TMDB TitleSearch
 	// Matcher, when set, serves RequestMatch.
@@ -75,8 +77,9 @@ type Browser struct {
 	// ProbeDailyBytes is the probes' daily download limit Stats reports; 0
 	// is none.
 	ProbeDailyBytes int64
-	// Probes has RequestProbe queue probes, and Settings report them on;
-	// without it RequestProbe answers FAILED_PRECONDITION.
+	// Probes has RequestProbe order probes, and Settings report them on;
+	// without it, or without ProbeOrders, RequestProbe answers
+	// FAILED_PRECONDITION.
 	Probes bool
 	// Languages are the audio languages Settings reports, tags in configured
 	// order; nil when the audio extension is off.
@@ -159,12 +162,12 @@ func (b *Browser) budgetSpent(ctx context.Context) (bool, error) {
 }
 
 // probers returns the probers seen within store.ProberWindow, 0 while
-// probes are off or without Tasks.
+// probes are off or without Probers.
 func (b *Browser) probers() int {
-	if !b.Probes || b.Tasks == nil {
+	if !b.Probes || b.Probers == nil {
 		return 0
 	}
-	return b.Tasks.Probers(b.now())
+	return b.Probers.Count(b.now())
 }
 
 func (b *Browser) now() time.Time {
@@ -491,8 +494,8 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	return connect.NewResponse(res), nil
 }
 
-// queue sets the queue fields of res from Fetches and Tasks, leaving those
-// of either unset without it.
+// queue sets the queue fields of res from Fetches and ProbeOrders, leaving
+// those of either unset without it.
 func (b *Browser) queue(ctx context.Context, res *sniffarrv1.StatsResponse) error {
 	if b.Fetches != nil {
 		queues, err := b.Fetches.Levels(ctx, b.now())
@@ -502,8 +505,8 @@ func (b *Browser) queue(ctx context.Context, res *sniffarrv1.StatsResponse) erro
 		res.QueueFetches = taskQueue(queues[store.TaskFetch])
 		res.QueueLookups = taskQueue(queues[store.TaskPeers])
 	}
-	if b.Tasks != nil {
-		queues, err := b.Tasks.Queues(ctx, b.now())
+	if b.ProbeOrders != nil {
+		queues, err := b.ProbeOrders.Levels(ctx, b.now())
 		if err != nil {
 			return err
 		}

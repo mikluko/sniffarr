@@ -139,11 +139,9 @@ func TestLoadComponents(t *testing.T) {
 		{name: "zero seed age", args: []string{"-fetch", "-probe", "-seed-max-age", "0s"}, err: "-probe-timeout and -seed-max-age: want positive durations"},
 		{name: "api with probes", args: []string{"-api", "-probe"}, env: apiEnv, want: func(t *testing.T, c config) {
 			require.True(t, c.api.Probes)
-			require.False(t, c.db.Tasks.NoProbes)
 		}},
 		{name: "api without probes", args: []string{"-api"}, env: apiEnv, want: func(t *testing.T, c config) {
 			require.False(t, c.api.Probes)
-			require.True(t, c.db.Tasks.NoProbes, "Trim drops the probes queued")
 		}},
 		{name: "sniff with another STUN server", args: []string{"-sniff", "-stun", "stun.example.net:3478"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 			require.Equal(t, dht.Config{Network: defaultNetwork(false), STUN: "stun.example.net:3478"}, c.dht)
@@ -215,8 +213,7 @@ func TestLoadAPI(t *testing.T) {
 				Retention: defaultRetention, RetentionIdle: defaultRetentionIdle, RetentionJournal: defaultRetentionJournal, StatsInterval: defaultStatsInterval, Scripts: defaultScripts,
 				Probe: defaultProbe, ReleaseCheck: true},
 			db.Config{Path: "/data/sniffarr.db",
-				Tasks: store.TaskOptions{NoProbes: true},
-				Store: store.Options{MaxFiles: store.DefaultMaxFiles, ProbeBatch: store.DefaultProbeBatch, TMDB: true}}
+				Store: store.Options{MaxFiles: store.DefaultMaxFiles, TMDB: true}}
 	}
 	tests := []struct {
 		name string
@@ -230,7 +227,7 @@ func TestLoadAPI(t *testing.T) {
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
 			"SNIFFARR_PROBE_DAILY_BYTES", "20GiB", "SNIFFARR_PROBE_SEARCH_RESERVE", "10", "SNIFFARR_PROBE_MAX_BYTES", "32MiB",
-			"SNIFFARR_PROBE_LEASE", "5m", "SNIFFARR_PROBE_ATTEMPTS", "2", "SNIFFARR_PROBE_BACKOFF", "12h", "SNIFFARR_PROBE_BATCH", "50",
+			"SNIFFARR_PROBE_LEASE", "5m", "SNIFFARR_PROBE_ATTEMPTS", "2", "SNIFFARR_PROBE_BACKOFF", "12h",
 			"SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
 			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h", "SNIFFARR_RETENTION_IDLE", "72h", "SNIFFARR_RETENTION_JOURNAL", "168h", "SNIFFARR_STATS_INTERVAL", "1m",
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
@@ -243,7 +240,7 @@ func TestLoadAPI(t *testing.T) {
 					StatsInterval: time.Minute, LazyMax: 5, LazyWait: 500 * time.Millisecond,
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian,
 					Probe: ingest.ProbeConfig{DailyBytes: 20 << 30, SearchReserve: 10, MaxBytes: 32 << 20, Lease: 5 * time.Minute, Attempts: 2, Backoff: 12 * time.Hour}, ReleaseCheck: true}
-				d.Store = store.Options{MaxFiles: 50, ProbeBatch: 50, Languages: []string{"ru"}, TMDB: true}
+				d.Store = store.Options{MaxFiles: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
 		{name: "classifier endpoint", env: with("SNIFFARR_CLASSIFY_URL", "http://laya:8000/v1/systemone"),
 			want: func(a *api.Config, _ *db.Config) { a.ClassifyURL = "http://laya:8000/v1/systemone" }},
@@ -259,7 +256,6 @@ func TestLoadAPI(t *testing.T) {
 		{name: "audio languages set but empty", env: with("SNIFFARR_AUDIO_LANGUAGES", ""), want: func(*api.Config, *db.Config) {}},
 		{name: "audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru"), want: func(a *api.Config, d *db.Config) { a.Languages, d.Store.Languages = russian, []string{"ru"} }},
 		{name: "unknown audio language", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru,xx"), err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},
-		{name: "probe batch zero", env: with("SNIFFARR_PROBE_BATCH", "0"), err: "SNIFFARR_PROBE_BATCH: want a positive integer"},
 		{name: "nothing set", err: "SNIFFARR_DB is not set"},
 		{name: "release check off", env: with("SNIFFARR_RELEASE_CHECK", "off"), want: func(a *api.Config, _ *db.Config) { a.ReleaseCheck = false }},
 		{name: "release check no", env: with("SNIFFARR_RELEASE_CHECK", "no"), want: func(a *api.Config, _ *db.Config) { a.ReleaseCheck = false }},

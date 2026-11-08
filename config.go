@@ -186,7 +186,7 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 		if c.broker, err = loadBroker(getenv, c.db.Path); err != nil {
 			return c, err
 		}
-		c.api.Probes, c.db.Tasks.NoProbes = c.probe, !c.probe
+		c.api.Probes = c.probe
 	}
 	return c, nil
 }
@@ -387,10 +387,7 @@ func loadBroker(getenv func(string) string, dbPath string) (broker.Config, error
 func loadStore(getenv func(string) string) (store.Options, error) {
 	var o store.Options
 	var err error
-	if o.MaxFiles, err = positive(getenv, "SNIFFARR_STORE_MAX_FILES", store.DefaultMaxFiles); err != nil {
-		return o, err
-	}
-	o.ProbeBatch, err = positive(getenv, "SNIFFARR_PROBE_BATCH", store.DefaultProbeBatch)
+	o.MaxFiles, err = positive(getenv, "SNIFFARR_STORE_MAX_FILES", store.DefaultMaxFiles)
 	return o, err
 }
 

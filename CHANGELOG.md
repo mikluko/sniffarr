@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An announce of an infohash whose sample waits orders its fetch again at the announce's priority, journaled as `sighted/queued`.
 - `RefreshPeers` journals every request for a peer lookup.
 - The metric `sniffarr.queue.depth` counts orders by `sniffarr.task.kind` and `sniffarr.priority`, and `sniffarr.queue.lease_expiries` counts by `sniffarr.task.kind`.
+- Probes are orders on the NATS stream `PROBE_ORDERS`, which the API hands out through `IngestService.ProbeTask`, in place of the SQLite queue, whose probes move into the stream at the first start.
+- A failed probe that a request or a search ordered is retried by a message scheduled on `sniffarr.orders.probe.retry.<infohash>`.
+- `RequestProbe` journals every request, and orders the probe of a release without peers at once.
+- A Torznab search orders no probe of a release without peers.
 
 ### Fixed
 
@@ -36,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** the NATS server's listener for workers, with `SNIFFARR_NATS_ADDR`, the user `worker`, and the chart's `api.nats.enabled` and port `nats`.
 - **Breaking:** the eviction of waiting fetches by age and by size, with `SNIFFARR_QUEUE_MAX_AGE`, `SNIFFARR_QUEUE_MAX_SIZE` and the `age` and `size` evictions of `sniffarr.queue.evictions`.
+- `SNIFFARR_PROBE_BATCH`, with the batching of probe tasks asked for at once.
 
 ## [0.45.0] - 2026-11-08
 

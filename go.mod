@@ -10,7 +10,6 @@ require (
 	github.com/anacrolix/torrent v1.61.1-0.20261108082052-e93a3fc0da93
 	github.com/dchest/siphash v1.2.3
 	github.com/google/pprof v0.0.0-20261105003125-4bf881d7fb0b
-	github.com/mikluko/batcher v0.10.0
 	github.com/nats-io/jwt/v2 v2.8.2
 	github.com/nats-io/nats-server/v2 v2.15.2
 	github.com/nats-io/nats.go v1.55.0

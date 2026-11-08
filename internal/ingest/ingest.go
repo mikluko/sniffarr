@@ -41,7 +41,6 @@ const maxCredit = 10000
 // the default named in their doc.
 type Service struct {
 	Store *store.Store
-	Tasks *store.Tasks
 	// Fetches hands out the fetch orders and the peer lookups.
 	Fetches *orders.Queue
 	Log     *slog.Logger
@@ -74,7 +73,11 @@ type Service struct {
 	Now       func() time.Time
 	// Probe tunes the probe tasks.
 	Probe ProbeConfig
-	// Probes has ProbeTask lease probe tasks; without it ProbeTask answers
+	// ProbeOrders hands out the probe orders; Probers counts who asks for
+	// them. Both are needed with Probes.
+	ProbeOrders *orders.Queue
+	Probers     *store.Probers
+	// Probes has ProbeTask hand out probe tasks; without it ProbeTask answers
 	// none.
 	Probes bool
 	// Meter records the service's metrics; the global MeterProvider when
@@ -82,6 +85,7 @@ type Service struct {
 	Meter metric.MeterProvider
 
 	owners      atomic.Int64
+	probeMu     sync.Mutex
 	metricsOnce sync.Once
 	m           *metrics
 }

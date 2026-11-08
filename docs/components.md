@@ -21,7 +21,7 @@ until SIGINT or SIGTERM.
   of stored releases.
 
 Probes are off unless `-probe` is given, and the flag means the same to
-every component in the process: `-api` queues probes and hands them out,
+every component in the process: `-api` orders probes and hands them out,
 and `-fetch` takes them. The web UI follows the API's `Settings`, not the
 flag. With probes off, results stored by earlier probes still show.
 
@@ -38,10 +38,11 @@ first, then the infohashes Radarr or Sonarr grabbed and the probes of
 releases a search returned, then announced infohashes before sampled
 ones, then the oldest first. Fetchers take fetches and lookups,
 and probers take probes. Fetches and lookups are orders on the NATS stream
-`FETCH_ORDERS`, described below, and survive restarts with it; probes wait in
-the SQLite database. The API pulls the orders 32 at a time from each
+`FETCH_ORDERS` and probes on `PROBE_ORDERS`, described below, and survive
+restarts with them. The API pulls the orders 32 at a time from each
 priority's consumer, highest priority first, and hands them out against the
-fetchers' credit; fetchers never connect to NATS. An order whose fetcher
+fetchers' credit, or one to each prober's `ProbeTask`; fetchers never connect
+to NATS. [Probes](probes.md) tells how the probes are ordered and handed out. An order whose fetcher
 goes away goes back to the stream at once, as does one held longer than
 `SNIFFARR_FETCH_LEASE`; the orders the API holds are marked in progress every
 30 seconds, so those an API that stopped without handing them back held go
@@ -77,7 +78,7 @@ only ever sampled are left out: the journal of a sampled infohash begins with
 its metadata. What repeats without changing is left out too: a lease of the
 same attempt after one expired, a title lookup that finds nothing or fails as
 the last one did, unless `RequestMatch` asked for it, a search that returns the release within a day of the last,
-a probe requested again before a lease began, and a Radarr or Sonarr event
+and a Radarr or Sonarr event
 that names the work its title key matched already, which raises the match's
 layer to theirs and writes no row. Peer lookups are not journaled; a request
 for one through `RefreshPeers`, which the web UI's button calls, is, at P0. A kind
@@ -289,7 +290,7 @@ under the same `Nats-Msg-Id`, and take scheduled messages on
 replacing the one pending; a consumer of each order subject delivers at most
 1024 orders not acknowledged, and one neither acknowledged nor marked in
 progress again after 2 minutes. Only the API publishes and consumes the
-fetch orders; no component publishes the probe orders or the results yet.
+fetch and probe orders; no component publishes the results yet.
 The server listens on no port and has no monitoring port, and the
 API's user connects in process only. Its JetStream domain is `sniffarr`.
 With `SNIFFARR_NATS_URL` set, the server connects to that upstream server as

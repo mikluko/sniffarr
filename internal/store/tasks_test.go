@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -87,87 +86,4 @@ func TestMigrateFeedPriority(t *testing.T) {
 	tables := schema(t, db)
 	require.NotContains(t, tables, "table feed_items")
 	require.NotContains(t, tables, "table crawl_state")
-}
-
-func TestTrimDropsProbesOfGoneReleases(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	q, err := NewTasks(ctx, s.db, TaskOptions{})
-	require.NoError(t, err)
-	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
-	_, _, err = s.RequestProbe(ctx, []Hash{a, b}, t0)
-	require.NoError(t, err)
-	_, err = s.w.ExecContext(ctx, "DELETE FROM torrent_releases WHERE infohash = ?", a[:])
-	require.NoError(t, err)
-
-	require.NoError(t, q.Trim(ctx))
-	require.Equal(t, []Hash{b}, queuedProbes(t, s))
-}
-
-func TestTrimDropsProbesNeverLeased(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	q, err := NewTasks(ctx, s.db, TaskOptions{})
-	require.NoError(t, err)
-	readable := insertProbeable(t, s, 1, "Alien.1979.1080p", 0, "Alien.1979.1080p.mkv")
-	avi := insertProbeable(t, s, 2, "Heat.1995.DVDRip", 5, "Heat.1995.DVDRip.avi")
-	_, _, err = s.RequestProbe(ctx, []Hash{readable, avi}, t0)
-	require.NoError(t, err)
-
-	require.NoError(t, q.Trim(ctx))
-	require.Equal(t, []Hash{readable}, queuedProbes(t, s), "a release without peers waits; one a probe cannot read goes")
-}
-
-func TestTrimNoProbes(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	q, err := NewTasks(ctx, s.db, TaskOptions{NoProbes: true})
-	require.NoError(t, err)
-	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
-	_, _, err = s.RequestProbe(ctx, []Hash{a, b}, t0)
-	require.NoError(t, err)
-	_, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 1, Now: t0, Lease: time.Minute, MaxBytes: 1 << 20, Admit: admitting(false)})
-	require.NoError(t, err)
-	require.True(t, ok)
-
-	require.NoError(t, q.Trim(ctx))
-	require.Empty(t, queuedProbes(t, s), "queued and leased probes go")
-}
-
-func TestReset(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	q, err := NewTasks(ctx, s.db, TaskOptions{})
-	require.NoError(t, err)
-	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-	_, _, err = s.RequestProbe(ctx, []Hash{a}, t0)
-	require.NoError(t, err)
-	_, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 1, Now: t0, Lease: time.Hour, MaxBytes: 1 << 20})
-	require.NoError(t, err)
-	require.True(t, ok)
-	_, ok, err = s.LeaseProbe(ctx, ProbeRequest{Owner: 2, Now: t0, Lease: time.Hour, MaxBytes: 1 << 20})
-	require.NoError(t, err)
-	require.False(t, ok, "leased")
-	require.NoError(t, q.Reset(ctx))
-	c, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 2, Now: t0, Lease: time.Hour, MaxBytes: 1 << 20})
-	require.NoError(t, err)
-	require.True(t, ok, "free again")
-	require.Equal(t, a, c.Hash)
-}
-
-func TestTaskPlans(t *testing.T) {
-	s := open(t)
-	rows, err := s.r.QueryContext(context.Background(), "EXPLAIN QUERY PLAN "+freeExpiredQuery("kind = 'probe'"), 0)
-	require.NoError(t, err)
-	var plan []string
-	for rows.Next() {
-		var id, parent, unused int
-		var detail string
-		require.NoError(t, rows.Scan(&id, &parent, &unused, &detail))
-		plan = append(plan, detail)
-	}
-	require.NoError(t, rows.Close())
-	require.Equal(t, []string{"SEARCH task_queue USING INDEX task_queue_lease_until (lease_until<?)"}, plan)
 }

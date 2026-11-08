@@ -2,16 +2,16 @@
 
 A probe reads the track list of a stored release's main video file from its
 container header, which lies in the file's first pieces. Probes are off
-unless `-probe` is given: `-api` with it queues probes and hands out the
+unless `-probe` is given: `-api` with it orders probes and hands out the
 tasks, and `-fetch` with it takes them. Turn probes on by giving `-probe` to
 the process that runs `-api` and to the fetchers that are to probe, with
 `-probe-dir` naming where the pieces are kept; without `-probe-dir` they are
 kept in a fresh temporary directory, removed at stop, so nothing seeded
 survives a restart. The Helm chart's `probe.enabled` does both.
 
-With probes off, Torznab searches and `RequestProbe` queue no probe,
-`RequestProbe` fails with `FAILED_PRECONDITION`, `ProbeTask` hands out
-none, the API's maintenance drops the probes queued, and `Settings` tells
+With probes off, Torznab searches order no probe, `RequestProbe` fails
+with `FAILED_PRECONDITION`, `ProbeTask` hands out none, the API purges
+`PROBE_ORDERS` at start, and `Settings` tells
 the web UI, which hides its probe button, meter and queue. Tracks and
 probabilities stored by earlier probes stay, in the Torznab titles too.
 
@@ -57,62 +57,65 @@ sequenceDiagram
 ```
 
 Candidates are stored movies and series with a stored file of those
-formats and at least one distinct peer over the last 7 days. Probes wait in
-the API's task queue beside fetches and peer lookups, by priority and then
-the most recently queued first. Releases asked for with `RequestProbe`, the
-web UI's probe button, go first, whatever their last probe; a request for
-a release with no file of those formats queues nothing. Releases a
-Torznab search with a query or an ID returned go next, unless their probe is
-done or its failures ran out without the peers growing. With the queue
-empty, the release never probed with the most peers over 7 days goes, then
-the one due a probe again with the most. A release without peers waits
-until it has some. Each release is probed once, and
+formats and at least one distinct peer over the last 7 days. Probes are
+orders on the NATS stream `PROBE_ORDERS`, on a subject per priority, and the
+API hands them out one to each `ProbeTask`, the highest priority first and
+then the oldest order. Releases asked for with `RequestProbe`, the web UI's
+probe button, are ordered at P0 and go first, whatever their last probe; a
+request for a release with no file of those formats orders nothing.
+Releases with peers that a Torznab search with a query or an ID returned are
+ordered at P1, unless their probe is done or its failures ran out without
+the peers growing; one waiting out the backoff of a failed probe is
+ordered for the time it is due. Once a minute, while P3 holds no order, handed out or not,
+the API orders at P3 the 64 releases never probed with the most peers over 7
+days, then those due a probe again with the most. An order at P1 to P3 of a
+release that is no longer due a probe when it comes out is dropped, as is
+an order of a release whose probe is handed out already. Each release is
+probed once, and
 the outcome is stored, the tracks in their own table: read, unknown
 (no file of those formats, a track list beyond `max_bytes` or of more than
 128 tracks, or a header the probe cannot read), or failed (fewer than `-min-peers` peers within
 `-peer-wait`, the metadata not within `-fetch-timeout`, or the pieces not
-before `-probe-timeout`). The release's journal records a request, unless its
-probe is queued as requested already and no lease began since, and once a day a search that queued or
-moved its probe, with the query, the first hand-out of each attempt and of
-each move ahead with the piece data it may download and when the lease ends,
+before `-probe-timeout`). The release's journal records each request, once a
+day a search that ordered its probe, with the query, the first hand-out of
+each order with the piece data it may download and when the hold ends,
 and each outcome with the piece data downloaded, the first 32
-tracks read with how many there were when more, the leases the attempt took
-when it took more than one and, for a failure, whether the attempts have run
-out and, when it waits out a backoff, when it is due again. A failed probe
-is repeated after `SNIFFARR_PROBE_BACKOFF`, doubled for each failure
-before; a requested or searched one stays queued as searched until then,
-unless it was requested while the failed attempt was in flight, which keeps
-the request. Once
+tracks read with how many there were when more, the times the order was
+handed out when that was more than once and, for a failure, whether the
+attempts have run out and, when it waits out a backoff, when it is due
+again. A failed probe is due again after `SNIFFARR_PROBE_BACKOFF`, doubled
+for each failure before; one a request or a search ordered is ordered again
+at P1 for that time, by a message scheduled on
+`sniffarr.orders.probe.retry.<infohash>`. Once
 `SNIFFARR_PROBE_ATTEMPTS` have failed since the release was last read, the
 backoff stays at its last doubling and the release is probed again only once
 it has twice the peers over 7 days it had at its last probe, and at least two
-more. A task is leased for
-`SNIFFARR_PROBE_LEASE`; leases are kept in the queue, and a restart of the
-API frees them. Tasks asked for at once, up to `SNIFFARR_PROBE_BATCH`, are
-handed out together in the order asked, from one look-up of the candidates.
+more. A prober holds a probe for `SNIFFARR_PROBE_LEASE`; then, or when the
+API stops, the order goes back to the stream and is handed out again. A
+result that comes after its order went back still records the probe.
 
 ```mermaid
 stateDiagram-v2
     state "Attempts run out" as RunOut
-    [*] --> Queued: requested, searched, or the most peers
-    Queued --> Leased: ProbeTask
-    Leased --> Queued: lease ends, API restarts
-    Leased --> Read: tracks
-    Leased --> Unknown: no video file, beyond max_bytes, over 128 tracks, unreadable
-    Leased --> Failed: too few peers, no metadata, pieces too slow
-    Read --> Queued: RequestProbe
-    Unknown --> Queued: RequestProbe
-    Failed --> Queued: after the backoff, doubled per failure
+    [*] --> Ordered: requested, searched, or the most peers
+    Ordered --> Held: ProbeTask
+    Held --> Ordered: hold ends, API stops
+    Held --> Read: tracks
+    Held --> Unknown: no video file, beyond max_bytes, over 128 tracks, unreadable
+    Held --> Failed: too few peers, no metadata, pieces too slow
+    Read --> Ordered: RequestProbe
+    Unknown --> Ordered: RequestProbe
+    Failed --> Ordered: after the backoff, doubled per failure
     Failed --> RunOut: SNIFFARR_PROBE_ATTEMPTS failed
-    RunOut --> Queued: twice the peers, and two more
+    RunOut --> Ordered: twice the peers, and two more
 ```
 
 The API meters the piece data probes download per UTC day, as it meters
 the classifier's tokens: `SNIFFARR_PROBE_DAILY_BYTES`, 100 GiB by default.
-A lease counts as `SNIFFARR_PROBE_MAX_BYTES` until its result reports what
-it downloaded. Releases no search returned stop at 75% of the day's bytes
-by default, `SNIFFARR_PROBE_SEARCH_RESERVE` leaving the rest for searched
-ones.
+A probe handed out counts as `SNIFFARR_PROBE_MAX_BYTES` until its result
+reports what it downloaded. Orders at P3 stop at 75% of the day's bytes by
+default, `SNIFFARR_PROBE_SEARCH_RESERVE` leaving the rest for requested and
+searched ones.
 
 With the audio extension on, a probe that read the tracks sets the
 probability of an audio track in each configured language, under layer

@@ -92,7 +92,8 @@ type Config struct {
 	Sonarr ArrHistory
 	// Probe tunes the probe tasks of the ingest service.
 	Probe ingest.ProbeConfig
-	// Probes has the API queue and lease probes; without it none is queued.
+	// Probes has the API order and hand out probes; without it none is
+	// ordered, and the probe orders are purged at start.
 	Probes bool
 	// ReleaseCheck has the API ask the forge for the latest stable release
 	// once a day and report it in BrowseService.Settings.
@@ -116,7 +117,7 @@ const arrTimeout = time.Minute
 // process's own clients, and serves it on Config.Addr from start to stop
 // with its workers.
 var Module = fx.Module("api",
-	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder, newChecker, newFetches, newIngest),
+	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder, newChecker, newFetches, newProbeOrders, newIngest),
 	fx.Invoke(serve, work),
 )
 
@@ -219,10 +220,25 @@ func newFetches(lc fx.Lifecycle, cfg Config, b *broker.Broker) *orders.Queue {
 	return q
 }
 
+// probeOrders is the hand-out of the probe orders.
+type probeOrders struct{ *orders.Queue }
+
+// newProbeOrders returns the hand-out of the probe orders, bound to b's stream
+// from b's start.
+func newProbeOrders(lc fx.Lifecycle, cfg Config, b *broker.Broker) probeOrders {
+	lease := cfg.Probe.Lease
+	if lease <= 0 {
+		lease = ingest.DefaultProbeLease
+	}
+	q := orders.New(orders.Config{Stream: bus.StreamProbeOrders, Lanes: bus.ProbeLanes, Lease: lease})
+	lc.Append(fx.StartHook(func(ctx context.Context) error { return q.Start(ctx, b.JetStream) }))
+	return probeOrders{q}
+}
+
 // newIngest returns the ingest service the API serves, whose Sight publishes
 // to the sightings stream, from b's start, and whose Intake takes it.
-func newIngest(lc fx.Lifecycle, cfg Config, s *store.Store, q *store.Tasks, fetches *orders.Queue, b *broker.Broker, log *slog.Logger) *ingest.Service {
-	ing := &ingest.Service{Store: s, Tasks: q, Fetches: fetches, Log: log, Attempts: cfg.Attempts, Backoff: cfg.Backoff, DeadFor: cfg.DeadFor, NoPeersFor: cfg.NoPeersFor,
+func newIngest(lc fx.Lifecycle, cfg Config, s *store.Store, fetches *orders.Queue, probes probeOrders, b *broker.Broker, log *slog.Logger) *ingest.Service {
+	ing := &ingest.Service{Store: s, Fetches: fetches, ProbeOrders: probes.Queue, Probers: &store.Probers{}, Log: log, Attempts: cfg.Attempts, Backoff: cfg.Backoff, DeadFor: cfg.DeadFor, NoPeersFor: cfg.NoPeersFor,
 		Scripts: cfg.Scripts, Languages: cfg.Languages, Probe: cfg.Probe, Probes: cfg.Probes}
 	lc.Append(fx.StartHook(func() { ing.JetStream = b.JetStream }))
 	return ing
@@ -236,7 +252,7 @@ func newRecorder(s *store.Store, ing *ingest.Service, c *classifiers, log *slog.
 	return r
 }
 
-func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Tasks, fetches *orders.Queue, c *classifiers, counts *search.Counts,
+func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, fetches *orders.Queue, c *classifiers, counts *search.Counts,
 	rec *arr.Recorder, mem *memconn.Listener, chk *latest.Checker, ing *ingest.Service) error {
 	var releases search.LatestRelease
 	if chk != nil {
@@ -251,8 +267,9 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		TMDB:              titles,
 		Matcher:           matcher,
 		Store:             s,
-		Tasks:             q,
 		Fetches:           fetches,
+		ProbeOrders:       ing.ProbeOrders,
+		Probers:           ing.Probers,
 		Ingest:            ing,
 		Scripts:           cfg.Scripts,
 		Languages:         cfg.Languages,
@@ -279,11 +296,20 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 	return nil
 }
 
-func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts, rec *arr.Recorder, chk *latest.Checker,
-	b *broker.Broker, fetches *orders.Queue, ing *ingest.Service) {
+func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, c *classifiers, counts *search.Counts, rec *arr.Recorder, chk *latest.Checker,
+	b *broker.Broker, fetches *orders.Queue, probes probeOrders, ing *ingest.Service) {
 	app.Go(lc, sd, log, "intake", func(ctx context.Context) error { return ing.Intake(ctx, b.JetStream) })
 	app.Go(lc, sd, log, "fetch orders", fetches.Run)
-	app.Go(lc, sd, log, "backlog", func(ctx context.Context) error { return moveBacklog(ctx, s, log, fetches) })
+	app.Go(lc, sd, log, "probe orders", probes.Run)
+	app.Go(lc, sd, log, "backlog", func(ctx context.Context) error {
+		if err := moveBacklog(ctx, s, log, fetches, probes.Queue); err != nil || cfg.Probes {
+			return err
+		}
+		return probes.Purge(ctx)
+	})
+	if cfg.Probes {
+		app.Go(lc, sd, log, "probe schedule", ing.ScheduleProbes)
+	}
 	if chk != nil {
 		app.Go(lc, sd, log, "release check", chk.Run)
 	}
@@ -292,7 +318,7 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		return nil
 	})
 	app.Go(lc, sd, log, "maintenance", func(ctx context.Context) error {
-		every(ctx, maintenance, func() { maintain(ctx, q, s, cfg.Retention, cfg.RetentionIdle, cfg.RetentionJournal, log) })
+		every(ctx, maintenance, func() { maintain(ctx, s, cfg.Retention, cfg.RetentionIdle, cfg.RetentionJournal, log) })
 		return nil
 	})
 	app.Go(lc, sd, log, "wal", func(ctx context.Context) error {
@@ -334,14 +360,11 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 	}
 }
 
-// maintain trims the probe queue, forgets the dead hashes whose time is up,
+// maintain forgets the dead hashes whose time is up,
 // deletes the torrents not seen within retention, or within idle for those
 // with no TMDB work, and the journal entries older than journal.
-func maintain(ctx context.Context, q *store.Tasks, s *store.Store, retention, idle, journal time.Duration, log *slog.Logger) {
+func maintain(ctx context.Context, s *store.Store, retention, idle, journal time.Duration, log *slog.Logger) {
 	now := time.Now()
-	if err := q.Trim(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		log.ErrorContext(ctx, "trim probes", "err", err)
-	}
 	if n, err := s.ExpireDead(ctx, now); err != nil && !errors.Is(err, context.Canceled) {
 		log.ErrorContext(ctx, "expire dead", "err", err)
 	} else if n > 0 {

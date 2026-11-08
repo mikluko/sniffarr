@@ -115,8 +115,8 @@ type BrowseServiceClient interface {
 	RefreshPeers(context.Context, *connect.Request[v1.RefreshPeersRequest]) (*connect.Response[v1.RefreshPeersResponse], error)
 	// RequestProbe asks the prober to probe a release, or every release of a
 	// work, ahead of the releases searches return, whatever its last probe.
-	// A release without peers over the last 7 days is not probed until it has
-	// some; one with no file a probe can read is not probed. NOT_FOUND without
+	// A release without peers over the last 7 days is ordered all the same;
+	// one with no file a probe can read is not. NOT_FOUND without
 	// a stored release, FAILED_PRECONDITION while probes are off.
 	RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error)
 	// RequestMatch looks the title keys of a release, or of every release of
@@ -352,8 +352,8 @@ type BrowseServiceHandler interface {
 	RefreshPeers(context.Context, *connect.Request[v1.RefreshPeersRequest]) (*connect.Response[v1.RefreshPeersResponse], error)
 	// RequestProbe asks the prober to probe a release, or every release of a
 	// work, ahead of the releases searches return, whatever its last probe.
-	// A release without peers over the last 7 days is not probed until it has
-	// some; one with no file a probe can read is not probed. NOT_FOUND without
+	// A release without peers over the last 7 days is ordered all the same;
+	// one with no file a probe can read is not. NOT_FOUND without
 	// a stored release, FAILED_PRECONDITION while probes are off.
 	RequestProbe(context.Context, *connect.Request[v1.RequestProbeRequest]) (*connect.Response[v1.RequestProbeResponse], error)
 	// RequestMatch looks the title keys of a release, or of every release of

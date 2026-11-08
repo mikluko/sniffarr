@@ -221,7 +221,7 @@ func TestBackfillProbeAttempts(t *testing.T) {
 	require.NoError(t, s.ProbeDone(ctx, read, Probe{Outcome: ProbeTracks}, t0))
 	require.NoError(t, s.ProbeDone(ctx, unknown, Probe{Outcome: ProbeUnknown}, t0))
 	for range 2 {
-		_, err := s.ProbeFailed(ctx, failed, ProbeTimeout, 0, t0, 3, time.Hour)
+		_, _, err := s.ProbeFailed(ctx, failed, ProbeTimeout, 0, 1, t0, 3, time.Hour)
 		require.NoError(t, err)
 	}
 	_, err := s.w.ExecContext(ctx, "UPDATE probe_releases SET attempts = 2 WHERE outcome != ?", ProbeFailed)
@@ -235,7 +235,7 @@ func TestBackfillProbeAttempts(t *testing.T) {
 		require.NoError(t, s.r.QueryRowContext(ctx, "SELECT p.attempts FROM probe_releases p JOIN torrent_releases t ON t.id = p.torrent_id WHERE t.infohash = ?", h[:]).Scan(&n))
 		require.Equal(t, want, n, "a failed probe keeps its attempts")
 	}
-	final, err := s.ProbeFailed(ctx, read, ProbeTimeout, 0, t0, 3, time.Hour)
+	final, _, err := s.ProbeFailed(ctx, read, ProbeTimeout, 0, 1, t0, 3, time.Hour)
 	require.NoError(t, err)
 	require.False(t, final, "the first failure after a read")
 }

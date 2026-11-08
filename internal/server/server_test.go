@@ -53,9 +53,6 @@ func start(t *testing.T, cfg Config) (*httptest.Server, *http.Client) {
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(cfg.Languages), Meter: cfg.Meter})
 	require.NoError(t, err)
-	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
-	require.NoError(t, err)
-	cfg.Tasks = q
 	cfg.Store, cfg.Log = s, slog.New(slog.DiscardHandler)
 	if cfg.Arr != nil {
 		cfg.Arr.Store, cfg.Arr.Log = s, cfg.Log
@@ -69,6 +66,11 @@ func start(t *testing.T, cfg Config) (*httptest.Server, *http.Client) {
 		cfg.Fetches = orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes, Meter: cfg.Meter})
 	}
 	require.NoError(t, cfg.Fetches.Start(ctx, js))
+	if cfg.ProbeOrders == nil {
+		cfg.ProbeOrders = orders.New(orders.Config{Stream: bus.StreamProbeOrders, Lanes: bus.ProbeLanes, Meter: cfg.Meter})
+	}
+	require.NoError(t, cfg.ProbeOrders.Start(ctx, js))
+	cfg.Probers = &store.Probers{}
 	cfg.Ingest = cfg.ingestService()
 	cfg.Ingest.IntakeWait = 10 * time.Millisecond
 	if cfg.Arr != nil {
@@ -797,12 +799,10 @@ func serveMem(t *testing.T) (*store.Store, sniffarrv1connect.IngestServiceClient
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{})
 	require.NoError(t, err)
-	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
-	require.NoError(t, err)
 	_, _, err = s.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Alien.1979.1080p", Size: 8 << 30, Discovery: "sample", SeenAt: time.Now(),
 		Files: []rules.File{{Path: "Alien.mkv", Size: 8 << 30}}})
 	require.NoError(t, err)
-	h, err := New(Config{Store: s, Tasks: q, Log: slog.New(slog.DiscardHandler)})
+	h, err := New(Config{Store: s, Log: slog.New(slog.DiscardHandler)})
 	require.NoError(t, err)
 	mem := memconn.Listen()
 	srv := &http.Server{Handler: h, Protocols: Protocols()}
@@ -921,7 +921,8 @@ func (c *blockingClassifier) Classify(ctx context.Context, p store.Pending, _ st
 
 func TestTorznabProbes(t *testing.T) {
 	for _, probes := range []bool{false, true} {
-		srv, hc := start(t, Config{Poll: 20 * time.Millisecond, TorznabToken: "tz", Probes: probes})
+		counts := &search.Counts{}
+		srv, hc := start(t, Config{Poll: 20 * time.Millisecond, TorznabToken: "tz", Probes: probes, Counts: counts})
 		ingest := ingestClient(srv, hc)
 		_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 		require.NoError(t, err)
@@ -930,6 +931,7 @@ func TestTorznabProbes(t *testing.T) {
 		f.expect(1)
 		f.torrent(1, "The.Thing.1982.1080p.BluRay.x264", "The.Thing.1982.mkv")
 		f.finish()
+		peered(t, counts.Store, store.Hash(hash(1)))
 
 		res, err := hc.Get(srv.URL + "/torznab/api?t=search&q=the+thing&apikey=tz")
 		require.NoError(t, err)
@@ -1069,4 +1071,20 @@ func TestWebhookTrace(t *testing.T) {
 	res.Body.Close()
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	requireServerSpan(t, rec, "POST /webhooks/arr")
+}
+
+// peered gives the stored release of h peers over the last 7 days.
+func peered(t *testing.T, s *store.Store, h store.Hash) {
+	t.Helper()
+	ctx := context.Background()
+	key, err := s.HashKey(ctx)
+	require.NoError(t, err)
+	sk := sketch.New()
+	for i := range 5 {
+		sk.Add(key.Hash(netip.AddrPortFrom(netip.AddrFrom4([4]byte{10, 0, 0, byte(i)}), 6881)))
+	}
+	now := time.Now()
+	_, _, err = s.MergePeers(ctx, []store.PeerSketch{{Hash: h, Hour: now, Sketch: sk.Bytes()}})
+	require.NoError(t, err)
+	require.NoError(t, s.ComputeTop(ctx, now))
 }

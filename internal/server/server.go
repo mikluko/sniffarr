@@ -32,7 +32,7 @@ func (c Config) ingestService() *ingest.Service {
 	if c.Ingest != nil {
 		return c.Ingest
 	}
-	return &ingest.Service{Store: c.Store, Tasks: c.Tasks, Fetches: c.Fetches, Log: c.Log, Attempts: c.Attempts, Backoff: c.Backoff, DeadFor: c.DeadFor, NoPeersFor: c.NoPeersFor, Poll: c.Poll, JetStream: c.JetStream,
+	return &ingest.Service{Store: c.Store, Fetches: c.Fetches, ProbeOrders: c.ProbeOrders, Probers: c.Probers, Log: c.Log, Attempts: c.Attempts, Backoff: c.Backoff, DeadFor: c.DeadFor, NoPeersFor: c.NoPeersFor, Poll: c.Poll, JetStream: c.JetStream,
 		Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Probes: c.Probes, Meter: c.Meter}
 }
 
@@ -42,9 +42,11 @@ const MaxMessage = 32 << 20
 // Config is what New needs; the fetch fields are those of ingest.Service.
 type Config struct {
 	Store *store.Store
-	Tasks *store.Tasks
-	// Fetches hands out the fetch orders and peer lookups, and orders those.
+	// Fetches hands out the fetch orders and peer lookups, and orders those;
+	// ProbeOrders likewise the probes, and Probers counts who asks for them.
 	Fetches             *orders.Queue
+	ProbeOrders         *orders.Queue
+	Probers             *store.Probers
 	Attempts            int
 	Backoff             time.Duration
 	DeadFor, NoPeersFor time.Duration
@@ -89,8 +91,8 @@ type Config struct {
 	Arr          *arr.Recorder
 	// Probe tunes IngestService's probe tasks.
 	Probe ingest.ProbeConfig
-	// Probes has the APIs queue and lease probes and Torznab record the
-	// releases of its searches for them; without it no probe is queued.
+	// Probes has the APIs order and hand out probes and Torznab order those of
+	// the releases its searches return; without it no probe is ordered.
 	Probes bool
 	// Classifier has BrowseService.Settings report the classifier on, and
 	// ClassifierSetting is the setting it names for it.
@@ -125,8 +127,9 @@ func New(c Config) (http.Handler, error) {
 	traced := func(route string, h http.Handler) {
 		mux.Handle(route, otelhttp.NewHandler(h, route, hopts...))
 	}
+	ing := c.ingestService()
 	mux.Handle(sniffarrv1connect.NewIngestServiceHandler(
-		c.ingestService(),
+		ing,
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),
 	))
@@ -137,7 +140,7 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
-		&search.Browser{Store: c.Store, Tasks: c.Tasks, Fetches: c.Fetches, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts,
+		&search.Browser{Store: c.Store, Fetches: c.Fetches, ProbeOrders: c.ProbeOrders, Probers: c.Probers, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts,
 			Classifier: c.Classifier, ClassifierSetting: c.ClassifierSetting, JournalRetention: c.JournalRetention,
 			Releases: c.Releases, ReleaseNotice: c.ReleaseNotice},
 		connect.WithInterceptors(otel),
@@ -147,7 +150,7 @@ func New(c Config) (http.Handler, error) {
 		torznabSearch := &search.Service{Store: c.Store, Log: c.Log, Lazy: c.Lazy, NoWait: true}
 		th := &torznab.Handler{Search: torznabSearch, Token: c.TorznabToken, Log: c.Log}
 		if c.Probes {
-			th.Probes = c.Store
+			th.Probes = ing
 		}
 		traced("GET /torznab/api", th)
 	}

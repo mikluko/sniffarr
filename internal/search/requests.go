@@ -40,10 +40,24 @@ func (b *Browser) RefreshPeers(ctx context.Context, req *connect.Request[sniffar
 }
 
 func (b *Browser) RequestProbe(ctx context.Context, req *connect.Request[sniffarrv1.RequestProbeRequest]) (*connect.Response[sniffarrv1.RequestProbeResponse], error) {
-	if !b.Probes {
+	if !b.Probes || b.ProbeOrders == nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("probes are off"))
 	}
-	n, err := b.request(ctx, req.Msg.GetReleases(), "request probe", b.Store.RequestProbe)
+	n, err := b.request(ctx, req.Msg.GetReleases(), "request probe", func(ctx context.Context, hashes []store.Hash, at time.Time) (int, int, error) {
+		readable, stored, err := b.Store.RequestProbe(ctx, hashes, at)
+		if err != nil {
+			return 0, 0, err
+		}
+		l, _ := b.ProbeOrders.Lane(store.TaskProbe, store.PriorityRequest)
+		items := make([]orders.Item, len(readable))
+		for i, h := range readable {
+			items[i] = orders.Item{Hash: h}
+		}
+		if _, err := b.ProbeOrders.Publish(ctx, l, items); err != nil {
+			return 0, 0, err
+		}
+		return len(readable), stored, nil
+	})
 	if err != nil {
 		return nil, err
 	}

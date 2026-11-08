@@ -69,8 +69,8 @@ service BrowseService {
   rpc RefreshPeers(RefreshPeersRequest) returns (RefreshPeersResponse);
   // RequestProbe asks the prober to probe a release, or every release of a
   // work, ahead of the releases searches return, whatever its last probe.
-  // A release without peers over the last 7 days is not probed until it has
-  // some; one with no file a probe can read is not probed. NOT_FOUND without
+  // A release without peers over the last 7 days is ordered all the same;
+  // one with no file a probe can read is not. NOT_FOUND without
   // a stored release, FAILED_PRECONDITION while probes are off.
   rpc RequestProbe(RequestProbeRequest) returns (RequestProbeResponse);
   // RequestMatch looks the title keys of a release, or of every release of
@@ -134,7 +134,7 @@ message SettingsResponse {
   // server's order; empty when the audio extension is off.
   repeated string audio_languages = 1;
   // Whether the server probes releases for their tracks; false leaves
-  // RequestProbe answering FAILED_PRECONDITION and queues no probe.
+  // RequestProbe answering FAILED_PRECONDITION and orders no probe.
   bool probes = 2;
   // The optional features, one per Feature value but FEATURE_UNSPECIFIED,
   // in the enum's order, read at the request.

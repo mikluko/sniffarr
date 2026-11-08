@@ -790,7 +790,7 @@ type SettingsResponse struct {
 	// server's order; empty when the audio extension is off.
 	AudioLanguages []string `protobuf:"bytes,1,rep,name=audio_languages,json=audioLanguages,proto3" json:"audio_languages,omitempty"`
 	// Whether the server probes releases for their tracks; false leaves
-	// RequestProbe answering FAILED_PRECONDITION and queues no probe.
+	// RequestProbe answering FAILED_PRECONDITION and orders no probe.
 	Probes bool `protobuf:"varint,2,opt,name=probes,proto3" json:"probes,omitempty"`
 	// The optional features, one per Feature value but FEATURE_UNSPECIFIED,
 	// in the enum's order, read at the request.
