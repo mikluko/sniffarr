@@ -336,8 +336,21 @@ func TestCard(t *testing.T) {
 	require.Equal(t, "announce", c.Discovery)
 	require.Equal(t, 2, c.Stored)
 	require.Equal(t, []rules.File{{Path: "Alien.mkv", Size: 8 << 30}}, c.Files)
+	require.Nil(t, c.Reading, "never read")
 	_, err = s.Card(ctx, hash(9), 8, t0)
 	require.ErrorIs(t, err, ErrNotFound)
+
+	r := &Reading{PrefixEnd: 4, TitlePos: 4, TitleEnd: 9, Title: "Alien", TitleConfidence: 0.8}
+	_, err = s.Classify(ctx, c.ID, Classification{Source: "web", Reading: r}, t0)
+	require.NoError(t, err)
+	c, err = s.Card(ctx, hash(1), 1, t0)
+	require.NoError(t, err)
+	require.Equal(t, r, c.Reading)
+	_, err = s.Classify(ctx, c.ID, Classification{Source: "web", Reading: &Reading{TitleEnd: 5}}, t0)
+	require.NoError(t, err)
+	c, err = s.Card(ctx, hash(1), 1, t0)
+	require.NoError(t, err)
+	require.Equal(t, &Reading{TitleEnd: 5}, c.Reading, "a reading replaces the last, title and all")
 }
 
 func TestStats(t *testing.T) {

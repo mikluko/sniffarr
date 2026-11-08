@@ -352,7 +352,7 @@ func (b *Browser) Card(ctx context.Context, req *connect.Request[sniffarrv1.Card
 	for _, f := range c.Files {
 		res.Files = append(res.Files, &sniffarrv1.File{Path: f.Path, Size: f.Size})
 	}
-	res.Rules = ruleHits(c.Name, c.Files, b.Languages)
+	res.Rules = ruleHits(c.Name, c.Reading, c.Files, b.Languages)
 	hash := store.Hash(h)
 	j, err := b.journal(ctx, store.JournalFilter{Hash: &hash}, 0, DefaultJournalLimit)
 	if err != nil {
@@ -422,11 +422,22 @@ func (b *Browser) journal(ctx context.Context, f store.JournalFilter, before int
 	return res, nil
 }
 
-// ruleHits are the features names.Explain finds in name, then the audio
-// markers of the languages with tags that name or a file path has.
-func ruleHits(name string, files []rules.File, tags []string) []*sniffarrv1.RuleHit {
+// ruleHits are the features names.Explain finds in name with the prefix and
+// title spans of the reading, in the order they read, then the audio markers
+// of the languages with tags that name or a file path has.
+func ruleHits(name string, reading *store.Reading, files []rules.File, tags []string) []*sniffarrv1.RuleHit {
+	hits := names.Explain(name)
+	if reading != nil {
+		if end := reading.PrefixEnd; end > 0 && end <= len(name) {
+			hits = append(hits, names.Hit{Rule: "jev.prefix", Match: name[:end], Pos: 0})
+		}
+		if pos, end := reading.TitlePos, reading.TitleEnd; pos < end && end <= len(name) {
+			hits = append(hits, names.Hit{Rule: "jev.title", Match: name[pos:end], Pos: pos})
+		}
+		slices.SortStableFunc(hits, func(a, b names.Hit) int { return a.Pos - b.Pos })
+	}
 	var out []*sniffarrv1.RuleHit
-	for _, h := range names.Explain(name) {
+	for _, h := range hits {
 		out = append(out, &sniffarrv1.RuleHit{Rule: h.Rule, Match: h.Match})
 	}
 	for _, tag := range tags {

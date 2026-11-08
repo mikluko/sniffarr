@@ -14,6 +14,8 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/sync/singleflight"
 
+	"sarak.sh/mikluko/libarr/names/jev"
+	"sarak.sh/mikluko/libarr/typesafe"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
@@ -80,7 +82,7 @@ func (j *Classifier) metrics() *metrics {
 		j.m = &metrics{
 			classifications: counter("sniffarr.classify.classifications", "{torrent}",
 				"Torrents whose kind was decided, by kind and by the layer that decided it."),
-			tokens: counter("sniffarr.classify.tokens", "{token}", "Classifier tokens spent."),
+			tokens: counter("sniffarr.classify.tokens", "{token}", "Classifier tokens spent, by direction."),
 			errors: counter("sniffarr.classify.errors", "{error}", "Failed classifier requests, by whether a retry can succeed."),
 		}
 	})
@@ -98,12 +100,17 @@ func layerAttrs(layer, kind string) metric.AddOption {
 	return metric.WithAttributes(attribute.String("sniffarr.classify.layer", layer), attribute.String("sniffarr.kind", kind))
 }
 
+func direction(d string) metric.AddOption {
+	return metric.WithAttributes(attribute.String("sniffarr.classify.direction", d))
+}
+
 func errorKind(k string) metric.AddOption {
 	return metric.WithAttributes(attribute.String("sniffarr.classify.error", k))
 }
 
-// Classify asks the classifier about the torrent, for its kind too when the
-// kind is unknown, and records the answer with the trigger, who asked:
+// Classify asks the classifier about the torrent, reading its name for the
+// kind too when the kind is unknown, and records the answer and the reading
+// with the trigger, who asked:
 // store.TriggerWorker, store.TriggerSearch or store.TriggerTorznab. It
 // returns ErrBudget, without a request, once the day's budget is spent. A
 // torrent the classifier refuses as malformed is marked failed and never
@@ -120,7 +127,7 @@ func (j *Classifier) classify(ctx context.Context, p store.Pending, trigger stri
 		return errors.Join(err, ErrBudget)
 	}
 	r, err := j.Model.Classify(ctx, Input{Name: p.Name, Size: p.Size, Files: p.Files, AskKind: !p.KindKnown})
-	var apiErr *APIError
+	var apiErr *typesafe.Error
 	switch {
 	case ctx.Err() != nil:
 		return ctx.Err()
@@ -135,10 +142,7 @@ func (j *Classifier) classify(ctx context.Context, p store.Pending, trigger stri
 		j.metrics().errors.Add(ctx, 1, errorKind("transient"))
 		return err
 	}
-	j.metrics().tokens.Add(ctx, r.Tokens)
-	if err := j.Store.AddTokens(ctx, day(j.now()), r.Tokens); err != nil {
-		j.Log.Error("record tokens", "err", err)
-	}
+	j.spend(ctx, r.Usage)
 	copied, err := j.Store.Classify(ctx, p.ID, store.Classification{
 		Kind:             r.Kind,
 		KindConfidence:   r.KindConfidence,
@@ -146,6 +150,7 @@ func (j *Classifier) classify(ctx context.Context, p store.Pending, trigger stri
 		SourceConfidence: r.SourceConfidence,
 		Audio:            r.Audio,
 		Trigger:          trigger,
+		Reading:          reading(r.Reading),
 	}, j.now())
 	if err != nil {
 		return fmt.Errorf("store classification: %w", err)
@@ -168,11 +173,31 @@ func (j *Classifier) Choose(ctx context.Context, in ChoiceInput) (ChoiceResult, 
 	if err != nil {
 		return ChoiceResult{}, err
 	}
-	j.metrics().tokens.Add(ctx, r.Tokens)
-	if err := j.Store.AddTokens(ctx, day(j.now()), r.Tokens); err != nil {
+	j.spend(ctx, r.Usage)
+	return r, nil
+}
+
+// spend counts u against today's budget and in the tokens metric by
+// direction.
+func (j *Classifier) spend(ctx context.Context, u typesafe.Usage) {
+	j.metrics().tokens.Add(ctx, int64(u.Input), direction("input"))
+	j.metrics().tokens.Add(ctx, int64(u.Output), direction("output"))
+	if err := j.Store.AddTokens(ctx, day(j.now()), int64(u.Input+u.Output)); err != nil {
 		j.Log.Error("record tokens", "err", err)
 	}
-	return r, nil
+}
+
+// reading is what the store keeps of r: its spans, and its title only after
+// a prefix; nil for a nil r.
+func reading(r *jev.Reading) *store.Reading {
+	if r == nil {
+		return nil
+	}
+	out := &store.Reading{PrefixEnd: r.Prefix.End, TitlePos: r.TitleSpan.Pos, TitleEnd: r.TitleSpan.End}
+	if r.Prefix.End > 0 && r.Title != "" {
+		out.Title, out.TitleConfidence = r.Title, r.TitleConfidence
+	}
+	return out
 }
 
 // UnderBudget reports whether today's budget has room.

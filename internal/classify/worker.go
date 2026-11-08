@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"sarak.sh/mikluko/libarr/typesafe"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
@@ -79,7 +80,7 @@ func (w *Worker) classifyAll(ctx context.Context, batch []store.Pending) bool {
 		wg.Go(func() {
 			defer func() { <-sem }()
 			err := w.Classifier.Classify(ctx, p, store.TriggerWorker)
-			var apiErr *APIError
+			var apiErr *typesafe.Error
 			if err == nil || ctx.Err() != nil || errors.Is(err, ErrBudget) || errors.As(err, &apiErr) && apiErr.Permanent() {
 				return
 			}

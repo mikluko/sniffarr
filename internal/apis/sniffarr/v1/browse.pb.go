@@ -2447,7 +2447,9 @@ type RuleHit struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The feature recognised: "kind.series", "kind.movie", "year", "season",
 	// "episode", "quality." and the resolution ("2160p", "1080p", "720p",
-	// "sd"), or "audio." and the language tag.
+	// "sd"), "source." and the source, "jev.prefix" or "jev.title" for the
+	// prefix and the title the classifier read in the name, or "audio." and
+	// the language tag.
 	Rule string `protobuf:"bytes,1,opt,name=rule,proto3" json:"rule,omitempty"`
 	// The fragment of the name, or for audio of a name or file path, as
 	// written there.

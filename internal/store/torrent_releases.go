@@ -110,6 +110,26 @@ type Classification struct {
 	// Trigger names who asked for the classification: TriggerWorker,
 	// TriggerSearch or TriggerTorznab; the journal records it.
 	Trigger string
+	// Reading, when set, replaces the release's stored reading.
+	Reading *Reading
+}
+
+// Reading is what the classifier read in a release's name: the prefix
+// name[:PrefixEnd], none at 0, and the title at name[TitlePos:TitleEnd],
+// none when empty.
+type Reading struct {
+	PrefixEnd, TitlePos, TitleEnd int
+	// Title is the title as read, with TitleConfidence; "" without a prefix.
+	Title           string
+	TitleConfidence float64
+}
+
+// title is the reading's Title, "" for a nil reading.
+func (r *Reading) title() string {
+	if r == nil {
+		return ""
+	}
+	return r.Title
 }
 
 // largest returns the at most n largest files, largest first.
@@ -502,6 +522,9 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 			at.Unix(), c.Source, c.SourceConfidence, id); err != nil {
 			return err
 		}
+		if err := setReading(ctx, tx, id, c.Reading); err != nil {
+			return err
+		}
 		for _, lang := range slices.Sorted(maps.Keys(c.Audio)) {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO torrent_audio (torrent_id, language, marker, script_hint, probability, layer)
 				VALUES (?, ?, 0, 0, ?, ?) ON CONFLICT (torrent_id, language) DO UPDATE SET
@@ -531,12 +554,24 @@ func (s *Store) Classify(ctx context.Context, id int64, c Classification, at tim
 			}
 		}
 		if err := journal(ctx, tx, h, at, JournalClassified, LayerClassifier, Detail("kind", kind, "kind_confidence", kindConfidence, "source", c.Source,
-			"source_confidence", c.SourceConfidence, "audio", c.Audio, "copied", copied, "trigger", c.Trigger)); err != nil {
+			"source_confidence", c.SourceConfidence, "audio", c.Audio, "copied", copied, "trigger", c.Trigger, "title", c.Reading.title())); err != nil {
 			return err
 		}
 		return journalEach(ctx, tx, siblings, journalReuse, at, JournalClassified, LayerReuse, Detail("kind", c.Kind, "from", hex.EncodeToString(h[:])))
 	})
 	return copied, err
+}
+
+// setReading replaces the reading of the torrent with the ID by r, and keeps
+// it for a nil r.
+func setReading(ctx context.Context, tx *sql.Tx, id int64, r *Reading) error {
+	if r == nil {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE torrent_releases SET reading_prefix_end = ?, reading_title_pos = ?, reading_title_end = ?,
+		reading_title = nullif(?, ''), reading_title_confidence = CASE WHEN ? = '' THEN NULL ELSE ? END WHERE id = ?`,
+		r.PrefixEnd, r.TitlePos, r.TitleEnd, r.Title, r.Title, r.TitleConfidence, id)
+	return err
 }
 
 // ClassifyFailed marks the torrent with the ID as one the classifier cannot
@@ -740,6 +775,8 @@ type Card struct {
 	// PeersWeek, 1 first, and 0 without a work.
 	Work       *Summary
 	RankInWork int
+	// Reading is the classifier's reading of the name, nil without one.
+	Reading *Reading
 }
 
 // Card returns the stored release with the hash, its first files, at most
@@ -750,9 +787,17 @@ func (s *Store) Card(ctx context.Context, h Hash, files int, now time.Time) (Car
 		return Card{}, err
 	}
 	c := Card{Release: r}
-	if err := s.r.QueryRowContext(ctx, "SELECT discovery, (SELECT count(*) FROM torrent_files WHERE torrent_id = t.id) FROM torrent_releases t WHERE t.id = ?", r.ID).
-		Scan(&c.Discovery, &c.Stored); err != nil {
+	var prefixEnd, titlePos, titleEnd sql.NullInt64
+	var title sql.NullString
+	var titleConfidence sql.NullFloat64
+	if err := s.r.QueryRowContext(ctx, `SELECT discovery, (SELECT count(*) FROM torrent_files WHERE torrent_id = t.id),
+		reading_prefix_end, reading_title_pos, reading_title_end, reading_title, reading_title_confidence FROM torrent_releases t WHERE t.id = ?`, r.ID).
+		Scan(&c.Discovery, &c.Stored, &prefixEnd, &titlePos, &titleEnd, &title, &titleConfidence); err != nil {
 		return Card{}, err
+	}
+	if prefixEnd.Valid {
+		c.Reading = &Reading{PrefixEnd: int(prefixEnd.Int64), TitlePos: int(titlePos.Int64), TitleEnd: int(titleEnd.Int64),
+			Title: title.String, TitleConfidence: titleConfidence.Float64}
 	}
 	if c.Files, err = s.files(ctx, r.ID, files); err != nil {
 		return Card{}, err

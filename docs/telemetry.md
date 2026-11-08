@@ -39,7 +39,8 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.classify.classifications`    | `{torrent}`  | `sniffarr.kind`, `sniffarr.classify.layer` |
 | `-api`     | `sniffarr.search.lazy.duration`        | `s`          |                                            |
 | `-api`     | `sniffarr.search.lazy.classifications` | `{torrent}`  | `sniffarr.search.lazy.result`              |
-| `-api`     | `sniffarr.classify.tokens`             | `{token}`    |                                            |
+| `-api`     | `sniffarr.classify.tokens`             | `{token}`    | `sniffarr.classify.direction`              |
+| `-api`     | `sniffarr.typesafe.requests`           | `{request}`  | `sniffarr.typesafe.status`                 |
 | `-api`     | `sniffarr.classify.errors`             | `{error}`    | `sniffarr.classify.error`                  |
 | `-api`     | `sniffarr.tmdb.matches`                | `{title}`    | `sniffarr.tmdb.layer`                      |
 | `-api`     | `sniffarr.tmdb.requests`               | `{request}`  | `sniffarr.tmdb.status`                     |
@@ -75,6 +76,9 @@ counts are the `db.sql.connection.*` metrics.
 failure), and the sum over it is the `sample_infohashes` queries sent, less those cut
 short when the node stops; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
+`sniffarr.classify.direction` is `input` or `output`;
+`sniffarr.typesafe.status` is the HTTP status of the classifier endpoint's
+answer to each attempt, retries included, or `error` without one;
 `sniffarr.queue.eviction` is `no_peers`; `sniffarr.priority` is `0` to `3`;
 `sniffarr.task.kind` is `fetch`, `peers` or `probe`;
 `sniffarr.store.retention.class` is `idle` or `expired`;

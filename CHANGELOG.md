@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The metric `sniffarr.dht.sample_queries` counts the `sample_infohashes` queries the sniff sends, by `sniffarr.dht.outcome`: `answered`, `timeout` or `error`.
+- The classifier reads the name of a torrent of unknown kind with Jev in two steps, the prefix to drop and then the title and kind, and a release's card shows the prefix and title it read among the rule hits as `jev.prefix` and `jev.title`.
+- The metric `sniffarr.typesafe.requests` counts the requests to the classifier endpoint, retries included, by `sniffarr.typesafe.status`.
 - With `SNIFFARR_NATS_URL`, the NATS server `-api` embeds connects to that upstream server as a leaf node, with `SNIFFARR_NATS_PASSWORD` or the `.creds` file `SNIFFARR_NATS_CREDS`, its streams kept in its own JetStream domain, `sniffarr`.
 
 ### Changed
@@ -17,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `SNIFFARR_NATS_PASSWORD` is the password of the leaf node's user at `SNIFFARR_NATS_URL`, refused without it.
 - `IngestService.Sight` publishes the sightings to the API's sightings stream, from which the API queues them in batches, announced ones first, and `SightResponse.known` counts the repeats the stream drops within 5 minutes, not the queued infohashes.
 - **Breaking:** `IngestService.Sight` refuses `SOURCE_ARR`.
+- `sniffarr.classify.tokens` counts the tokens by `sniffarr.classify.direction`, `input` or `output`.
+- Requests to the classifier endpoint are paced at 10 a second.
 - The start of `-api` allows up to 5 minutes for the NATS server to recover its store, on top of the 15 seconds the start of every process has.
 - Fetches and peer lookups are orders on the NATS stream `FETCH_ORDERS`, which the API hands out through `IngestService.Fetch`, in place of the SQLite queue, whose fetches and lookups move into the stream at the first start.
 - A timed-out fetch is retried by a message scheduled on `sniffarr.orders.fetch.retry.<infohash>`.

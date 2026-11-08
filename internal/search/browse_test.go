@@ -138,6 +138,17 @@ func TestBrowserTorrents(t *testing.T) {
 	require.Empty(t, r.GetWork())
 }
 
+func TestRuleHitsReading(t *testing.T) {
+	name := "[rutor.info] Heat.1995.1080p"
+	require.Equal(t, []*sniffarrv1.RuleHit{
+		{Rule: "jev.prefix", Match: "[rutor.info] "}, {Rule: "jev.title", Match: "Heat"}, {Rule: "year", Match: "1995"}, {Rule: "quality.1080p", Match: "1080p"},
+	}, ruleHits(name, &store.Reading{PrefixEnd: 13, TitlePos: 13, TitleEnd: 17}, nil, nil))
+	require.Equal(t, []*sniffarrv1.RuleHit{{Rule: "jev.title", Match: "Heat"}, {Rule: "year", Match: "1995"}},
+		ruleHits("Heat.1995", &store.Reading{TitleEnd: 4}, nil, nil), "no prefix, no prefix hit")
+	require.Equal(t, []*sniffarrv1.RuleHit{{Rule: "year", Match: "1995"}},
+		ruleHits("Heat.1995", &store.Reading{PrefixEnd: 40, TitlePos: 3, TitleEnd: 40}, nil, nil), "spans past the name are dropped")
+}
+
 func TestBrowserCard(t *testing.T) {
 	b := browser(t)
 	ctx := context.Background()

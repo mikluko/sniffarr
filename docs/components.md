@@ -118,7 +118,15 @@ records which layer decided its kind:
    shared; audio and the video source belong to each release.
 3. The classifier, a model behind a System One endpoint, examines a torrent
    for audio in each audio language, video source, and kind when it is still
-   unknown. It does so lazily, for the candidates of a search before the answer, and in the
+   unknown. A torrent of unknown kind has its name read with libarr's Jev
+   reader, in two requests or one when the name opens with nothing that could
+   be a prefix: which opening part of the name, such as a site address or a
+   tracker tag, is not the title, then the title and the kind, a movie, a
+   series, or else music, a book, software, adult or other, with the audio and
+   source questions riding the second request. The release keeps the
+   reading's spans of the prefix and the title, which its card shows among
+   the rule hits as `jev.prefix` and `jev.title`, and the title itself when a
+   prefix was found. It does so lazily, for the candidates of a search before the answer, and in the
    background only for torrents of unknown kind whose names carry a marker or
    a script hint of an audio language. Both share a daily token budget,
    2,000,000 tokens by default, some 1,500 torrents a day; the background stops

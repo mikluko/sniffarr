@@ -30,7 +30,7 @@ the same to each.
 | `SNIFFARR_NATS_CREDS`              |                  | Path of the `.creds` file the leaf node authenticates with, in place of a password; refused without `SNIFFARR_NATS_URL` |
 | `SNIFFARR_CLASSIFY_URL`            | `https://api.typesafe.ai/v1/systemone` | Classifier endpoint serving the System One protocol, `POST /v1/systemone`; another endpoint than the default turns the classifier on, with or without a key, and has no daily token limit |
 | `SNIFFARR_CLASSIFY_API_KEY`        |                  | Key sent to `SNIFFARR_CLASSIFY_URL` as a bearer token; with the default endpoint and no key the classifier is off, and only rules and reuse classify |
-| `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |
+| `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classifications at once; requests to the endpoint are paced at 10 a second whatever it is                   |
 | `SNIFFARR_CLASSIFY_DAILY_TOKENS`   | `2000000`        | Classifier tokens per UTC day at most with the default endpoint; `0` is no limit                                       |
 | `SNIFFARR_CLASSIFY_SEARCH_RESERVE` | `25`             | Percentage of the daily tokens background classification leaves for searches, `0` to `100`                             |
 | `SNIFFARR_SEARCH_CLASSIFY_MAX`     | `20`             | Candidates one search has classified at most                                                                           |

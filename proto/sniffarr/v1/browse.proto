@@ -472,7 +472,9 @@ message JournalEntry {
 message RuleHit {
   // The feature recognised: "kind.series", "kind.movie", "year", "season",
   // "episode", "quality." and the resolution ("2160p", "1080p", "720p",
-  // "sd"), or "audio." and the language tag.
+  // "sd"), "source." and the source, "jev.prefix" or "jev.title" for the
+  // prefix and the title the classifier read in the name, or "audio." and
+  // the language tag.
   string rule = 1;
   // The fragment of the name, or for audio of a name or file path, as
   // written there.

@@ -348,7 +348,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 32, version)
+	require.Equal(t, 33, version)
 	var kept []byte
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT value FROM state WHERE key = 'peer_hash_key'").Scan(&kept))
 	require.Equal(t, []byte{0}, kept, "the settings rows move to state")
