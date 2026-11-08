@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-08
+
 ### Added
 
 - `-api` embeds a NATS server with JetStream, its store in `SNIFFARR_NATS_DIR`, `nats` beside `SNIFFARR_DB` by default, with the streams of sightings, fetch and probe orders by priority, and fetch and probe results.
@@ -999,7 +1001,8 @@ Changes since 0.43.0, the pre-releases taken together: the web UI's new look, a 
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.3...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.45.0...HEAD
+[0.45.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.3...v0.45.0
 [0.44.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.2...v0.44.3
 [0.44.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.1...v0.44.2
 [0.44.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0...v0.44.1
