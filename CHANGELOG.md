@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.1] - 2026-11-08
+
 ### Added
 
 - The chart's `sniff.hostPort` and `fetch.hostPort` publish the DHT port on the node's address from the pod network.
@@ -966,7 +968,8 @@ Changes since 0.43.0, the pre-releases taken together: the web UI's new look, a 
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.1...HEAD
+[0.44.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0...v0.44.1
 [0.44.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.43.0...v0.44.0
 [0.44.0-rc.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-rc.1...v0.44.0-rc.2
 [0.44.0-rc.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.8...v0.44.0-rc.1
