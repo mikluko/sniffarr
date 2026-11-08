@@ -52,6 +52,7 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.probe.uploaded`              | `By`         |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.nodes`                   | `{node}`     |                                            |
 | `-sniff`, `-fetch` | `sniffarr.dht.sample_answers`          | `{answer}`   |                                            |
+| `-sniff`, `-fetch` | `sniffarr.dht.sample_queries`          | `{query}`    | `sniffarr.dht.outcome`                     |
 | `-sniff`   | `sniffarr.dht.replies`                 | `{reply}`    | `sniffarr.dht.query`                       |
 | `-sniff`   | `sniffarr.dht.infohashes`              | `{infohash}` |                                            |
 | `-sniff`   | `sniffarr.dht.peers`                   | `{peer}`     |                                            |
@@ -69,7 +70,10 @@ counts are the `db.sql.connection.*` metrics.
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`, and for a peer lookup
 `lookup` or `lookup_no_peers`;
 `sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` too;
-`sniffarr.dht.query` is `sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
+`sniffarr.dht.query` is `sample_infohashes` or `scrape`; `sniffarr.dht.outcome` is
+`answered`, `timeout` (no answer within 5 seconds) or `error` (an error reply or a send
+failure), and the sum over it is the `sample_infohashes` queries sent, less those cut
+short when the node stops; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
 `sniffarr.task.kind` is `fetch`, `peers` or `probe`;

@@ -18,6 +18,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
 
@@ -32,6 +33,18 @@ const (
 	DefaultFetchTimeout = 15 * time.Second
 	DefaultWalkers      = 16
 )
+
+// sampleWait is how long a sample_infohashes query waits for its answer.
+const sampleWait = 5 * time.Second
+
+// Outcomes of a sample_infohashes query, the values of sampleOutcome.
+const (
+	sampleAnswered = "answered"
+	sampleTimedOut = "timeout"
+	sampleFailed   = "error"
+)
+
+var sampleOutcome = attribute.Key("sniffarr.dht.outcome")
 
 // sweepEvery is how often the peer store drops expired peers.
 const sweepEvery = time.Minute
@@ -107,7 +120,10 @@ type Network struct {
 	dht     *dht.Server
 	swarm   swarm
 	answers metric.Int64Counter
+	queries metric.Int64Counter
 	replies metric.Int64Counter
+	// sampleWait is the sampleWait the tests shorten.
+	sampleWait time.Duration
 	// seeder, seedStorage and completion are nil without Seed.Dir.
 	seeder      *Seeder
 	seedStorage storage.ClientImplCloser
@@ -178,7 +194,7 @@ func (s clientSwarm) fetch(ctx context.Context, h Hash, peers []torrent.PeerInfo
 // the announcing peer through Announced.
 func New(cfg NetworkConfig, offer func(Hash, sniffarrv1.Source), peers PeerSink) *Network {
 	cfg.defaults()
-	n := &Network{cfg: cfg, offer: offer, peers: peers, ready: make(chan struct{}), stop: make(chan struct{})}
+	n := &Network{cfg: cfg, offer: offer, peers: peers, ready: make(chan struct{}), stop: make(chan struct{}), sampleWait: sampleWait}
 	if !cfg.Passive {
 		n.store = newPeerStore(peerStoreConfig{})
 	}
@@ -341,6 +357,7 @@ func (n *Network) sweep() {
 
 func (n *Network) observe(m metric.Meter) {
 	n.answers = counter(m, "sniffarr.dht.sample_answers", "{answer}", "sample_infohashes queries answered.")
+	n.queries = counter(m, "sniffarr.dht.sample_queries", "{query}", "sample_infohashes queries sent, by outcome.")
 	n.replies = counter(m, "sniffarr.dht.replies", "{reply}", "Queries the node's socket answered or completed itself, by query.")
 	_, err := m.Int64ObservableGauge("sniffarr.dht.nodes", metric.WithUnit("{node}"),
 		metric.WithDescription("Nodes in the DHT routing table."),
@@ -484,12 +501,16 @@ func (n *Network) Sample(ctx context.Context, walkers int, found func(Hash)) {
 func (n *Network) sampleNode(ctx context.Context, a krpc.NodeAddr, found func(Hash), push func(krpc.NodeAddr)) {
 	var target krpc.ID
 	_, _ = rand.Read(target[:])
-	qctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	qctx, cancel := context.WithTimeout(ctx, n.sampleWait)
 	defer cancel()
 	res := n.dht.Query(qctx, dht.NewAddr(a.UDP()), "sample_infohashes", dht.QueryInput{
 		MsgArgs:  krpc.MsgArgs{Target: target},
 		NumTries: 1,
 	})
+	if ctx.Err() != nil {
+		return
+	}
+	n.queries.Add(ctx, 1, metric.WithAttributes(sampleOutcome.String(queryOutcome(res))))
 	if res.Err != nil || res.Reply.R == nil {
 		return
 	}
@@ -501,6 +522,18 @@ func (n *Network) sampleNode(ctx context.Context, a krpc.NodeAddr, found func(Ha
 		}
 	}
 	r.ForAllNodes(func(ni krpc.NodeInfo) { push(ni.Addr) })
+}
+
+// queryOutcome classifies the result of a query that ctx did not cancel: a
+// reply carrying an error counts as a failure, not an answer.
+func queryOutcome(res dht.QueryResult) string {
+	switch {
+	case errors.Is(res.Err, context.DeadlineExceeded), errors.Is(res.Err, dht.TransactionTimeout):
+		return sampleTimedOut
+	case res.Err != nil, res.Reply.R == nil:
+		return sampleFailed
+	}
+	return sampleAnswered
 }
 
 // Metadata finds the torrent's peers on the DHT and gets its metadata from
