@@ -136,10 +136,42 @@ func Parse(name string) Parsed {
 	return parse(name, nil)
 }
 
+// Video sources Source can tell.
+const (
+	SourceDisc   = "disc_image"
+	SourceRemux  = "remux"
+	SourceEncode = "encode"
+	SourceWeb    = "web"
+)
+
+// sources are matched in order; the first to match is the source.
+var sources = []struct {
+	re     *regexp.Regexp
+	source string
+}{
+	{words(`bd-?remux|remux`), SourceRemux},
+	{words(`bdmv|video ts|bd25|bd50|bd66|bd100|dvd5|dvd9`), SourceDisc},
+	{words(`web-?dl(?:rip)?|web-?rip`), SourceWeb},
+	{words(`bd-?rip|br-?rip|dvd-?rip|hd-?rip|hdtv(?:rip)?|tv-?rip|sat-?rip`), SourceEncode},
+}
+
+// Source returns the video source the name gives, one of the Source
+// constants, or "" when it gives none or names music.
+func Source(name string) string {
+	return sourceOf(cleaned(name), nil)
+}
+
+// cleaned is name with its dots and underscores spelled as the spaces they
+// stand for.
+func cleaned(name string) string {
+	return strings.NewReplacer(".", " ", "_", " ").Replace(name)
+}
+
 // Hit is a feature of a name and the fragment of the name that gave it.
 type Hit struct {
 	// Rule is "kind.series" or "kind.movie", "year", "season", "episode",
-	// or "quality." and the quality, one of Qualities.
+	// or "quality." and the quality, one of Qualities, or "source." and
+	// the source Source returns.
 	Rule string
 	// Match is the fragment as written in the name.
 	Match string
@@ -149,12 +181,13 @@ type Hit struct {
 
 // Explain returns the features Parse recognises in a name, each with the
 // fragment that gave it, in the order the fragments read; features at the
-// same place keep the order kind, year, season, episode, quality. It has a
-// hit for each of the non-empty Kind, Year, Season, Episode and Quality that
-// Parse returns for the name.
+// same place keep the order kind, year, season, episode, quality, source. It
+// has a hit for each of the non-empty Kind, Year, Season, Episode and Quality
+// that Parse returns for the name, and for the Source.
 func Explain(name string) []Hit {
 	c := &collector{name: name}
 	parse(name, c)
+	sourceOf(cleaned(name), c)
 	slices.SortStableFunc(c.hits, func(a, b Hit) int { return a.Pos - b.Pos })
 	return c.hits
 }
@@ -174,7 +207,7 @@ func (c *collector) add(rule string, from, to int) {
 }
 
 func parse(name string, c *collector) Parsed {
-	clean := strings.NewReplacer(".", " ", "_", " ").Replace(name)
+	clean := cleaned(name)
 	var p Parsed
 	if m := anime.FindStringSubmatchIndex(name); m != nil {
 		c.add("kind.series", m[4], m[5])
@@ -258,6 +291,20 @@ func episodeOf(clean string, c *collector) int {
 	return n
 }
 
+// sourceOf returns the source the cleaned name gives, "" for none.
+func sourceOf(clean string, c *collector) string {
+	if music.MatchString(clean) {
+		return ""
+	}
+	for _, s := range sources {
+		if m := s.re.FindStringSubmatchIndex(clean); m != nil {
+			c.add("source."+s.source, m[2], m[3])
+			return s.source
+		}
+	}
+	return ""
+}
+
 // qualityOf returns the highest quality the cleaned name gives, "" for none.
 func qualityOf(clean string, c *collector) string {
 	for _, q := range qualities {
@@ -276,7 +323,7 @@ func Titles(name string) []string {
 	if m := anime.FindStringSubmatch(name); m != nil {
 		return titles([]string{cut(m[1], seriesMarker)})
 	}
-	clean := groups.ReplaceAllString(strings.NewReplacer(".", " ", "_", " ").Replace(name), "")
+	clean := groups.ReplaceAllString(cleaned(name), "")
 	var parts []string
 	for _, part := range strings.Split(clean, " / ") {
 		if i := strings.IndexAny(part, "[("); i >= 0 {

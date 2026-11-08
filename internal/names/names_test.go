@@ -126,25 +126,54 @@ func TestExplain(t *testing.T) {
 		name string
 		want []string
 	}{
-		{"Spider-Man.Brand.New.Day.2026.2160p.WEB-DL.DDP5.1.HDR", []string{"year 2026", "quality.2160p 2160p", "kind.movie WEB-DL"}},
-		{"Heart.of.the.Beast.2026.720p.AMZN.WEB-DLRip", []string{"year 2026", "quality.720p 720p", "kind.movie WEB-DLRip"}},
+		{"Spider-Man.Brand.New.Day.2026.2160p.WEB-DL.DDP5.1.HDR", []string{"year 2026", "quality.2160p 2160p", "kind.movie WEB-DL", "source.web WEB-DL"}},
+		{"Heart.of.the.Beast.2026.720p.AMZN.WEB-DLRip", []string{"year 2026", "quality.720p 720p", "kind.movie WEB-DLRip", "source.web WEB-DLRip"}},
 		{"Heart.of.the.Beast.2026.720p", []string{"year 2026", "quality.720p 720p"}},
 		{"Fallout.S02E05.1080p.WEB.h264-ETHEL[EZTVx.to].mkv", []string{"kind.series S02E05", "season S02E05", "episode S02E05", "quality.1080p 1080p"}},
 		{"Law.and.Order.SVU.S28E02.720p.x264-FENiX", []string{"kind.series S28E02", "season S28E02", "episode S28E02", "quality.720p 720p"}},
-		{"Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv", []string{"year 2015", "kind.movie WEB-DL", "quality.1080p 1080р"}},
-		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", []string{"year 2026", "kind.movie WEB-DL", "quality.1080p 1O8Op"}},
+		{"Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv", []string{"year 2015", "kind.movie WEB-DL", "source.web WEB-DL", "quality.1080p 1080р"}},
+		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", []string{"year 2026", "kind.movie WEB-DL", "source.web WEB-DL", "quality.1080p 1O8Op"}},
 		{"Movie 2001 1О8Ор", []string{"year 2001", "quality.1080p 1О8Ор"}},
-		{"The.Wire.Complete.Series.DVDRip", []string{"kind.series Complete.Series", "quality.sd DVDRip"}},
-		{"Сериал (2 сезон, 7 серия) 2019 WEB-DL 1080p", []string{"kind.series 2 сезон", "season 2 сезон", "episode 7 серия", "year 2019", "quality.1080p 1080p"}},
-		{"Show S01 E05 WEB-DL 720p", []string{"kind.series S01 E05", "season S01 E05", "episode S01 E05", "quality.720p 720p"}},
+		{"The.Wire.Complete.Series.DVDRip", []string{"kind.series Complete.Series", "quality.sd DVDRip", "source.encode DVDRip"}},
+		{"Сериал (2 сезон, 7 серия) 2019 WEB-DL 1080p", []string{"kind.series 2 сезон", "season 2 сезон", "episode 7 серия", "year 2019", "source.web WEB-DL", "quality.1080p 1080p"}},
+		{"Show S01 E05 WEB-DL 720p", []string{"kind.series S01 E05", "season S01 E05", "episode S01 E05", "source.web WEB-DL", "quality.720p 720p"}},
 		{"[SubsPlease] Kuroneko to Majo no Kyoushitsu - 09 (1080p) [0F72F2B7].mkv", []string{"kind.series - 09", "quality.1080p 1080p"}},
-		{"[Erai-raws] Honzuki no Gekokujou S4 - 19 [720p CR WEB-DL AVC AAC][MultiSub][FA2C7C2D].mkv", []string{"season S4", "kind.series - 19", "quality.720p 720p"}},
-		{"Сериал (1 сезон, 1-8 серии из 8) DVDRip", []string{"kind.series 1 сезон", "season 1 сезон", "quality.sd DVDRip"}},
+		{"[Erai-raws] Honzuki no Gekokujou S4 - 19 [720p CR WEB-DL AVC AAC][MultiSub][FA2C7C2D].mkv", []string{"season S4", "kind.series - 19", "quality.720p 720p", "source.web WEB-DL"}},
+		{"Сериал (1 сезон, 1-8 серии из 8) DVDRip", []string{"kind.series 1 сезон", "season 1 сезон", "quality.sd DVDRip", "source.encode DVDRip"}},
 		{"Some Notes.txt", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, hits(tt.name))
+		})
+	}
+}
+
+func TestSource(t *testing.T) {
+	tests := []struct{ name, want string }{
+		{"Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.HDR.HEVC.Atmos-FGT", SourceRemux},
+		{"Movie (2001) BDRemux", SourceRemux},
+		{"Movie.2001.BD.Remux.1080p", SourceRemux},
+		{"Heart.of.the.Beast.2026.720p.AMZN.WEB-DLRip", SourceWeb},
+		{"Слово пацана. Кровь на асфальте (1 сезон, 1-8 серии из 8) [2023, WEB-DLRip]", SourceWeb},
+		{"Severance.S02E01.1080p.ATVP.WEB-DL.DDP5.1.H.264-NTb", SourceWeb},
+		{"Movie.2001.1080p.WEBRip.x265", SourceWeb},
+		{"Marshall.2O17.P.BDRip.1O8Op.mkv", SourceEncode},
+		{"Брат 2 (Алексей Балабанов) [2000, драма, DVDRip]", SourceEncode},
+		{"Show.S01E01.HDTV.x264", SourceEncode},
+		{"Movie.2001.BDMV", SourceDisc},
+		{"Movie.2001.DVD9", SourceDisc},
+		{"Movie_2001_VIDEO_TS", SourceDisc},
+		{"UHD.Bluray.REMUX.WEB-DL", SourceRemux},
+		{"Interstellar 2014 1080p BluRay x264", ""},
+		{"Movie.2001.1080p", ""},
+		{"Spider Web 2001", ""},
+		{"Artist - Album (2001) [WEB-DL FLAC]", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, Source(tt.name))
 		})
 	}
 }
@@ -180,6 +209,7 @@ func TestExplainAgreesWithParse(t *testing.T) {
 			require.Equal(t, p.Season != 0, got["season"])
 			require.Equal(t, p.Episode != 0, got["episode"])
 			require.Equal(t, p.Quality != "", got["quality."+p.Quality])
+			require.Equal(t, Source(name) != "", got["source."+Source(name)])
 		})
 	}
 }

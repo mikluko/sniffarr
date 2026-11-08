@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A name with a year and a resolution but no source or encoding tag, `Movie.2026.720p`, is no longer taken for a movie by the rules; `WEB-DLRip` counts as a source tag.
+- The rules read a release's video source from its name, `UHD.Bluray.REMUX` as remux and `WEB-DLRip` as web, so the card and the source filters no longer show none for it, and stored releases get theirs at the first start.
 
 ## [0.45.0] - 2026-11-08
 

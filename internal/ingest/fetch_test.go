@@ -186,7 +186,7 @@ func TestResultStoresFeatures(t *testing.T) {
 	leased, _, err := q.Lease(ctx, 1, 2, now, time.Minute)
 	require.NoError(t, err)
 	require.Len(t, leased, 2)
-	for i, name := range []string{"Heat.1995.1080p.BluRay.Rus.RHS", "The Office (US) S03E05 720p"} {
+	for i, name := range []string{"Heat.1995.1080p.BluRay.Rus.RHS", "The Office (US) S03E05 720p HDTV"} {
 		require.NoError(t, s.result(ctx, 1, &sniffarrv1.Result{Infohash: infohash(byte(i + 1)),
 			Outcome: &sniffarrv1.Result_Torrent{Torrent: &sniffarrv1.Torrent{Name: name, Size: 8 << 30,
 				Files: []*sniffarrv1.File{{Path: name + ".mkv", Size: 8 << 30}}}}}))
@@ -207,6 +207,9 @@ func TestResultStoresFeatures(t *testing.T) {
 	require.Equal(t, 3, series.Season)
 	require.Equal(t, 5, series.Episode)
 	require.Equal(t, "720p", series.Quality)
+	require.Equal(t, "encode", series.Source, "the source its name gives")
+	require.InDelta(t, 1, series.SourceConfidence, 0)
+	require.Empty(t, movie.Source, "BluRay alone gives none")
 }
 
 func TestFetchLookups(t *testing.T) {

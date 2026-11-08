@@ -169,7 +169,7 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 			Audio: ru(store.Audio{ScriptHint: true})},
 		{Hash: hash(3), Name: severance, Size: 3 << 30, Discovery: "sample", SeenAt: now.Add(-30 * time.Hour), Kind: "series", KindLayer: store.LayerRules, Audio: ru(store.Audio{})},
 		{Hash: hash(4), Name: season1, Size: 40 << 30, Discovery: "sample", SeenAt: now.Add(-40 * time.Hour), Kind: "series", KindLayer: store.LayerRules, Audio: ru(store.Audio{})},
-		{Hash: hash(5), Name: ronin, Size: 9 << 30, Discovery: "sample", SeenAt: now.Add(-3 * time.Hour), Kind: "movie", KindLayer: store.LayerRules},
+		{Hash: hash(5), Name: ronin, Size: 9 << 30, Discovery: "sample", SeenAt: now.Add(-3 * time.Hour), Kind: "movie", KindLayer: store.LayerRules, Source: "remux"},
 		{Hash: hash(6), Name: narcissist, Size: 3 << 30, Discovery: "sample", SeenAt: now.Add(-4 * time.Hour), Kind: "movie", KindLayer: store.LayerRules},
 		{Hash: hash(7), Name: heat, Size: 2 << 30, Discovery: "sample", SeenAt: now.Add(-50 * time.Hour), Kind: "movie", KindLayer: store.LayerRules},
 		{Hash: hash(8), Name: "Сборник", Size: 1 << 30, Discovery: "sample", SeenAt: now.Add(-5 * time.Hour), Audio: ru(store.Audio{ScriptHint: true})},
@@ -595,6 +595,7 @@ func TestTorrent(t *testing.T) {
 
 	body = page(t, get(t, h, "/t/"+hexOf(5), ""))
 	require.Contains(t, body, `<div class="tm-poster tm-none" aria-hidden="true">No poster</div>`, "matched without a poster")
+	require.Contains(t, body, `<tr><td>Source</td><td>remux</td><td>rules</td><td class="r">—</td></tr>`, "a source not classified is the rules'")
 
 	body = page(t, get(t, h, "/t/"+hexOf(6), ""))
 	require.Contains(t, body, `<section class="tm tm-unmatched" aria-label="TMDB">`, "looked up and not found")

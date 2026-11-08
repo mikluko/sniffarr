@@ -22,6 +22,10 @@ const backfillBatch = 200
 // names.Parse needs.
 const featuresFilled = "release_features_letter_o"
 
+// sourcesFilled is the state key that records that the releases stored
+// without a source got the one their names tell.
+const sourcesFilled = "release_sources"
+
 // marksFilled is the prefix of the state key that records, per language,
 // that the marks backfill has run. A new prefix makes every database
 // recompute its marks and studios once more, which a change to
@@ -63,10 +67,11 @@ type Backfilled struct {
 
 // Backfill runs, in transactions of a few hundred rows, the one-time
 // backfills of stored torrents not yet done: the year, season, episode and
-// quality of those without a year or a quality, from their names, no
-// failed attempts for a release whose last probe read it, as probed records,
-// and, per language of Options.Languages, a marker for every torrent whose
-// name has the language's audio.Language.Codes, no marker of the rules layer
+// quality of those without a year or a quality, and the source of those
+// without one, from their names, no failed attempts for a release whose last
+// probe read it, as probed records, and, per language of
+// Options.Languages, a marker for every torrent whose name has the
+// language's audio.Language.Codes, no marker of the rules layer
 // that only a subtitle file's path gave, the mark and studios of every
 // stored marker, as audio.Language.Mark and audio.Language.StudiosIn give
 // them from the torrent's name and stored files, the studios probed tracks
@@ -80,6 +85,9 @@ func (s *Store) Backfill(ctx context.Context, progress func(Backfilled)) error {
 	}
 	if err := s.backfill(ctx, "release features", featuresFilled, progress, s.featuresBatch); err != nil {
 		return fmt.Errorf("release features: %w", err)
+	}
+	if err := s.backfill(ctx, "release sources", sourcesFilled, progress, s.sourcesBatch); err != nil {
+		return fmt.Errorf("release sources: %w", err)
 	}
 	if err := s.backfill(ctx, "probe attempts", probeAttemptsFilled, progress, s.probeAttemptsBatch); err != nil {
 		return fmt.Errorf("probe attempts: %w", err)
@@ -210,6 +218,42 @@ func (s *Store) featuresBatch(ctx context.Context, after int64) (int, int64, fun
 		for _, r := range batch {
 			if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET year = ?, season = ?, episode = ?, quality = ? WHERE id = ?",
 				nullInt(r.p.Year), nullInt(r.p.Season), nullInt(r.p.Episode), null(r.p.Quality), r.id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, nil
+}
+
+// sourcesBatch reads the releases after the row ID after that have no source,
+// and gives each the source its name tells, as ingest does.
+func (s *Store) sourcesBatch(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
+	type row struct {
+		id     int64
+		source string
+	}
+	var batch []row
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var r row
+		var name string
+		if err := rows.Scan(&r.id, &name); err != nil {
+			return err
+		}
+		r.source = names.Source(name)
+		batch = append(batch, r)
+		return nil
+	}, "SELECT id, name FROM torrent_releases WHERE id > ? AND source IS NULL ORDER BY id LIMIT ?", after, s.backfillBatch); err != nil {
+		return 0, 0, nil, err
+	}
+	if len(batch) == 0 {
+		return 0, 0, nil, nil
+	}
+	return len(batch), batch[len(batch)-1].id, func(tx *sql.Tx) error {
+		for _, r := range batch {
+			if r.source == "" {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET source = ?, source_confidence = 1 WHERE id = ?", r.source, r.id); err != nil {
 				return err
 			}
 		}

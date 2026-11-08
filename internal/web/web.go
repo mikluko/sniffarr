@@ -655,9 +655,13 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 	if r.GetLayer() == sniffarrv1.Layer_LAYER_CLASSIFIER {
 		t.Kind.Confidence = new(float64(r.GetKindConfidence()))
 	}
-	if r.GetSource() != sniffarrv1.VideoSource_VIDEO_SOURCE_UNSPECIFIED {
+	switch {
+	case r.GetSource() == sniffarrv1.VideoSource_VIDEO_SOURCE_UNSPECIFIED:
+	case r.GetClassified():
 		t.Source.Layer = "classifier"
 		t.Source.Confidence = new(float64(r.GetSourceConfidence()))
+	default:
+		t.Source.Layer = "rules"
 	}
 	for _, l := range s.settings().Languages {
 		a := ui.Audio{Lang: l.Tag}

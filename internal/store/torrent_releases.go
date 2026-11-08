@@ -39,6 +39,8 @@ type Torrent struct {
 	Season  int
 	Episode int
 	Quality string
+	// Source is what names.Source gives; the classifier's answer replaces it.
+	Source string
 	// Audio holds one entry per language, at most.
 	Audio []Audio
 }
@@ -172,11 +174,11 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 		var id int64
 		var work sql.NullInt64
 		err := tx.QueryRowContext(ctx, `INSERT INTO torrent_releases (infohash, name, size, file_count, discovery, first_seen, last_seen,
-				kind, kind_layer, title_key, year, season, episode, quality, work)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT work FROM tmdb_matches WHERE title_key = ?10))
+				kind, kind_layer, title_key, year, season, episode, quality, source, source_confidence, work)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT 1.0 WHERE ?15 IS NOT NULL), (SELECT work FROM tmdb_matches WHERE title_key = ?10))
 			ON CONFLICT (infohash) DO NOTHING RETURNING id, work`,
 			t.Hash[:], t.Name, t.Size, len(t.Files), t.Discovery, t.SeenAt.Unix(), t.SeenAt.Unix(),
-			null(t.Kind), null(t.KindLayer), null(t.TitleKey), nullInt(t.Year), nullInt(t.Season), nullInt(t.Episode), null(t.Quality)).Scan(&id, &work)
+			null(t.Kind), null(t.KindLayer), null(t.TitleKey), nullInt(t.Year), nullInt(t.Season), nullInt(t.Episode), null(t.Quality), null(t.Source)).Scan(&id, &work)
 		if errors.Is(err, sql.ErrNoRows) {
 			return journal(ctx, tx, t.Hash, t.SeenAt, JournalFetched, "duplicate", nil)
 		}

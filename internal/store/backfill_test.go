@@ -90,6 +90,39 @@ func TestBackfillLetterO(t *testing.T) {
 	require.Equal(t, 2017, r.Year, "a release stored with a quality and no year")
 }
 
+func TestBackfillSources(t *testing.T) {
+	ctx := context.Background()
+	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
+	defer db.Close()
+	for _, tr := range []Torrent{
+		torrent(1, "Movie.2026.2160p.UHD.BluRay.REMUX", "Movie.mkv"),
+		torrent(2, "Heart.of.the.Beast.2026.720p.AMZN.WEB-DLRip", "Heart.mkv"),
+		torrent(3, "Movie.2026.1080p", "Movie.mkv"),
+		torrent(4, "Movie.2026.WEB-DL", "Movie.mkv"),
+	} {
+		_, _, err := s.Insert(ctx, tr)
+		require.NoError(t, err)
+	}
+	h4 := hash(4)
+	_, err := s.w.ExecContext(ctx, "UPDATE torrent_releases SET source = 'encode', source_confidence = 0.9 WHERE infohash = ?", h4[:])
+	require.NoError(t, err)
+
+	got := map[string]Backfilled{}
+	require.NoError(t, s.Backfill(ctx, func(b Backfilled) { got[b.Name] = b }))
+	require.Equal(t, Backfilled{Name: "release sources", Rows: 3, Done: true}, got["release sources"])
+	for i, want := range map[byte]string{1: "remux", 2: "web", 3: "", 4: "encode"} {
+		r, err := s.Get(ctx, hash(i))
+		require.NoError(t, err)
+		require.Equal(t, want, r.Source, r.Name)
+	}
+	r, err := s.Get(ctx, hash(1))
+	require.NoError(t, err)
+	require.InDelta(t, 1, r.SourceConfidence, 0)
+	r, err = s.Get(ctx, hash(4))
+	require.NoError(t, err)
+	require.InDelta(t, 0.9, r.SourceConfidence, 1e-9, "a stored source stays")
+}
+
 func TestBackfillAudioCodes(t *testing.T) {
 	ctx := context.Background()
 	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))

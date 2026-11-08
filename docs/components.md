@@ -133,6 +133,15 @@ either case, and `p` as the Cyrillic `р`: `2O17` reads as `2017`, and
 stored without a year or a quality gets its features read again once, at
 the first start that reads them this way.
 
+The rules read the video source from the name too: `remux` for `Remux` or
+`BDRemux`; `disc_image` for `BDMV`, `VIDEO_TS`, `BD25`, `BD50`, `BD66`, `BD100`,
+`DVD5` or `DVD9`; `web` for `WEB-DL`, `WEB-DLRip` or `WEBRip`; `encode` for
+`BDRip`, `BRRip`, `DVDRip`, `HDRip`, `HDTV`, `TVRip` or `SATRip`, the first
+of these in that order. A name with none of them, `BluRay` alone among them,
+and a name of music have no source until the classifier examines the
+release; its answer replaces the rules'. A release stored without a source
+gets the one its name gives once, at the first start that reads it so.
+
 Audio is an extension over the layers, off until `SNIFFARR_AUDIO_LANGUAGES`
 names languages; `ru` is the only language built in. For each configured
 language every stored torrent records a marker, a word or studio of the
