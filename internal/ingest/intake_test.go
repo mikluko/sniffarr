@@ -15,6 +15,7 @@ import (
 	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/bus/bustest"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
@@ -30,23 +31,25 @@ type intakeFixture struct {
 	now time.Time
 }
 
-// newIntakeFixture serves a store and a bus whose clock moves a second at
-// every reading.
+// newIntakeFixture serves a store and a bus, with the fetch orders' queue
+// started on it, whose clock moves a second at every reading.
 func newIntakeFixture(t *testing.T) *intakeFixture {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	st, err := store.New(ctx, db, store.Options{})
+	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, st.Close(context.Background())) })
 	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
-	f := &intakeFixture{st: st, db: db, nc: bustest.Conn(t), now: time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)}
+	f := &intakeFixture{st: st, db: db, nc: bustest.Conn(t), now: time.Now().UTC().Truncate(time.Second)}
 	f.js, err = jetstream.New(f.nc)
 	require.NoError(t, err)
-	f.s = &Service{Store: st, Tasks: q, Log: slog.New(slog.DiscardHandler), IntakeWait: 50 * time.Millisecond, Now: f.clock}
+	fetches := orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes})
+	require.NoError(t, fetches.Start(ctx, f.js))
+	f.s = &Service{Store: st, Tasks: q, Fetches: fetches, Log: slog.New(slog.DiscardHandler), IntakeWait: 50 * time.Millisecond, Now: f.clock}
 	return f
 }
 
@@ -67,6 +70,19 @@ func (f *intakeFixture) sight(t *testing.T, discovery string, bs ...byte) {
 	}
 }
 
+// order publishes a fetch order of each hash at the priority.
+func (f *intakeFixture) order(t *testing.T, priority int, bs ...byte) {
+	t.Helper()
+	l, ok := f.s.Fetches.Lane(store.TaskFetch, priority)
+	require.True(t, ok)
+	items := make([]orders.Item, len(bs))
+	for i, b := range bs {
+		items[i] = orders.Item{Hash: store.Hash{b}}
+	}
+	_, err := f.s.Fetches.Publish(t.Context(), l, items)
+	require.NoError(t, err)
+}
+
 // run runs Intake until the sightings stream is empty, then stops it.
 func (f *intakeFixture) run(t *testing.T) {
 	t.Helper()
@@ -83,21 +99,30 @@ func (f *intakeFixture) run(t *testing.T) {
 	require.ErrorIs(t, <-done, context.Canceled)
 }
 
-// queued returns the fetch tasks queued, by first byte of the hash, with
-// their priority and the time they were queued.
-func (f *intakeFixture) queued(t *testing.T) map[byte][2]int64 {
+// queuedOrder is an order on the fetch orders' stream.
+type queuedOrder struct {
+	hash     byte
+	subject  string
+	attempt  int
+	schedule string
+}
+
+// queued returns the messages of the fetch orders' stream in the order they
+// were published, the first byte of each hash.
+func (f *intakeFixture) queued(t *testing.T) []queuedOrder {
 	t.Helper()
-	rows, err := f.db.R.QueryContext(t.Context(), "SELECT infohash, priority, queued_at FROM task_queue WHERE kind = 'fetch'")
+	stream, err := f.js.Stream(t.Context(), bus.StreamFetchOrders)
 	require.NoError(t, err)
-	defer rows.Close()
-	out := map[byte][2]int64{}
-	for rows.Next() {
-		var h []byte
-		var p, at int64
-		require.NoError(t, rows.Scan(&h, &p, &at))
-		out[h[0]] = [2]int64{p, at}
+	info, err := stream.Info(t.Context())
+	require.NoError(t, err)
+	var out []queuedOrder
+	for seq := info.State.FirstSeq; info.State.Msgs > 0 && seq <= info.State.LastSeq; seq++ {
+		m, err := stream.GetMsg(t.Context(), seq)
+		if err != nil {
+			continue
+		}
+		out = append(out, queuedOrder{hash: m.Data[0], subject: m.Subject, attempt: bus.Attempt(m.Header), schedule: m.Header.Get(jetstream.ScheduleHeader)})
 	}
-	require.NoError(t, rows.Err())
 	return out
 }
 
@@ -108,13 +133,9 @@ func TestIntakeAnnouncedFirst(t *testing.T) {
 	f.sight(t, store.Announce, 3, 4)
 	f.run(t)
 
-	q := f.queued(t)
-	require.Len(t, q, 4)
-	require.Equal(t, int64(store.PriorityAnnounce), q[3][0])
-	require.Equal(t, int64(store.PrioritySample), q[1][0])
-	require.Less(t, q[3][1], q[4][1])
-	require.Less(t, q[4][1], q[1][1], "the announced batches are taken before the sampled ones published earlier")
-	require.Less(t, q[1][1], q[2][1])
+	require.Equal(t, []queuedOrder{{hash: 3, subject: bus.SubjectFetchP2}, {hash: 4, subject: bus.SubjectFetchP2},
+		{hash: 1, subject: bus.SubjectFetchP3}, {hash: 2, subject: bus.SubjectFetchP3}}, f.queued(t),
+		"the announced batches are taken before the sampled ones published earlier")
 }
 
 func TestIntakeDrops(t *testing.T) {
@@ -136,10 +157,8 @@ func TestIntakeDrops(t *testing.T) {
 	require.NoError(t, err)
 	f.run(t)
 
-	q := f.queued(t)
-	require.Len(t, q, 2, "1 is stored, 2 rejected, 3 dead and only sampled")
-	require.Equal(t, int64(store.PriorityAnnounce), q[4][0], "an announce revives the dead 4")
-	require.Equal(t, int64(store.PrioritySample), q[5][0])
+	require.Equal(t, []queuedOrder{{hash: 4, subject: bus.SubjectFetchP2}, {hash: 5, subject: bus.SubjectFetchP3}}, f.queued(t),
+		"1 is stored, 2 rejected, 3 dead and only sampled; an announce revives the dead 4")
 
 	r, err := f.st.Get(ctx, store.Hash{1})
 	require.NoError(t, err)
@@ -148,6 +167,51 @@ func TestIntakeDrops(t *testing.T) {
 	var revived int
 	require.NoError(t, f.db.R.QueryRowContext(ctx, "SELECT count(*) FROM torrent_journal WHERE infohash = ? AND outcome = 'revived'", infohash(4)).Scan(&revived))
 	require.Equal(t, 1, revived)
+	held, err := f.st.Screen(ctx, []store.Hash{{3}, {4}}, f.now)
+	require.NoError(t, err)
+	require.Equal(t, map[store.Hash]store.Screened{{3}: {Dead: true}}, held, "the revived 4 leaves the dead set")
+}
+
+func TestIntakeRedelivered(t *testing.T) {
+	f := newIntakeFixture(t)
+	ctx := t.Context()
+	fresh := []store.Queued{{Hash: store.Hash{1}, Discovery: store.Announce}, {Hash: store.Hash{2}, Discovery: store.Sample}}
+	n, err := f.s.queue(ctx, fresh, f.now)
+	require.NoError(t, err)
+	require.Equal(t, 2, n)
+	n, err = f.s.queue(ctx, fresh, f.now)
+	require.NoError(t, err)
+	require.Zero(t, n, "a batch redelivered after a failure publishes its orders again under the same IDs")
+	require.Len(t, f.queued(t), 2)
+}
+
+func TestEnqueueArr(t *testing.T) {
+	f := newIntakeFixture(t)
+	ctx := t.Context()
+	_, err := f.db.W.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (task_dead_key(?), ?)", infohash(1), f.now.Add(time.Hour).UnixMilli())
+	require.NoError(t, err)
+	_, err = f.st.Reject(ctx, store.Hash{2}, rules.Software, "setup.exe", 1, f.now)
+	require.NoError(t, err)
+	n, err := f.s.Enqueue(ctx, []store.Sighting{{Hash: store.Hash{1}, Discovery: store.Arr}, {Hash: store.Hash{2}, Discovery: store.Arr}})
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, []queuedOrder{{hash: 1, subject: bus.SubjectFetchP1}}, f.queued(t), "Radarr and Sonarr revive a dead hash, not a rejected one")
+	require.Equal(t, []string{"sighted/revived"}, journal(t, f.st, store.Hash{1}))
+}
+
+func TestIntakePromotes(t *testing.T) {
+	f := newIntakeFixture(t)
+	f.sight(t, store.Sample, 1, 2)
+	f.run(t)
+	f.sight(t, store.Announce, 2)
+	f.run(t)
+
+	got, err := f.s.Fetches.Take(1, 3, store.PrioritySample)
+	require.NoError(t, err)
+	require.Len(t, got, 2, "the sample's order of 2 is a second order of one held")
+	require.Equal(t, [2]byte{2, 1}, [2]byte{got[0].Hash[0], got[1].Hash[0]}, "an announce of a queued sample moves it ahead")
+	require.Equal(t, store.PriorityAnnounce, got[0].Priority)
+	require.Equal(t, []string{"sighted/queued"}, journal(t, f.st, store.Hash{2}))
 }
 
 func TestIntakeMissingConsumer(t *testing.T) {

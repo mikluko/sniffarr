@@ -19,6 +19,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/arr"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/ingest"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	"sarak.sh/mikluko/sniffarr/internal/store"
@@ -31,7 +32,7 @@ func (c Config) ingestService() *ingest.Service {
 	if c.Ingest != nil {
 		return c.Ingest
 	}
-	return &ingest.Service{Store: c.Store, Tasks: c.Tasks, Log: c.Log, Lease: c.Lease, Attempts: c.Attempts, Backoff: c.Backoff, Poll: c.Poll, JetStream: c.JetStream,
+	return &ingest.Service{Store: c.Store, Tasks: c.Tasks, Fetches: c.Fetches, Log: c.Log, Attempts: c.Attempts, Backoff: c.Backoff, DeadFor: c.DeadFor, NoPeersFor: c.NoPeersFor, Poll: c.Poll, JetStream: c.JetStream,
 		Scripts: c.Scripts, Languages: c.Languages, Probe: c.Probe, Probes: c.Probes, Meter: c.Meter}
 }
 
@@ -40,12 +41,14 @@ const MaxMessage = 32 << 20
 
 // Config is what New needs; the fetch fields are those of ingest.Service.
 type Config struct {
-	Store    *store.Store
-	Tasks    *store.Tasks
-	Lease    time.Duration
-	Attempts int
-	Backoff  time.Duration
-	Poll     time.Duration
+	Store *store.Store
+	Tasks *store.Tasks
+	// Fetches hands out the fetch orders and peer lookups, and orders those.
+	Fetches             *orders.Queue
+	Attempts            int
+	Backoff             time.Duration
+	DeadFor, NoPeersFor time.Duration
+	Poll                time.Duration
 	// JetStream is the connection IngestService.Sight publishes sightings
 	// on, for the IngestService built from the fetch fields.
 	JetStream jetstream.JetStream
@@ -134,7 +137,7 @@ func New(c Config) (http.Handler, error) {
 		connect.WithReadMaxBytes(MaxMessage),
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
-		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts,
+		&search.Browser{Store: c.Store, Tasks: c.Tasks, Fetches: c.Fetches, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts,
 			Classifier: c.Classifier, ClassifierSetting: c.ClassifierSetting, JournalRetention: c.JournalRetention,
 			Releases: c.Releases, ReleaseNotice: c.ReleaseNotice},
 		connect.WithInterceptors(otel),

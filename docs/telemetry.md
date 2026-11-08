@@ -26,9 +26,9 @@ counts are the `db.sql.connection.*` metrics.
 | ---------- | -------------------------------------- | ------------ | ------------------------------------------ |
 | `-api`     | `sniffarr.db.wal.size`                 | `By`         |                                            |
 | `-api`     | `sniffarr.ingest.sightings`            | `{sighting}` | `sniffarr.sighting.result`                 |
-| `-api`     | `sniffarr.queue.depth`                 | `{infohash}` | `sniffarr.discovery`                       |
+| `-api`     | `sniffarr.queue.depth`                 | `{order}`    | `sniffarr.task.kind`, `sniffarr.priority`  |
 | `-api`     | `sniffarr.queue.leases`                | `{lease}`    | `sniffarr.task.kind`                       |
-| `-api`     | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
+| `-api`     | `sniffarr.queue.lease_expiries`        | `{lease}`    | `sniffarr.task.kind`                       |
 | `-api`     | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
 | `-api`     | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
 | `-api`     | `sniffarr.store.retention.deletions`   | `{torrent}`  | `sniffarr.store.retention.class`           |
@@ -69,13 +69,13 @@ counts are the `db.sql.connection.*` metrics.
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`, and for a peer lookup
 `lookup` or `lookup_no_peers`;
-`sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` too;
+`sniffarr.discovery` is `announce` or `sample`;
 `sniffarr.dht.query` is `sample_infohashes` or `scrape`; `sniffarr.dht.outcome` is
 `answered`, `timeout` (no answer within 5 seconds) or `error` (an error reply or a send
 failure), and the sum over it is the `sample_infohashes` queries sent, less those cut
 short when the node stops; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
-`sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
+`sniffarr.queue.eviction` is `no_peers`; `sniffarr.priority` is `0` to `3`;
 `sniffarr.task.kind` is `fetch`, `peers` or `probe`;
 `sniffarr.store.retention.class` is `idle` or `expired`;
 `sniffarr.classify.layer` is `rules`, `reuse` or `classifier`;

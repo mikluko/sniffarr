@@ -11,6 +11,7 @@ import (
 	"math/rand/v2"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -209,7 +210,8 @@ func setConsumers(ctx context.Context, n *node, s drainSpec) (uint64, error) {
 	var total uint64
 	cfgs := bus.Consumers()[bus.StreamFetchOrders]
 	for p := range s.prios {
-		cfg := cfgs[p]
+		i := slices.IndexFunc(cfgs, func(c jetstream.ConsumerConfig) bool { return c.Durable == bus.OrderConsumers[p] })
+		cfg := cfgs[i]
 		if s.maxAckPending > 0 {
 			cfg.MaxAckPending = s.maxAckPending
 		}

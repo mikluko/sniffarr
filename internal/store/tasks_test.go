@@ -10,110 +10,34 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"sarak.sh/mikluko/libarr/database"
 )
 
-func openQueue(t *testing.T, opts ...TaskOptions) *Tasks {
+// migrateBefore applies to db the store's migrations whose paths sort
+// before path, such as "migrations/031".
+func migrateBefore(t *testing.T, db *database.DB, path string) {
 	t.Helper()
-	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
+	old := fstest.MapFS{}
+	names, err := fs.Glob(migrations, "migrations/*.sql")
 	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	checkJournal(t, db)
-	var o TaskOptions
-	if len(opts) > 0 {
-		o = opts[0]
-	}
-	q, err := NewTasks(ctx, db, o)
-	require.NoError(t, err)
-	return q
-}
-
-func enqueueAt(t *testing.T, q *Tasks, at time.Time, discovery string, bs ...byte) (int, int) {
-	t.Helper()
-	queued, known, err := q.Enqueue(context.Background(), sightings(discovery, bs...), at)
-	require.NoError(t, err)
-	return queued, known
-}
-
-func sightings(discovery string, bs ...byte) []Sighting {
-	var out []Sighting
-	for _, b := range bs {
-		out = append(out, Sighting{Hash: hash(b), Discovery: discovery})
-	}
-	return out
-}
-
-func enqueue(t *testing.T, q *Tasks, discovery string, bs ...byte) (int, int) {
-	t.Helper()
-	queued, known, err := q.Enqueue(context.Background(), sightings(discovery, bs...), t0)
-	require.NoError(t, err)
-	return queued, known
-}
-
-// lease leases up to n tasks to owner at, and returns their hashes.
-func lease(t *testing.T, q *Tasks, owner int64, n int, at time.Time) []Hash {
-	t.Helper()
-	tasks, _, err := q.Lease(context.Background(), owner, n, at, time.Minute)
-	require.NoError(t, err)
-	var hs []Hash
-	for _, task := range tasks {
-		hs = append(hs, task.Hash)
-	}
-	return hs
-}
-
-func TestEnqueue(t *testing.T) {
-	q := openQueue(t)
-	queued, known := enqueue(t, q, Sample, 1, 2, 2)
-	require.Equal(t, 2, queued)
-	require.Equal(t, 1, known)
-	queued, known = enqueue(t, q, Announce, 1)
-	require.Zero(t, queued)
-	require.Equal(t, 1, known)
-
-	d, err := q.Discovery(context.Background(), hash(1))
-	require.NoError(t, err)
-	require.Equal(t, Announce, d, "an announce sighting moves a queued sample ahead")
-	_, err = q.Discovery(context.Background(), hash(3))
-	require.ErrorIs(t, err, ErrNotQueued)
-}
-
-func TestSight(t *testing.T) {
-	ctx := context.Background()
-	q := openQueue(t)
-	sight := func(discovery string, b byte) Sighted {
-		t.Helper()
-		got, err := q.Sight(ctx, Sighting{Hash: hash(b), Discovery: discovery}, t0)
+	for _, name := range names {
+		if name >= path {
+			break
+		}
+		b, err := migrations.ReadFile(name)
 		require.NoError(t, err)
-		return got
+		old[strings.TrimPrefix(name, "migrations/")] = &fstest.MapFile{Data: b}
 	}
-	require.Equal(t, SightQueued, sight(Sample, 1))
-	require.Equal(t, SightKnown, sight(Sample, 1), "queued as it was")
-	require.Equal(t, SightPromoted, sight(Announce, 1), "moved ahead")
-	require.Equal(t, SightKnown, sight(Announce, 1))
-	require.Equal(t, SightKnown, sight(Sample, 1), "a sighting that serves later moves it nowhere")
-
-	dead := hash(2)
-	_, err := q.db.W.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (?, ?)", deadKey(dead[:]), t0.Add(time.Hour).UnixMilli())
-	require.NoError(t, err)
-	require.Equal(t, SightKnown, sight(Sample, 2), "a dead hash a sample sights stays out")
-	require.Equal(t, SightQueued, sight(Announce, 2), "an announce revives it")
+	require.NoError(t, db.Migrate(context.Background(), "store", old))
 }
 
-func TestLeaseOrder(t *testing.T) {
-	q := openQueue(t)
-	enqueue(t, q, Sample, 1, 2)
-	enqueue(t, q, Announce, 3)
-	enqueue(t, q, Sample, 4)
-	enqueue(t, q, Announce, 4)
-
-	require.Equal(t, []Hash{hash(3), hash(4), hash(1)}, lease(t, q, 1, 3, t0), "announced first, then oldest")
-	require.Equal(t, []Hash{hash(2)}, lease(t, q, 2, 3, t0))
-	require.Empty(t, lease(t, q, 2, 3, t0), "everything is leased")
+func TestPriorityOf(t *testing.T) {
+	for d, p := range map[string]int{Arr: PriorityArr, Announce: PriorityAnnounce, Sample: PrioritySample} {
+		require.Equal(t, p, PriorityOf(d))
+		require.Equal(t, d, DiscoveryOf(p))
+	}
+	require.Equal(t, Arr, DiscoveryOf(PriorityRequest), "a fetch asked for at P0 serves Radarr and Sonarr")
 }
 
 func TestMigrateFeedPriority(t *testing.T) {
@@ -121,18 +45,7 @@ func TestMigrateFeedPriority(t *testing.T) {
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer db.Close()
-	old := fstest.MapFS{}
-	names, err := fs.Glob(migrations, "migrations/*.sql")
-	require.NoError(t, err)
-	for _, name := range names {
-		if name >= "migrations/030" {
-			break
-		}
-		b, err := migrations.ReadFile(name)
-		require.NoError(t, err)
-		old[strings.TrimPrefix(name, "migrations/")] = &fstest.MapFile{Data: b}
-	}
-	require.NoError(t, db.Migrate(ctx, "store", old))
+	migrateBefore(t, db, "migrations/030")
 	for p := range 5 {
 		_, err := db.W.ExecContext(ctx, "INSERT INTO task_queue (kind, infohash, priority, queued_at) VALUES ('fetch', ?, ?, 0)", []byte{byte(p)}, p)
 		require.NoError(t, err)
@@ -146,10 +59,9 @@ func TestMigrateFeedPriority(t *testing.T) {
 		require.NoError(t, err, stmt)
 	}
 
-	q, err := NewTasks(ctx, db, TaskOptions{})
-	require.NoError(t, err)
+	migrateBefore(t, db, "migrations/031")
 	got := map[byte]int{}
-	rows, err := q.db.R.QueryContext(ctx, "SELECT infohash, priority FROM task_queue")
+	rows, err := db.R.QueryContext(ctx, "SELECT infohash, priority FROM task_queue")
 	require.NoError(t, err)
 	for rows.Next() {
 		var h []byte
@@ -162,7 +74,7 @@ func TestMigrateFeedPriority(t *testing.T) {
 	require.Equal(t, map[byte]int{0: PriorityRequest, 1: PriorityArr, 2: PriorityAnnounce, 3: PriorityAnnounce, 4: PrioritySample}, got,
 		"the feed priority folds into announce, the ones behind it move up")
 	var kinds []string
-	rows, err = q.db.R.QueryContext(ctx, "SELECT kind FROM torrent_journal")
+	rows, err = db.R.QueryContext(ctx, "SELECT kind FROM torrent_journal")
 	require.NoError(t, err)
 	for rows.Next() {
 		var k string
@@ -177,199 +89,85 @@ func TestMigrateFeedPriority(t *testing.T) {
 	require.NotContains(t, tables, "table crawl_state")
 }
 
-func TestEnqueueArr(t *testing.T) {
+func TestTrimDropsProbesOfGoneReleases(t *testing.T) {
 	ctx := context.Background()
-	q := openQueue(t)
-	enqueue(t, q, Sample, 1)
-	enqueue(t, q, Announce, 2)
-	dead := hash(3)
-	_, err := q.db.W.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (?, ?)", deadKey(dead[:]), t0.Add(time.Hour).UnixMilli())
+	s := open(t)
+	q, err := NewTasks(ctx, s.db, TaskOptions{})
 	require.NoError(t, err)
-	queued, known := enqueue(t, q, Arr, 1, 3)
-	require.Equal(t, 1, queued, "arr revives a dead hash")
-	require.Equal(t, 1, known)
+	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	_, _, err = s.RequestProbe(ctx, []Hash{a, b}, t0)
+	require.NoError(t, err)
+	_, err = s.w.ExecContext(ctx, "DELETE FROM torrent_releases WHERE infohash = ?", a[:])
+	require.NoError(t, err)
 
-	for _, b := range []byte{1, 3} {
-		d, err := q.Discovery(ctx, hash(b))
-		require.NoError(t, err)
-		require.Equal(t, Arr, d)
-	}
-	require.Equal(t, []Hash{hash(1), hash(3), hash(2)}, lease(t, q, 1, 3, t0), "arr first, then announced")
-	enqueue(t, q, Sample, 4)
-	enqueue(t, q, Announce, 4)
-	d, err := q.Discovery(ctx, hash(4))
-	require.NoError(t, err)
-	require.Equal(t, Announce, d)
+	require.NoError(t, q.Trim(ctx))
+	require.Equal(t, []Hash{b}, queuedProbes(t, s))
 }
 
-func TestLeaseExpiryAndRelease(t *testing.T) {
+func TestTrimDropsProbesNeverLeased(t *testing.T) {
 	ctx := context.Background()
-	q := openQueue(t)
-	enqueue(t, q, Sample, 1, 2)
-	require.Len(t, lease(t, q, 1, 2, t0), 2)
-
-	require.Empty(t, lease(t, q, 2, 2, t0.Add(59*time.Second)))
-	hs, expired, err := q.Lease(ctx, 2, 2, t0.Add(time.Minute), time.Minute)
+	s := open(t)
+	q, err := NewTasks(ctx, s.db, TaskOptions{})
 	require.NoError(t, err)
-	require.Equal(t, []Task{{Kind: TaskFetch, Hash: hash(1)}, {Kind: TaskFetch, Hash: hash(2)}}, hs, "expired leases are free")
-	require.Equal(t, 2, expired)
+	readable := insertProbeable(t, s, 1, "Alien.1979.1080p", 0, "Alien.1979.1080p.mkv")
+	avi := insertProbeable(t, s, 2, "Heat.1995.DVDRip", 5, "Heat.1995.DVDRip.avi")
+	_, _, err = s.RequestProbe(ctx, []Hash{readable, avi}, t0)
+	require.NoError(t, err)
 
-	require.NoError(t, q.Release(ctx, 1))
-	require.Empty(t, lease(t, q, 3, 2, t0.Add(time.Minute)), "releasing a stale owner frees nothing")
-	require.NoError(t, q.Release(ctx, 2))
-	require.Len(t, lease(t, q, 3, 2, t0.Add(time.Minute)), 2)
+	require.NoError(t, q.Trim(ctx))
+	require.Equal(t, []Hash{readable}, queuedProbes(t, s), "a release without peers waits; one a probe cannot read goes")
+}
 
+func TestTrimNoProbes(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	q, err := NewTasks(ctx, s.db, TaskOptions{NoProbes: true})
+	require.NoError(t, err)
+	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
+	_, _, err = s.RequestProbe(ctx, []Hash{a, b}, t0)
+	require.NoError(t, err)
+	_, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 1, Now: t0, Lease: time.Minute, MaxBytes: 1 << 20, Admit: admitting(false)})
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	require.NoError(t, q.Trim(ctx))
+	require.Empty(t, queuedProbes(t, s), "queued and leased probes go")
+}
+
+func TestReset(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	q, err := NewTasks(ctx, s.db, TaskOptions{})
+	require.NoError(t, err)
+	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
+	_, _, err = s.RequestProbe(ctx, []Hash{a}, t0)
+	require.NoError(t, err)
+	_, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 1, Now: t0, Lease: time.Hour, MaxBytes: 1 << 20})
+	require.NoError(t, err)
+	require.True(t, ok)
+	_, ok, err = s.LeaseProbe(ctx, ProbeRequest{Owner: 2, Now: t0, Lease: time.Hour, MaxBytes: 1 << 20})
+	require.NoError(t, err)
+	require.False(t, ok, "leased")
 	require.NoError(t, q.Reset(ctx))
-	require.Len(t, lease(t, q, 4, 2, t0.Add(time.Minute)), 2)
-}
-
-func TestFail(t *testing.T) {
-	ctx := context.Background()
-	q := openQueue(t)
-	enqueue(t, q, Sample, 1)
-	require.Len(t, lease(t, q, 1, 1, t0), 1)
-
-	dropped, err := q.Fail(ctx, hash(1), 2, t0, 3, time.Minute)
+	c, ok, err := s.LeaseProbe(ctx, ProbeRequest{Owner: 2, Now: t0, Lease: time.Hour, MaxBytes: 1 << 20})
 	require.NoError(t, err)
-	require.False(t, dropped)
-	require.Empty(t, lease(t, q, 2, 1, t0.Add(30*time.Second)), "a failure from another owner is ignored")
-
-	dropped, err = q.Fail(ctx, hash(1), 1, t0, 3, time.Minute)
-	require.NoError(t, err)
-	require.False(t, dropped)
-	require.Empty(t, lease(t, q, 2, 1, t0.Add(59*time.Second)), "waits out the backoff")
-	require.Len(t, lease(t, q, 2, 1, t0.Add(time.Minute)), 1)
-
-	dropped, err = q.Fail(ctx, hash(1), 2, t0.Add(time.Minute), 3, time.Minute)
-	require.NoError(t, err)
-	require.False(t, dropped)
-	require.Empty(t, lease(t, q, 3, 1, t0.Add(2*time.Minute+59*time.Second)), "the backoff doubles")
-	require.Len(t, lease(t, q, 3, 1, t0.Add(3*time.Minute)), 1)
-
-	dropped, err = q.Fail(ctx, hash(1), 3, t0.Add(3*time.Minute), 3, time.Minute)
-	require.NoError(t, err)
-	require.True(t, dropped, "the third failure drops it")
-	_, err = q.Discovery(ctx, hash(1))
-	require.ErrorIs(t, err, ErrNotQueued)
-
-	queued, known := enqueueAt(t, q, t0.Add(DefaultDeadFor), Sample, 1)
-	require.Zero(t, queued, "a dropped hash stays dead")
-	require.Equal(t, 1, known)
-	queued, _ = enqueueAt(t, q, t0.Add(3*time.Minute+DefaultDeadFor), Sample, 1)
-	require.Equal(t, 1, queued, "and queues again once its time is up")
-}
-
-func TestComplete(t *testing.T) {
-	ctx := context.Background()
-	q := openQueue(t)
-	enqueue(t, q, Sample, 1, 2)
-	require.NoError(t, q.Complete(ctx, TaskFetch, hash(1)))
-	n, err := q.Len(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
-}
-
-func TestTrimBySize(t *testing.T) {
-	ctx := context.Background()
-	q := openQueue(t, TaskOptions{MaxSize: 3})
-	enqueueAt(t, q, t0, Announce, 1)
-	enqueueAt(t, q, t0.Add(time.Second), Sample, 2, 3)
-	enqueueAt(t, q, t0.Add(2*time.Second), Announce, 4)
-	enqueueAt(t, q, t0.Add(3*time.Second), Sample, 5, 6)
-	require.Len(t, lease(t, q, 1, 1, t0), 1, "leases 1, an announced one")
-
-	tr, err := q.Trim(ctx, t0.Add(time.Minute))
-	require.NoError(t, err)
-	require.Equal(t, Trimmed{Oversize: 3}, tr)
-	n, err := q.Len(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 3, n)
-	require.NoError(t, q.Release(ctx, 1))
-	require.Equal(t, []Hash{hash(1), hash(4), hash(6)}, lease(t, q, 2, 10, t0.Add(time.Minute)), "the oldest samples go first")
-
-	tr, err = q.Trim(ctx, t0.Add(time.Minute))
-	require.NoError(t, err)
-	require.Zero(t, tr.Oversize)
-	enqueueAt(t, q, t0.Add(time.Minute), Sample, 7, 8)
-	require.NoError(t, q.Reset(ctx))
-	_, err = q.Trim(ctx, t0.Add(time.Minute))
-	require.NoError(t, err)
-	require.Equal(t, []Hash{hash(1), hash(4), hash(8)}, lease(t, q, 3, 10, t0.Add(time.Minute)), "announced ones stay while samples remain")
-}
-
-func TestTrimByAgeAndDeadExpiry(t *testing.T) {
-	ctx := context.Background()
-	q := openQueue(t, TaskOptions{MaxAge: time.Hour, DeadFor: 24 * time.Hour})
-	enqueueAt(t, q, t0, Announce, 1)
-	enqueueAt(t, q, t0.Add(30*time.Minute), Sample, 2)
-
-	tr, err := q.Trim(ctx, t0.Add(time.Hour+time.Minute))
-	require.NoError(t, err)
-	require.Equal(t, Trimmed{Aged: 1}, tr, "an old announced hash ages out too")
-	queued, known := enqueueAt(t, q, t0.Add(2*time.Hour), Sample, 1)
-	require.Zero(t, queued, "an evicted hash is dead")
-	require.Equal(t, 1, known)
-
-	tr, err = q.Trim(ctx, t0.Add(26*time.Hour))
-	require.NoError(t, err)
-	require.Equal(t, 1, tr.Expired)
-	require.Equal(t, 1, tr.Aged, "2 aged meanwhile")
-	queued, _ = enqueueAt(t, q, t0.Add(26*time.Hour), Sample, 1)
-	require.Equal(t, 1, queued, "a forgotten dead hash queues again")
-}
-
-func TestTrimMetrics(t *testing.T) {
-	reader := sdkmetric.NewManualReader()
-	q := openQueue(t, TaskOptions{MaxSize: 1, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
-	enqueueAt(t, q, t0, Sample, 1, 2, 3)
-	_, err := q.Trim(context.Background(), t0)
-	require.NoError(t, err)
-
-	var rm metricdata.ResourceMetrics
-	require.NoError(t, reader.Collect(context.Background(), &rm))
-	got := map[string]int64{}
-	for _, sm := range rm.ScopeMetrics {
-		for _, m := range sm.Metrics {
-			switch d := m.Data.(type) {
-			case metricdata.Sum[int64]:
-				for _, p := range d.DataPoints {
-					why, _ := p.Attributes.Value("sniffarr.queue.eviction")
-					got[m.Name+"/"+why.AsString()] += p.Value
-				}
-			case metricdata.Gauge[int64]:
-				for _, p := range d.DataPoints {
-					got[m.Name] += p.Value
-				}
-			}
-		}
-	}
-	require.EqualValues(t, 2, got["sniffarr.queue.evictions/size"])
-	require.EqualValues(t, 2, got["sniffarr.queue.dead"])
-	require.EqualValues(t, 1, got["sniffarr.queue.depth"])
+	require.True(t, ok, "free again")
+	require.Equal(t, a, c.Hash)
 }
 
 func TestTaskPlans(t *testing.T) {
-	q := openQueue(t)
-	for _, tt := range []struct {
-		query, want string
-		args        []any
-	}{
-		{leaseIDs, "SCAN task_queue USING INDEX task_queue_order", []any{0, 1}},
-		{agedIDs, "SEARCH task_queue USING INDEX task_queue_queued_at (queued_at<?)", []any{0}},
-		{oversizeIDs, "SCAN task_queue USING INDEX task_queue_evict", []any{1}},
-		{freeExpiredQuery("kind IN ('fetch', 'peers')"), "SEARCH task_queue USING INDEX task_queue_lease_until (lease_until<?)", []any{0}},
-		{freeExpiredQuery("kind = 'probe'"), "SEARCH task_queue USING INDEX task_queue_lease_until (lease_until<?)", []any{0}},
-	} {
-		rows, err := q.db.R.QueryContext(context.Background(), "EXPLAIN QUERY PLAN "+tt.query, tt.args...)
-		require.NoError(t, err)
-		var plan []string
-		for rows.Next() {
-			var id, parent, unused int
-			var detail string
-			require.NoError(t, rows.Scan(&id, &parent, &unused, &detail))
-			plan = append(plan, detail)
-		}
-		require.NoError(t, rows.Close())
-		require.Equal(t, []string{tt.want}, plan, "walks its index in order, not the (kind, infohash) key with a sort: %s", tt.query)
+	s := open(t)
+	rows, err := s.r.QueryContext(context.Background(), "EXPLAIN QUERY PLAN "+freeExpiredQuery("kind = 'probe'"), 0)
+	require.NoError(t, err)
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		require.NoError(t, rows.Scan(&id, &parent, &unused, &detail))
+		plan = append(plan, detail)
 	}
+	require.NoError(t, rows.Close())
+	require.Equal(t, []string{"SEARCH task_queue USING INDEX task_queue_lease_until (lease_until<?)"}, plan)
 }

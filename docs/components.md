@@ -37,25 +37,36 @@ serves them by priority: the lookups and probes asked for in the web UI
 first, then the infohashes Radarr or Sonarr grabbed and the probes of
 releases a search returned, then announced infohashes before sampled
 ones, then the oldest first. Fetchers take fetches and lookups,
-and probers take probes. It lives in the same SQLite database and survives restarts; a task
-whose fetcher goes away, or whose lease expires, goes back to the queue. A
-task whose fetcher finds no peers, or fewer than its `-min-peers`, is dropped
-at once. A task whose metadata times out is retried after a backoff and
-dropped after a few attempts.
-The fetches are bounded: once a minute the API evicts the infohashes that have
-waited too long, then the ones beyond the size limit, sampled ones before
-announced ones and the oldest first. A dropped or evicted infohash is kept out
-of the queue for a while, a shorter one when it had no peers, then forgotten.
-It is not rejected: an announce or a Radarr or Sonarr event queues it again
-at once, and a sample once it is forgotten.
+and probers take probes. Fetches and lookups are orders on the NATS stream
+`FETCH_ORDERS`, described below, and survive restarts with it; probes wait in
+the SQLite database. The API pulls the orders 32 at a time from each
+priority's consumer, highest priority first, and hands them out against the
+fetchers' credit; fetchers never connect to NATS. An order whose fetcher
+goes away goes back to the stream at once, as does one held longer than
+`SNIFFARR_FETCH_LEASE`; the orders the API holds are marked in progress every
+30 seconds, so those an API that stopped without handing them back held go
+out again within 2 minutes. A fetch whose fetcher finds no peers, or fewer
+than its `-min-peers`, is dropped at once. A fetch whose metadata times out
+is retried after a backoff, by a message scheduled on
+`sniffarr.orders.fetch.retry.<infohash>` that the server publishes as the
+order at its time, and dropped after a few attempts. A dropped infohash is
+kept out of the queue for a while, a shorter one when it had no peers, then
+forgotten. It is not rejected: an announce or a Radarr or Sonarr event queues
+it again at once, and a sample once it is forgotten. An announce of an
+infohash whose sample waits orders it again at the announce's priority; the
+first of the two orders a fetcher takes is fetched, and the other is dropped
+when it comes out while the first is held, and otherwise fetched again to no
+effect: its metadata is stored already, and its failure retries nothing.
+Nothing bounds the orders waiting.
 
 What happens to an infohash is recorded in the store, `torrent_journal`, one
-row per event in the transaction of the change it records: queued, promoted
-or queued again, leased once per attempt and per promotion, failed for no
-peers or a timeout, with the leases the attempt took when it took more than
-one, dropped and evicted, for an infohash sighted by announce or Radarr
-or Sonarr; metadata fetched and stored, with the leases its attempt
-took when it took more than one, rejected or already stored;
+row per event, most in the transaction of the change it records: ordered,
+as queued or, for a dead infohash, revived, handed out once per attempt and
+per order, failed for no peers or a timeout, with the times the attempt was
+handed out when that was more than once, and dropped, for an infohash
+sighted by announce or Radarr or Sonarr; metadata fetched and stored, with
+when its order was queued and the times its attempt was handed out when that
+was more than once, rejected or already stored;
 a classification by the classifier, with who asked for it, a kind copied from a release
 of the same title key, and a classification that failed; a title lookup's
 match, no match or error, with who asked for it, and the earlier match of its
@@ -69,8 +80,7 @@ the last one did, unless `RequestMatch` asked for it, a search that returns the 
 a probe requested again before a lease began, and a Radarr or Sonarr event
 that names the work its title key matched already, which raises the match's
 layer to theirs and writes no row. Peer lookups are not journaled; a request
-for one through `RefreshPeers`, which the web UI's button calls, is, at P0,
-unless the release already waits for a lookup or is being looked up. A kind
+for one through `RefreshPeers`, which the web UI's button calls, is, at P0. A kind
 copied to more than 50 releases of a title key, a match of more than 500, or
 no match for a key of more than 50, is journaled on none of them. The journal
 is keyed by infohash and outlives the torrent's row, so a rejected, dropped
@@ -269,10 +279,18 @@ on a subject per discovery, `sniffarr.sightings.announce` and
 under the same `Nats-Msg-Id` header, the discovery and the infohash in hex,
 so an announce after a sample of the same infohash is kept, and keep one
 nobody consumed for a day, fetch and probe orders on a subject per
-priority, P0 to P3, and fetch and probe results. The order and result
+priority, P0 to P3, the fetch orders with `sniffarr.orders.fetch.peers` for
+the peer lookups besides, and fetch and probe results. The order and result
 streams are work queues without limits: a message stays until a consumer
-acknowledges it. No component publishes or consumes the orders and results
-yet. The server listens on no port and has no monitoring port, and the
+acknowledges it. The order streams drop an order repeated within 5 minutes
+under the same `Nats-Msg-Id`, and take scheduled messages on
+`sniffarr.orders.fetch.retry.<infohash>` and
+`sniffarr.orders.probe.retry.<infohash>`, a later one on the same subject
+replacing the one pending; a consumer of each order subject delivers at most
+1024 orders not acknowledged, and one neither acknowledged nor marked in
+progress again after 2 minutes. Only the API publishes and consumes the
+fetch orders; no component publishes the probe orders or the results yet.
+The server listens on no port and has no monitoring port, and the
 API's user connects in process only. Its JetStream domain is `sniffarr`.
 With `SNIFFARR_NATS_URL` set, the server connects to that upstream server as
 a leaf node, with `SNIFFARR_NATS_PASSWORD` or the `.creds` file
@@ -286,5 +304,6 @@ torrents from one read of the store, writing nothing to it. The API's intake
 takes the sightings from the stream in batches of 500, every announced one
 before any sampled one, and checks each batch against the store in one
 read: an infohash stored, rejected, or kept out of the queue and sampled is
-dropped, and any other is queued. The intake moves the last sighting of a
-stored infohash.
+dropped, and any other is ordered at its discovery's priority, under the
+`Nats-Msg-Id` of its sighting, so a batch taken again after a failure orders
+nothing twice. The intake moves the last sighting of a stored infohash.

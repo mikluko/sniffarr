@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `IngestService.Sight` publishes the sightings to the API's sightings stream, from which the API queues them in batches, announced ones first, and `SightResponse.known` counts the repeats the stream drops within 5 minutes, not the queued infohashes.
 - **Breaking:** `IngestService.Sight` refuses `SOURCE_ARR`.
 - The start of `-api` allows up to 5 minutes for the NATS server to recover its store, on top of the 15 seconds the start of every process has.
+- Fetches and peer lookups are orders on the NATS stream `FETCH_ORDERS`, which the API hands out through `IngestService.Fetch`, in place of the SQLite queue, whose fetches and lookups move into the stream at the first start.
+- A timed-out fetch is retried by a message scheduled on `sniffarr.orders.fetch.retry.<infohash>`.
+- An announce of an infohash whose sample waits orders its fetch again at the announce's priority, journaled as `sighted/queued`.
+- `RefreshPeers` journals every request for a peer lookup.
+- The metric `sniffarr.queue.depth` counts orders by `sniffarr.task.kind` and `sniffarr.priority`, and `sniffarr.queue.lease_expiries` counts by `sniffarr.task.kind`.
 
 ### Fixed
 
@@ -30,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Breaking:** the NATS server's listener for workers, with `SNIFFARR_NATS_ADDR`, the user `worker`, and the chart's `api.nats.enabled` and port `nats`.
+- **Breaking:** the eviction of waiting fetches by age and by size, with `SNIFFARR_QUEUE_MAX_AGE`, `SNIFFARR_QUEUE_MAX_SIZE` and the `age` and `size` evictions of `sniffarr.queue.evictions`.
 
 ## [0.45.0] - 2026-11-08
 

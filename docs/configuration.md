@@ -35,12 +35,10 @@ the same to each.
 | `SNIFFARR_CLASSIFY_SEARCH_RESERVE` | `25`             | Percentage of the daily tokens background classification leaves for searches, `0` to `100`                             |
 | `SNIFFARR_SEARCH_CLASSIFY_MAX`     | `20`             | Candidates one search has classified at most                                                                           |
 | `SNIFFARR_SEARCH_CLASSIFY_WAIT`    | `2s`             | How long a search waits for them                                                                                       |
-| `SNIFFARR_FETCH_LEASE`             | `1m`             | How long a fetcher may hold a task                                                                                     |
+| `SNIFFARR_FETCH_LEASE`             | `1m`             | How long a fetcher may hold a fetch order or a peer lookup before it goes back to the stream                           |
 | `SNIFFARR_FETCH_ATTEMPTS`          | `3`              | Timed-out fetches after which an infohash is dropped                                                                   |
-| `SNIFFARR_FETCH_BACKOFF`           | `10m`            | Wait before retrying a timed-out task, doubled per timeout                                                             |
-| `SNIFFARR_QUEUE_MAX_SIZE`          | `1000000`        | Fetches the queue keeps                                                                                                |
-| `SNIFFARR_QUEUE_MAX_AGE`           | `24h`            | How long a fetch may wait in the queue                                                                                 |
-| `SNIFFARR_QUEUE_DEAD_FOR`          | `168h`           | How long an evicted infohash, or one dropped after its last attempt, stays out                                         |
+| `SNIFFARR_FETCH_BACKOFF`           | `10m`            | Wait before retrying a timed-out fetch, doubled per timeout                                                            |
+| `SNIFFARR_QUEUE_DEAD_FOR`          | `168h`           | How long an infohash dropped after its last attempt stays out                                                          |
 | `SNIFFARR_QUEUE_NO_PEERS_FOR`      | `24h`            | How long an infohash dropped for having no peers stays out                                                             |
 | `SNIFFARR_STORE_MAX_FILES`         | `20`             | Files stored per torrent, the largest ones                                                                             |
 | `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |

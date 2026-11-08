@@ -13,76 +13,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"sarak.sh/mikluko/libarr/database"
 )
 
-func evictions(t *testing.T, reader *sdkmetric.ManualReader) map[string]int64 {
-	t.Helper()
-	var rm metricdata.ResourceMetrics
-	require.NoError(t, reader.Collect(context.Background(), &rm))
-	got := map[string]int64{}
-	for _, sm := range rm.ScopeMetrics {
-		for _, m := range sm.Metrics {
-			if m.Name != "sniffarr.queue.evictions" {
-				continue
-			}
-			for _, p := range m.Data.(metricdata.Sum[int64]).DataPoints {
-				why, _ := p.Attributes.Value("sniffarr.queue.eviction")
-				got[why.AsString()] += p.Value
-			}
-		}
-	}
-	return got
-}
-
-func TestNoPeers(t *testing.T) {
-	ctx := context.Background()
-	reader := sdkmetric.NewManualReader()
-	q := openQueue(t, TaskOptions{NoPeersFor: time.Hour, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
-	enqueue(t, q, Sample, 1)
-	require.Len(t, lease(t, q, 1, 1, t0), 1)
-
-	require.NoError(t, q.NoPeers(ctx, hash(1), 2, t0))
-	_, err := q.Discovery(ctx, hash(1))
-	require.NoError(t, err, "a report from another owner is ignored")
-
-	require.NoError(t, q.NoPeers(ctx, hash(1), 1, t0))
-	_, err = q.Discovery(ctx, hash(1))
-	require.ErrorIs(t, err, ErrNotQueued, "dropped at the first report")
-	require.EqualValues(t, 1, evictions(t, reader)["no_peers"])
-
-	queued, known := enqueueAt(t, q, t0.Add(59*time.Minute), Sample, 1)
-	require.Zero(t, queued, "a sample leaves it dead")
-	require.Equal(t, 1, known)
-	queued, _ = enqueueAt(t, q, t0.Add(time.Hour), Sample, 1)
-	require.Equal(t, 1, queued, "for NoPeersFor, not DeadFor")
-}
-
-func TestAnnounceRevives(t *testing.T) {
-	ctx := context.Background()
-	q := openQueue(t)
-	enqueue(t, q, Sample, 1, 2)
-	require.Len(t, lease(t, q, 1, 2, t0), 2)
-	require.NoError(t, q.NoPeers(ctx, hash(1), 1, t0))
-	dropped, err := q.Fail(ctx, hash(2), 1, t0, 1, time.Minute)
-	require.NoError(t, err)
-	require.True(t, dropped)
-
-	queued, known := enqueueAt(t, q, t0.Add(time.Minute), Announce, 1, 2)
-	require.Equal(t, 2, queued, "an announce revives any dead hash")
-	require.Zero(t, known)
-	d, err := q.Discovery(ctx, hash(1))
-	require.NoError(t, err)
-	require.Equal(t, Announce, d)
-	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, 2, 2, t0.Add(time.Minute)), "revived with no attempts behind it")
-}
-
 func TestDeadKey(t *testing.T) {
 	ctx := context.Background()
-	q := openQueue(t)
+	q := open(t)
 	for _, c := range []struct {
 		hash []byte
 		want int64
@@ -102,22 +39,6 @@ func TestDeadKey(t *testing.T) {
 	require.False(t, null.Valid)
 	_, err := q.db.R.ExecContext(ctx, "SELECT task_dead_key('text')")
 	require.Error(t, err)
-}
-
-func TestDeadKeyShared(t *testing.T) {
-	ctx := context.Background()
-	q := openQueue(t)
-	a, b := hash(1), hash(1)
-	b[19] = 1
-	_, _, err := q.Enqueue(ctx, []Sighting{{Hash: a, Discovery: Sample}}, t0)
-	require.NoError(t, err)
-	_, _, err = q.Lease(ctx, 1, 1, t0, time.Minute)
-	require.NoError(t, err)
-	require.NoError(t, q.NoPeers(ctx, a, 1, t0))
-
-	queued, known, err := q.Enqueue(ctx, []Sighting{{Hash: b, Discovery: Sample}}, t0.Add(time.Minute))
-	require.NoError(t, err)
-	require.Equal(t, [2]int{0, 1}, [2]int{queued, known}, "a hash sharing the first 8 bytes of a dead one is dead too")
 }
 
 func TestMigrateDeadKey(t *testing.T) {
@@ -144,7 +65,7 @@ func TestMigrateDeadKey(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	q, err := NewTasks(ctx, db, TaskOptions{})
+	q, err := New(ctx, db, Options{})
 	require.NoError(t, err)
 	got := map[int64]int64{}
 	require.NoError(t, func() error {
@@ -184,7 +105,7 @@ func BenchmarkDeadExpiry(b *testing.B) {
 			db, err := database.Open(ctx, filepath.Join(b.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 			require.NoError(b, err)
 			defer db.Close()
-			_, err = NewTasks(ctx, db, TaskOptions{})
+			_, err = New(ctx, db, Options{})
 			require.NoError(b, err)
 			if !indexed {
 				_, err := db.W.ExecContext(ctx, "DROP INDEX task_dead_until")
@@ -227,4 +148,65 @@ func BenchmarkDeadExpiry(b *testing.B) {
 			b.ReportMetric(float64(deleting.Milliseconds())/float64(b.N), "delete-ms/op")
 		})
 	}
+}
+
+func TestRecordQueued(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for _, b := range []byte{3, 4} {
+		_, err := s.w.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (task_dead_key(?), ?)", []byte{b}, t0.Add(time.Hour).UnixMilli())
+		require.NoError(t, err)
+	}
+	require.NoError(t, s.RecordQueued(ctx, []Queued{{Hash: hash(1), Discovery: Announce}, {Hash: hash(2), Discovery: Sample},
+		{Hash: hash(3), Discovery: Announce, Revived: true}, {Hash: hash(4), Discovery: Sample, Revived: true}, {Hash: hash(5), Discovery: Arr}}, t0))
+	require.JSONEq(t, `{"discovery":"announce"}`, entry(t, s, hash(1), JournalSighted, "queued").Detail)
+	require.Empty(t, entries(t, s, hash(2)), "a sample's fetch is not journaled")
+	require.JSONEq(t, `{"discovery":"announce"}`, entry(t, s, hash(3), JournalSighted, "revived").Detail)
+	require.Empty(t, entries(t, s, hash(4)))
+	require.Equal(t, []string{"sighted/queued"}, entries(t, s, hash(5)))
+	held, err := s.Screen(ctx, []Hash{hash(3), hash(4)}, t0)
+	require.NoError(t, err)
+	require.Empty(t, held, "a revived hash leaves the dead set, journaled or not")
+	require.NoError(t, s.RecordQueued(ctx, nil, t0))
+}
+
+func TestRecordLeases(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	until := t0.Add(time.Minute)
+	require.NoError(t, s.RecordLeases(ctx, []Lease{{Hash: hash(1), Priority: PriorityAnnounce, Attempt: 2, Until: until},
+		{Hash: hash(2), Priority: PrioritySample, Attempt: 1, Until: until}}, t0))
+	require.JSONEq(t, `{"attempt":2,"lease_until":`+unix(until)+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail)
+	require.Empty(t, entries(t, s, hash(2)), "nor a sample's lease")
+}
+
+func TestRecordFetchFailure(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	retry, dead := t0.Add(10*time.Minute), t0.Add(24*time.Hour)
+	require.NoError(t, s.RecordFetchFailure(ctx, FetchFailure{Hash: hash(1), Priority: PriorityAnnounce, Outcome: "timeout", Attempt: 1, RetryAt: retry, Leases: 2}, t0))
+	require.NoError(t, s.RecordFetchFailure(ctx, FetchFailure{Hash: hash(2), Priority: PriorityArr, Outcome: "dropped", Attempt: 3, DeadUntil: dead, Leases: 1}, t0))
+	require.NoError(t, s.RecordFetchFailure(ctx, FetchFailure{Hash: hash(3), Priority: PriorityAnnounce, Outcome: "no_peers", DeadUntil: t0.Add(time.Hour), Leases: 3}, t0))
+	require.NoError(t, s.RecordFetchFailure(ctx, FetchFailure{Hash: hash(4), Priority: PrioritySample, Outcome: "no_peers", DeadUntil: t0.Add(time.Hour)}, t0))
+	require.JSONEq(t, `{"attempt":1,"retry_at":`+unix(retry)+`,"leases":2}`, entry(t, s, hash(1), JournalFetchFailed, "timeout").Detail)
+	require.JSONEq(t, `{"attempt":3,"dead_until":`+unix(dead)+`}`, entry(t, s, hash(2), JournalFetchFailed, "dropped").Detail)
+	require.JSONEq(t, `{"dead_until":`+unix(t0.Add(time.Hour))+`,"leases":3}`, entry(t, s, hash(3), JournalFetchFailed, "no_peers").Detail)
+	require.Empty(t, entries(t, s, hash(4)), "a sample's failure is not journaled")
+
+	shared := hash(4)
+	shared[19] = 1
+	held, err := s.Screen(ctx, []Hash{hash(1), hash(2), hash(3), hash(4), shared}, t0.Add(time.Hour-time.Millisecond))
+	require.NoError(t, err)
+	require.Equal(t, map[Hash]Screened{hash(2): {Dead: true}, hash(3): {Dead: true}, hash(4): {Dead: true}, shared: {Dead: true}}, held,
+		"a timeout to retry is not dead; a hash sharing the first 8 bytes of a dead one is dead too")
+	n, err := s.Dead(ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, n)
+
+	expired, err := s.ExpireDead(ctx, t0.Add(time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, 2, expired, "the no-peers ones end first")
+	held, err = s.Screen(ctx, []Hash{hash(2), hash(3)}, t0.Add(time.Hour))
+	require.NoError(t, err)
+	require.Equal(t, map[Hash]Screened{hash(2): {Dead: true}}, held)
 }

@@ -6,10 +6,9 @@ import (
 	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	"modernc.org/sqlite"
 )
 
@@ -45,60 +44,126 @@ func sqlDeadKey(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, e
 	}
 }
 
-func evictionAttr(why string) metric.AddOption {
-	return metric.WithAttributes(attribute.String("sniffarr.queue.eviction", why))
-}
-
-// evicted is a queued hash that evict moved into the dead set, with the
-// priority, queued_at and leases of its queue row.
-type evicted struct {
-	hash     Hash
-	priority int
-	queuedAt int64
-	leases   int
-}
-
-// evict moves the queued hashes whose ids selectIDs returns into the dead set
-// until until, and returns them.
-func evict(ctx context.Context, tx *sql.Tx, selectIDs string, until int64, args ...any) ([]evicted, error) {
-	if _, err := tx.ExecContext(ctx, "INSERT INTO task_dead (key, until) SELECT task_dead_key(infohash), ? FROM task_queue WHERE id IN ("+selectIDs+") ON CONFLICT (key) DO UPDATE SET until = excluded.until",
-		append([]any{until}, args...)...); err != nil {
-		return nil, err
-	}
-	rows, err := tx.QueryContext(ctx, "DELETE FROM task_queue WHERE id IN ("+selectIDs+") RETURNING infohash, priority, queued_at, leases", args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []evicted
-	for rows.Next() {
-		var e evicted
-		var b []byte
-		if err := rows.Scan(&b, &e.priority, &e.queuedAt, &e.leases); err != nil {
-			return nil, err
-		}
-		e.hash = Hash(b)
-		out = append(out, e)
-	}
-	return out, rows.Err()
-}
-
-// journaled reports whether the queue journals a hash of the priority:
-// those sighted by a discovery served before samples.
+// journaled reports whether the fetches of a hash queued at the priority are
+// journaled: those sighted by a discovery served before samples.
 func journaled(priority int) bool {
 	return priority < PrioritySample
 }
 
-// journalEvicted writes the entry, with the detail of each, for every
-// evicted hash the queue journals.
-func journalEvicted(ctx context.Context, tx *sql.Tx, rows []evicted, at time.Time, kind, outcome string, detail func(evicted) map[string]any) error {
-	for _, e := range rows {
-		if !journaled(e.priority) {
-			continue
-		}
-		if err := journal(ctx, tx, e.hash, at, kind, outcome, detail(e)); err != nil {
-			return err
-		}
+// Queued is a fetch queued for a sighting.
+type Queued struct {
+	Hash      Hash
+	Discovery string
+	// Revived is a hash in the dead set that the sighting queued anyway.
+	Revived bool
+}
+
+// RecordQueued takes the revived hashes of qs out of the dead set and
+// journals each fetch queued for a discovery served before samples, at the
+// time, as queued or revived.
+func (s *Store) RecordQueued(ctx context.Context, qs []Queued, at time.Time) error {
+	if !slices.ContainsFunc(qs, func(q Queued) bool { return q.Revived || journaled(PriorityOf(q.Discovery)) }) {
+		return nil
 	}
-	return nil
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		for _, q := range qs {
+			outcome := "queued"
+			if q.Revived {
+				outcome = "revived"
+				if _, err := tx.ExecContext(ctx, "DELETE FROM task_dead WHERE key = ?", deadKey(q.Hash[:])); err != nil {
+					return err
+				}
+			}
+			if !journaled(PriorityOf(q.Discovery)) {
+				continue
+			}
+			if err := journal(ctx, tx, q.Hash, at, JournalSighted, outcome, Detail("discovery", q.Discovery)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// Lease is a fetch handed to a fetcher.
+type Lease struct {
+	Hash     Hash
+	Priority int
+	// Attempt counts this attempt, the first being 1.
+	Attempt int
+	Until   time.Time
+}
+
+// RecordLeases journals, at the time, each lease of a fetch queued for a
+// discovery served before samples.
+func (s *Store) RecordLeases(ctx context.Context, ls []Lease, at time.Time) error {
+	if !slices.ContainsFunc(ls, func(l Lease) bool { return journaled(l.Priority) }) {
+		return nil
+	}
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		for _, l := range ls {
+			if !journaled(l.Priority) {
+				continue
+			}
+			if err := journal(ctx, tx, l.Hash, at, JournalLeased, "fetch", Detail("attempt", l.Attempt, "lease_until", l.Until)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// FetchFailure is a fetch that brought no metadata.
+type FetchFailure struct {
+	Hash     Hash
+	Priority int
+	// Outcome is "no_peers", "timeout" or "dropped".
+	Outcome string
+	// Attempt counts the failed attempt, the first being 1.
+	Attempt int
+	// RetryAt is when the fetch is tried again, and DeadUntil until when the
+	// hash is kept out of the queue; either may be zero.
+	RetryAt, DeadUntil time.Time
+	// Leases is how many times the attempt was handed out.
+	Leases int
+}
+
+// RecordFetchFailure keeps f's hash in the dead set until f.DeadUntil,
+// unless it is zero, and journals f, at the time, when its fetch was queued
+// for a discovery served before samples.
+func (s *Store) RecordFetchFailure(ctx context.Context, f FetchFailure, at time.Time) error {
+	if f.DeadUntil.IsZero() && !journaled(f.Priority) {
+		return nil
+	}
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		if !f.DeadUntil.IsZero() {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO task_dead (key, until) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET until = excluded.until",
+				deadKey(f.Hash[:]), f.DeadUntil.UnixMilli()); err != nil {
+				return err
+			}
+		}
+		if !journaled(f.Priority) {
+			return nil
+		}
+		return journal(ctx, tx, f.Hash, at, JournalFetchFailed, f.Outcome,
+			Detail("attempt", f.Attempt, "retry_at", f.RetryAt, "dead_until", f.DeadUntil, "leases", manyLeases(f.Leases)))
+	})
+}
+
+// ExpireDead forgets the dead hashes whose time is up at now, and returns
+// how many it forgot.
+func (s *Store) ExpireDead(ctx context.Context, now time.Time) (int, error) {
+	res, err := s.w.ExecContext(ctx, "DELETE FROM task_dead WHERE until <= ?", now.UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
+}
+
+// Dead returns how many hashes the dead set holds.
+func (s *Store) Dead(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.r.QueryRowContext(ctx, "SELECT count(*) FROM task_dead").Scan(&n)
+	return n, err
 }

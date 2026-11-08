@@ -121,6 +121,21 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{db: db, w: db.W, r: db.R, opts: opts, deleted: deleted, journalDeleted: journalDeleted, backfillBatch: backfillBatch, log: opts.Log}
+	dead, err := m.Int64ObservableGauge("sniffarr.queue.dead", metric.WithUnit("{infohash}"),
+		metric.WithDescription("Infohashes kept out of the queue after their last failed attempt."))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := m.RegisterCallback(func(ctx context.Context, o metric.Observer) error {
+		n, err := s.Dead(ctx)
+		if err != nil {
+			return err
+		}
+		o.ObserveInt64(dead, n)
+		return nil
+	}, dead); err != nil {
+		return nil, err
+	}
 	s.probes = s.newProbes(opts.ProbeBatch)
 	return s, nil
 }

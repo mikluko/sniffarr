@@ -105,9 +105,7 @@ func TestHistoryRadarr(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(3), sums[id].GrabsWeek, "the webhook's grab and the history's are one")
 	for _, b := range []byte{1, 2, 4, 5} {
-		d, err := f.rec.Tasks.Discovery(ctx, hash(b))
-		require.NoError(t, err)
-		require.Equal(t, store.Arr, d)
+		require.Equal(t, store.Arr, f.queue.discovery(hash(b)))
 	}
 
 	arr.mu.Lock()

@@ -19,6 +19,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/latest"
 	"sarak.sh/mikluko/sniffarr/internal/names"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 	"sarak.sh/mikluko/sniffarr/internal/version"
@@ -57,8 +58,12 @@ type LatestRelease interface {
 // Browser implements sniffarrv1connect.BrowseServiceHandler.
 type Browser struct {
 	Store *store.Store
-	// Tasks, when set, has Stats report the task queue.
+	// Tasks, when set, has Stats report the probe queue.
 	Tasks *store.Tasks
+	// Fetches, when set, has Stats report the fetch orders and peer lookups,
+	// and RefreshPeers order the lookups; without it RefreshPeers answers
+	// FAILED_PRECONDITION.
+	Fetches *orders.Queue
 	// TMDB, when set, has SearchTitles search TMDB as well as the store.
 	TMDB TitleSearch
 	// Matcher, when set, serves RequestMatch.
@@ -486,18 +491,24 @@ func (b *Browser) Stats(ctx context.Context, req *connect.Request[sniffarrv1.Sta
 	return connect.NewResponse(res), nil
 }
 
-// queue sets the queue fields of res from Tasks, and none without it.
+// queue sets the queue fields of res from Fetches and Tasks, leaving those
+// of either unset without it.
 func (b *Browser) queue(ctx context.Context, res *sniffarrv1.StatsResponse) error {
-	if b.Tasks == nil {
-		return nil
+	if b.Fetches != nil {
+		queues, err := b.Fetches.Levels(ctx, b.now())
+		if err != nil {
+			return err
+		}
+		res.QueueFetches = taskQueue(queues[store.TaskFetch])
+		res.QueueLookups = taskQueue(queues[store.TaskPeers])
 	}
-	queues, err := b.Tasks.Queues(ctx, b.now())
-	if err != nil {
-		return err
+	if b.Tasks != nil {
+		queues, err := b.Tasks.Queues(ctx, b.now())
+		if err != nil {
+			return err
+		}
+		res.QueueProbes = taskQueue(queues[store.TaskProbe])
 	}
-	res.QueueFetches = taskQueue(queues[store.TaskFetch])
-	res.QueueLookups = taskQueue(queues[store.TaskPeers])
-	res.QueueProbes = taskQueue(queues[store.TaskProbe])
 	return nil
 }
 

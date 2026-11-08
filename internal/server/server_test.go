@@ -36,6 +36,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/bus/bustest"
 	"sarak.sh/mikluko/sniffarr/internal/memconn"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rot13"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
@@ -44,38 +45,42 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
-func start(t *testing.T, cfg Config, qopts ...store.TaskOptions) (*httptest.Server, *http.Client) {
+func start(t *testing.T, cfg Config) (*httptest.Server, *http.Client) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(cfg.Languages)})
+	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(cfg.Languages), Meter: cfg.Meter})
 	require.NoError(t, err)
-	var qo store.TaskOptions
-	if len(qopts) > 0 {
-		qo = qopts[0]
-	}
-	qo.Meter = cfg.Meter
-	q, err := store.NewTasks(ctx, db, qo)
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
 	cfg.Tasks = q
 	cfg.Store, cfg.Log = s, slog.New(slog.DiscardHandler)
 	if cfg.Arr != nil {
-		cfg.Arr.Store, cfg.Arr.Tasks, cfg.Arr.Log = s, q, cfg.Log
+		cfg.Arr.Store, cfg.Arr.Log = s, cfg.Log
 	}
 	if cfg.Counts != nil {
 		cfg.Counts.Store = s
 	}
 	js := sightings(t)
 	cfg.JetStream = js
+	if cfg.Fetches == nil {
+		cfg.Fetches = orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes, Meter: cfg.Meter})
+	}
+	require.NoError(t, cfg.Fetches.Start(ctx, js))
 	cfg.Ingest = cfg.ingestService()
 	cfg.Ingest.IntakeWait = 10 * time.Millisecond
+	if cfg.Arr != nil {
+		cfg.Arr.Fetches = cfg.Ingest
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
+	done := make(chan error, 2)
 	go func() { done <- cfg.Ingest.Intake(ctx, js) }()
+	go func() { done <- cfg.Fetches.Run(ctx) }()
 	t.Cleanup(func() {
 		cancel()
+		require.ErrorIs(t, <-done, context.Canceled)
 		require.ErrorIs(t, <-done, context.Canceled)
 	})
 	h, err := New(cfg)
@@ -93,17 +98,19 @@ func start(t *testing.T, cfg Config, qopts ...store.TaskOptions) (*httptest.Serv
 const dedupe = 100 * time.Millisecond
 
 // sightings returns a connection to a server with the bus topology whose
-// sightings stream has the duplicates window dedupe.
+// sightings and fetch orders streams have the duplicates window dedupe.
 func sightings(t *testing.T) jetstream.JetStream {
 	t.Helper()
 	js, err := jetstream.New(bustest.Conn(t))
 	require.NoError(t, err)
-	stream, err := js.Stream(t.Context(), bus.StreamSightings)
-	require.NoError(t, err)
-	cfg := stream.CachedInfo().Config
-	cfg.Duplicates = dedupe
-	_, err = js.UpdateStream(t.Context(), cfg)
-	require.NoError(t, err)
+	for _, name := range []string{bus.StreamSightings, bus.StreamFetchOrders} {
+		stream, err := js.Stream(t.Context(), name)
+		require.NoError(t, err)
+		cfg := stream.CachedInfo().Config
+		cfg.Duplicates = dedupe
+		_, err = js.UpdateStream(t.Context(), cfg)
+		require.NoError(t, err)
+	}
 	return js
 }
 
@@ -514,7 +521,8 @@ func TestFetchCreditAndLeases(t *testing.T) {
 }
 
 func TestFetchLeaseExpiry(t *testing.T) {
-	srv, hc := start(t, Config{Lease: 300 * time.Millisecond, Poll: 20 * time.Millisecond})
+	srv, hc := start(t, Config{Poll: 20 * time.Millisecond,
+		Fetches: orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes, Lease: 300 * time.Millisecond, Heartbeat: 50 * time.Millisecond})})
 	ingest := ingestClient(srv, hc)
 	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 	require.NoError(t, err)
@@ -529,7 +537,7 @@ func TestFetchLeaseExpiry(t *testing.T) {
 }
 
 func TestFetchRetryAndForget(t *testing.T) {
-	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, Poll: 20 * time.Millisecond}, store.TaskOptions{DeadFor: 300 * time.Millisecond})
+	srv, hc := start(t, Config{Attempts: 2, Backoff: 100 * time.Millisecond, DeadFor: 300 * time.Millisecond, Poll: 20 * time.Millisecond})
 	ingest := ingestClient(srv, hc)
 	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
 	require.NoError(t, err)
@@ -722,7 +730,7 @@ func TestMetrics(t *testing.T) {
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.stored"))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "adult")))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "script")))
-	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.depth", attribute.String("sniffarr.discovery", "sample")))
+	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.depth", attribute.String("sniffarr.task.kind", "fetch"), attribute.Int("sniffarr.priority", store.PrioritySample)))
 	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.leases"))
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.queue.dead"), "the one without peers is dead")
 	require.EqualValues(t, 1, value(t, rm, "sniffarr.queue.evictions", attribute.String("sniffarr.queue.eviction", "no_peers")))

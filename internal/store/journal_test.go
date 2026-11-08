@@ -458,124 +458,6 @@ func TestJournalFetched(t *testing.T) {
 	require.Equal(t, []string{"fetched/stored"}, entries(t, s, hash(5)), "a key matched to nothing gives no work")
 }
 
-func TestJournalQueue(t *testing.T) {
-	ctx := context.Background()
-	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	q, err := NewTasks(ctx, db, TaskOptions{MaxSize: 1, MaxAge: time.Hour, DeadFor: 24 * time.Hour, NoPeersFor: time.Hour})
-	require.NoError(t, err)
-	const owner = 7
-	enqueue(t, q, Announce, 1)
-	enqueue(t, q, Sample, 2)
-	require.JSONEq(t, `{"discovery":"announce"}`, entry(t, s, hash(1), JournalSighted, "queued").Detail)
-	require.Empty(t, entries(t, s, hash(2)), "a sample's sighting is not journaled")
-
-	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, owner, 2, t0))
-	require.JSONEq(t, `{"attempt":1,"lease_until":`+unix(t0.Add(time.Minute))+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail)
-	require.Empty(t, entries(t, s, hash(2)), "nor its lease")
-	first := t0.Add(time.Minute)
-	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, owner, 2, first), "the leases expired")
-	require.Equal(t, []string{"sighted/queued", "leased/fetch"}, entries(t, s, hash(1)), "a lease of the same attempt again is not journaled")
-
-	at := first
-	for attempt := 1; attempt <= 3; attempt++ {
-		dropped, err := q.Fail(ctx, hash(1), owner, at, 3, 10*time.Minute)
-		require.NoError(t, err)
-		require.Equal(t, attempt == 3, dropped)
-		_, err = q.Fail(ctx, hash(2), owner, at, 3, 10*time.Minute)
-		require.NoError(t, err)
-		if attempt < 3 {
-			at = at.Add(10 * time.Minute << (attempt - 1))
-			require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, owner, 2, at))
-		}
-	}
-	require.Equal(t, []string{"sighted/queued", "leased/fetch", "fetch_failed/timeout", "leased/fetch", "fetch_failed/timeout", "leased/fetch", "fetch_failed/dropped"},
-		entries(t, s, hash(1)))
-	got, err := s.Journal(ctx, hash(1), 10)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"attempt":1,"retry_at":`+unix(first.Add(10*time.Minute))+`,"leases":2}`, got[2].Detail, "the attempt's lease expired once")
-	require.JSONEq(t, `{"attempt":2,"lease_until":`+unix(first.Add(11*time.Minute))+`}`, got[3].Detail, "the attempt number carries over the retry")
-	require.JSONEq(t, `{"attempt":3,"dead_until":`+unix(at.Add(24*time.Hour))+`}`, got[6].Detail)
-	require.Empty(t, entries(t, s, hash(2)), "nor its failures")
-
-	enqueueAt(t, q, at, Announce, 3)
-	require.Len(t, lease(t, q, owner, 1, at), 1)
-	require.Len(t, lease(t, q, owner, 1, at.Add(time.Minute)), 1)
-	require.NoError(t, q.NoPeers(ctx, hash(3), owner, at))
-	require.JSONEq(t, `{"dead_until":`+unix(at.Add(time.Hour))+`,"leases":2}`, entry(t, s, hash(3), JournalFetchFailed, "no_peers").Detail)
-	enqueueAt(t, q, at, Announce, 3)
-	require.JSONEq(t, `{"discovery":"announce"}`, entry(t, s, hash(3), JournalSighted, "revived").Detail)
-	require.Equal(t, []string{"sighted/queued", "leased/fetch", "fetch_failed/no_peers", "sighted/revived"}, entries(t, s, hash(3)), "a revival is not queued too")
-
-	enqueueAt(t, q, at, Sample, 4)
-	enqueueAt(t, q, at, Announce, 4)
-	require.JSONEq(t, `{"from":"sample","to":"announce"}`, entry(t, s, hash(4), JournalSighted, "promoted").Detail)
-	enqueueAt(t, q, at, Sample, 4)
-	require.Equal(t, []string{"sighted/promoted"}, entries(t, s, hash(4)), "a later discovery does not promote")
-
-	tr := torrent(4, "Four.2024.1080p")
-	tr.SeenAt = at
-	_, _, err = s.Insert(ctx, tr)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"name":"Four.2024.1080p","size":1073741824,"discovery":"sample","queued_at":`+unix(at)+`}`, entry(t, s, hash(4), JournalFetched, "stored").Detail,
-		"the wait in the queue is derivable while the queue row is there")
-	require.NoError(t, q.Complete(ctx, TaskFetch, hash(4)))
-
-	later := at.Add(2 * time.Hour)
-	enqueueAt(t, q, later, Announce, 5, 6)
-	trimmed, err := q.Trim(ctx, later)
-	require.NoError(t, err)
-	require.Equal(t, Trimmed{Aged: 1, Oversize: 1}, trimmed, "3 aged; 5 over the size")
-	require.JSONEq(t, `{"queued_at":`+unix(at)+`,"discovery":"announce","dead_until":`+unix(later.Add(24*time.Hour))+`}`, entry(t, s, hash(3), JournalEvicted, "aged").Detail)
-	require.JSONEq(t, `{"queued_at":`+unix(later)+`,"discovery":"announce","dead_until":`+unix(later.Add(24*time.Hour))+`}`, entry(t, s, hash(5), JournalEvicted, "oversize").Detail)
-	require.Equal(t, []string{"sighted/queued"}, entries(t, s, hash(6)))
-}
-
-func TestJournalFetchedLeases(t *testing.T) {
-	ctx := context.Background()
-	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	q, err := NewTasks(ctx, db, TaskOptions{})
-	require.NoError(t, err)
-	enqueue(t, q, Announce, 1, 2)
-	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, 7, 2, t0))
-	require.Equal(t, []Hash{hash(1), hash(2)}, lease(t, q, 7, 2, t0.Add(time.Minute)), "the first leases expired")
-	require.Equal(t, []Hash{hash(1)}, lease(t, q, 7, 1, t0.Add(2*time.Minute)), "and hash 1's second")
-	require.NoError(t, q.Complete(ctx, TaskFetch, hash(2)))
-	for _, b := range []byte{1, 2} {
-		tr := torrent(b, "Alien.1979."+strconv.Itoa(int(b)))
-		tr.SeenAt = t0.Add(3 * time.Minute)
-		_, _, err = s.Insert(ctx, tr)
-		require.NoError(t, err)
-	}
-	require.JSONEq(t, `{"name":"Alien.1979.1","size":1073741824,"discovery":"sample","queued_at":`+unix(t0)+`,"leases":3}`, entry(t, s, hash(1), JournalFetched, "stored").Detail,
-		"the leases its attempt took, as the failure rows say")
-	require.NotContains(t, entry(t, s, hash(2), JournalFetched, "stored").Detail, "leases", "none for a hash no longer queued")
-}
-
-func TestJournalLeasedAfterPromotion(t *testing.T) {
-	ctx := context.Background()
-	s, db := openAt(t, filepath.Join(t.TempDir(), "test.db"))
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	q, err := NewTasks(ctx, db, TaskOptions{})
-	require.NoError(t, err)
-	const owner = 7
-	enqueue(t, q, Sample, 1)
-	require.Equal(t, []Hash{hash(1)}, lease(t, q, owner, 1, t0))
-	moved := t0.Add(2 * time.Minute)
-	enqueueAt(t, q, moved, Announce, 1)
-	require.Equal(t, []Hash{hash(1)}, lease(t, q, owner, 1, moved), "the sample's lease expired")
-	require.JSONEq(t, `{"attempt":1,"lease_until":`+unix(moved.Add(time.Minute))+`}`, entry(t, s, hash(1), JournalLeased, "fetch").Detail,
-		"the first lease since an announce moved it ahead")
-
-	again := moved.Add(2 * time.Minute)
-	enqueueAt(t, q, again, Announce, 1)
-	require.Equal(t, []Hash{hash(1)}, lease(t, q, owner, 1, again))
-	_, err = q.Fail(ctx, hash(1), owner, again, 3, time.Minute)
-	require.NoError(t, err)
-	require.Equal(t, []string{"sighted/promoted", "leased/fetch", "fetch_failed/timeout"}, entries(t, s, hash(1)), "a sighting that moves it nowhere keeps the count")
-}
-
 func TestJournalClassified(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
@@ -1100,44 +982,18 @@ func TestJournalDeleted(t *testing.T) {
 	require.Equal(t, []string{"fetched/stored", "matched/tmdb", "deleted/expired"}, entries(t, s, hash(1)), "the trail outlives the torrent")
 }
 
-func TestJournalPeersWanted(t *testing.T) {
+func TestJournalFetchedLeases(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	q, err := NewTasks(ctx, s.db, TaskOptions{})
+	tr := torrent(1, "Alien.1979.1")
+	tr.SeenAt, tr.QueuedAt, tr.Leases = t0.Add(3*time.Minute), t0, 3
+	_, _, err := s.Insert(ctx, tr)
 	require.NoError(t, err)
-	a := insertProbeable(t, s, 1, "Alien.1979.1080p", 5, "Alien.1979.1080p.mkv")
-	b := insertProbeable(t, s, 2, "Heat.1995.1080p", 5, "Heat.1995.1080p.mkv")
-	wanted := func(h Hash) []time.Time {
-		t.Helper()
-		got, err := s.Journal(ctx, h, 1000)
-		require.NoError(t, err)
-		var out []time.Time
-		for _, e := range got {
-			if e.Kind == JournalPeersWanted {
-				require.Equal(t, "request", e.Outcome)
-				require.Empty(t, e.Detail)
-				out = append(out, e.At)
-			}
-		}
-		return out
-	}
-
-	_, err = s.WantPeers(ctx, []Hash{a, hash(99)}, t0)
+	require.JSONEq(t, `{"name":"Alien.1979.1","size":1073741824,"discovery":"sample","queued_at":`+unix(t0)+`,"leases":3}`, entry(t, s, hash(1), JournalFetched, "stored").Detail,
+		"when its order was queued and the leases its attempt took, as the failure rows say")
+	tr = torrent(2, "Alien.1979.2")
+	tr.Leases = 1
+	_, _, err = s.Insert(ctx, tr)
 	require.NoError(t, err)
-	require.Equal(t, []time.Time{t0}, wanted(a))
-	require.Empty(t, entries(t, s, hash(99)), "nor one of a release not stored")
-	_, err = s.WantPeers(ctx, []Hash{a, b}, t0.Add(time.Minute))
-	require.NoError(t, err)
-	require.Equal(t, []time.Time{t0}, wanted(a), "not again while the lookup waits")
-	require.Equal(t, []time.Time{t0.Add(time.Minute)}, wanted(b))
-
-	_, _, err = q.Lease(ctx, 1, 2, t0.Add(2*time.Minute), time.Minute)
-	require.NoError(t, err)
-	_, err = s.WantPeers(ctx, []Hash{a}, t0.Add(3*time.Minute))
-	require.NoError(t, err)
-	require.Equal(t, []time.Time{t0}, wanted(a), "nor while it runs")
-	require.NoError(t, q.Complete(ctx, TaskPeers, a))
-	_, err = s.WantPeers(ctx, []Hash{a}, t0.Add(4*time.Minute))
-	require.NoError(t, err)
-	require.Equal(t, []time.Time{t0, t0.Add(4 * time.Minute)}, wanted(a), "once it is done, again")
+	require.NotContains(t, entry(t, s, hash(2), JournalFetched, "stored").Detail, "leases", "none for an attempt of one lease")
 }

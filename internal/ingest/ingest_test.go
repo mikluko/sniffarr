@@ -41,7 +41,5 @@ func TestSight(t *testing.T) {
 	require.Equal(t, uint64(5), info.State.Msgs, "every sighting but the repeated sample of 3 is on the stream; the announce of 1 is not a duplicate of its sample")
 
 	f.run(t)
-	q := f.queued(t)
-	require.Len(t, q, 1)
-	require.Contains(t, q, byte(3), "the intake queues what Sight counted as new")
+	require.Equal(t, []queuedOrder{{hash: 3, subject: bus.SubjectFetchP3}}, f.queued(t), "the intake queues what Sight counted as new")
 }

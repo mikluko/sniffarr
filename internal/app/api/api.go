@@ -21,10 +21,12 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/arr"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
 	"sarak.sh/mikluko/sniffarr/internal/ingest"
 	"sarak.sh/mikluko/sniffarr/internal/latest"
 	"sarak.sh/mikluko/sniffarr/internal/memconn"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	"sarak.sh/mikluko/sniffarr/internal/server"
@@ -54,10 +56,12 @@ type Config struct {
 	// SearchReserve is the percentage of DailyTokens the background
 	// classifier leaves for searches.
 	SearchReserve int
-	// Lease, Attempts and Backoff are those of ingest.Service.
-	Lease    time.Duration
-	Attempts int
-	Backoff  time.Duration
+	// Lease is how long a fetcher may hold a fetch order or a peer lookup.
+	Lease time.Duration
+	// Attempts, Backoff, DeadFor and NoPeersFor are those of ingest.Service.
+	Attempts            int
+	Backoff             time.Duration
+	DeadFor, NoPeersFor time.Duration
 	// Retention is how long a stored torrent is kept without being seen.
 	Retention time.Duration
 	// RetentionIdle is Retention for a torrent with no TMDB work.
@@ -112,7 +116,7 @@ const arrTimeout = time.Minute
 // process's own clients, and serves it on Config.Addr from start to stop
 // with its workers.
 var Module = fx.Module("api",
-	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder, newChecker, newIngest),
+	fx.Provide(memconn.Listen, newClassifiers, newCounts, newRecorder, newChecker, newFetches, newIngest),
 	fx.Invoke(serve, work),
 )
 
@@ -207,24 +211,32 @@ func newChecker(cfg Config, log *slog.Logger) *latest.Checker {
 	return &latest.Checker{HTTP: &http.Client{Timeout: releaseTimeout}, Log: log}
 }
 
+// newFetches returns the hand-out of the fetch orders, bound to b's stream
+// from b's start.
+func newFetches(lc fx.Lifecycle, cfg Config, b *broker.Broker) *orders.Queue {
+	q := orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes, Lease: cfg.Lease})
+	lc.Append(fx.StartHook(func(ctx context.Context) error { return q.Start(ctx, b.JetStream) }))
+	return q
+}
+
 // newIngest returns the ingest service the API serves, whose Sight publishes
 // to the sightings stream, from b's start, and whose Intake takes it.
-func newIngest(lc fx.Lifecycle, cfg Config, s *store.Store, q *store.Tasks, b *broker.Broker, log *slog.Logger) *ingest.Service {
-	ing := &ingest.Service{Store: s, Tasks: q, Log: log, Lease: cfg.Lease, Attempts: cfg.Attempts, Backoff: cfg.Backoff,
+func newIngest(lc fx.Lifecycle, cfg Config, s *store.Store, q *store.Tasks, fetches *orders.Queue, b *broker.Broker, log *slog.Logger) *ingest.Service {
+	ing := &ingest.Service{Store: s, Tasks: q, Fetches: fetches, Log: log, Attempts: cfg.Attempts, Backoff: cfg.Backoff, DeadFor: cfg.DeadFor, NoPeersFor: cfg.NoPeersFor,
 		Scripts: cfg.Scripts, Languages: cfg.Languages, Probe: cfg.Probe, Probes: cfg.Probes}
 	lc.Append(fx.StartHook(func() { ing.JetStream = b.JetStream }))
 	return ing
 }
 
-func newRecorder(s *store.Store, q *store.Tasks, c *classifiers, log *slog.Logger) *arr.Recorder {
-	r := &arr.Recorder{Store: s, Tasks: q, Log: log}
+func newRecorder(s *store.Store, ing *ingest.Service, c *classifiers, log *slog.Logger) *arr.Recorder {
+	r := &arr.Recorder{Store: s, Fetches: ing, Log: log}
 	if c.matcher != nil {
 		r.Finder = c.matcher.Client
 	}
 	return r
 }
 
-func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts,
+func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *store.Store, q *store.Tasks, fetches *orders.Queue, c *classifiers, counts *search.Counts,
 	rec *arr.Recorder, mem *memconn.Listener, chk *latest.Checker, ing *ingest.Service) error {
 	var releases search.LatestRelease
 	if chk != nil {
@@ -240,6 +252,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		Matcher:           matcher,
 		Store:             s,
 		Tasks:             q,
+		Fetches:           fetches,
 		Ingest:            ing,
 		Scripts:           cfg.Scripts,
 		Languages:         cfg.Languages,
@@ -267,8 +280,10 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 }
 
 func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *database.DB, s *store.Store, q *store.Tasks, c *classifiers, counts *search.Counts, rec *arr.Recorder, chk *latest.Checker,
-	b *broker.Broker, ing *ingest.Service) {
+	b *broker.Broker, fetches *orders.Queue, ing *ingest.Service) {
 	app.Go(lc, sd, log, "intake", func(ctx context.Context) error { return ing.Intake(ctx, b.JetStream) })
+	app.Go(lc, sd, log, "fetch orders", fetches.Run)
+	app.Go(lc, sd, log, "backlog", func(ctx context.Context) error { return moveBacklog(ctx, s, log, fetches) })
 	if chk != nil {
 		app.Go(lc, sd, log, "release check", chk.Run)
 	}
@@ -319,16 +334,18 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 	}
 }
 
-// maintain trims the queue, deletes the torrents not seen within
-// retention, or within idle for those with no TMDB work, and the journal
-// entries older than journal.
+// maintain trims the probe queue, forgets the dead hashes whose time is up,
+// deletes the torrents not seen within retention, or within idle for those
+// with no TMDB work, and the journal entries older than journal.
 func maintain(ctx context.Context, q *store.Tasks, s *store.Store, retention, idle, journal time.Duration, log *slog.Logger) {
 	now := time.Now()
-	t, err := q.Trim(ctx, now)
-	if err != nil && !errors.Is(err, context.Canceled) {
-		log.ErrorContext(ctx, "trim queue", "err", err)
-	} else if t != (store.Trimmed{}) {
-		log.Info("trimmed queue", "aged", t.Aged, "oversize", t.Oversize, "dead_expired", t.Expired)
+	if err := q.Trim(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "trim probes", "err", err)
+	}
+	if n, err := s.ExpireDead(ctx, now); err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "expire dead", "err", err)
+	} else if n > 0 {
+		log.Info("expired dead", "infohashes", n)
 	}
 	sw, err := s.Sweep(ctx, now.Add(-retention), now.Add(-idle), now, sweepBatch)
 	if err != nil && !errors.Is(err, context.Canceled) {

@@ -10,18 +10,16 @@ import (
 	"connectrpc.com/connect"
 
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
-
-// releaseTimeout bounds freeing a finished stream's leases.
-const releaseTimeout = 5 * time.Second
 
 // resultTimeout bounds recording one received result.
 const resultTimeout = 5 * time.Second
 
 func (s *Service) Fetch(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse]) error {
 	owner := s.owners.Add(1)
-	defer s.release(ctx, owner)
+	defer s.Fetches.Release(owner)
 	r := newReceiver(stream)
 	defer r.stop()
 
@@ -31,8 +29,8 @@ func (s *Service) Fetch(ctx context.Context, stream *connect.BidiStream[sniffarr
 	for {
 		var wake <-chan struct{}
 		if credit > 0 {
-			wake = s.wake.wait()
-			n, err := s.lease(ctx, stream, owner, credit)
+			wake = s.Fetches.Wait()
+			n, err := s.hand(ctx, stream, owner, credit)
 			if err != nil {
 				return err
 			}
@@ -119,21 +117,34 @@ func (r *receiver) stop() {
 	<-r.exited
 }
 
-// lease leases up to credit tasks to owner, sends them, and returns how many
-// it sent. A failure to lease is logged and leases nothing.
-func (s *Service) lease(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse], owner int64, credit int) (int, error) {
-	tasks, expired, err := s.Tasks.Lease(ctx, owner, credit, s.now(), or(s.Lease, DefaultLease))
+// hand takes up to credit orders for owner, sends them as tasks, and returns
+// how many it sent. A failure to take or to journal them is logged.
+func (s *Service) hand(ctx context.Context, stream *connect.BidiStream[sniffarrv1.FetchRequest, sniffarrv1.FetchResponse], owner int64, credit int) (int, error) {
+	taken, err := s.Fetches.Take(owner, credit, store.PrioritySample)
 	if err != nil {
-		s.Log.ErrorContext(ctx, "lease", "err", err)
-		return 0, nil
+		s.Log.ErrorContext(ctx, "take orders", "err", err)
 	}
-	s.metrics().expiries.Add(ctx, int64(expired))
-	for i, t := range tasks {
-		if err := stream.Send(&sniffarrv1.FetchResponse{Task: &sniffarrv1.Task{Infohash: t.Hash[:], Peers: t.Kind == store.TaskPeers}}); err != nil {
+	if err := s.journalLeases(ctx, taken); err != nil {
+		s.Log.ErrorContext(ctx, "journal leases", "err", err)
+	}
+	for i, o := range taken {
+		if err := stream.Send(&sniffarrv1.FetchResponse{Task: &sniffarrv1.Task{Infohash: o.Hash[:], Peers: o.Kind == store.TaskPeers}}); err != nil {
 			return i, err
 		}
 	}
-	return len(tasks), nil
+	return len(taken), nil
+}
+
+// journalLeases journals the first hand-out of each fetch order of taken.
+func (s *Service) journalLeases(ctx context.Context, taken []*orders.Order) error {
+	now := s.now()
+	var ls []store.Lease
+	for _, o := range taken {
+		if o.Kind == store.TaskFetch && o.Leases == 1 {
+			ls = append(ls, store.Lease{Hash: o.Hash, Priority: o.Priority, Attempt: o.Attempt + 1, Until: now.Add(s.Fetches.Lease())})
+		}
+	}
+	return s.Store.RecordLeases(ctx, ls, now)
 }
 
 // result records a received result, to completion even when the stream ends
@@ -145,50 +156,83 @@ func (s *Service) result(ctx context.Context, owner int64, r *sniffarrv1.Result)
 	if err != nil {
 		return err
 	}
-	kind := store.TaskFetch
-	if _, ok := r.GetOutcome().(*sniffarrv1.Result_Lookup); ok {
-		kind = store.TaskPeers
-	}
-	if r.GetOutcome() != nil {
-		s.Tasks.Finished(kind, s.now())
-	}
 	switch o := r.GetOutcome().(type) {
 	case *sniffarrv1.Result_Torrent:
 		s.metrics().results.Add(ctx, 1, outcome("torrent"))
 		return s.store(ctx, h, o.Torrent)
 	case *sniffarrv1.Result_Lookup:
 		s.metrics().results.Add(ctx, 1, outcome("lookup"))
-		if err := s.Tasks.Complete(ctx, store.TaskPeers, store.Hash(h)); err != nil {
-			return s.internal(ctx, "complete lookup", err)
+		s.Fetches.Finished(store.TaskPeers, s.now())
+		if ord := s.Fetches.Done(store.TaskPeers, h); ord != nil {
+			if err := s.Fetches.Ack(ctx, ord); err != nil {
+				return s.internal(ctx, "ack lookup", err)
+			}
 		}
 		return nil
 	case *sniffarrv1.Result_Failure:
 		switch o.Failure {
 		case sniffarrv1.Failure_FAILURE_NO_PEERS:
 			s.metrics().results.Add(ctx, 1, outcome("no_peers"))
-			if err := s.Tasks.NoPeers(ctx, store.Hash(h), owner, s.now()); err != nil {
-				return s.internal(ctx, "no peers", err)
-			}
-			return nil
+			return s.failed(ctx, owner, h, true)
 		case sniffarrv1.Failure_FAILURE_TIMEOUT:
 			s.metrics().results.Add(ctx, 1, outcome("timeout"))
-			if _, err := s.Tasks.Fail(ctx, store.Hash(h), owner, s.now(), or(s.Attempts, DefaultAttempts), or(s.Backoff, DefaultBackoff)); err != nil {
-				return s.internal(ctx, "fail", err)
-			}
-			return nil
+			return s.failed(ctx, owner, h, false)
 		}
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("failure %v", o.Failure))
 	}
 	return connect.NewError(connect.CodeInvalidArgument, errors.New("result without outcome"))
 }
 
-// release frees the leases of a finished stream and wakes the others.
-func (s *Service) release(ctx context.Context, owner int64) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
-	defer cancel()
-	if err := s.Tasks.Release(ctx, owner); err != nil {
-		s.Log.ErrorContext(ctx, "release leases", "owner", owner, "err", err)
-		return
+// failed records a failed fetch of h held by owner: one that found no peers
+// keeps h dead for NoPeersFor at once, and a timeout is retried after
+// Backoff, doubled for each attempt before, until Attempts have failed and h
+// is kept dead for DeadFor. A failure of an order owner does not hold, or of
+// a hash stored, rejected or dead by now, which a second order of it met, is
+// dropped.
+func (s *Service) failed(ctx context.Context, owner int64, h store.Hash, noPeers bool) error {
+	o := s.Fetches.DoneBy(store.TaskFetch, h, owner)
+	if o == nil {
+		return nil
 	}
-	s.wake.notify()
+	now := s.now()
+	s.Fetches.Finished(store.TaskFetch, now)
+	held, err := s.Store.Screen(ctx, []store.Hash{h}, now)
+	if err != nil {
+		s.Fetches.Nak(o)
+		return s.internal(ctx, "screen", err)
+	}
+	if held[h] != (store.Screened{}) {
+		return s.ack(ctx, o)
+	}
+	f := store.FetchFailure{Hash: h, Priority: o.Priority, Attempt: o.Attempt + 1, Leases: o.Leases}
+	switch {
+	case noPeers:
+		f.Outcome, f.Attempt, f.DeadUntil = "no_peers", 0, now.Add(or(s.NoPeersFor, store.DefaultNoPeersFor))
+	case f.Attempt >= or(s.Attempts, DefaultAttempts):
+		f.Outcome, f.DeadUntil = "dropped", now.Add(or(s.DeadFor, store.DefaultDeadFor))
+	default:
+		f.Outcome, f.RetryAt = "timeout", now.Add(or(s.Backoff, DefaultBackoff)<<(f.Attempt-1))
+	}
+	if err := s.Store.RecordFetchFailure(ctx, f, now); err != nil {
+		s.Fetches.Nak(o)
+		return s.internal(ctx, "record failure", err)
+	}
+	if noPeers {
+		s.metrics().evictions.Add(ctx, 1, evictionAttr("no_peers"))
+	}
+	if f.RetryAt.IsZero() {
+		return s.ack(ctx, o)
+	}
+	if err := s.Fetches.Retry(ctx, o, o.Lane, f.RetryAt); err != nil {
+		return s.internal(ctx, "retry", err)
+	}
+	return nil
+}
+
+// ack acknowledges the order o.
+func (s *Service) ack(ctx context.Context, o *orders.Order) error {
+	if err := s.Fetches.Ack(ctx, o); err != nil {
+		return s.internal(ctx, "ack", err)
+	}
+	return nil
 }

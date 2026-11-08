@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -25,8 +26,11 @@ import (
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/bus"
+	"sarak.sh/mikluko/sniffarr/internal/bus/bustest"
 	"sarak.sh/mikluko/sniffarr/internal/memconn"
 	"sarak.sh/mikluko/sniffarr/internal/names"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	"sarak.sh/mikluko/sniffarr/internal/sketch"
@@ -229,13 +233,22 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 	require.NoError(t, st.ComputeTop(ctx, now))
 	tasks, err := store.NewTasks(ctx, db, store.TaskOptions{})
 	require.NoError(t, err)
-	_, _, err = tasks.Enqueue(ctx, []store.Sighting{{Hash: hash(30), Discovery: store.Arr}, {Hash: hash(31), Discovery: store.Sample}, {Hash: hash(32), Discovery: store.Sample}}, now)
+	js, err := jetstream.New(bustest.Conn(t))
 	require.NoError(t, err)
-	for i := range 10 {
-		tasks.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
+	fetches := orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes})
+	require.NoError(t, fetches.Start(ctx, js))
+	for p, bs := range map[int][]byte{store.PriorityArr: {30}, store.PrioritySample: {31, 32}} {
+		l, _ := fetches.Lane(store.TaskFetch, p)
+		for _, b := range bs {
+			_, err := fetches.Publish(ctx, l, []orders.Item{{Hash: hash(b)}})
+			require.NoError(t, err)
+		}
 	}
-	tasks.Finished(store.TaskPeers, now.Add(-time.Minute))
-	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier,
+	for i := range 10 {
+		fetches.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
+	}
+	fetches.Finished(store.TaskPeers, now.Add(-time.Minute))
+	h, err := New(Config{Browse: browse(t, st, tasks, fetches, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier,
 		Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, JournalRetention: 30 * 24 * time.Hour, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h, tasks
@@ -244,10 +257,10 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 // browse serves BrowseService over st with the probes and classifier cfg
 // turns on, behind the token "search" in-process, and returns a client
 // holding the token.
-func browse(t *testing.T, st *store.Store, tasks *store.Tasks, tags []string, cfg Config) sniffarrv1connect.BrowseServiceClient {
+func browse(t *testing.T, st *store.Store, tasks *store.Tasks, fetches *orders.Queue, tags []string, cfg Config) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
-	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30,
+	b := &search.Browser{Store: st, Tasks: tasks, Fetches: fetches, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30,
 		Probes: cfg.Probes, Classifier: cfg.Classifier, Languages: tags, Now: func() time.Time { return now },
 		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }, Interval: 5 * time.Minute}}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b))

@@ -21,6 +21,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
 	"sarak.sh/mikluko/sniffarr/internal/ingest"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	sniffer "sarak.sh/mikluko/sniffarr/internal/sniff"
@@ -210,11 +211,11 @@ func TestLoadAPI(t *testing.T) {
 		return api.Config{Addr: ":8080", TMDBKey: tmdb.DefaultKey, ClassifyConcurrency: 4,
 				DailyTokens: classify.DefaultDailyTokens, SearchReserve: classify.DefaultSearchReserve, LazyMax: search.DefaultLazyMax, LazyWait: search.DefaultLazyWait,
 				LazyTMDB: search.DefaultLazyTMDB, TMDBConcurrency: tmdb.DefaultConcurrency, TMDBRate: tmdb.DefaultRate, TMDBRetry: tmdb.DefaultRetry,
-				Lease: ingest.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff,
+				Lease: orders.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor,
 				Retention: defaultRetention, RetentionIdle: defaultRetentionIdle, RetentionJournal: defaultRetentionJournal, StatsInterval: defaultStatsInterval, Scripts: defaultScripts,
 				Probe: defaultProbe, ReleaseCheck: true},
 			db.Config{Path: "/data/sniffarr.db",
-				Tasks: store.TaskOptions{MaxSize: store.DefaultMaxSize, MaxAge: store.DefaultMaxAge, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor, NoProbes: true},
+				Tasks: store.TaskOptions{NoProbes: true},
 				Store: store.Options{MaxFiles: store.DefaultMaxFiles, ProbeBatch: store.DefaultProbeBatch, TMDB: true}}
 	}
 	tests := []struct {
@@ -230,7 +231,7 @@ func TestLoadAPI(t *testing.T) {
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
 			"SNIFFARR_PROBE_DAILY_BYTES", "20GiB", "SNIFFARR_PROBE_SEARCH_RESERVE", "10", "SNIFFARR_PROBE_MAX_BYTES", "32MiB",
 			"SNIFFARR_PROBE_LEASE", "5m", "SNIFFARR_PROBE_ATTEMPTS", "2", "SNIFFARR_PROBE_BACKOFF", "12h", "SNIFFARR_PROBE_BATCH", "50",
-			"SNIFFARR_QUEUE_MAX_SIZE", "5000", "SNIFFARR_QUEUE_MAX_AGE", "6h", "SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
+			"SNIFFARR_QUEUE_DEAD_FOR", "48h", "SNIFFARR_QUEUE_NO_PEERS_FOR", "12h",
 			"SNIFFARR_STORE_MAX_FILES", "50", "SNIFFARR_RETENTION", "720h", "SNIFFARR_RETENTION_IDLE", "72h", "SNIFFARR_RETENTION_JOURNAL", "168h", "SNIFFARR_STATS_INTERVAL", "1m",
 			"SNIFFARR_SEARCH_CLASSIFY_MAX", "5", "SNIFFARR_SEARCH_CLASSIFY_WAIT", "500ms",
 			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_AUDIO_LANGUAGES", "ru",
@@ -238,11 +239,10 @@ func TestLoadAPI(t *testing.T) {
 			want: func(a *api.Config, d *db.Config) {
 				*a = api.Config{Addr: ":9000", ClassifyKey: "ck", TMDBKey: "tm", TorznabToken: "tz", ClassifyConcurrency: 8,
 					TMDBConcurrency: 3, TMDBRate: 10, TMDBRetry: 240 * time.Hour, LazyTMDB: 7, DailyTokens: 1000000, SearchReserve: 40,
-					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, RetentionIdle: 72 * time.Hour, RetentionJournal: 168 * time.Hour,
+					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour, Retention: 720 * time.Hour, RetentionIdle: 72 * time.Hour, RetentionJournal: 168 * time.Hour,
 					StatsInterval: time.Minute, LazyMax: 5, LazyWait: 500 * time.Millisecond,
 					Scripts: rules.Scripts{unicode.Latin, unicode.Cyrillic, unicode.Greek}, Languages: russian,
 					Probe: ingest.ProbeConfig{DailyBytes: 20 << 30, SearchReserve: 10, MaxBytes: 32 << 20, Lease: 5 * time.Minute, Attempts: 2, Backoff: 12 * time.Hour}, ReleaseCheck: true}
-				d.Tasks = store.TaskOptions{MaxSize: 5000, MaxAge: 6 * time.Hour, DeadFor: 48 * time.Hour, NoPeersFor: 12 * time.Hour, NoProbes: true}
 				d.Store = store.Options{MaxFiles: 50, ProbeBatch: 50, Languages: []string{"ru"}, TMDB: true}
 			}},
 		{name: "classifier endpoint", env: with("SNIFFARR_CLASSIFY_URL", "http://laya:8000/v1/systemone"),
@@ -259,7 +259,6 @@ func TestLoadAPI(t *testing.T) {
 		{name: "audio languages set but empty", env: with("SNIFFARR_AUDIO_LANGUAGES", ""), want: func(*api.Config, *db.Config) {}},
 		{name: "audio languages", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru"), want: func(a *api.Config, d *db.Config) { a.Languages, d.Store.Languages = russian, []string{"ru"} }},
 		{name: "unknown audio language", env: with("SNIFFARR_AUDIO_LANGUAGES", "ru,xx"), err: `SNIFFARR_AUDIO_LANGUAGES: unknown audio language "xx"`},
-		{name: "queue size not a number", env: with("SNIFFARR_QUEUE_MAX_SIZE", "1M"), err: "SNIFFARR_QUEUE_MAX_SIZE: want a positive integer"},
 		{name: "probe batch zero", env: with("SNIFFARR_PROBE_BATCH", "0"), err: "SNIFFARR_PROBE_BATCH: want a positive integer"},
 		{name: "nothing set", err: "SNIFFARR_DB is not set"},
 		{name: "release check off", env: with("SNIFFARR_RELEASE_CHECK", "off"), want: func(a *api.Config, _ *db.Config) { a.ReleaseCheck = false }},

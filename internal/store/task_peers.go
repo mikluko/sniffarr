@@ -3,40 +3,28 @@ package store
 import (
 	"context"
 	"database/sql"
-	"slices"
 	"time"
 )
 
-// WantPeers queues a peer lookup at PriorityRequest for each stored release
-// of the hashes, at the time, and returns how many of them are stored. A
-// release already queued for one, or being looked up, keeps its place; any
-// other is journaled as requested.
-func (s *Store) WantPeers(ctx context.Context, hashes []Hash, at time.Time) (int, error) {
+// WantPeers journals a peer lookup requested, at the time, on each stored
+// release of the hashes, and returns their hashes.
+func (s *Store) WantPeers(ctx context.Context, hashes []Hash, at time.Time) ([]Hash, error) {
 	if len(hashes) == 0 {
-		return 0, nil
+		return nil, nil
 	}
-	args := make([]any, 0, len(hashes)+2)
-	args = append(args, PriorityRequest, at.UnixMilli())
-	for _, h := range hashes {
-		args = append(args, h[:])
+	args := make([]any, len(hashes))
+	for i, h := range hashes {
+		args[i] = h[:]
 	}
-	var n int
+	var stored []Hash
 	err := s.tx(ctx, func(tx *sql.Tx) error {
-		pending, err := hashesOf(tx.QueryContext(ctx, "SELECT infohash FROM task_queue WHERE kind = 'peers' AND infohash IN ("+placeholders(len(hashes))+")", args[2:]...))
-		if err != nil {
+		var err error
+		if stored, err = hashesOf(tx.QueryContext(ctx, "SELECT infohash FROM torrent_releases WHERE infohash IN ("+placeholders(len(hashes))+")", args...)); err != nil {
 			return err
 		}
-		hs, err := hashesOf(tx.QueryContext(ctx, `INSERT INTO task_queue (kind, infohash, priority, queued_at)
-			SELECT 'peers', infohash, ?1, ?2 FROM torrent_releases WHERE infohash IN (`+placeholders(len(hashes))+`)
-			ON CONFLICT (kind, infohash) DO UPDATE SET priority = task_queue.priority
-			RETURNING infohash`, args...))
-		if err != nil {
-			return err
-		}
-		n = len(hs)
-		return journalEach(ctx, tx, slices.DeleteFunc(hs, func(h Hash) bool { return slices.Contains(pending, h) }), n, at, JournalPeersWanted, "request", nil)
+		return journalEach(ctx, tx, stored, len(stored), at, JournalPeersWanted, "request", nil)
 	})
-	return n, err
+	return stored, err
 }
 
 // WorkHashes returns the hashes of the stored releases of the work.

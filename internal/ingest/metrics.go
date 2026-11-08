@@ -9,8 +9,8 @@ import (
 const scope = "sarak.sh/mikluko/sniffarr/internal/ingest"
 
 type metrics struct {
-	sightings, expiries, results, rejections, stored, classifications, sketches metric.Int64Counter
-	probeTasks, probeResults, probeBytes, probeUploaded                         metric.Int64Counter
+	sightings, evictions, results, rejections, stored, classifications, sketches metric.Int64Counter
+	probeTasks, probeResults, probeBytes, probeUploaded                          metric.Int64Counter
 }
 
 func newMetrics(mp metric.MeterProvider) *metrics {
@@ -27,7 +27,7 @@ func newMetrics(mp metric.MeterProvider) *metrics {
 	}
 	return &metrics{
 		sightings:  counter("sniffarr.ingest.sightings", "{sighting}", "Sightings received, by whether they queued a new infohash."),
-		expiries:   counter("sniffarr.queue.lease_expiries", "{lease}", "Leases that expired before their result came back."),
+		evictions:  counter("sniffarr.queue.evictions", "{infohash}", "Infohashes kept out of the queue, by why."),
 		results:    counter("sniffarr.ingest.results", "{result}", "Fetch results received, by outcome."),
 		rejections: counter("sniffarr.ingest.rejections", "{torrent}", "Fetched torrents the rules rejected, by reason."),
 		stored:     counter("sniffarr.ingest.stored", "{torrent}", "Fetched torrents stored."),
@@ -54,6 +54,10 @@ var (
 
 func outcome(o string) metric.AddOption {
 	return metric.WithAttributes(attribute.String("sniffarr.fetch.outcome", o))
+}
+
+func evictionAttr(why string) metric.AddOption {
+	return metric.WithAttributes(attribute.String("sniffarr.queue.eviction", why))
 }
 
 func reasonAttr(r string) metric.AddOption {

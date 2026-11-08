@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -41,6 +42,29 @@ type fixture struct {
 	finder *fakeFinder
 	reader *sdkmetric.ManualReader
 	hook   *httptest.Server
+	queue  *fakeQueue
+}
+
+// fakeQueue records the discovery of each infohash queued.
+type fakeQueue struct {
+	mu  sync.Mutex
+	got map[store.Hash]string
+}
+
+func (q *fakeQueue) Enqueue(_ context.Context, sightings []store.Sighting) (int, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for _, g := range sightings {
+		q.got[g.Hash] = g.Discovery
+	}
+	return len(sightings), nil
+}
+
+// discovery returns the discovery the hash was queued by, "" for none.
+func (q *fakeQueue) discovery(h store.Hash) string {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.got[h]
 }
 
 func setup(t *testing.T) *fixture {
@@ -51,10 +75,8 @@ func setup(t *testing.T) *fixture {
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{TMDB: true})
 	require.NoError(t, err)
-	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
-	require.NoError(t, err)
-	f := &fixture{db: db, finder: &fakeFinder{}, reader: sdkmetric.NewManualReader()}
-	f.rec = &Recorder{Store: s, Tasks: q, Finder: f.finder, Log: slog.New(slog.DiscardHandler),
+	f := &fixture{db: db, finder: &fakeFinder{}, reader: sdkmetric.NewManualReader(), queue: &fakeQueue{got: map[store.Hash]string{}}}
+	f.rec = &Recorder{Store: s, Fetches: f.queue, Finder: f.finder, Log: slog.New(slog.DiscardHandler),
 		Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(f.reader))}
 	f.hook = httptest.NewServer(&Webhook{Recorder: f.rec, Token: "secret", Log: f.rec.Log})
 	t.Cleanup(f.hook.Close)
@@ -207,11 +229,10 @@ func TestWebhookGrabUnknown(t *testing.T) {
 	code, answer := f.post(t, "?app=radarr", "secret", radarrGrab(hexOf(2)))
 	require.Equal(t, http.StatusOK, code)
 	require.Equal(t, Queued, answer)
-	d, err := f.rec.Tasks.Discovery(ctx, hash(2))
-	require.NoError(t, err)
+	d := f.queue.discovery(hash(2))
 	require.Equal(t, store.Arr, d)
 
-	_, _, err = s.Insert(ctx, store.Torrent{Hash: hash(2), Name: "Alien.1979.1080p.BluRay.x264-GRP", Size: 8 << 30, Discovery: d, SeenAt: time.Now(),
+	_, _, err := s.Insert(ctx, store.Torrent{Hash: hash(2), Name: "Alien.1979.1080p.BluRay.x264-GRP", Size: 8 << 30, Discovery: d, SeenAt: time.Now(),
 		Kind: "movie", KindLayer: store.LayerRules, TitleKey: "y:alien 1979"})
 	require.NoError(t, err)
 	r, err := s.Get(ctx, hash(2))
@@ -223,8 +244,7 @@ func TestWebhookGrabUnknown(t *testing.T) {
 	require.NoError(t, err)
 	_, answer = f.post(t, "", "secret", radarrGrab(hexOf(3)))
 	require.Equal(t, Unknown, answer, "a rejected torrent is not queued")
-	_, err = f.rec.Tasks.Discovery(ctx, hash(3))
-	require.ErrorIs(t, err, store.ErrNotQueued)
+	require.Empty(t, f.queue.discovery(hash(3)))
 }
 
 func TestWebhookSonarrTVDB(t *testing.T) {

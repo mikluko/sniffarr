@@ -1,11 +1,11 @@
 // Package ingest implements sniffarr.v1.IngestService, the work queue between
-// sniffers: it queues sighted infohashes, leases them to fetchers, and passes
-// the metadata they return through the rules into the store.
+// sniffers: it queues sighted infohashes as fetch orders, hands the orders to
+// fetchers, and passes the metadata they return through the rules into the
+// store.
 package ingest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -20,12 +20,12 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/names"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 const (
-	DefaultLease    = time.Minute
 	DefaultAttempts = 3
 	DefaultBackoff  = 10 * time.Minute
 	DefaultPoll     = time.Second
@@ -42,19 +42,21 @@ const maxCredit = 10000
 type Service struct {
 	Store *store.Store
 	Tasks *store.Tasks
-	Log   *slog.Logger
-	// Lease is how long a fetcher holds a task before it returns to the
-	// queue; DefaultLease.
-	Lease time.Duration
-	// Attempts is how many timed-out fetches drop a hash from the queue;
-	// DefaultAttempts. A dropped hash is not rejected; it is dead for the
-	// queue's DeadFor. A fetch that finds no peers drops its hash at once.
+	// Fetches hands out the fetch orders and the peer lookups.
+	Fetches *orders.Queue
+	Log     *slog.Logger
+	// Attempts is how many timed-out fetches drop a hash; DefaultAttempts.
+	// A dropped hash is not rejected; it is dead for DeadFor.
 	Attempts int
-	// Backoff is the wait before a timed-out hash is leased again, doubled
+	// Backoff is the wait before a timed-out hash is fetched again, doubled
 	// for each timeout before; DefaultBackoff.
 	Backoff time.Duration
-	// Poll is how often a Fetch stream with credit looks for free tasks
-	// besides when hashes are queued or released; DefaultPoll.
+	// DeadFor is how long a hash dropped after its last attempt is kept
+	// out, store.DefaultDeadFor; NoPeersFor that of one whose fetch found no
+	// peers, store.DefaultNoPeersFor.
+	DeadFor, NoPeersFor time.Duration
+	// Poll is how often a Fetch stream with credit looks for orders besides
+	// when orders are published or handed back; DefaultPoll.
 	Poll time.Duration
 	// JetStream is the connection Sight publishes sightings on.
 	JetStream jetstream.JetStream
@@ -80,7 +82,6 @@ type Service struct {
 	Meter metric.MeterProvider
 
 	owners      atomic.Int64
-	wake        notifier
 	metricsOnce sync.Once
 	m           *metrics
 }
@@ -192,29 +193,28 @@ func (s *Service) sight(ctx context.Context, batch []store.Sighting) (known int,
 }
 
 // store passes fetched metadata through the rules, stores or rejects it, and
-// completes its task. Metadata for a hash that is not queued is dropped.
+// acknowledges its order. Metadata for a hash with no order held, or handed
+// back within the lease, is dropped.
 func (s *Service) store(ctx context.Context, h store.Hash, t *sniffarrv1.Torrent) error {
 	if t.GetName() == "" {
 		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("torrent %x has no name", h))
 	}
-	d, err := s.Tasks.Discovery(ctx, store.Hash(h))
-	if errors.Is(err, store.ErrNotQueued) {
+	o := s.Fetches.Done(store.TaskFetch, h)
+	if o == nil {
 		return nil
 	}
-	if err != nil {
-		return s.internal(ctx, "discovery", err)
-	}
-	if err := s.keep(ctx, h, d, t); err != nil {
+	s.Fetches.Finished(store.TaskFetch, s.now())
+	if err := s.keep(ctx, o, t); err != nil {
+		s.Fetches.Nak(o)
 		return err
 	}
-	if err := s.Tasks.Complete(ctx, store.TaskFetch, store.Hash(h)); err != nil {
-		return s.internal(ctx, "complete", err)
-	}
-	return nil
+	return s.ack(ctx, o)
 }
 
-// keep stores the torrent, or rejects it when the rules say so.
-func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv1.Torrent) error {
+// keep stores the torrent of the order o, or rejects it when the rules say
+// so.
+func (s *Service) keep(ctx context.Context, o *orders.Order, t *sniffarrv1.Torrent) error {
+	h := o.Hash
 	files := make([]rules.File, len(t.GetFiles()))
 	for i, f := range t.GetFiles() {
 		files[i] = rules.File{Path: f.GetPath(), Size: f.GetSize()}
@@ -238,8 +238,10 @@ func (s *Service) keep(ctx context.Context, h store.Hash, d string, t *sniffarrv
 		Name:      t.GetName(),
 		Size:      t.GetSize(),
 		Files:     files,
-		Discovery: d,
+		Discovery: store.DiscoveryOf(o.Priority),
 		SeenAt:    now,
+		QueuedAt:  o.QueuedAt,
+		Leases:    o.Leases,
 		Audio:     audioEntries(s.Languages, t.GetName(), files),
 	}
 	if err := s.kind(ctx, &tr); err != nil {
@@ -317,29 +319,4 @@ func hash(b []byte) (store.Hash, error) {
 func (s *Service) internal(ctx context.Context, op string, err error) error {
 	s.Log.ErrorContext(ctx, op, "err", err)
 	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s failed", op))
-}
-
-// notifier wakes every waiter at once.
-type notifier struct {
-	mu sync.Mutex
-	ch chan struct{}
-}
-
-// wait returns a channel closed by the next notify.
-func (n *notifier) wait() <-chan struct{} {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	if n.ch == nil {
-		n.ch = make(chan struct{})
-	}
-	return n.ch
-}
-
-func (n *notifier) notify() {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	if n.ch != nil {
-		close(n.ch)
-		n.ch = nil
-	}
 }

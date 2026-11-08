@@ -24,6 +24,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
 	"sarak.sh/mikluko/sniffarr/internal/ingest"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	sniffer "sarak.sh/mikluko/sniffarr/internal/sniff"
@@ -283,7 +284,7 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Attempts, err = positive(getenv, "SNIFFARR_FETCH_ATTEMPTS", ingest.DefaultAttempts); err != nil {
 		return a, d, err
 	}
-	if a.Lease, err = duration(getenv, "SNIFFARR_FETCH_LEASE", ingest.DefaultLease); err != nil {
+	if a.Lease, err = duration(getenv, "SNIFFARR_FETCH_LEASE", orders.DefaultLease); err != nil {
 		return a, d, err
 	}
 	if a.Backoff, err = duration(getenv, "SNIFFARR_FETCH_BACKOFF", ingest.DefaultBackoff); err != nil {
@@ -292,16 +293,10 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Probe, err = loadProbe(getenv); err != nil {
 		return a, d, err
 	}
-	if d.Tasks.MaxSize, err = positive(getenv, "SNIFFARR_QUEUE_MAX_SIZE", store.DefaultMaxSize); err != nil {
+	if a.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", store.DefaultDeadFor); err != nil {
 		return a, d, err
 	}
-	if d.Tasks.MaxAge, err = duration(getenv, "SNIFFARR_QUEUE_MAX_AGE", store.DefaultMaxAge); err != nil {
-		return a, d, err
-	}
-	if d.Tasks.DeadFor, err = duration(getenv, "SNIFFARR_QUEUE_DEAD_FOR", store.DefaultDeadFor); err != nil {
-		return a, d, err
-	}
-	if d.Tasks.NoPeersFor, err = duration(getenv, "SNIFFARR_QUEUE_NO_PEERS_FOR", store.DefaultNoPeersFor); err != nil {
+	if a.NoPeersFor, err = duration(getenv, "SNIFFARR_QUEUE_NO_PEERS_FOR", store.DefaultNoPeersFor); err != nil {
 		return a, d, err
 	}
 	if d.Store, err = loadStore(getenv); err != nil {

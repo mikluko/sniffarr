@@ -93,15 +93,15 @@ func (q *Tasks) Finished(kind string, at time.Time) {
 	q.pace.add(kind, at)
 }
 
-// Queues returns the queue of each task kind at now, keyed by kind.
+// Queues returns the queue of the probe tasks at now, keyed by their kind.
 func (q *Tasks) Queues(ctx context.Context, now time.Time) (map[string]Queue, error) {
 	counts, err := q.queued(ctx)
 	if err != nil {
 		return nil, err
 	}
 	out := map[string]Queue{}
-	for _, kind := range []string{TaskFetch, TaskPeers, TaskProbe} {
-		out[kind] = queue(counts[kind], q.pace.perSecond(now, kind))
+	for _, kind := range []string{TaskProbe} {
+		out[kind] = Levels(counts[kind], q.pace.perSecond(now, kind))
 	}
 	return out, nil
 }
@@ -133,9 +133,9 @@ func (q *Tasks) queued(ctx context.Context) (map[string][]int64, error) {
 	return counts, rows.Err()
 }
 
-// queue is the Queue of the tasks counted at each priority from
+// Levels returns the Queue of the tasks counted at each priority from
 // PriorityRequest, none when counts is nil, worked at perSecond.
-func queue(counts []int64, perSecond float64) Queue {
+func Levels(counts []int64, perSecond float64) Queue {
 	out := Queue{PerSecond: perSecond, Levels: make([]Level, PrioritySample-PriorityRequest+1)}
 	var ahead int64
 	for i := range out.Levels {

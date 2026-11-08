@@ -43,6 +43,10 @@ type Torrent struct {
 	Source string
 	// Audio holds one entry per language, at most.
 	Audio []Audio
+	// QueuedAt is when its fetch was queued, and Leases how many times the
+	// fetch was handed out; the journal keeps both.
+	QueuedAt time.Time
+	Leases   int
 }
 
 // Release is a stored torrent with its classification.
@@ -213,17 +217,8 @@ func (s *Store) Insert(ctx context.Context, t Torrent) (inserted bool, copied in
 			}
 			copied = len(siblings)
 		}
-		var queuedAt sql.NullInt64
-		var leases int
-		if err := ignoreNoRows(tx.QueryRowContext(ctx, "SELECT queued_at, leases FROM task_queue WHERE kind = 'fetch' AND infohash = ?", t.Hash[:]).Scan(&queuedAt, &leases)); err != nil {
-			return err
-		}
-		var queued time.Time
-		if queuedAt.Valid {
-			queued = time.UnixMilli(queuedAt.Int64)
-		}
 		if err := journal(ctx, tx, t.Hash, t.SeenAt, JournalFetched, "stored", Detail("name", t.Name, "size", t.Size, "files", len(t.Files),
-			"discovery", t.Discovery, "queued_at", queued, "leases", manyLeases(leases), "kind", t.Kind, "kind_layer", t.KindLayer, "copied", copied)); err != nil {
+			"discovery", t.Discovery, "queued_at", t.QueuedAt, "leases", manyLeases(t.Leases), "kind", t.Kind, "kind_layer", t.KindLayer, "copied", copied)); err != nil {
 			return err
 		}
 		pending, err := applyPendingArr(ctx, tx, t.Hash, t.SeenAt)

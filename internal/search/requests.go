@@ -10,13 +10,28 @@ import (
 
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 func (b *Browser) RefreshPeers(ctx context.Context, req *connect.Request[sniffarrv1.RefreshPeersRequest]) (*connect.Response[sniffarrv1.RefreshPeersResponse], error) {
+	if b.Fetches == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no fetch orders"))
+	}
 	n, err := b.request(ctx, req.Msg.GetReleases(), "refresh peers", func(ctx context.Context, hashes []store.Hash, at time.Time) (int, int, error) {
-		n, err := b.Store.WantPeers(ctx, hashes, at)
-		return n, n, err
+		stored, err := b.Store.WantPeers(ctx, hashes, at)
+		if err != nil {
+			return 0, 0, err
+		}
+		l, _ := b.Fetches.Lane(store.TaskPeers, store.PriorityRequest)
+		items := make([]orders.Item, len(stored))
+		for i, h := range stored {
+			items[i] = orders.Item{Hash: h}
+		}
+		if _, err := b.Fetches.Publish(ctx, l, items); err != nil {
+			return 0, 0, err
+		}
+		return len(stored), len(stored), nil
 	})
 	if err != nil {
 		return nil, err

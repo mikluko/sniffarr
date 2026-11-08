@@ -308,11 +308,9 @@ func TestMigrateModules(t *testing.T) {
 
 	s, err := New(ctx, db, Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
-	q, err := NewTasks(ctx, db, TaskOptions{})
-	require.NoError(t, err)
 
 	names := schema(t, db)
-	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "task_queue", "task_dead",
+	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "task_queue", "task_dead", "task_backlog",
 		"ingest_rejected", "ingest_token_usage", "stat_peers_by_hour", "stat_peers_by_day", "stat_top", "tmdb_works", "tmdb_ids", "state",
 		"torrent_releases_fts_data", "torrent_releases_fts_idx", "torrent_releases_fts_docsize", "torrent_releases_fts_config", "torrent_journal",
 		"stat_top_history"} {
@@ -352,7 +350,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 30, version)
+	require.Equal(t, 31, version)
 	var kept []byte
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT value FROM state WHERE key = 'peer_hash_key'").Scan(&kept))
 	require.Equal(t, []byte{0}, kept, "the settings rows move to state")
@@ -377,10 +375,7 @@ func TestMigrateModules(t *testing.T) {
 	tokens, err := s.TokensUsed(ctx, "2026-10-01")
 	require.NoError(t, err)
 	require.EqualValues(t, 500, tokens)
-	n, err := q.Len(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
-	for table, want := range map[string]int{"task_dead": 1, "ingest_rejected": 1, "stat_peers_by_hour": 1, "stat_peers_by_day": 1,
+	for table, want := range map[string]int{"task_backlog": 1, "task_queue": 0, "task_dead": 1, "ingest_rejected": 1, "stat_peers_by_hour": 1, "stat_peers_by_day": 1,
 		"stat_top": 0, "tmdb_works": 1, "tmdb_matches": 1, "tmdb_ids": 0} {
 		var n int
 		require.NoError(t, db.R.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&n))

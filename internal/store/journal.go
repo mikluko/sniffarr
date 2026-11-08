@@ -13,8 +13,9 @@ import (
 
 // Kinds of journal entries, each with its outcomes.
 const (
-	// JournalSighted is a hash queued, promoted to an earlier discovery's
-	// queue, or revived from the dead set: queued, promoted, revived.
+	// JournalSighted is a fetch ordered for a sighting, queued, or for one of
+	// a dead hash, revived; promoted is in journals written before the order
+	// streams.
 	JournalSighted = "sighted"
 	// JournalLeased is a hash leased to a fetcher: fetch.
 	JournalLeased = "leased"
@@ -23,7 +24,8 @@ const (
 	// JournalFetchFailed is a fetch that brought none: no_peers, timeout,
 	// dropped.
 	JournalFetchFailed = "fetch_failed"
-	// JournalEvicted is a hash Trim evicted: aged, oversize.
+	// JournalEvicted is a hash evicted from the queue: aged, oversize; only
+	// journals written before the order streams hold it.
 	JournalEvicted = "evicted"
 	// JournalClassified is a classification recorded: classifier, reuse,
 	// failed.
@@ -48,8 +50,8 @@ const (
 	JournalDeleted = "deleted"
 )
 
-// JournalOutcomes maps every kind of journal entry to the outcomes the store
-// writes for it; the store's tests fail on an entry written outside it.
+// JournalOutcomes maps every kind of journal entry to the outcomes a journal
+// holds for it; the store's tests fail on an entry written outside it.
 var JournalOutcomes = map[string][]string{
 	JournalSighted:     {"queued", "promoted", "revived"},
 	JournalLeased:      {"fetch"},

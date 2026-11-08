@@ -7,10 +7,14 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
 
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/bus"
+	"sarak.sh/mikluko/sniffarr/internal/bus/bustest"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
+	"sarak.sh/mikluko/sniffarr/internal/orders"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
@@ -25,19 +29,25 @@ func byWork(id string) *sniffarrv1.Releases {
 
 func TestBrowserRefreshPeers(t *testing.T) {
 	ctx := context.Background()
-	b, db := rankedDB(t)
+	b := ranked(t)
+	_, err := b.RefreshPeers(ctx, connect.NewRequest(&sniffarrv1.RefreshPeersRequest{Releases: byHash(7)}))
+	require.Equal(t, connect.CodeFailedPrecondition, connect.CodeOf(err), "nothing to order lookups on")
+	b.Fetches = fetches(t)
 	res, err := b.RefreshPeers(ctx, connect.NewRequest(&sniffarrv1.RefreshPeersRequest{Releases: byHash(7)}))
 	require.NoError(t, err)
 	require.Equal(t, int32(1), res.Msg.GetReleases())
 	res, err = b.RefreshPeers(ctx, connect.NewRequest(&sniffarrv1.RefreshPeersRequest{Releases: byWork("m693134")}))
 	require.NoError(t, err)
 	require.Equal(t, int32(3), res.Msg.GetReleases(), "every release of the work")
-	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
+	got, err := b.Fetches.Take(1, 10, store.PrioritySample)
 	require.NoError(t, err)
-	got, _, err := q.Lease(ctx, 1, 10, now, time.Minute)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []store.Task{{Kind: store.TaskPeers, Hash: hash(7)}, {Kind: store.TaskPeers, Hash: hash(1)},
-		{Kind: store.TaskPeers, Hash: hash(2)}, {Kind: store.TaskPeers, Hash: hash(4)}}, got)
+	var ordered []store.Hash
+	for _, o := range got {
+		require.Equal(t, store.TaskPeers, o.Kind)
+		require.Equal(t, store.PriorityRequest, o.Priority)
+		ordered = append(ordered, o.Hash)
+	}
+	require.Equal(t, []store.Hash{hash(7), hash(1), hash(2), hash(4)}, ordered, "a lookup ordered at P0 for each")
 
 	for _, tt := range []struct {
 		name string
@@ -110,7 +120,35 @@ func TestBrowserStatsQueue(t *testing.T) {
 	require.Equal(t, int32(0), q[0].GetPriority())
 	require.Equal(t, int64(1), q[0].GetTasks())
 	require.Nil(t, q[0].GetEta(), "no pace yet")
-	require.Len(t, res.Msg.GetQueueFetches().GetLevels(), 4)
+	require.Nil(t, res.Msg.GetQueueFetches(), "no fetch queue without Fetches")
+
+	b.Fetches = fetches(t)
+	for _, o := range []struct {
+		kind     string
+		priority int
+		hashes   []byte
+	}{{store.TaskFetch, store.PriorityArr, []byte{11, 12}}, {store.TaskFetch, store.PrioritySample, []byte{31}}, {store.TaskPeers, store.PriorityRequest, []byte{1}}} {
+		l, ok := b.Fetches.Lane(o.kind, o.priority)
+		require.True(t, ok)
+		for _, h := range o.hashes {
+			_, err := b.Fetches.Publish(ctx, l, []orders.Item{{Hash: hash(h)}})
+			require.NoError(t, err)
+		}
+	}
+	_, err = b.Fetches.Take(1, 1, store.PrioritySample)
+	require.NoError(t, err)
+	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
+	require.NoError(t, err)
+	levels := func(q *sniffarrv1.TaskQueue) []int64 {
+		var n []int64
+		for _, l := range q.GetLevels() {
+			n = append(n, l.GetTasks())
+		}
+		return n
+	}
+	require.Equal(t, []int64{0, 2, 0, 1}, levels(res.Msg.GetQueueFetches()), "four levels from the streams, handed out or not")
+	require.Equal(t, []int64{1, 0, 0, 0}, levels(res.Msg.GetQueueLookups()))
+	require.Nil(t, res.Msg.GetQueueFetches().GetLevels()[1].GetEta(), "no pace yet")
 	require.NotNil(t, res.Msg.GetQueueFetches().GetLevels()[0].GetEta(), "nothing to wait for")
 
 	b.Tasks.Finished(store.TaskProbe, now.Add(-time.Minute))
@@ -120,6 +158,16 @@ func TestBrowserStatsQueue(t *testing.T) {
 	require.InDelta(t, 2.0, res.Msg.GetQueueProbes().GetPerMinute(), 1e-9)
 	require.Equal(t, 30*time.Second, res.Msg.GetQueueProbes().GetLevels()[3].GetEta().AsDuration())
 	require.Zero(t, res.Msg.GetQueueLookups().GetPerMinute())
+}
+
+// fetches returns the hand-out of the fetch orders on a bus of its own.
+func fetches(t *testing.T) *orders.Queue {
+	t.Helper()
+	js, err := jetstream.New(bustest.Conn(t))
+	require.NoError(t, err)
+	q := orders.New(orders.Config{Stream: bus.StreamFetchOrders, Lanes: bus.FetchLanes})
+	require.NoError(t, q.Start(t.Context(), js))
+	return q
 }
 
 // fakeMatcher matches a key to the TMDB ID in ids, or to nothing, recording

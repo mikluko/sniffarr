@@ -243,8 +243,7 @@ func (x *SightRequest) GetSource() Source {
 
 type SightResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Sightings neither in known: those the server queues unless already
-	// queued.
+	// Sightings neither in known: those the server orders a fetch of.
 	New int64 `protobuf:"varint,1,opt,name=new,proto3" json:"new,omitempty"`
 	// Sightings of infohashes stored, rejected, or kept out of the queue and
 	// not announced, and those the sightings stream dropped as a repeat of
