@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The chart's `sniff.hostPort` and `fetch.hostPort` publish the DHT port on the node's address from the pod network.
+
 ## [0.44.0] - 2026-11-08
 
 The web UI's new design, a journal of what happens to each infohash, and the chart's API as a StatefulSet.

@@ -1,0 +1,8 @@
+sniff:
+  hostNetwork: false
+  hostPort: true
+
+fetch:
+  hostPort: true
+  flags:
+    port: 42070

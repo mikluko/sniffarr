@@ -24,6 +24,7 @@
 {{- $fetching := or $fetch.enabled (and $sniff.enabled $sniff.fetch) }}
 {{- $dhtOn := or $discover $fetching }}
 {{- $hostNetwork := or (and $sniff.enabled $sniff.hostNetwork) (and $fetch.enabled $fetch.hostNetwork) }}
+{{- $hostPort := or (and $sniff.enabled $sniff.hostPort) (and $fetch.enabled $fetch.hostPort) }}
 {{- $upnp := or (and $sniff.enabled $sniff.upnp) (and $fetch.enabled $fetch.upnp) }}
 {{- $env := dict }}
 {{- $flags := dict }}
@@ -63,6 +64,7 @@
 {{- $dht := include "sniffarr.dhtPort" (dict "component" ($svcOwner | default "sniff") "flags" $flags "service" $svc) | fromYaml }}
 {{- $port := int $dht.port }}
 {{- $nodePort := int $dht.nodePort }}
+{{- include "sniffarr.dhtHostPort" (dict "component" ($svcOwner | default "sniff") "v" (dict "hostPort" $hostPort "hostNetwork" $hostNetwork) "port" $port) }}
 {{- $loopback := include "sniffarr.uiLoopback" $ui.addr }}
 {{- $probe := and $fetch.enabled .Values.probe.enabled }}
 apiVersion: apps/v1
@@ -152,8 +154,8 @@ spec:
             - name: ui
               containerPort: {{ include "sniffarr.uiPort" $ui.addr }}
             {{- end }}
-            {{- if and $dhtOn $port (or $discover $hostNetwork $svc.enabled) }}
-            {{- include "sniffarr.dhtContainerPorts" (dict "port" $port) | trim | nindent 12 }}
+            {{- if and $dhtOn $port (or $discover $hostNetwork $hostPort $svc.enabled) }}
+            {{- include "sniffarr.dhtContainerPorts" (dict "port" $port "hostPort" $hostPort) | trim | nindent 12 }}
             {{- end }}
           startupProbe:
             httpGet:

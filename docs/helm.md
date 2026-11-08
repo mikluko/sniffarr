@@ -86,16 +86,29 @@ reachable only through that proxy, and `ui.service.targetPort` must name it.
 Either DHT Deployment reaches the DHT from the pod network through
 `<component>.service`: a Service of the component's name exposing its port,
 TCP and UDP, `NodePort` by default. With `service.nodePort` the pod listens on
-that port, rendered as `-port`, so the port peers reach the node on is the
-port it uses; `flags.port` must then be unset or equal. `<component>.upnp`
-renders `-upnp`.
+that port, rendered as `-port`, so peers reach the node on the port it
+listens on; `flags.port` must then be unset or equal. Its queries leave
+through the cluster's masquerade, though, and the source port they carry is
+the one other nodes record. Cilium keeps a pod's source port only above the
+node port range, 32767 by default, so a node port, always inside that range,
+is rewritten, and other nodes list the node at a port that stops reaching it
+once the masquerade's mapping expires.
+
+`<component>.hostPort` publishes the port, TCP and UDP, on the node's address
+at the same number, from the pod network, and makes the Deployment
+`Recreate`. With a port above the node port range, such as the default 42069,
+the port other nodes learn from the node's queries is the port that reaches
+it. It wants a fixed port and refuses `hostNetwork`; the probe has none, since
+its replicas each listen on a port of their own. `<component>.upnp` renders
+`-upnp`.
 
 With `waitForAPI.enabled`, true by default, the `ui`, `sniff`, `fetch` and
 `probe` pods start with an init container `wait-api` running `sniffarr
 -wait-api` against the pod's `SNIFFARR_URL`: the pod's own container starts
 only once the API there answers with the version of the pod's image. On an
 upgrade under a rolling update, the old pods keep running while the new ones
-wait; a Deployment in the host network, which is `Recreate`, and the probe
+wait; a Deployment in the host network or with a `hostPort`, which is
+`Recreate`, and the probe
 StatefulSet stop the old pod first, so it is down until the new API answers.
 `waitForAPI.resources` are the init container's resources.
 
@@ -109,7 +122,8 @@ flags. The Services `<release>-api` and, with `ui.enabled`, `<release>-ui`
 select that pod. The components keep their values and the pod takes the union
 of them: `api.persistence`, `api.litestream`, `api.existingSecret`, the `env`
 of every enabled component, `ui.addr`, the `flags` and `upnp` of `sniff` and
-`fetch`, `probe` with its claim `<release>-seeds`, their `hostNetwork`, and the `extraContainers` and `extraVolumes` of
+`fetch`, `probe` with its claim `<release>-seeds`, their `hostNetwork` and
+`hostPort`, and the `extraContainers` and `extraVolumes` of
 `api` and `ui`. The pod's `resources`, `podAnnotations`, `podLabels`,
 `nodeSelector`, `tolerations` and `affinity` come from the `single` block; the
 components' own are not read. With `probe.enabled` the process renders

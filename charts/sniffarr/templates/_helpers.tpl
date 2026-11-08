@@ -132,13 +132,35 @@ nodePort: {{ $nodePort }}
 {{- end }}
 {{- end }}
 
+{{- /* sniffarr.dhtContainerPorts is the container's DHT port, UDP and TCP, also a hostPort when hostPort. */}}
 {{- define "sniffarr.dhtContainerPorts" -}}
 - name: dht
   containerPort: {{ .port }}
+  {{- if .hostPort }}
+  hostPort: {{ .port }}
+  {{- end }}
   protocol: UDP
 - name: peers
   containerPort: {{ .port }}
+  {{- if .hostPort }}
+  hostPort: {{ .port }}
+  {{- end }}
   protocol: TCP
+{{- end }}
+
+{{- /*
+sniffarr.dhtHostPort fails on a hostPort the component cannot have: in the host network or over
+a port the cluster picks. It takes component, v (with hostPort and hostNetwork) and port.
+*/}}
+{{- define "sniffarr.dhtHostPort" -}}
+{{- if .v.hostPort }}
+{{- if .v.hostNetwork }}
+{{- fail (printf "%s.hostPort and %s.hostNetwork: a pod in the host network listens on the node already" .component .component) }}
+{{- end }}
+{{- if not .port }}
+{{- fail (printf "%s.hostPort: wants a fixed port, not flags.port 0" .component) }}
+{{- end }}
+{{- end }}
 {{- end }}
 
 {{- /*
@@ -329,6 +351,10 @@ on the port plus its index, and with v.service.enabled a Service per pod, <name>
 {{- $port := int $dht.port }}
 {{- $nodePort := int $dht.nodePort }}
 {{- $probe := .probe }}
+{{- if and $probe $v.hostPort }}
+{{- fail "probe.hostPort: one pod template cannot give each replica the port plus its index" }}
+{{- end }}
+{{- include "sniffarr.dhtHostPort" (dict "component" .component "v" $v "port" $port) }}
 {{- $seeds := "" }}
 {{- if $probe }}
 {{- $seeds = include "sniffarr.seedsType" $probe.persistence }}
@@ -345,7 +371,7 @@ spec:
   {{- if $probe }}
   serviceName: {{ $root.Release.Name }}-{{ .component }}
   podManagementPolicy: Parallel
-  {{- else if $v.hostNetwork }}
+  {{- else if or $v.hostNetwork $v.hostPort }}
   strategy:
     type: Recreate
   {{- end }}
@@ -426,9 +452,9 @@ spec:
             {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
-          {{- if and $port (not $probe) (or .sniff $v.hostNetwork $svc.enabled) }}
+          {{- if and $port (not $probe) (or .sniff $v.hostNetwork $v.hostPort $svc.enabled) }}
           ports:
-            {{- include "sniffarr.dhtContainerPorts" (dict "port" $port) | trim | nindent 12 }}
+            {{- include "sniffarr.dhtContainerPorts" (dict "port" $port "hostPort" $v.hostPort) | trim | nindent 12 }}
           {{- end }}
           {{- with $v.resources }}
           resources:
