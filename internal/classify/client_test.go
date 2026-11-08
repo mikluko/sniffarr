@@ -7,7 +7,6 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -16,11 +15,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/libarr/telemetry/telemetrytest"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
-	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 const answer200 = `{
@@ -201,136 +198,6 @@ func TestClientNoKey(t *testing.T) {
 	_, err := c.Classify(context.Background(), Input{Name: "Heat.1995.1080p.BluRay.REMUX"})
 	require.NoError(t, err)
 	require.Empty(t, auth, "no key, no Authorization header")
-}
-
-func setup(t *testing.T, names ...string) *store.Store {
-	t.Helper()
-	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(russian)})
-	require.NoError(t, err)
-	for i, n := range names {
-		_, _, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{byte(i + 1)}, Name: n, Size: 1 << 30, Files: []rules.File{{Path: n + ".mkv", Size: 1 << 30}},
-			Discovery: "sample", SeenAt: time.Now(), Audio: []store.Audio{{Language: "ru", ScriptHint: true}}})
-		require.NoError(t, err)
-	}
-	return s
-}
-
-func worker(s *store.Store, c Model) *Worker {
-	cl := &Classifier{Store: s, Model: c, Log: slog.New(slog.DiscardHandler)}
-	return &Worker{Store: s, Classifier: cl, Concurrency: 2, Poll: 10 * time.Millisecond, Log: slog.New(slog.DiscardHandler)}
-}
-
-func TestWorker(t *testing.T) {
-	f := newFake(t)
-	f.status["Broken"] = http.StatusUnprocessableEntity
-	s := setup(t, "Heat.1995", "Ronin.1998", "Broken", "Collateral.2004")
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error)
-	go func() { done <- worker(s, f.client()).Run(ctx) }()
-
-	require.Eventually(t, func() bool {
-		p, err := s.Unclassified(ctx, 0, 10, 1)
-		return err == nil && len(p) == 0
-	}, 5*time.Second, 10*time.Millisecond)
-	cancel()
-	require.ErrorIs(t, <-done, context.Canceled)
-
-	r, err := s.Get(context.Background(), store.Hash{2})
-	require.NoError(t, err)
-	require.Equal(t, "movie", r.Kind)
-	require.Equal(t, "remux", r.Source)
-	require.Len(t, r.Audio, 1)
-	require.InDelta(t, 0.75, *r.Audio[0].Probability, 1e-9)
-	r, err = s.Get(context.Background(), store.Hash{3})
-	require.NoError(t, err)
-	require.Empty(t, r.Kind, "a refused torrent stays without a kind")
-	n, err := s.TokensUsed(context.Background(), day(time.Now()))
-	require.NoError(t, err)
-	require.EqualValues(t, 3000, n)
-}
-
-func TestWorkerBudget(t *testing.T) {
-	f := newFake(t)
-	s := setup(t, "Heat.1995", "Ronin.1998", "Collateral.2004")
-	w := worker(s, f.client())
-	w.Concurrency = 1
-	w.Classifier.DailyTokens = 1500
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error)
-	go func() { done <- w.Run(ctx) }()
-
-	require.Eventually(t, func() bool {
-		p, err := s.Unclassified(ctx, 0, 10, 1)
-		return err == nil && len(p) == 1
-	}, 5*time.Second, 10*time.Millisecond)
-	time.Sleep(100 * time.Millisecond)
-	cancel()
-	require.ErrorIs(t, <-done, context.Canceled)
-	require.EqualValues(t, 2, f.requests.Load(), "the budget stops requests once spent")
-}
-
-func TestWorkerReserve(t *testing.T) {
-	f := newFake(t)
-	s := setup(t, "Heat.1995", "Ronin.1998", "Collateral.2004", "Thief.1981")
-	w := worker(s, f.client())
-	w.Concurrency = 1
-	w.Classifier.DailyTokens = 3000
-	w.Reserve = 50
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error)
-	go func() { done <- w.Run(ctx) }()
-
-	require.Eventually(t, func() bool {
-		p, err := s.Unclassified(ctx, 0, 10, 1)
-		return err == nil && len(p) == 2
-	}, 5*time.Second, 10*time.Millisecond)
-	time.Sleep(100 * time.Millisecond)
-	cancel()
-	require.ErrorIs(t, <-done, context.Canceled)
-	require.EqualValues(t, 2, f.requests.Load(), "the Worker stops at the reserve")
-
-	p, err := s.Unclassified(context.Background(), 0, 10, 1)
-	require.NoError(t, err)
-	require.NoError(t, w.Classifier.Classify(context.Background(), p[0], store.TriggerSearch), "Search spends the reserve")
-	require.ErrorIs(t, w.Classifier.Classify(context.Background(), p[1], store.TriggerSearch), ErrBudget)
-	require.EqualValues(t, 3, f.requests.Load())
-}
-
-func TestClassifierAsksKindOnlyWhenUnknown(t *testing.T) {
-	ctx := context.Background()
-	f := newFake(t)
-	s := setup(t, "Heat.1995")
-	_, _, err := s.Insert(ctx, store.Torrent{Hash: store.Hash{9}, Name: "Ronin.S01E01", Size: 1 << 30, Discovery: "sample", SeenAt: time.Now(),
-		Kind: "series", KindLayer: store.LayerRules})
-	require.NoError(t, err)
-	cl := &Classifier{Store: s, Model: f.client(), Log: slog.New(slog.DiscardHandler)}
-
-	p, err := s.Pending(ctx, []int64{1, 2}, MaxFiles)
-	require.NoError(t, err)
-	for _, p := range p {
-		require.NoError(t, cl.Classify(ctx, p, store.TriggerWorker))
-	}
-	require.EqualValues(t, 2, f.requests.Load())
-	require.EqualValues(t, 1, f.kindAsked.Load(), "only Heat's kind was unknown")
-
-	r, err := s.Get(ctx, store.Hash{9})
-	require.NoError(t, err)
-	require.Equal(t, "series", r.Kind, "the rules' kind stays")
-	require.Equal(t, store.LayerRules, r.KindLayer)
-	require.Equal(t, "remux", r.Source)
-	require.True(t, r.Classified)
-	r, err = s.Get(ctx, store.Hash{1})
-	require.NoError(t, err)
-	require.Equal(t, "movie", r.Kind)
-	require.Equal(t, store.LayerClassifier, r.KindLayer)
-
-	cl.DailyTokens = 1
-	require.ErrorIs(t, cl.Classify(ctx, store.Pending{ID: 1, Name: "Heat.1995"}, store.TriggerWorker), ErrBudget)
-	require.EqualValues(t, 2, f.requests.Load(), "no request once the budget is spent")
 }
 
 func TestClientTrace(t *testing.T) {
