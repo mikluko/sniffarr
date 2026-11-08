@@ -231,6 +231,16 @@ func TestOptions(t *testing.T) {
 	require.Len(t, opts.Users, 1)
 }
 
+func TestReadyWait(t *testing.T) {
+	require.Equal(t, RecoveryBudget, readyWait(context.Background()), "no deadline")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+	require.Equal(t, RecoveryBudget, readyWait(ctx), "a later deadline")
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.LessOrEqual(t, readyWait(ctx), time.Second, "an earlier deadline")
+}
+
 func TestModule(t *testing.T) {
 	var b *Broker
 	app := fxtest.New(t,

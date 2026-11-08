@@ -61,6 +61,11 @@ func TestGraph(t *testing.T) {
 	}
 }
 
+func TestStartTimeout(t *testing.T) {
+	require.Equal(t, fx.DefaultTimeout+broker.RecoveryBudget, startTimeout(components{api: true, ui: true}))
+	require.Equal(t, fx.DefaultTimeout, startTimeout(components{ui: true, sniff: true, fetch: true}))
+}
+
 // freeAddr is a loopback address nothing listens on.
 func freeAddr(t *testing.T) string {
 	t.Helper()

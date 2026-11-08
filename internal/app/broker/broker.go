@@ -62,12 +62,14 @@ func newBroker(lc fx.Lifecycle, cfg Config, log *slog.Logger) *Broker {
 // made at each start.
 const apiUser = "api"
 
-// defaultReady bounds the wait for the server when the start has no deadline.
-const defaultReady = time.Minute
+// RecoveryBudget bounds the wait at start for the server to recover its
+// store and take connections; the start's deadline must leave it that long.
+const RecoveryBudget = 5 * time.Minute
 
 // start runs the server, waits for it to take connections, connects to it
 // in process and ensures the topology; on error the server is shut down.
 func (b *Broker) start(ctx context.Context, cfg Config, log *slog.Logger) (err error) {
+	t0 := time.Now()
 	log = log.With("component", "nats")
 	password := rand.Text()
 	opts, err := options(cfg, password)
@@ -106,7 +108,7 @@ func (b *Broker) start(ctx context.Context, cfg Config, log *slog.Logger) (err e
 	if err := bus.Ensure(ctx, b.JetStream); err != nil {
 		return fmt.Errorf("nats: %w", err)
 	}
-	attrs := []any{"dir", cfg.Dir}
+	attrs := []any{"dir", cfg.Dir, "start", time.Since(t0).Round(time.Millisecond)}
 	if a := srv.Addr(); a != nil {
 		attrs = append(attrs, "addr", a.String())
 	}
@@ -131,13 +133,10 @@ func (b *Broker) stop(ctx context.Context) error {
 	return err
 }
 
-// ready waits until srv takes connections and runs JetStream, within ctx's
-// deadline or defaultReady, failing at once on a fatal error srv logs.
+// ready waits until srv takes connections and runs JetStream, within
+// readyWait, failing at once on a fatal error srv logs.
 func ready(ctx context.Context, srv *server.Server, fatal <-chan string) error {
-	wait := defaultReady
-	if d, ok := ctx.Deadline(); ok {
-		wait = time.Until(d)
-	}
+	wait := readyWait(ctx)
 	done := make(chan bool, 1)
 	go func() { done <- srv.ReadyForConnections(wait) }()
 	select {
@@ -152,6 +151,14 @@ func ready(ctx context.Context, srv *server.Server, fatal <-chan string) error {
 		return errors.New("JetStream is not enabled")
 	}
 	return nil
+}
+
+// readyWait is RecoveryBudget, cut short by ctx's deadline.
+func readyWait(ctx context.Context) time.Duration {
+	if d, ok := ctx.Deadline(); ok {
+		return min(RecoveryBudget, time.Until(d))
+	}
+	return RecoveryBudget
 }
 
 // options returns the server's options for cfg: JetStream in cfg.Dir, no

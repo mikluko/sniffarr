@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"go.uber.org/fx"
 
@@ -38,7 +39,7 @@ func main() {
 
 // options is the fx graph of the components cfg switches on.
 func options(cfg config, log *slog.Logger) []fx.Option {
-	opts := []fx.Option{fx.Supply(log), app.Logging, app.Telemetry}
+	opts := []fx.Option{fx.Supply(log), app.Logging, app.Telemetry, fx.StartTimeout(startTimeout(cfg.on))}
 	if cfg.on.api {
 		opts = append(opts, fx.Supply(cfg.db, cfg.api, cfg.broker), db.Module, broker.Module, api.Module)
 	}
@@ -58,6 +59,14 @@ func options(cfg config, log *slog.Logger) []fx.Option {
 		opts = append(opts, fx.Supply(cfg.fetch), fetch.Module)
 	}
 	return opts
+}
+
+// startTimeout is fx's default, with -api plus broker.RecoveryBudget.
+func startTimeout(on components) time.Duration {
+	if on.api {
+		return fx.DefaultTimeout + broker.RecoveryBudget
+	}
+	return fx.DefaultTimeout
 }
 
 // run starts the components and stops them when ctx ends or one of them

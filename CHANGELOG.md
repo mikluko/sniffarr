@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** sightings go to `sniffarr.sightings.announce` and `sniffarr.sightings.sample`, by discovery, in place of `sniffarr.sightings`.
+- The start of `-api` allows up to 5 minutes for the NATS server to recover its store, on top of the 15 seconds the start of every process has.
 
 ### Fixed
 

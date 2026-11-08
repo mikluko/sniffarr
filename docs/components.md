@@ -260,7 +260,9 @@ page can sort by them.
 `-api` embeds a NATS server with JetStream, started before the API serves
 and shut down cleanly after it stops; no other component runs one. Its
 store is the directory `SNIFFARR_NATS_DIR`, by default `nats` beside the
-SQLite database, so it shares the API's volume. At start the API connects
+SQLite database, so it shares the API's volume. The start of `-api` allows
+up to 5 minutes for the server to recover its store, on top of the 15
+seconds the start of every process has. At start the API connects
 to it in process and creates or updates the pipeline's streams: sightings,
 on a subject per discovery, `sniffarr.sightings.announce` and
 `sniffarr.sightings.sample`, which drop a sighting repeated within 5 minutes
