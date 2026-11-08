@@ -38,3 +38,23 @@ func TestSearchSeason(t *testing.T) {
 		require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), req.String())
 	}
 }
+
+func TestWorkID(t *testing.T) {
+	require.Equal(t, "m348", WorkID(store.Work{TMDBID: 348, Details: store.Details{Type: store.TypeMovie}}))
+	require.Equal(t, "tv1399", WorkID(store.Work{TMDBID: 1399, Details: store.Details{Type: store.TypeTV}}))
+	for id, want := range map[string]struct {
+		typ string
+		n   int
+		ok  bool
+	}{
+		"m348": {store.TypeMovie, 348, true}, "tv1399": {store.TypeTV, 1399, true},
+		"348": {}, "m": {}, "tv": {}, "m0": {}, "m-1": {}, "m+1": {}, "m01": {}, "x348": {},
+	} {
+		typ, n, ok := ParseWorkID(id)
+		require.Equal(t, want, struct {
+			typ string
+			n   int
+			ok  bool
+		}{typ, n, ok}, id)
+	}
+}
