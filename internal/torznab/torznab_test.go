@@ -243,13 +243,12 @@ func TestSearchSeasonEpisode(t *testing.T) {
 func TestSearchPeers(t *testing.T) {
 	ctx := context.Background()
 	srv, s := serve(t, stored{"Heat.1995.1080p", "movie", ""}, stored{"Ronin.1998.1080p", "movie", ""})
-	k, err := s.HashKey(ctx)
-	require.NoError(t, err)
+	k := sketch.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 	sk := sketch.New()
 	for i := range 40 {
 		sk.Add(k.Hash(netip.AddrPortFrom(netip.AddrFrom4([4]byte{10, 0, 0, byte(i)}), 6881)))
 	}
-	_, _, err = s.MergePeers(ctx, []store.PeerSketch{{Hash: store.Hash{1}, Hour: t0, Sketch: sk.Bytes()}})
+	_, _, err := s.MergePeers(ctx, []store.PeerSketch{{Hash: store.Hash{1}, Hour: t0, Sketch: sk.Bytes()}})
 	require.NoError(t, err)
 	require.NoError(t, s.ComputeTop(ctx, t0))
 

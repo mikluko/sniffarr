@@ -11,6 +11,10 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 
+// testKey hashes the peers of sketchOf, fixed so that cardinality estimates,
+// and the bounds the tests hold them to, do not vary between runs.
+var testKey = sketch.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+
 // sketchOf returns a sketch of n peers numbered from first, hashed with k.
 func sketchOf(k sketch.Key, first, n int) []byte {
 	s := sketch.New()
@@ -23,9 +27,8 @@ func sketchOf(k sketch.Key, first, n int) []byte {
 func TestMergePeers(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	k, err := s.HashKey(ctx)
-	require.NoError(t, err)
-	_, _, err = s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
+	k := testKey
+	_, _, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
 	require.NoError(t, err)
 
 	merged, dropped, err := s.MergePeers(ctx, []PeerSketch{
@@ -67,9 +70,8 @@ func TestMergePeers(t *testing.T) {
 func TestRollupPeers(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	k, err := s.HashKey(ctx)
-	require.NoError(t, err)
-	_, _, err = s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
+	k := testKey
+	_, _, err := s.Insert(ctx, torrent(1, "Alien.1979.mkv"))
 	require.NoError(t, err)
 	r, err := s.Get(ctx, hash(1))
 	require.NoError(t, err)

@@ -55,8 +55,7 @@ func seeded(t *testing.T) *Store {
 	t.Helper()
 	ctx := context.Background()
 	s := open(t)
-	k, err := s.HashKey(ctx)
-	require.NoError(t, err)
+	k := testKey
 	for _, tr := range []Torrent{
 		named(1, "Dune.Part.Two.2024.1080p.BluRay.x264", "movie", marker),
 		named(2, "Dune.Part.Two.2024.2160p.BluRay.Rus", "movie", marker),
@@ -77,7 +76,7 @@ func seeded(t *testing.T) *Store {
 	interstellar = matchTo(t, s, "y:interstellar 2014", TypeMovie, 157336, "Interstellar")
 	oppenheimer = matchTo(t, s, "y:oppenheimer 2023", TypeMovie, 872585, "Oppenheimer")
 	severance = matchTo(t, s, "s:severance", TypeTV, 95396, "Severance")
-	_, _, err = s.MergePeers(ctx, []PeerSketch{
+	_, _, err := s.MergePeers(ctx, []PeerSketch{
 		{Hash: hash(1), Hour: t0, Sketch: sketchOf(k, 0, 120)},
 		{Hash: hash(2), Hour: t0.Add(-time.Hour), Sketch: sketchOf(k, 50, 100)},
 		{Hash: hash(9), Hour: t0, Sketch: sketchOf(k, 2000, 20)},
@@ -178,8 +177,7 @@ func TestComputeTop(t *testing.T) {
 func TestComputeTopPrevRankBelowTop(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	k, err := s.HashKey(ctx)
-	require.NoError(t, err)
+	k := testKey
 	var sketches []PeerSketch
 	for i := range TopSize + 2 {
 		b := byte(i + 1)
@@ -193,7 +191,7 @@ func TestComputeTopPrevRankBelowTop(t *testing.T) {
 		}
 		sketches = append(sketches, PeerSketch{Hash: hash(b), Hour: t0.Add(-30 * time.Hour), Sketch: sketchOf(k, 100*i, peers)})
 	}
-	_, _, err = s.MergePeers(ctx, sketches)
+	_, _, err := s.MergePeers(ctx, sketches)
 	require.NoError(t, err)
 	require.NoError(t, s.ComputeTop(ctx, t0))
 
@@ -209,8 +207,7 @@ func TestComputeTopPrevRankBelowTop(t *testing.T) {
 func TestTopHistory(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	k, err := s.HashKey(ctx)
-	require.NoError(t, err)
+	k := testKey
 	var a, b, c int64
 	for i, w := range []struct {
 		id   *int64

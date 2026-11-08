@@ -76,8 +76,7 @@ func rankedDB(t *testing.T) (*Browser, *database.DB) {
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}, TMDB: true})
 	require.NoError(t, err)
-	k, err := s.HashKey(ctx)
-	require.NoError(t, err)
+	k := sketch.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 	add := func(b byte, name, kind string, ru store.Audio) {
 		p := titles.Parse(name)
 		ru.Language = "ru"
