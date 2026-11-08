@@ -108,10 +108,21 @@ go run ./hack/natsload -orders 5000000 -drain=false
 
 ## Releases
 
-`CHANGELOG.md` decides the version. To release, rename `## [Unreleased]` to
-`## [X.Y.Z] - YYYY-MM-DD`, open a fresh `## [Unreleased]` above it, and merge
-on the date you wrote. `mikluko/action-changelog` validates the file on every
-pull request.
+`CHANGELOG.md` decides the version. Work for the next version gathers on the
+`integration` branch under an open entry, `## [X.Y.Z]` with no date. To
+release, date it, `## [X.Y.Z] - YYYY-MM-DD`, squash `integration` into `main`
+with a fresh `## [Unreleased]` above it, and push on the date you wrote.
+`mikluko/action-changelog` validates the file on every pull request.
+
+### Pre-releases
+
+A pre-release is run by hand on `integration`, the workflow `pre-release.yaml`
+(`fj actions dispatch pre-release.yaml integration`). It runs CI, takes the
+version the open entry names, and cuts the next `vX.Y.Z-pre.N`, N one past the
+highest already cut for that version, building and publishing exactly as a
+release does below, as a Forgejo pre-release. The entry stays undated and the
+tag never becomes a heading. Clusters whose chart range admits pre-releases
+pick it up.
 
 The repository lives at `https://sarak.sh/mikluko/sniffarr`, and its
 workflows in `.forgejo/workflows` run on Forgejo Actions. On a push to `main`,

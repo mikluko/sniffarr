@@ -1,0 +1,91 @@
+name: Pre-release
+run-name: Pre-release from ${{ github.ref_name }}
+
+# Run by hand on integration: cuts the next v<version>-pre.N of the version
+# the changelog's open entry names, the entry undated while the release
+# accumulates. The tag never becomes a heading; the squash into main dates the
+# entry and release.yaml cuts v<version>. As in release.yaml, a draft holds the
+# tag while build.yaml publishes the artifacts, and publishing the draft last
+# creates the tag.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    if: github.ref == 'refs/heads/integration'
+    uses: ./.forgejo/workflows/ci.yaml
+
+  draft:
+    needs: ci
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      id: ${{ steps.draft.outputs.id }}
+    steps:
+      - uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: changelog
+        uses: https://sarak.sh/actions/changelog@v1
+        with:
+          "off": undated-entry
+          reference-tags: final
+      # The ordinal is the highest pre.N already cut for this version, plus one.
+      - id: next
+        name: Next pre-release
+        env:
+          VERSION: ${{ steps.changelog.outputs.version }}
+          TAGGED: ${{ steps.changelog.outputs['already-tagged'] }}
+        run: |
+          [ -n "$VERSION" ] || { echo "::error::the changelog names no version"; exit 1; }
+          [ "$TAGGED" = false ] || { echo "::error::v$VERSION is released; open the next version's entry"; exit 1; }
+          case "$VERSION" in *-*) echo "::error::the open entry names a pre-release, $VERSION"; exit 1 ;; esac
+          prev=$(git tag --list "v$VERSION-pre.*" | sed "s|^v$VERSION-pre\.||" | grep -E '^[0-9]+$' | sort -n | tail -1)
+          echo "version=$VERSION-pre.$(( ${prev:-0} + 1 ))" >>"$GITHUB_OUTPUT"
+      - id: draft
+        name: Draft
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.next.outputs.version }}
+        run: |
+          api="$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY"
+          auth="Authorization: token $TOKEN"
+          curl --fail-with-body -sS -H "$auth" "$api/releases?draft=true&limit=50" |
+            jq -r --arg tag "$TAG" '.[] | select(.draft and .tag_name == $tag) | .id' |
+            while read -r old; do
+              curl --fail-with-body -sS -X DELETE -H "$auth" "$api/releases/$old"
+            done
+          id=$(jq -n --arg tag "$TAG" --arg sha "$GITHUB_SHA" \
+            '{tag_name: $tag, target_commitish: $sha, name: $tag, body: "Pre-release of integration at \($sha).", prerelease: true, draft: true}' |
+            curl --fail-with-body -sS -X POST -H "$auth" -H 'Content-Type: application/json' \
+              -d @- "$api/releases" | jq -r .id)
+          echo "id=$id" >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: draft
+    uses: ./.forgejo/workflows/build.yaml
+    with:
+      version: ${{ needs.draft.outputs.version }}
+      publish: true
+      release-id: ${{ needs.draft.outputs.id }}
+
+  publish:
+    needs: [draft, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ID: ${{ needs.draft.outputs.id }}
+          VERSION: ${{ needs.draft.outputs.version }}
+        run: |
+          curl --fail-with-body -sS -o /dev/null -X PATCH \
+            -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
+            -d '{"draft": false}' "$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY/releases/$ID"
+          echo "Pre-released **v$VERSION** from $GITHUB_SHA." >>"$GITHUB_STEP_SUMMARY"
