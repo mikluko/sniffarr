@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The journal's heading counts a failure only while no later entry of its task has settled it: a fetch or probe that ended a later chain, or a later entry of the same kind.
 - A time in a journal row's particulars leaves out the year when it is the current one.
 
-## [0.44.0-beta.7] - 2026-11-07
+## [0.44.0-beta.7] - 2026-11-08
 
 ### Fixed
 
