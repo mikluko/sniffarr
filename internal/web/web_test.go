@@ -468,7 +468,7 @@ func TestWork(t *testing.T) {
 	require.Contains(t, body, `<img class="hero-ph" src="https://image.tmdb.org/t/p/w185/p.jpg" srcset="https://image.tmdb.org/t/p/w342/p.jpg 2x" width="185" height="278"`)
 	require.Contains(t, body, `<h1>Alien <span class="mu">1979</span></h1>`)
 	require.Contains(t, body, "Movie · 1 h 57 min · US · en", "the year is the title's")
-	require.Contains(t, body, `<div>horror, science fiction<span class="mu"> · TMDB 8.2 · 16,995 votes</span></div>`, "the rating on the genres' line")
+	require.Contains(t, body, "<div>horror, science fiction<span class=\"mu\"> · TMDB 8.2 · 16,995\u00a0votes</span></div>", "the rating on the genres' line")
 	require.Contains(t, body, `<a href="https://www.themoviedb.org/movie/348" rel="noreferrer" target="_blank">TMDB</a> · <a href="https://www.imdb.com/title/tt0078748/"`)
 	require.NotContains(t, body, "Seerr", "no Seerr configured")
 	require.Contains(t, body, `<span>Chart position</span>

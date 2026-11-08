@@ -349,6 +349,41 @@ func TestRenderFeaturesDegraded(t *testing.T) {
 	}
 }
 
+// Every noun counted in Russian agrees with its number by the number's
+// last two digits.
+func TestPluralForms(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := r.Base(httptest.NewRequest("GET", "/", nil), "ru", "", nil, time.UTC)
+	forms := map[int64]string{1: "one", 2: "few", 5: "many", 11: "many", 12: "many", 21: "one", 101: "one", 112: "many", 1001: "one", 3192: "few"}
+	for _, key := range []string{"tmdb.votes", "top.rels", "journal.events", "card.files_n", "top.days", "q.tasks_n"} {
+		for n, form := range forms {
+			want, ok := b.Messages[key+"."+form]
+			if !ok {
+				t.Errorf("%s has no %s form", key, form)
+				continue
+			}
+			if got := b.Count(n, key); got != b.Num(n)+" "+want {
+				t.Errorf("Count(%d, %q) = %q, want the %s form %q", n, key, got, form, want)
+			}
+		}
+	}
+
+	p := SampleWork(b, SampleSpiderID, ReleaseFilters{})
+	m := *p.Work.TMDB
+	m.Votes = 3192
+	p.Work.TMDB = &m
+	w := httptest.NewRecorder()
+	if err := r.Render(w, httptest.NewRequest("GET", "/movie/900001", nil), "work", p); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(w.Body.String(), "3 192 голоса") {
+		t.Error("the work's votes do not agree with their number: want 3 192 голоса")
+	}
+}
+
 func TestFormat(t *testing.T) {
 	t5 := time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
 	ru := Base{Locale: libui.Locale{Lang: "ru"}}

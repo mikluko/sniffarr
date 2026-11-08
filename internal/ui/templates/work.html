@@ -19,7 +19,7 @@
     <h1>{{$m.Title}}{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h1>
     {{if $m.ShowOriginal}}<div class="mu">{{$m.OriginalTitle}}</div>{{end}}
     <div>{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}</div>
-    {{if or $m.Genres $m.Votes}}<div>{{.Genres $m.Genres}}{{if $m.Votes}}<span class="mu">{{if $m.Genres}} · {{end}}TMDB {{.Rating $m.Rating}} · {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span>{{end}}</div>{{end}}
+    {{if or $m.Genres $m.Votes}}<div>{{.Genres $m.Genres}}{{if $m.Votes}}<span class="mu">{{if $m.Genres}} · {{end}}TMDB {{.Rating $m.Rating}} · {{.Count (int64 $m.Votes) "tmdb.votes"}}</span>{{end}}</div>{{end}}
     {{if $m.Overview}}<p class="hero-desc">{{$m.Overview}}</p>{{end}}
     <div>
       <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}{{with $.SeerrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Seerr</a>{{end}}{{with $.RadarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Radarr</a>{{end}}{{with $.SonarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Sonarr</a>{{end}}

@@ -190,7 +190,7 @@
     <h2 class="tm-title"><a class="tm-stretch" href="{{.WorkURL $w.Path}}">{{$m.Title}}</a>{{if $m.Year}} <span class="mu">{{$m.Year}}</span>{{end}}</h2>
     {{if $m.ShowOriginal}}<div class="tm-orig">{{$m.OriginalTitle}}</div>{{end}}
     <div class="tm-facts">{{.Facts $w.Kind $m}}{{if $m.Countries}} · {{.List $m.Countries}}{{end}}{{if $m.Language}} · {{$m.Language}}{{end}}{{if $m.Genres}} · {{.Genres $m.Genres}}{{end}}</div>
-    {{if $m.Votes}}<div class="tm-facts">TMDB {{.Rating $m.Rating}} <span class="mu">· {{.Num (int64 $m.Votes)}} {{.T "tmdb.votes"}}</span></div>{{end}}
+    {{if $m.Votes}}<div class="tm-facts">TMDB {{.Rating $m.Rating}} <span class="mu">· {{.Count (int64 $m.Votes) "tmdb.votes"}}</span></div>{{end}}
     {{if $m.Overview}}<p class="tm-over">{{$m.Overview}}</p>{{end}}
     <div class="tm-links"><span class="mu">{{if $w.Rank}}{{.RankN $w.Rank}} {{.T (concat "card.intop." $w.Kind)}} · {{end}}{{.Count (int64 $w.Releases) "top.rels"}}, {{.Fmt "card.thisis" (.RankN $t.RankInWork)}} ·</span>
       <a href="{{$m.URL}}" rel="noreferrer" target="_blank">TMDB</a>{{with $m.IMDbURL}} · <a href="{{.}}" rel="noreferrer" target="_blank">IMDb</a>{{end}}{{with $.SeerrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Seerr</a>{{end}}{{with $.RadarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Radarr</a>{{end}}{{with $.SonarrURL $m}} · <a href="{{.}}" rel="noreferrer" target="_blank">Sonarr</a>{{end}}
