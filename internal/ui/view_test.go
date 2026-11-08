@@ -35,6 +35,35 @@ func TestTorrentMagnetHref(t *testing.T) {
 	}
 }
 
+// The copy button sits in one flex row with the hash, whose digits wrap on
+// their own, so that on a phone the button does not drop under the hash.
+func TestTorrentCopyBesideHash(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/t/x", nil)
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	p := SampleTorrent(b, false, "poster")
+	p.Torrent.InfoHash = "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "torrent", p); err != nil {
+		t.Fatal(err)
+	}
+	if want := `<td><span class="cp"><span class="mono">8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52</span><span class="tt ic"><button type="button" class="ic" data-copy="8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"`; !strings.Contains(w.Body.String(), want) {
+		t.Errorf("no %s", want)
+	}
+	css, err := files.ReadFile("static/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range []string{".cp{display:flex;", ".cp>.mono{min-width:0}", ".cp>.tt{flex:none}"} {
+		if !strings.Contains(string(css), rule) {
+			t.Errorf("no %s in app.css", rule)
+		}
+	}
+}
+
 // The counts are stale past two of the intervals they are refreshed at:
 // the page's own, or the API's when that is longer.
 func TestDataStale(t *testing.T) {

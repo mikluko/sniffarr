@@ -20,8 +20,8 @@
 <section class="col">
   <h2>{{$.T "card.torrent"}}</h2>
   <table class="kv">
-    <tr><th>infohash</th><td><span class="mono">{{.InfoHash}}</span> {{template "copy" (copyArgs $.Base .InfoHash ($.T "card.copy_hash"))}}</td></tr>
-    <tr><th>magnet</th><td><a href="{{.Magnet}}">{{$.T "card.open"}}</a> {{template "copy" (copyArgs $.Base (print .Magnet) ($.T "card.copy_magnet"))}}</td></tr>
+    <tr><th>infohash</th><td><span class="cp"><span class="mono">{{.InfoHash}}</span>{{template "copy" (copyArgs $.Base .InfoHash ($.T "card.copy_hash"))}}</span></td></tr>
+    <tr><th>magnet</th><td><span class="cp"><a href="{{.Magnet}}">{{$.T "card.open"}}</a>{{template "copy" (copyArgs $.Base (print .Magnet) ($.T "card.copy_magnet"))}}</span></td></tr>
     <tr><th>{{$.T "card.size"}}</th><td>{{$.Size .Size}} · {{$.Count (int64 .FileCount) "card.files_n"}}</td></tr>
     <tr><th>{{$.T "card.peers"}}</th><td><b>{{$.Num .Peers.Week}}</b> {{$.T "win.7d_lc"}}<br><span class="mu">{{$.Num .Peers.Day}} {{$.T "win.24h_lc"}} · {{$.Num .Peers.Month}} {{$.T "win.30d_lc"}}</span></td></tr>
     <tr><th>{{$.T "col.first"}}</th><td>{{$.TimeFull .FirstSeen}}</td></tr>

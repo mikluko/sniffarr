@@ -91,6 +91,9 @@ button:hover{background:var(--muted)}
 .kv{border-collapse:collapse}
 .kv th{text-align:left;font-weight:400;color:var(--muted-foreground);padding:3px 16px 3px 0;white-space:nowrap;vertical-align:baseline}
 .kv td{padding:3px 0;vertical-align:baseline}
+.cp{display:flex;gap:8px;align-items:center}
+.cp>.mono{min-width:0}
+.cp>.tt{flex:none}
 
 /* card */
 .head{display:flex;flex-direction:column;gap:4px}
