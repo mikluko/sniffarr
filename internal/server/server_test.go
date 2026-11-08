@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -16,6 +17,14 @@ import (
 	"connectrpc.com/connect"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 
 	"sarak.sh/mikluko/libarr/database"
@@ -26,8 +35,12 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/bus/bustest"
+	"sarak.sh/mikluko/sniffarr/internal/memconn"
 	"sarak.sh/mikluko/sniffarr/internal/rot13"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
+	"sarak.sh/mikluko/sniffarr/internal/sniff"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
@@ -643,4 +656,409 @@ func TestKindLayers(t *testing.T) {
 	require.Equal(t, sniffarrv1.Layer_LAYER_REUSE, got["Heat (1995) [Rus]"].GetLayer())
 	require.Equal(t, sniffarrv1.Kind_KIND_UNSPECIFIED, got["Unnamed Collection"].GetKind())
 	require.Equal(t, sniffarrv1.Layer_LAYER_UNSPECIFIED, got["Unnamed Collection"].GetLayer())
+}
+
+// value returns the int64 data point of the named metric whose attributes
+// include kv, summed over the matching points.
+func value(t *testing.T, rm metricdata.ResourceMetrics, name string, kv ...attribute.KeyValue) int64 {
+	t.Helper()
+	var sum int64
+	found := false
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != name {
+				continue
+			}
+			var points []metricdata.DataPoint[int64]
+			switch d := m.Data.(type) {
+			case metricdata.Sum[int64]:
+				points = d.DataPoints
+			case metricdata.Gauge[int64]:
+				points = d.DataPoints
+			}
+			for _, p := range points {
+				match := true
+				for _, want := range kv {
+					if got, ok := p.Attributes.Value(want.Key); !ok || got != want.Value {
+						match = false
+					}
+				}
+				if match {
+					sum += p.Value
+					found = true
+				}
+			}
+		}
+	}
+	require.True(t, found, "no %s %v", name, kv)
+	return sum
+}
+
+func TestMetrics(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	srv, hc := start(t, Config{Meter: mp, Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3, 4, 1)
+	require.NoError(t, err)
+	f := openFetch(t, ingest)
+	f.credit(4)
+	f.expect(1, 2, 3, 4)
+	f.torrent(1, "The.Thing.1982.1080p.BluRay.x264", "The.Thing.1982.mkv")
+	f.torrent(2, rot13.String("Ovt.Cnpxntr.KKK.1080c"), "video.mp4")
+	f.failure(3, sniffarrv1.Failure_FAILURE_NO_PEERS)
+	f.torrent(4, "進撃の巨人 S04", "video.mkv")
+	f.finish()
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	result := func(v string) attribute.KeyValue { return attribute.String("sniffarr.sighting.result", v) }
+	outcome := func(v string) attribute.KeyValue { return attribute.String("sniffarr.fetch.outcome", v) }
+	require.EqualValues(t, 4, value(t, rm, "sniffarr.ingest.sightings", result("new")))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.sightings", result("known")))
+	require.EqualValues(t, 3, value(t, rm, "sniffarr.ingest.results", outcome("torrent")))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.results", outcome("no_peers")))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.stored"))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "adult")))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "script")))
+	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.depth", attribute.String("sniffarr.discovery", "sample")))
+	require.EqualValues(t, 0, value(t, rm, "sniffarr.queue.leases"))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.queue.dead"), "the one without peers is dead")
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.queue.evictions", attribute.String("sniffarr.queue.eviction", "no_peers")))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.classify.classifications",
+		attribute.String("sniffarr.classify.layer", "rules"), attribute.String("sniffarr.kind", "movie")))
+}
+
+func TestReuseMetrics(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	srv, hc := start(t, Config{Meter: mp, Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3)
+	require.NoError(t, err)
+	f := openFetch(t, ingest)
+	f.credit(3)
+	f.expect(1, 2, 3)
+	f.torrent(1, "Heat (1995) [Rus]", "Heat.avi")
+	f.torrent(2, "Heat (1995) [Eng]", "Heat.mkv")
+	f.torrent(3, "Heat.1995.1080p.BluRay.x264", "Heat.1995.mkv")
+	f.finish()
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	layer := func(v string) attribute.KeyValue { return attribute.String("sniffarr.classify.layer", v) }
+	movie := attribute.String("sniffarr.kind", "movie")
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.classify.classifications", layer("rules"), movie))
+	require.EqualValues(t, 2, value(t, rm, "sniffarr.classify.classifications", layer("reuse"), movie),
+		"the kind 3 lends to 1 and 2")
+}
+
+func TestScripts(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	scripts, err := rules.ParseScripts("Latin,Greek")
+	require.NoError(t, err)
+	srv, hc := start(t, Config{Meter: mp, Poll: 20 * time.Millisecond, Scripts: scripts})
+	ingest := ingestClient(srv, hc)
+
+	_, err = sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2)
+	require.NoError(t, err)
+	f := openFetch(t, ingest)
+	f.credit(2)
+	f.expect(1, 2)
+	f.torrent(1, "Ελληνικά.2020.1080p", "video.mkv")
+	f.torrent(2, "Мандалорец.S03.WEB-DL.Rus", "video.mkv")
+	f.finish()
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.stored"))
+	require.EqualValues(t, 1, value(t, rm, "sniffarr.ingest.rejections", attribute.String("sniffarr.rules.reason", "script")),
+		"Cyrillic is not among the configured scripts")
+}
+
+// serveMem serves the handler over memconn with Alien stored, and returns
+// the store and an ingest client of the in-process API.
+func serveMem(t *testing.T) (*store.Store, sniffarrv1connect.IngestServiceClient) {
+	t.Helper()
+	ctx := context.Background()
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+	s, err := store.New(ctx, db, store.Options{})
+	require.NoError(t, err)
+	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
+	require.NoError(t, err)
+	_, _, err = s.Insert(ctx, store.Torrent{Hash: store.Hash{1}, Name: "Alien.1979.1080p", Size: 8 << 30, Discovery: "sample", SeenAt: time.Now(),
+		Files: []rules.File{{Path: "Alien.mkv", Size: 8 << 30}}})
+	require.NoError(t, err)
+	h, err := New(Config{Store: s, Tasks: q, Log: slog.New(slog.DiscardHandler)})
+	require.NoError(t, err)
+	mem := memconn.Listen()
+	srv := &http.Server{Handler: h, Protocols: Protocols()}
+	go func() { _ = srv.Serve(mem) }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return s, sniffarrv1connect.NewIngestServiceClient(mem.Client(), memconn.URL)
+}
+
+func TestPeersEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	s, client := serveMem(t)
+	now := time.Now()
+	p := sniff.NewPeers(sniff.PeersConfig{Ingest: client, Flush: time.Hour, Backoff: time.Millisecond, Now: func() time.Time { return now }})
+	pctx, cancel := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { done <- p.Run(pctx) }()
+	key, err := s.HashKey(ctx)
+	require.NoError(t, err)
+	res, err := client.HashKey(ctx, connect.NewRequest(&sniffarrv1.HashKeyRequest{}))
+	require.NoError(t, err)
+	require.Equal(t, key[:], res.Msg.GetKey(), "the client gets the store's key")
+	id, err := s.NodeID(ctx, 0)
+	require.NoError(t, err)
+	require.Equal(t, id[:], res.Msg.GetNodeId(), "and the store's node ID")
+
+	peers := make([]netip.AddrPort, 200)
+	for i := range peers {
+		peers[i] = netip.AddrPortFrom(netip.AddrFrom4([4]byte{10, 0, byte(i >> 8), byte(i)}), 6881)
+	}
+	select {
+	case <-p.Ready():
+	case <-time.After(10 * time.Second):
+		t.Fatal("the key never came")
+	}
+	p.Add(sniff.Hash{1}, peers[:100])
+	p.Add(sniff.Hash{1}, peers[100:])
+	p.Add(sniff.Hash{2}, peers[:10])
+	cancel()
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run did not return")
+	}
+	r, err := s.Get(ctx, store.Hash{1})
+	require.NoError(t, err)
+	c, err := s.Peers(ctx, r.ID, now)
+	require.NoError(t, err)
+	require.InDelta(t, 200, c.Day, 20, "the flushed sketch is stored under the torrent and the hour")
+	require.Equal(t, c.Day, c.Week)
+
+	stream := client.Peers(ctx)
+	sk := sketch.New()
+	for _, a := range peers[:50] {
+		sk.Add(key.Hash(a))
+	}
+	require.NoError(t, stream.Send(&sniffarrv1.PeersRequest{Infohash: hash(1), Hour: now.Add(-time.Hour).Unix(), Sketch: sk.Bytes()}))
+	require.NoError(t, stream.Send(&sniffarrv1.PeersRequest{Infohash: hash(9), Hour: now.Unix(), Sketch: sk.Bytes()}))
+	pres, err := stream.CloseAndReceive()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), pres.Msg.GetMerged())
+	require.Equal(t, int64(1), pres.Msg.GetDropped(), "a sketch of an unknown infohash is dropped")
+	c, err = s.Peers(ctx, r.ID, now)
+	require.NoError(t, err)
+	require.InDelta(t, 200, c.Day, 20, "the earlier hour's peers are among the day's already")
+
+	stream = client.Peers(ctx)
+	require.NoError(t, stream.Send(&sniffarrv1.PeersRequest{Infohash: hash(1), Hour: now.Unix(), Sketch: []byte{1, 2, 3}}))
+	_, err = stream.CloseAndReceive()
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "garbage is not a sketch")
+	stream = client.Peers(ctx)
+	require.NoError(t, stream.Send(&sniffarrv1.PeersRequest{Infohash: []byte{1}, Hour: now.Unix(), Sketch: sk.Bytes()}))
+	_, err = stream.CloseAndReceive()
+	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "an infohash is 20 bytes")
+}
+
+func TestSightStored(t *testing.T) {
+	srv, hc := start(t, Config{Poll: 20 * time.Millisecond})
+	ingest := ingestClient(srv, hc)
+	res, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1, 2, 3)
+	require.NoError(t, err)
+	require.Equal(t, []bool{false, false, false}, res.GetStored(), "nothing is stored yet")
+
+	f := openFetch(t, ingest)
+	f.credit(3)
+	f.expect(1, 2, 3)
+	f.torrent(1, "The.Thing.1982.1080p.BluRay.x264", "The.Thing.1982.mkv")
+	f.torrent(2, rot13.String("Ovt.Cnpxntr.KKK.1080c"), "video.mp4")
+	f.finish()
+
+	pastDedupe()
+	res, err = sight(t, ingest, sniffarrv1.Source_SOURCE_ANNOUNCE, 1, 2, 3, 9, 1)
+	require.NoError(t, err)
+	require.Equal(t, []bool{true, false, false, false, true}, res.GetStored(), "the stored torrent is flagged, the rejected, queued and new ones are not")
+	require.Equal(t, int64(2), res.GetNew(), "the queued 3 and the new 9")
+	require.Equal(t, int64(3), res.GetKnown(), "the stored 1, twice, and the rejected 2")
+}
+
+// blockingClassifier signals each classification on started and holds it
+// until release closes, then signals it on done.
+type blockingClassifier struct {
+	started, done chan int64
+	release       chan struct{}
+}
+
+func (c *blockingClassifier) Classify(ctx context.Context, p store.Pending, _ string) error {
+	c.started <- p.ID
+	select {
+	case <-c.release:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	c.done <- p.ID
+	return nil
+}
+
+func TestTorznabProbes(t *testing.T) {
+	for _, probes := range []bool{false, true} {
+		srv, hc := start(t, Config{Poll: 20 * time.Millisecond, TorznabToken: "tz", Probes: probes})
+		ingest := ingestClient(srv, hc)
+		_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+		require.NoError(t, err)
+		f := openFetch(t, ingest)
+		f.credit(1)
+		f.expect(1)
+		f.torrent(1, "The.Thing.1982.1080p.BluRay.x264", "The.Thing.1982.mkv")
+		f.finish()
+
+		res, err := hc.Get(srv.URL + "/torznab/api?t=search&q=the+thing&apikey=tz")
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+		require.Equal(t, http.StatusOK, res.StatusCode)
+
+		browse := sniffarrv1connect.NewBrowseServiceClient(hc, srv.URL)
+		st, err := browse.Stats(context.Background(), connect.NewRequest(&sniffarrv1.StatsRequest{}))
+		require.NoError(t, err)
+		var queued int64
+		for _, l := range st.Msg.GetQueueProbes().GetLevels() {
+			queued += l.GetTasks()
+		}
+		settings, err := browse.Settings(context.Background(), connect.NewRequest(&sniffarrv1.SettingsRequest{}))
+		require.NoError(t, err)
+		require.Equal(t, probes, settings.Msg.GetProbes())
+		if probes {
+			require.EqualValues(t, 1, queued, "the search's release is queued for a probe")
+		} else {
+			require.Zero(t, queued, "probes are off: the search queues none")
+		}
+	}
+}
+
+func TestTorznabDoesNotWait(t *testing.T) {
+	cl := &blockingClassifier{started: make(chan int64, 1), done: make(chan int64, 1), release: make(chan struct{})}
+	lazy := &search.Lazy{Classifier: cl, Wait: time.Minute, Log: slog.New(slog.DiscardHandler)}
+	srv, hc := start(t, Config{Poll: 20 * time.Millisecond, Languages: russian, TorznabToken: "tz", Lazy: lazy})
+
+	ingest := ingestClient(srv, hc)
+	_, err := sight(t, ingest, sniffarrv1.Source_SOURCE_SAMPLE, 1)
+	require.NoError(t, err)
+	f := openFetch(t, ingest)
+	f.credit(1)
+	f.expect(1)
+	f.torrent(1, "The.Thing.1982.1080p.BluRay.x264", "The.Thing.1982.mkv")
+	f.finish()
+
+	begin := time.Now()
+	res, err := hc.Get(srv.URL + "/torznab/api?t=search&q=the+thing&apikey=tz")
+	require.NoError(t, err)
+	b, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Less(t, time.Since(begin), 10*time.Second, "answered before the classification, held, or Lazy.Wait")
+	require.Contains(t, string(b), "The.Thing.1982.1080p.BluRay.x264", "with what the store holds")
+
+	select {
+	case <-cl.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the classification did not start")
+	}
+	close(cl.release)
+	select {
+	case <-cl.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the classification did not run past the answer")
+	}
+}
+
+const (
+	callerTrace       = "4bf92f3577b34da6a3ce929d0e0e4736"
+	callerSpan        = "00f067aa0ba902b7"
+	callerTraceparent = "00-" + callerTrace + "-" + callerSpan + "-01"
+)
+
+// recordSpans installs a recorder as the global TracerProvider and
+// TraceContext as the global propagator for the rest of the test.
+func recordSpans(t *testing.T) *tracetest.SpanRecorder {
+	t.Helper()
+	tp, prop := otel.GetTracerProvider(), otel.GetTextMapPropagator()
+	rec := tracetest.NewSpanRecorder()
+	sdk := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(rec))
+	otel.SetTracerProvider(sdk)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() {
+		otel.SetTracerProvider(tp)
+		otel.SetTextMapPropagator(prop)
+		require.NoError(t, sdk.Shutdown(context.Background()))
+	})
+	return rec
+}
+
+// requireServerSpan requires the ended span named name to be a server span
+// continuing the caller's trace, with a span under it. The span may end
+// after the client has read the response, so it waits for the span.
+func requireServerSpan(t *testing.T, rec *tracetest.SpanRecorder, name string) {
+	t.Helper()
+	var span sdktrace.ReadOnlySpan
+	require.Eventually(t, func() bool {
+		for _, s := range rec.Ended() {
+			if s.Name() == name {
+				span = s
+			}
+		}
+		return span != nil
+	}, 5*time.Second, 10*time.Millisecond, "no span %q", name)
+	require.Equal(t, trace.SpanKindServer, span.SpanKind())
+	require.Equal(t, callerTrace, span.Parent().TraceID().String())
+	require.Equal(t, callerSpan, span.Parent().SpanID().String())
+	require.True(t, span.Parent().IsRemote())
+	var children int
+	for _, s := range rec.Ended() {
+		if s.Parent().SpanID() == span.SpanContext().SpanID() {
+			children++
+		}
+	}
+	require.NotZero(t, children, "the handler's store calls nest under %q", name)
+}
+
+func TestTorznabTrace(t *testing.T) {
+	rec := recordSpans(t)
+	srv, hc := start(t, Config{TorznabToken: "tz"})
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/torznab/api?t=search&q=alien&apikey=tz", nil)
+	require.NoError(t, err)
+	req.Header.Set("traceparent", callerTraceparent)
+	res, err := hc.Do(req)
+	require.NoError(t, err)
+	res.Body.Close()
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	requireServerSpan(t, rec, "GET /torznab/api")
+}
+
+func TestWebhookTrace(t *testing.T) {
+	rec := recordSpans(t)
+	srv, hc := start(t, Config{WebhookToken: "wh", Arr: &arr.Recorder{}})
+	body := `{"eventType":"Grab","movie":{"id":1,"title":"Alien","year":1979,"tmdbId":348},
+		"release":{"releaseTitle":"Alien.1979.1080p.BluRay.x264","indexer":"tracker","size":8589934592},
+		"downloadClient":"qBittorrent","downloadClientType":"qBittorrent","downloadId":"0700000000000000000000000000000000000000"}`
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL+"/webhooks/arr", strings.NewReader(body))
+	require.NoError(t, err)
+	req.SetBasicAuth("radarr", "wh")
+	req.Header.Set("traceparent", callerTraceparent)
+	res, err := hc.Do(req)
+	require.NoError(t, err)
+	res.Body.Close()
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	requireServerSpan(t, rec, "POST /webhooks/arr")
 }
