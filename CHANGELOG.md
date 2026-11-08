@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-beta.8] - 2026-11-08
+
 ### Added
 
 - `-port-offset` adds a number, such as a StatefulSet pod's index, to `-port`.
@@ -825,7 +827,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.7...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.8...HEAD
+[0.44.0-beta.8]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.7...v0.44.0-beta.8
 [0.44.0-beta.7]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.6...v0.44.0-beta.7
 [0.44.0-beta.6]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.5...v0.44.0-beta.6
 [0.44.0-beta.5]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.4...v0.44.0-beta.5
