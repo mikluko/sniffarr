@@ -74,6 +74,9 @@ enum Source {
   SOURCE_ARR = 3;
   reserved 4;
   reserved "SOURCE_FEED";
+  // A listing of a Torznab source; the queue serves these with the
+  // announced.
+  SOURCE_TORZNAB = 5;
 }
 
 message FetchRequest {

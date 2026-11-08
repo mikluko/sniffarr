@@ -247,6 +247,28 @@ func TestRetrySchedule(t *testing.T) {
 	require.Equal(t, uint64(1), streamMsgs(t, js), "the schedule is purged once it fires")
 }
 
+func TestRetryKeepsDiscovery(t *testing.T) {
+	q, _ := fetches(t, Config{})
+	l := laneOf(t, q, store.TaskFetch, store.PriorityAnnounce)
+	_, err := q.Publish(t.Context(), l, []Item{{Hash: store.Hash{1}, Discovery: store.Torznab}, {Hash: store.Hash{2}}})
+	require.NoError(t, err)
+	got, err := q.Take(1, 2, store.PrioritySample)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, store.Torznab, got[0].Discovery)
+	require.Empty(t, got[1].Discovery, "an order without one serves its priority's")
+
+	o := q.DoneBy(store.TaskFetch, store.Hash{1}, 1)
+	require.NoError(t, q.Retry(t.Context(), o, o.Lane, time.Now().Add(time.Second)))
+	var fired []*Order
+	require.Eventually(t, func() bool {
+		fired, err = q.Take(1, 1, store.PrioritySample)
+		require.NoError(t, err)
+		return len(fired) == 1
+	}, 10*time.Second, 50*time.Millisecond)
+	require.Equal(t, store.Torznab, fired[0].Discovery, "its retry keeps it")
+}
+
 func TestRetryReplaces(t *testing.T) {
 	q, js := fetches(t, Config{})
 	l := laneOf(t, q, store.TaskFetch, store.PrioritySample)

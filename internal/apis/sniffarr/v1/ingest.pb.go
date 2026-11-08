@@ -33,6 +33,9 @@ const (
 	// A grab or import Radarr or Sonarr reported; the queue serves these
 	// first.
 	Source_SOURCE_ARR Source = 3
+	// A listing of a Torznab source; the queue serves these with the
+	// announced.
+	Source_SOURCE_TORZNAB Source = 5
 )
 
 // Enum value maps for Source.
@@ -42,12 +45,14 @@ var (
 		1: "SOURCE_SAMPLE",
 		2: "SOURCE_ANNOUNCE",
 		3: "SOURCE_ARR",
+		5: "SOURCE_TORZNAB",
 	}
 	Source_value = map[string]int32{
 		"SOURCE_UNSPECIFIED": 0,
 		"SOURCE_SAMPLE":      1,
 		"SOURCE_ANNOUNCE":    2,
 		"SOURCE_ARR":         3,
+		"SOURCE_TORZNAB":     5,
 	}
 )
 
@@ -1526,13 +1531,14 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x13ProbeResultResponse\"0\n" +
 	"\x12ProbeUploadRequest\x12\x1a\n" +
 	"\buploaded\x18\x01 \x01(\x03R\buploaded\"\x15\n" +
-	"\x13ProbeUploadResponse*k\n" +
+	"\x13ProbeUploadResponse*\x7f\n" +
 	"\x06Source\x12\x16\n" +
 	"\x12SOURCE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSOURCE_SAMPLE\x10\x01\x12\x13\n" +
 	"\x0fSOURCE_ANNOUNCE\x10\x02\x12\x0e\n" +
 	"\n" +
-	"SOURCE_ARR\x10\x03\"\x04\b\x04\x10\x04*\vSOURCE_FEED*M\n" +
+	"SOURCE_ARR\x10\x03\x12\x12\n" +
+	"\x0eSOURCE_TORZNAB\x10\x05\"\x04\b\x04\x10\x04*\vSOURCE_FEED*M\n" +
 	"\aFailure\x12\x17\n" +
 	"\x13FAILURE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10FAILURE_NO_PEERS\x10\x01\x12\x13\n" +

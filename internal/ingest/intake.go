@@ -165,8 +165,9 @@ func (s *Service) Enqueue(ctx context.Context, sightings []store.Sighting) (int,
 }
 
 // queue publishes a fetch order of each of qs at its discovery's priority,
-// the Nats-Msg-Id the discovery and the infohash in hex, then records them,
-// and returns how many orders the stream took that were no duplicates.
+// naming the discovery, the Nats-Msg-Id the discovery and the infohash in
+// hex, then records them, and returns how many orders the stream took that
+// were no duplicates.
 func (s *Service) queue(ctx context.Context, qs []store.Queued, now time.Time) (int, error) {
 	byLane := map[bus.Lane][]orders.Item{}
 	for _, q := range qs {
@@ -174,7 +175,7 @@ func (s *Service) queue(ctx context.Context, qs []store.Queued, now time.Time) (
 		if !ok {
 			return 0, fmt.Errorf("no fetch lane for %s", q.Discovery)
 		}
-		byLane[l] = append(byLane[l], orders.Item{Hash: q.Hash, ID: q.Discovery + ":" + hex.EncodeToString(q.Hash[:])})
+		byLane[l] = append(byLane[l], orders.Item{Hash: q.Hash, ID: q.Discovery + ":" + hex.EncodeToString(q.Hash[:]), Discovery: q.Discovery})
 	}
 	took := 0
 	for l, items := range byLane {

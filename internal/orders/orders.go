@@ -66,6 +66,9 @@ type Order struct {
 	Leases int
 	// QueuedAt is when the order was published, or when its retry fired.
 	QueuedAt time.Time
+	// Discovery is the discovery a fetch order was ordered for, "" for its
+	// priority's.
+	Discovery string
 
 	msg   jetstream.Msg
 	seq   uint64
@@ -231,7 +234,7 @@ func (q *Queue) pull(l *lane, n int, now time.Time) error {
 			continue
 		}
 		l.buf = append(l.buf, &Order{Hash: store.Hash(m.Data()), Lane: l.Lane, Attempt: bus.Attempt(m.Headers()), Leases: int(meta.NumDelivered),
-			QueuedAt: meta.Timestamp, msg: m, seq: meta.Sequence.Stream, beat: now})
+			QueuedAt: meta.Timestamp, Discovery: m.Headers().Get(bus.HeaderDiscovery), msg: m, seq: meta.Sequence.Stream, beat: now})
 		q.pulled++
 	}
 	if err := batch.Error(); err != nil && !errors.Is(err, nats.ErrTimeout) && !errors.Is(err, context.DeadlineExceeded) {
@@ -309,7 +312,7 @@ func (q *Queue) Retry(ctx context.Context, o *Order, to bus.Lane, at time.Time) 
 		return err
 	}
 	_, err := q.Publish(ctx, to, []Item{{Hash: o.Hash, Attempt: o.Attempt + 1, At: at,
-		ID: "retry:" + hex.EncodeToString(o.Hash[:]) + ":" + strconv.Itoa(o.Attempt+1)}})
+		ID: "retry:" + hex.EncodeToString(o.Hash[:]) + ":" + strconv.Itoa(o.Attempt+1), Discovery: o.Discovery}})
 	return err
 }
 
@@ -369,6 +372,9 @@ type Item struct {
 	Attempt int
 	// ID is the order's Nats-Msg-Id; none when "".
 	ID string
+	// Discovery is the discovery a fetch order is ordered for; "" leaves it
+	// to the priority.
+	Discovery string
 	// At, when after now, has the order published then, by a schedule on
 	// its hash's retry subject that replaces any pending one.
 	At time.Time
@@ -381,7 +387,7 @@ func (q *Queue) Publish(ctx context.Context, l bus.Lane, items []Item) (int, err
 	now := q.cfg.Now()
 	acks := make([]jetstream.PubAckFuture, len(items))
 	for i, it := range items {
-		m := bus.OrderMsg(l, it.Hash, it.Attempt, it.ID)
+		m := bus.OrderMsg(l, it.Hash, it.Attempt, it.ID, it.Discovery)
 		if it.At.After(now) {
 			m.Subject = bus.RetrySubject(q.cfg.Stream, it.Hash)
 			m.Header.Set(jetstream.ScheduleHeader, "@at "+it.At.UTC().Format(time.RFC3339))

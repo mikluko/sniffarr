@@ -58,6 +58,10 @@ const (
 // it before; an order without it has none.
 const HeaderAttempt = "Sniffarr-Attempt"
 
+// HeaderDiscovery is the header of a fetch order that names the discovery it
+// was ordered for; an order without it serves its priority's.
+const HeaderDiscovery = "Sniffarr-Discovery"
+
 // Priorities is the number of order priorities, store.PriorityRequest to
 // store.PrioritySample.
 const Priorities = store.PrioritySample + 1
@@ -218,14 +222,18 @@ func SightingMsg(h [20]byte, discovery string) (*nats.Msg, bool) {
 }
 
 // OrderMsg returns the order of h on the lane's subject after attempt failed
-// attempts, with the Nats-Msg-Id id unless id is "".
-func OrderMsg(l Lane, h [20]byte, attempt int, id string) *nats.Msg {
+// attempts, with the Nats-Msg-Id id unless id is "", and the discovery unless
+// it is "".
+func OrderMsg(l Lane, h [20]byte, attempt int, id, discovery string) *nats.Msg {
 	m := &nats.Msg{Subject: l.Subject, Header: nats.Header{}, Data: h[:]}
 	if attempt > 0 {
 		m.Header.Set(HeaderAttempt, strconv.Itoa(attempt))
 	}
 	if id != "" {
 		m.Header.Set(jetstream.MsgIDHeader, id)
+	}
+	if discovery != "" {
+		m.Header.Set(HeaderDiscovery, discovery)
 	}
 	return m
 }

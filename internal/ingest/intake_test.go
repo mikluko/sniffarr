@@ -196,6 +196,23 @@ func TestEnqueueArr(t *testing.T) {
 	require.Equal(t, []string{"sighted/revived"}, journal(t, f.st, store.Hash{1}))
 }
 
+func TestEnqueueTorznab(t *testing.T) {
+	f := newIntakeFixture(t)
+	ctx := t.Context()
+	n, err := f.s.Enqueue(ctx, []store.Sighting{{Hash: store.Hash{1}, Discovery: store.Torznab}})
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, []queuedOrder{{hash: 1, subject: bus.SubjectFetchP2}}, f.queued(t), "with the announced")
+	got := f.take(t, 1, 1)
+	require.Len(t, got, 1)
+	require.NoError(t, f.s.result(ctx, 1, torrentResult(1, "Heat.1995.1080p.BluRay")))
+	require.Equal(t, store.Torznab, f.discovery(t, 1), "the torrent keeps the discovery its order named")
+	e, err := f.st.Journal(ctx, store.Hash{1}, 10)
+	require.NoError(t, err)
+	require.Equal(t, store.JournalSighted, e[0].Kind)
+	require.JSONEq(t, `{"discovery":"torznab"}`, e[0].Detail)
+}
+
 func TestIntakePromotes(t *testing.T) {
 	f := newIntakeFixture(t)
 	f.sight(t, store.Sample, 1, 2)

@@ -495,3 +495,9 @@ func TestTMDBWork(t *testing.T) {
 	_, err = svc.Search(ctx, connect.NewRequest(&sniffarrv1.SearchRequest{Lang: "xx"}))
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 }
+
+func TestDiscoveries(t *testing.T) {
+	for _, d := range []string{store.Sample, store.Announce, store.Arr, store.Torznab} {
+		require.NotEqual(t, sniffarrv1.Source_SOURCE_UNSPECIFIED, discoveries[d], d)
+	}
+}

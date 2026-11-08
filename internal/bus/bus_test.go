@@ -91,15 +91,17 @@ func TestSightingMsg(t *testing.T) {
 
 func TestOrderMsg(t *testing.T) {
 	h := [20]byte{0xab, 1}
-	m := OrderMsg(FetchLanes[3], h, 0, "")
+	m := OrderMsg(FetchLanes[3], h, 0, "", "")
 	require.Equal(t, SubjectFetchP2, m.Subject)
 	require.Equal(t, h[:], m.Data)
 	require.Empty(t, m.Header.Get(HeaderAttempt))
 	require.Empty(t, m.Header.Get(jetstream.MsgIDHeader))
+	require.Empty(t, m.Header.Get(HeaderDiscovery))
 	require.Zero(t, Attempt(m.Header))
-	m = OrderMsg(ProbeLanes[1], h, 2, "x")
+	m = OrderMsg(ProbeLanes[1], h, 2, "x", store.Torznab)
 	require.Equal(t, 2, Attempt(m.Header))
 	require.Equal(t, "x", m.Header.Get(jetstream.MsgIDHeader))
+	require.Equal(t, store.Torznab, m.Header.Get(HeaderDiscovery))
 	m.Header.Set(HeaderAttempt, "-1")
 	require.Zero(t, Attempt(m.Header))
 }

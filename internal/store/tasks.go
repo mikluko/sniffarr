@@ -12,10 +12,12 @@ const (
 	TaskProbe = "probe"
 )
 
-// Discoveries name how a hash was sighted, in the order its fetch is served.
+// Discoveries name how a hash was sighted, in the order its fetch is served;
+// Torznab, a listing of a Torznab source, is served with Announce.
 const (
 	Arr      = "arr"
 	Announce = "announce"
+	Torznab  = "torznab"
 	Sample   = "sample"
 )
 
@@ -48,7 +50,7 @@ func PriorityOf(discovery string) int {
 	switch discovery {
 	case Arr:
 		return PriorityArr
-	case Announce:
+	case Announce, Torznab:
 		return PriorityAnnounce
 	}
 	return PrioritySample

@@ -1164,3 +1164,11 @@ func TestNotFound(t *testing.T) {
 	notFound(t, get(t, h, "/t/xyz", ""))
 	require.Equal(t, http.StatusNotFound, post(t, h, "/t/"+hexOf(1)+"/seed", "act-seed").Code)
 }
+
+func TestDiscoveries(t *testing.T) {
+	for v := range sniffarrv1.Source_name {
+		if s := sniffarrv1.Source(v); s != sniffarrv1.Source_SOURCE_UNSPECIFIED {
+			require.NotEmpty(t, discoveries[s], s.String())
+		}
+	}
+}

@@ -37,6 +37,7 @@ func TestPriorityOf(t *testing.T) {
 		require.Equal(t, d, DiscoveryOf(p))
 	}
 	require.Equal(t, Arr, DiscoveryOf(PriorityRequest), "a fetch asked for at P0 serves Radarr and Sonarr")
+	require.Equal(t, PriorityAnnounce, PriorityOf(Torznab), "a Torznab listing is served with the announced")
 }
 
 func TestMigrateFeedPriority(t *testing.T) {

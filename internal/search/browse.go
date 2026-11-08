@@ -178,9 +178,10 @@ func (b *Browser) now() time.Time {
 }
 
 var discoveries = map[string]sniffarrv1.Source{
-	"sample":   sniffarrv1.Source_SOURCE_SAMPLE,
-	"announce": sniffarrv1.Source_SOURCE_ANNOUNCE,
-	"arr":      sniffarrv1.Source_SOURCE_ARR,
+	store.Sample:   sniffarrv1.Source_SOURCE_SAMPLE,
+	store.Announce: sniffarrv1.Source_SOURCE_ANNOUNCE,
+	store.Arr:      sniffarrv1.Source_SOURCE_ARR,
+	store.Torznab:  sniffarrv1.Source_SOURCE_TORZNAB,
 }
 
 var rejections = map[rules.Reason]sniffarrv1.Rejection{

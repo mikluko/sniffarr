@@ -5,6 +5,7 @@
 package ingest
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -242,7 +243,7 @@ func (s *Service) keep(ctx context.Context, o *orders.Order, t *sniffarrv1.Torre
 		Name:      t.GetName(),
 		Size:      t.GetSize(),
 		Files:     files,
-		Discovery: store.DiscoveryOf(o.Priority),
+		Discovery: cmp.Or(o.Discovery, store.DiscoveryOf(o.Priority)),
 		SeenAt:    now,
 		QueuedAt:  o.QueuedAt,
 		Leases:    o.Leases,

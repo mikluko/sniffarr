@@ -55,6 +55,7 @@
   "via.announce": "announce",
   "via.arr": "Radarr/Sonarr",
   "via.sample": "sample",
+  "via.torznab": "Torznab",
   "card.classification": "Classification",
   "cls.feature": "Feature",
   "cls.answer": "Answer",
