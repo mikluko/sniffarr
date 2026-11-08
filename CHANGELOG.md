@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The metric `sniffarr.dht.sample_queries` counts the `sample_infohashes` queries the sniff sends, by `sniffarr.dht.outcome`: `answered`, `timeout` or `error`.
 
+### Fixed
+
+- A name with a year and a resolution but no source or encoding tag, `Movie.2026.720p`, is no longer taken for a movie by the rules; `WEB-DLRip` counts as a source tag.
+
 ## [0.45.0] - 2026-11-08
 
 ### Added

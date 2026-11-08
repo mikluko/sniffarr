@@ -573,7 +573,7 @@ func TestTorrent(t *testing.T) {
 		"from elsewhere, back to its work")
 
 	require.Contains(t, body, "Rules fired")
-	for _, hit := range []string{"year ← «1979»", "kind.movie ← «1080p»", "quality.1080p ← «1080p»", "audio.ru ← «Rus»"} {
+	for _, hit := range []string{"year ← «1979»", "kind.movie ← «BluRay»", "quality.1080p ← «1080p»", "audio.ru ← «Rus»"} {
 		require.Contains(t, body, hit)
 	}
 	require.Contains(t, body, `<details class="jrow" id="ev-1">`, "a row anchored by its entry")

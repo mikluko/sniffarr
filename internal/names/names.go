@@ -67,6 +67,11 @@ const (
 	resolutions = r2160 + `|` + r1080 + `|` + r720 + `|` + r576 + `|` + r480
 )
 
+// releaseTags tag a release's source and encoding; a resolution is none, for
+// series have every resolution a movie has.
+const releaseTags = `bdrip|brrip|bluray|blu-ray|bdremux|remux|bd25|bd50|` +
+	`web-?dl(?:rip)?|webrip|hdrip|dvdrip|dvd5|dvd9|hdtv|hdtvrip|x264|x265|h\.?264|h\.?265|hevc|xvid|camrip|telesync|hdcam`
+
 var yearOrResolution = words(years + `|` + resolutions)
 
 // inDigits spells the lookalike letters of a year or a resolution as the
@@ -99,10 +104,10 @@ var (
 	// anime group 1 is the title, group 2 the episode part, "- 12".
 	anime   = regexp.MustCompile(`^\[[^\]]+\]\s*(.+?)\s+(-\s+\d{2,4}(?:v\d)?)(?:\s|$|[\[(])`)
 	year    = regexp.MustCompile(`(?:^|[^\p{L}\p{N}])(` + years + `)(?:$|[^\p{L}\p{N}])`)
-	quality = words(resolutions + `|4k|uhd|bdrip|brrip|bluray|blu-ray|bdremux|remux|bd25|bd50|` +
-		`web-?dl|webrip|hdrip|dvdrip|dvd5|dvd9|hdtv|hdtvrip|x264|x265|h\.?264|h\.?265|hevc|xvid|camrip|telesync|hdcam`)
-	music  = words(`flac|mp3|lossless|discography|дискография|альбом|album|ost`)
-	groups = regexp.MustCompile(`^(?:\s*\[[^\]]*\])+`)
+	quality = words(resolutions + `|4k|uhd|` + releaseTags)
+	tagged  = words(releaseTags)
+	music   = words(`flac|mp3|lossless|discography|дискография|альбом|album|ost`)
+	groups  = regexp.MustCompile(`^(?:\s*\[[^\]]*\])+`)
 	// season group 1 is the marker, the groups after it the season number,
 	// one per alternative.
 	season = regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])(s(\d{1,2})\s?e\d{1,3}|s(\d{1,2})|(\d{1,2})x\d{2,3}|seasons?\s?(\d{1,2})|` +
@@ -197,7 +202,7 @@ func movie(title, clean string, c *collector) Parsed {
 	}
 	p.Year, _ = strconv.Atoi(y)
 	c.add("year", m[2], m[3])
-	if q := quality.FindStringSubmatchIndex(clean); q != nil && !music.MatchString(clean) {
+	if q := tagged.FindStringSubmatchIndex(clean); q != nil && !music.MatchString(clean) {
 		p.Kind = Movie
 		c.add("kind.movie", q[2], q[3])
 	}

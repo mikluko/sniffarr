@@ -25,6 +25,9 @@ func TestParse(t *testing.T) {
 		{"Слово пацана. Кровь на асфальте (1 сезон, 1-8 серии из 8) [2023, WEB-DLRip]", Parsed{Series, "s:слово пацана кровь на асфальте", 2023, 1, 0, ""}},
 		{"Слово пацана. Кровь на асфальте (1 сезон, 5 серия) [2023, WEB-DL 1080p]", Parsed{Series, "s:слово пацана кровь на асфальте", 2023, 1, 5, Quality1080p}},
 		{"Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.HDR.HEVC.Atmos-FGT", Parsed{Movie, "y:dune part two 2024", 2024, 0, 0, Quality2160p}},
+		{"Heart.of.the.Beast.2026.720p.AMZN.WEB-DLRip", Parsed{Movie, "y:heart of the beast 2026", 2026, 0, 0, Quality720p}},
+		{"Heart.of.the.Beast.2026.720p", Parsed{"", "y:heart of the beast 2026", 2026, 0, 0, Quality720p}},
+		{"Heart.of.the.Beast.2026.2160p", Parsed{"", "y:heart of the beast 2026", 2026, 0, 0, Quality2160p}},
 		{"Interstellar 2014 1080p BluRay x264", Parsed{Movie, "y:interstellar 2014", 2014, 0, 0, Quality1080p}},
 		{"Дюна: Часть вторая / Dune: Part Two (Дени Вильнёв) [2024, фантастика, BDRip 1080p] Dub", Parsed{Movie, "y:дюна часть вторая 2024", 2024, 0, 0, Quality1080p}},
 		{"Брат 2 (Алексей Балабанов) [2000, драма, DVDRip]", Parsed{Movie, "y:брат 2 2000", 2000, 0, 0, QualitySD}},
@@ -123,12 +126,14 @@ func TestExplain(t *testing.T) {
 		name string
 		want []string
 	}{
-		{"Spider-Man.Brand.New.Day.2026.2160p.WEB-DL.DDP5.1.HDR", []string{"year 2026", "kind.movie 2160p", "quality.2160p 2160p"}},
+		{"Spider-Man.Brand.New.Day.2026.2160p.WEB-DL.DDP5.1.HDR", []string{"year 2026", "quality.2160p 2160p", "kind.movie WEB-DL"}},
+		{"Heart.of.the.Beast.2026.720p.AMZN.WEB-DLRip", []string{"year 2026", "quality.720p 720p", "kind.movie WEB-DLRip"}},
+		{"Heart.of.the.Beast.2026.720p", []string{"year 2026", "quality.720p 720p"}},
 		{"Fallout.S02E05.1080p.WEB.h264-ETHEL[EZTVx.to].mkv", []string{"kind.series S02E05", "season S02E05", "episode S02E05", "quality.1080p 1080p"}},
 		{"Law.and.Order.SVU.S28E02.720p.x264-FENiX", []string{"kind.series S28E02", "season S28E02", "episode S28E02", "quality.720p 720p"}},
 		{"Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv", []string{"year 2015", "kind.movie WEB-DL", "quality.1080p 1080р"}},
 		{"Bad.Apples.2026.P.WEB-DL.1O8Op.mkv", []string{"year 2026", "kind.movie WEB-DL", "quality.1080p 1O8Op"}},
-		{"Movie 2001 1О8Ор", []string{"year 2001", "kind.movie 1О8Ор", "quality.1080p 1О8Ор"}},
+		{"Movie 2001 1О8Ор", []string{"year 2001", "quality.1080p 1О8Ор"}},
 		{"The.Wire.Complete.Series.DVDRip", []string{"kind.series Complete.Series", "quality.sd DVDRip"}},
 		{"Сериал (2 сезон, 7 серия) 2019 WEB-DL 1080p", []string{"kind.series 2 сезон", "season 2 сезон", "episode 7 серия", "year 2019", "quality.1080p 1080p"}},
 		{"Show S01 E05 WEB-DL 720p", []string{"kind.series S01 E05", "season S01 E05", "episode S01 E05", "quality.720p 720p"}},

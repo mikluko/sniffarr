@@ -163,7 +163,7 @@ func TestBrowserCard(t *testing.T) {
 	require.Nil(t, res.Msg.GetWork(), "unmatched")
 	require.Zero(t, res.Msg.GetRankInWork())
 	require.Equal(t, []*sniffarrv1.RuleHit{
-		{Rule: "year", Match: "1979"}, {Rule: "kind.movie", Match: "1080p"}, {Rule: "quality.1080p", Match: "1080p"}, {Rule: "audio.ru", Match: "Rus"},
+		{Rule: "year", Match: "1979"}, {Rule: "quality.1080p", Match: "1080p"}, {Rule: "audio.ru", Match: "Rus"},
 	}, res.Msg.GetRules())
 	require.Len(t, res.Msg.GetJournal(), 1)
 	require.Equal(t, store.JournalFetched, res.Msg.GetJournal()[0].GetKind())

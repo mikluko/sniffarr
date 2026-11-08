@@ -98,7 +98,8 @@ records which layer decided its kind:
 
 1. Rules read the name: episode and season markers, in Latin and Cyrillic
    (`S01E02`, `1x05`, `Season 3`, `Сезон: 1`, `Серии: 1-8 из 8`), make a
-   series; a title with a year and a quality tag makes a movie. A name that
+   series; a title with a year and a source or encoding tag (`WEB-DL`,
+   `BluRay`, `x264`), but not a resolution alone, makes a movie. A name that
    says neither leaves the kind unknown.
 2. Reuse: the rules also reduce the name to a title key, the series title or
    the title and year. A torrent of unknown kind takes the kind of a stored
