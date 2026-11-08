@@ -79,14 +79,19 @@ pull request.
 
 The repository lives at `https://sarak.sh/mikluko/sniffarr`, and its
 workflows in `.forgejo/workflows` run on Forgejo Actions. On a push to `main`,
-`release.yaml` runs CI, and when the newest entry names a version no tag
-carries, builds and pushes the image `sarak.sh/mikluko/sniffarr:X.Y.Z`, the
-chart `oci://sarak.sh/mikluko/charts/sniffarr` at `X.Y.Z`, the archives and
-the `.deb` packages, and last creates the Forgejo release from the entry,
-with the tag `vX.Y.Z` on that commit: the tag is born with the release,
-nothing pushes it. A run that failed leaves no tag; re-run it. Run by hand,
-`release.yaml` builds the newest version, a prerelease included, and
-publishes nothing. Nothing else sets a version.
+`release.yaml` runs CI, and when it passes and the newest entry names a
+version no tag carries, drafts the Forgejo release from the entry. It then
+calls `build.yaml`, which builds in turn the archives and the `.deb` packages,
+attaching the archives and their checksums to the draft and uploading the
+packages to the Debian registry, then the image
+`sarak.sh/mikluko/sniffarr:X.Y.Z`, then the chart
+`oci://sarak.sh/mikluko/charts/sniffarr` at `X.Y.Z`. Last it publishes the
+draft, which creates the tag `vX.Y.Z` on that commit: the tag is born with the
+release, nothing pushes it. A run that failed leaves a draft and no tag; the
+next run replaces the draft, so re-run it. Nothing else sets a version.
+
+On a pull request `build.yaml` builds the same as `0.0.0-pr.N`, beside CI, and
+publishes nothing.
 
 ### Setting up
 
@@ -95,5 +100,5 @@ pushed with an OIDC token traded for an Authorized Integration of the owner's
 of the kind Forgejo Actions (Local), whose source repository is this one and
 whose scope is `write:package`, since the automatic token cannot write
 packages a user owns; the repository variable `REGISTRY_AUDIENCE` holds that
-integration's audience. The release and its tag are made with the automatic
-token.
+integration's audience. The release, its draft and its archives are made with
+the automatic token.

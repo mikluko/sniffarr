@@ -1,0 +1,150 @@
+name: Build
+
+# Builds, in order, the archives and the .deb packages, the image and the
+# chart. Called by release.yaml with publish, it attaches the archives to the
+# draft release, uploads the packages to the owner's Debian registry and
+# pushes the image and the chart to the owner's registry. On a pull request it
+# builds the same as 0.0.0-pr.N and publishes nothing.
+
+on:
+  pull_request:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      publish:
+        type: boolean
+        default: false
+      release-id:
+        description: ID of the draft release the archives are attached to
+        type: string
+        default: ''
+
+# The automatic token cannot write packages owned by a user, so registry access
+# trades an OIDC token for an Authorized Integration of the owner's, selected
+# by vars.REGISTRY_AUDIENCE and scoped write:package.
+enable-openid-connect: true
+
+env:
+  VERSION: ${{ inputs.version || format('0.0.0-pr.{0}', github.event.pull_request.number) }}
+  REGISTRY: sarak.sh
+  IMAGE: sarak.sh/mikluko/sniffarr
+  CHART_REPOSITORY: oci://sarak.sh/mikluko/charts
+  DEBIAN_DISTRIBUTION: trixie
+  DEBIAN_COMPONENT: main
+
+jobs:
+  # Static binaries for amd64 and arm64: an archive with the systemd unit and
+  # the settings file each, their checksums, and a .deb each.
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: https://github.com/actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          # GitHub release downloads, the default, fail from the runners with 5xx.
+          go-download-base-url: https://go.dev/dl
+      - name: Build
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
+          pkg=sarak.sh/mikluko/sniffarr/internal/version
+          commit=$(git rev-parse HEAD)
+          built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          for GOARCH in amd64 arm64; do
+            export GOARCH
+            CGO_ENABLED=0 GOOS=linux go build -trimpath -o dist/sniffarr \
+              -ldflags "-s -X $pkg.version=$VERSION -X $pkg.commit=$commit -X $pkg.built=$built" .
+            "$(go env GOPATH)/bin/nfpm" package --config packaging/nfpm.yaml --packager deb --target dist/
+            tar -czf "dist/sniffarr_${VERSION}_linux_${GOARCH}.tar.gz" -C dist sniffarr \
+              -C ../packaging sniffarr.service sniffarr.default
+            rm dist/sniffarr
+          done
+          (cd dist && sha256sum ./*.tar.gz ./*.deb >checksums.txt && cat checksums.txt)
+      - name: Attach to the draft release
+        if: inputs.publish
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ inputs.release-id }}
+        run: |
+          api="$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY"
+          for asset in dist/*; do
+            curl --fail-with-body -sS -X POST -H "Authorization: token $TOKEN" \
+              -F "attachment=@$asset" "$api/releases/$RELEASE_ID/assets?name=$(basename "$asset")" >/dev/null
+          done
+      - name: Upload to the Debian registry
+        if: inputs.publish
+        env:
+          AUDIENCE: ${{ vars.REGISTRY_AUDIENCE }}
+        run: |
+          jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
+          echo "::add-mask::$jwt"
+          owner=${GITHUB_REPOSITORY%%/*}
+          for deb in dist/*.deb; do
+            curl --fail-with-body -sS -X PUT -H "Authorization: Bearer $jwt" --upload-file "$deb" \
+              "$GITHUB_SERVER_URL/api/packages/$owner/debian/pool/$DEBIAN_DISTRIBUTION/$DEBIAN_COMPONENT/upload"
+          done
+
+  image:
+    needs: packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Log in
+        if: inputs.publish
+        env:
+          AUDIENCE: ${{ vars.REGISTRY_AUDIENCE }}
+        run: |
+          jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
+          echo "::add-mask::$jwt"
+          printf '%s' "$jwt" | docker login "$REGISTRY" --username oidc --password-stdin
+      - name: Build
+        env:
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          push=
+          if [ "$PUBLISH" = true ]; then push=--push; fi
+          commit=$(git rev-parse HEAD)
+          docker buildx build $push \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg "VERSION=$VERSION" \
+            --build-arg "COMMIT=$commit" \
+            --build-arg "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$commit" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --tag "$IMAGE:$VERSION" \
+            .
+
+  chart:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: https://github.com/azure/setup-helm@v5
+        with:
+          version: v4.3.1
+      - name: Package
+        run: |
+          helm package charts/sniffarr \
+            --version "$VERSION" --app-version "$VERSION" \
+            --destination "$RUNNER_TEMP/chart"
+      - name: Push
+        if: inputs.publish
+        env:
+          AUDIENCE: ${{ vars.REGISTRY_AUDIENCE }}
+        run: |
+          jwt=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
+          echo "::add-mask::$jwt"
+          printf '%s' "$jwt" | helm registry login "$REGISTRY" --username oidc --password-stdin
+          helm push "$RUNNER_TEMP/chart/sniffarr-$VERSION.tgz" "$CHART_REPOSITORY"
