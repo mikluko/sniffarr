@@ -17,3 +17,10 @@ fetch:
     type: LoadBalancer
     annotations:
       example.com/address-pool: public
+
+probe:
+  enabled: true
+  replicas: 2
+  service:
+    enabled: true
+    nodePort: 30070

@@ -214,7 +214,7 @@ fetch:
 probe:
   # Renders -probe on the API and deploys <release>-probe, a StatefulSet of sniffarr -fetch -probe -probe-dir=/seeds: fetchers that take probe tasks too, reading the tracks of stored releases from the first pieces of their main video file and seeding those pieces, kept in /seeds.
   enabled: false
-  # Replicas of <release>-probe, each with a /seeds of its own.
+  # Replicas of <release>-probe, each with a /seeds of its own and, with a fixed port, listening on the port plus its index, rendered as -port-offset.
   replicas: 1
   # Runs the pods in the host's network namespace.
   hostNetwork: false
@@ -225,11 +225,11 @@ probe:
   # Rendered as -upnp: the node asks the gateways on its network to forward its port, TCP and UDP.
   upnp: false
   service:
-    # Exposes the DHT port, TCP and UDP, as <release>-probe; needs a fixed port, not flags.port 0.
+    # Exposes each replica's DHT port, TCP and UDP, as <release>-probe-<index>, on the port plus the index; needs a fixed port, not flags.port 0.
     enabled: false
     # ClusterIP, NodePort or LoadBalancer.
     type: NodePort
-    # Node port of both entries, allocated by the cluster when 0; when set, the pod listens on it, so flags.port must be unset or equal.
+    # Node port of replica 0's entries, the index added for each other replica, allocated by the cluster when 0; when set, the pods listen on it, so flags.port must be unset or equal.
     nodePort: 0
     # Annotations of the Service.
     annotations: {}

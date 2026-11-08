@@ -67,7 +67,12 @@ it, `<path>/<pod>`. The kubelet makes a missing one root's, and the pod runs as
 the pod's, with the whole `hostPath` as the volume `seeds`. A prober reaches
 the peers it seeds to and is reached by
 them on its DHT port, so it belongs in the host's network, `probe.hostNetwork`,
-or behind `probe.service`.
+or behind `probe.service`. With a fixed port, each replica listens on the port
+plus its index, rendered as `-port-offset` from the pod's
+`apps.kubernetes.io/pod-index` label, so replicas on one node do not collide;
+`probe.service` is then a Service per replica, `<release>-probe-<index>`, on
+that port, its node port `probe.service.nodePort` plus the index. The
+StatefulSet's headless Service is `<release>-probe`.
 
 With `ui.enabled`, `<release>-ui` runs `sniffarr -ui`, with `ui.replicas`
 replicas, behind the Service `<release>-ui` on `ui.service.port` (8081).

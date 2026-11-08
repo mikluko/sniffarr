@@ -98,6 +98,8 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	fs.BoolVar(&c.waitAPI, "wait-api", false, "wait until the API at SNIFFARR_URL serves this release, then exit; alone, without the components")
 	fs.BoolVar(&c.probe, "probe", false, "probe stored releases for their tracks: -api queues probes, -fetch takes them and seeds; off, no component probes")
 	fs.IntVar(&c.dht.Network.Port, "port", sniffer.DefaultPort, "TCP and UDP port for peers and the DHT; 0 picks a free one")
+	var portOffset int
+	fs.IntVar(&portOffset, "port-offset", 0, "added to -port, such as a StatefulSet pod's index, so that replicas run from one set of flags listen apart; 0 with -port 0")
 	fs.BoolVar(&c.dht.Network.UPnP, "upnp", false, "ask the gateways on the local network to forward the listening port, TCP and UDP, by UPnP")
 	fs.StringVar(&c.dht.STUN, "stun", stun.DefaultServer, "STUN server that tells -sniff its public address, which gives its node ID the BEP 42 prefix; empty leaves the ID as stored")
 	fs.IntVar(&c.dht.Network.Fetchers, "fetchers", sniffer.DefaultFetchers, "metadata fetches at once")
@@ -131,13 +133,16 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	switch {
 	case c.on == (components{}):
 		return c, errors.New("-api, -ui, -sniff and -fetch are all off: nothing to do")
-	case c.dht.Network.Port < 0 || c.dht.Network.Port > 65535:
-		return c, errors.New("-port: want 0 to 65535")
+	case portOffset < 0 || portOffset > 0 && c.dht.Network.Port == 0:
+		return c, errors.New("-port-offset: want 0 or more, and 0 with -port 0")
+	case c.dht.Network.Port < 0 || c.dht.Network.Port+portOffset > 65535:
+		return c, errors.New("-port: want 0 to 65535, with -port-offset added")
 	case c.dht.Network.Fetchers < 1, c.dht.Network.Rate < 1, c.sniff.Walkers < 1, c.dht.Network.MinPeers < 1:
 		return c, errors.New("-fetchers, -rate, -walkers and -min-peers: want positive integers")
 	case c.dht.Network.FetchTimeout <= 0, c.dht.Network.PeerWait <= 0:
 		return c, errors.New("-fetch-timeout and -peer-wait: want positive durations")
 	}
+	c.dht.Network.Port += portOffset
 	c.dht.Network.Passive = !c.on.sniff
 	c.fetch.Workers = c.dht.Network.Fetchers
 	switch {

@@ -143,7 +143,7 @@ nodePort: {{ $nodePort }}
 
 {{- /*
 sniffarr.dhtService is the Service of a DHT port, TCP and UDP. It takes root, name, component
-(the pods it selects), service, port and nodePort.
+(the pods it selects), service, port and nodePort, and pod, the one pod it selects when set.
 */}}
 {{- define "sniffarr.dhtService" -}}
 {{- $svc := .service }}
@@ -162,6 +162,9 @@ spec:
   type: {{ $svc.type }}
   selector:
     {{- include "sniffarr.selector" (dict "root" .root "component" .component) | nindent 4 }}
+    {{- with .pod }}
+    statefulset.kubernetes.io/pod-name: {{ . }}
+    {{- end }}
   ports:
     {{- range $proto := list "tcp" "udp" }}
     - name: dht-{{ $proto }}
@@ -315,7 +318,8 @@ spec:
 sniffarr.dht is a Deployment of sniffarr with its DHT components, and the Service of its DHT
 port when v.service.enabled. It takes root, component, v (the component's values), sniff and
 fetch (the flags), url, and probe, the probe values for the probe component, which make it a
-StatefulSet with a /seeds per replica.
+StatefulSet with a /seeds per replica, its headless Service of the component's name, each pod
+on the port plus its index, and with v.service.enabled a Service per pod, <name>-<index>.
 */}}
 {{- define "sniffarr.dht" -}}
 {{- $root := .root }}
@@ -339,7 +343,7 @@ metadata:
 spec:
   replicas: {{ $v.replicas }}
   {{- if $probe }}
-  serviceName: {{ $root.Release.Name }}-{{ .component }}-pods
+  serviceName: {{ $root.Release.Name }}-{{ .component }}
   podManagementPolicy: Parallel
   {{- else if $v.hostNetwork }}
   strategy:
@@ -402,6 +406,9 @@ spec:
             {{- end }}
             {{- if $probe }}
             {{- include "sniffarr.probeArgs" $probe | trim | nindent 12 }}
+            {{- if $port }}
+            - "-port-offset=$(POD_INDEX)"
+            {{- end }}
             {{- end }}
           env:
             - name: SNIFFARR_URL
@@ -411,11 +418,15 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: POD_INDEX
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
             {{- end }}
             {{- with include "sniffarr.env" (dict "root" $root "env" $v.env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
-          {{- if and $port (or .sniff $v.hostNetwork $svc.enabled) }}
+          {{- if and $port (not $probe) (or .sniff $v.hostNetwork $svc.enabled) }}
           ports:
             {{- include "sniffarr.dhtContainerPorts" (dict "port" $port) | trim | nindent 12 }}
           {{- end }}
@@ -465,7 +476,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $root.Release.Name }}-{{ .component }}-pods
+  name: {{ $root.Release.Name }}-{{ .component }}
   labels:
     {{- include "sniffarr.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ .component }}
@@ -474,7 +485,13 @@ spec:
   selector:
     {{- include "sniffarr.selector" (dict "root" $root "component" .component) | nindent 4 }}
 {{- end }}
-{{- if $svc.enabled }}
+{{- if and $svc.enabled $probe }}
+{{- range $i := until (int $v.replicas) }}
+{{- $pod := printf "%s-%s-%d" $root.Release.Name $.component $i }}
+---
+{{ include "sniffarr.dhtService" (dict "root" $root "name" $pod "pod" $pod "component" $.component "service" $svc "port" (add $port $i) "nodePort" (ternary (add $nodePort $i) 0 (gt $nodePort 0))) }}
+{{- end }}
+{{- else if $svc.enabled }}
 ---
 {{ include "sniffarr.dhtService" (dict "root" $root "name" (printf "%s-%s" $root.Release.Name .component) "component" .component "service" $svc "port" $port "nodePort" $nodePort) }}
 {{- end }}

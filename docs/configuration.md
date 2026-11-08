@@ -114,6 +114,7 @@ recomputes the tops of works and every torrent's peers over the last 7 days.
 | Flag             | Default | Meaning                                                |
 | ---------------- | ------- | ------------------------------------------------------ |
 | `-port`          | `42069` | Port for peers and the DHT, TCP and UDP; `0` picks one |
+| `-port-offset`   | `0`     | Added to `-port`, such as a StatefulSet pod's index, so replicas run from one set of flags listen apart; `0` with `-port 0` |
 | `-upnp`          | `false` | Forward the port, TCP and UDP, by UPnP                 |
 | `-stun`          | `stun.l.google.com:19302` | STUN server asked for the node's public address, for BEP 42; empty asks none |
 | `-fetchers`      | `2000`  | Metadata fetches at once                               |

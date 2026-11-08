@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `-port-offset` adds a number, such as a StatefulSet pod's index, to `-port`.
+
 ### Changed
 
+- **Breaking:** the chart's probe StatefulSet is governed by the headless Service `<release>-probe`, not `<release>-probe-pods`; a StatefulSet installed by an earlier version is deleted once with `kubectl delete statefulset <release>-probe --cascade=orphan` before the upgrade.
+- **Breaking:** with a fixed port, each probe replica listens on the port plus its index, and `probe.service` is a Service per replica, `<release>-probe-<index>`, on that port and on `probe.service.nodePort` plus the index.
 - In an open journal row, the particulars and the steps' text start under the outcome column, their keys and times under the event column.
 - The journal's heading counts a failure only while no later entry of its task has settled it: a fetch or probe that ended a later chain, or a later entry of the same kind.
 - A time in a journal row's particulars leaves out the year when it is the current one.

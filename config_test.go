@@ -124,6 +124,9 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, dht.Config{Network: want, STUN: stun.DefaultServer}, c.dht, "a node that does not discover is passive")
 			require.Equal(t, fetch.Config{Workers: 100}, c.fetch)
 		}},
+		{name: "port with an offset", args: []string{"-fetch", "-port", "30070", "-port-offset", "2"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
+			require.Equal(t, 30072, c.dht.Network.Port, "a StatefulSet pod's index added to the port")
+		}},
 		{name: "fetch with probes", args: []string{"-fetch", "-probe", "-probe-dir", "/var/lib/sniffarr", "-probers", "2", "-probe-timeout", "5m", "-seed-max-size", "50GiB", "-seed-max-age", "72h"},
 			env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 				require.Equal(t, sniffer.SeederConfig{Dir: "/var/lib/sniffarr", MaxBytes: 50 << 30, MaxAge: 72 * time.Hour}, c.dht.Network.Seed)
@@ -195,6 +198,9 @@ func TestLoadComponents(t *testing.T) {
 		{name: "zero rate", args: []string{"-fetch", "-rate", "0"}, err: "-fetchers, -rate, -walkers and -min-peers: want positive integers"},
 		{name: "zero peers", args: []string{"-fetch", "-min-peers", "0"}, err: "-fetchers, -rate, -walkers and -min-peers: want positive integers"},
 		{name: "port out of range", args: []string{"-sniff", "-port", "70000"}, err: "-port: want 0 to 65535"},
+		{name: "port out of range by its offset", args: []string{"-sniff", "-port", "65535", "-port-offset", "1"}, err: "-port: want 0 to 65535, with -port-offset added"},
+		{name: "offset of a free port", args: []string{"-fetch", "-port", "0", "-port-offset", "1"}, err: "-port-offset: want 0 or more, and 0 with -port 0"},
+		{name: "negative offset", args: []string{"-fetch", "-port-offset", "-1"}, err: "-port-offset: want 0 or more"},
 		{name: "negative wait", args: []string{"-fetch", "-peer-wait", "-1s"}, err: "-fetch-timeout and -peer-wait: want positive durations"},
 	}
 	for _, tt := range tests {
