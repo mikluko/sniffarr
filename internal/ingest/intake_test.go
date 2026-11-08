@@ -12,9 +12,9 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/require"
 
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/bus/bustest"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
@@ -35,7 +35,7 @@ type intakeFixture struct {
 func newIntakeFixture(t *testing.T) *intakeFixture {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
