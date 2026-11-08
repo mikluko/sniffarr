@@ -17,7 +17,10 @@ With `api.nats.enabled`, the API's embedded NATS server listens for the user
 4222, its password `SNIFFARR_NATS_PASSWORD` taken from the key of that name
 in `api.existingSecret`, which is then required; a Secret without the key
 keeps the pod from starting. The store of the NATS server is `/data/nats`,
-on the API's volume.
+on the API's volume. The `sniff`, `fetch` and `probe` pods then get
+`SNIFFARR_NATS_URL`, `nats://<release>-api:4222`, and
+`SNIFFARR_NATS_PASSWORD` from the same key; they take no other key of the
+Secret.
 Every value is described in [`values.yaml`](../charts/sniffarr/values.yaml).
 
 With `api.networkPolicy.enabled`, true by default, a NetworkPolicy

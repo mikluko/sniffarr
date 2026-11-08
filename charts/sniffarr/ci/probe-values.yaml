@@ -1,3 +1,8 @@
+api:
+  existingSecret: sniffarr-tokens
+  nats:
+    enabled: true
+
 fetch:
   replicas: 2
 

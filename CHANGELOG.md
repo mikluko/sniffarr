@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The metric `sniffarr.dht.sample_queries` counts the `sample_infohashes` queries the sniff sends, by `sniffarr.dht.outcome`: `answered`, `timeout` or `error`.
+- With the chart's `api.nats.enabled`, the sniff, fetch and probe pods get `SNIFFARR_NATS_URL`, the `<release>-api` Service port `nats`, and `SNIFFARR_NATS_PASSWORD` from `api.existingSecret`.
 
 ### Fixed
 
