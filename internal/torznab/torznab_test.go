@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"sarak.sh/mikluko/libarr/database"
+	"sarak.sh/mikluko/libarr/torznab"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/names"
@@ -129,38 +130,23 @@ func parseError(t *testing.T, body string) (int, string) {
 
 func TestCaps(t *testing.T) {
 	srv, _ := serve(t)
-	var c struct {
-		Server struct {
-			Title string `xml:"title,attr"`
-		} `xml:"server"`
-		Limits struct {
-			Default int `xml:"default,attr"`
-			Max     int `xml:"max,attr"`
-		} `xml:"limits"`
-		Search      mode `xml:"searching>search"`
-		TVSearch    mode `xml:"searching>tv-search"`
-		MovieSearch mode `xml:"searching>movie-search"`
-		MusicSearch mode `xml:"searching>music-search"`
-		Categories  []struct {
-			ID      int      `xml:"id,attr"`
-			Name    string   `xml:"name,attr"`
-			Subcats []subcat `xml:"subcat"`
-		} `xml:"categories>category"`
-	}
+	var c torznab.Caps
 	require.NoError(t, xml.Unmarshal([]byte(get(t, srv, "t", "caps")), &c))
 	require.Equal(t, "sniffarr", c.Server.Title)
-	require.Equal(t, 100, c.Limits.Default)
-	require.Equal(t, 500, c.Limits.Max)
-	require.Equal(t, "yes", c.Search.Available)
-	require.Equal(t, "q", c.Search.Params)
-	require.Equal(t, "q,tvdbid,tmdbid,season,ep", c.TVSearch.Params)
-	require.Equal(t, "q,tmdbid,imdbid", c.MovieSearch.Params)
-	require.Equal(t, "no", c.MusicSearch.Available)
+	require.Equal(t, torznab.Limits{Default: 100, Max: 500}, c.Limits)
+	require.Equal(t, []torznab.Mode{
+		{Function: "search", Available: true, SupportedParams: "q"},
+		{Function: "tv-search", Available: true, SupportedParams: "q,tvdbid,tmdbid,season,ep"},
+		{Function: "movie-search", Available: true, SupportedParams: "q,tmdbid,imdbid"},
+		{Function: "music-search"},
+		{Function: "audio-search"},
+		{Function: "book-search"},
+	}, c.Searching.Modes)
 	require.Len(t, c.Categories, 2)
 	require.Equal(t, 2000, c.Categories[0].ID)
-	require.Equal(t, []subcat{{2030, "Movies/SD"}, {2040, "Movies/HD"}, {2045, "Movies/UHD"}}, c.Categories[0].Subcats)
+	require.Equal(t, []torznab.Subcat{{ID: 2030, Name: "Movies/SD"}, {ID: 2040, Name: "Movies/HD"}, {ID: 2045, Name: "Movies/UHD"}}, c.Categories[0].Subcats)
 	require.Equal(t, 5000, c.Categories[1].ID)
-	require.Equal(t, []subcat{{5030, "TV/SD"}, {5040, "TV/HD"}, {5045, "TV/UHD"}}, c.Categories[1].Subcats)
+	require.Equal(t, []torznab.Subcat{{ID: 5030, Name: "TV/SD"}, {ID: 5040, Name: "TV/HD"}, {ID: 5045, Name: "TV/UHD"}}, c.Categories[1].Subcats)
 }
 
 func TestSearchByID(t *testing.T) {
@@ -387,7 +373,7 @@ func TestResolutionInLetters(t *testing.T) {
 	} {
 		it := itemOf(&sniffarrv1.Release{Name: c.name, Kind: sniffarrv1.Kind_KIND_MOVIE})
 		require.Equal(t, c.title, it.Title, c.name)
-		require.Equal(t, strconv.Itoa(c.cat), it.Category, c.name)
+		require.Equal(t, []int{c.cat}, it.Categories, c.name)
 	}
 }
 

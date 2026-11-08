@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/hex"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,6 +18,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"sarak.sh/mikluko/libarr/torznab"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/names"
 	"sarak.sh/mikluko/sniffarr/internal/search"
@@ -33,14 +33,8 @@ const (
 	MaxLimit = search.MaxLimit
 )
 
-// Newznab error codes.
-const (
-	errCredentials = 100
-	errMissing     = 200
-	errParameter   = 201
-	errFunction    = 202
-	errUnknown     = 900
-)
+// limits are the items a search returns by default and at most.
+var limits = torznab.Limits{Default: DefaultLimit, Max: MaxLimit}
 
 // Categories of the items: movies and TV, each by resolution.
 const (
@@ -79,82 +73,104 @@ type Handler struct {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if subtle.ConstantTimeCompare([]byte(q.Get("apikey")), []byte(h.Token)) != 1 {
-		h.fail(w, errCredentials, "Incorrect user credentials")
+		h.fail(w, &torznab.Error{Code: torznab.CodeIncorrectCredentials, Description: "Incorrect user credentials"})
 		return
 	}
 	switch t := q.Get("t"); t {
 	case "caps":
-		h.write(w, capabilities())
+		h.check(torznab.WriteCaps(w, capabilities()))
 	case "search", "movie", "tvsearch":
-		feed, code, err := h.search(r.Context(), t, q)
+		req, err := torznab.ParseRequest(q, limits)
 		if err != nil {
-			h.fail(w, code, err.Error())
+			h.fail(w, asError(err))
 			return
 		}
-		h.write(w, feed)
+		feed, terr := h.search(r.Context(), req)
+		if terr != nil {
+			h.fail(w, terr)
+			return
+		}
+		h.check(torznab.WriteFeed(w, feed))
 	case "":
-		h.fail(w, errMissing, "Missing parameter (t)")
+		h.fail(w, torznab.MissingParameter("t"))
 	default:
-		h.fail(w, errFunction, "No such function ("+t+")")
+		h.fail(w, torznab.NoSuchFunction(t))
 	}
 }
 
-// search runs the search function t, returning a Newznab error code with
-// the error.
-func (h *Handler) search(ctx context.Context, t string, q map[string][]string) (*feed, int, error) {
-	get := func(k string) string {
-		if v := q[k]; len(v) > 0 {
-			return v[0]
-		}
-		return ""
+// capabilities is the answer to t=caps.
+func capabilities() *torznab.Caps {
+	return &torznab.Caps{
+		Server: torznab.Server{Title: "sniffarr"},
+		Limits: limits,
+		Searching: torznab.Searching{Modes: []torznab.Mode{
+			{Function: "search", Available: true, SupportedParams: "q"},
+			{Function: "tv-search", Available: true, SupportedParams: "q,tvdbid,tmdbid,season,ep"},
+			{Function: "movie-search", Available: true, SupportedParams: "q,tmdbid,imdbid"},
+			{Function: "music-search"},
+			{Function: "audio-search"},
+			{Function: "book-search"},
+		}},
+		Categories: []torznab.Category{
+			{ID: catMovies, Name: "Movies", Subcats: []torznab.Subcat{{ID: catMoviesSD, Name: "Movies/SD"}, {ID: catMoviesHD, Name: "Movies/HD"}, {ID: catMoviesUHD, Name: "Movies/UHD"}}},
+			{ID: catTV, Name: "TV", Subcats: []torznab.Subcat{{ID: catTVSD, Name: "TV/SD"}, {ID: catTVHD, Name: "TV/HD"}, {ID: catTVUHD, Name: "TV/UHD"}}},
+		},
 	}
-	offset, err := number(get("offset"), 0)
-	if err != nil {
-		return nil, errParameter, fmt.Errorf("Incorrect parameter (offset)")
+}
+
+// newFeed is a feed with no items.
+func newFeed() *torznab.RSS {
+	return &torznab.RSS{Channel: torznab.Channel{Title: "sniffarr", Description: "BitTorrent DHT releases"}}
+}
+
+// asError is err as a Newznab error, CodeUnknown when it is not one.
+func asError(err error) *torznab.Error {
+	var e *torznab.Error
+	if errors.As(err, &e) {
+		return e
 	}
-	limit, err := number(get("limit"), DefaultLimit)
-	if err != nil {
-		return nil, errParameter, fmt.Errorf("Incorrect parameter (limit)")
-	}
-	kinds, err := kindsOf(t, get("cat"))
-	if err != nil {
-		return nil, errParameter, err
-	}
+	return &torznab.Error{Code: torznab.CodeUnknown, Description: err.Error()}
+}
+
+// search runs the search req.
+func (h *Handler) search(ctx context.Context, req torznab.Request) (*torznab.RSS, *torznab.Error) {
 	f := newFeed()
-	if len(kinds) == 0 || offset >= MaxLimit || limit == 0 {
-		return f, 0, nil
+	kinds := kindsOf(req.T, req.Cat)
+	if len(kinds) == 0 || req.Limit == 0 {
+		return f, nil
 	}
-	req := &sniffarrv1.SearchRequest{Query: get("q"), Kinds: kinds, Limit: int32(min(offset+limit, MaxLimit))}
-	if req.Id, err = idOf(t, get); err != nil {
-		return nil, errParameter, err
+	sreq := &sniffarrv1.SearchRequest{Query: req.Q, Kinds: kinds, Limit: int32(req.Offset + req.Limit)}
+	var terr *torznab.Error
+	if sreq.Id, terr = idOf(req); terr != nil {
+		return nil, terr
 	}
-	if t == "tvsearch" {
+	if req.T == "tvsearch" {
 		var dated bool
-		if req.Season, req.Episode, dated, err = episodeOf(get("season"), get("ep")); err != nil {
-			return nil, errParameter, err
+		if sreq.Season, sreq.Episode, dated, terr = episodeOf(req.Season, req.Ep); terr != nil {
+			return nil, terr
 		}
 		if dated {
-			return f, 0, nil
+			return f, nil
 		}
 	}
-	res, err := h.Search.Search(ctx, connect.NewRequest(req))
+	res, err := h.Search.Search(ctx, connect.NewRequest(sreq))
 	if connect.CodeOf(err) == connect.CodeInvalidArgument {
-		return nil, errParameter, err
+		return nil, &torznab.Error{Code: torznab.CodeIncorrectParameter, Description: err.Error()}
 	}
 	if err != nil {
 		h.Log.ErrorContext(ctx, "torznab search", "err", err)
-		return nil, errUnknown, errors.New("Search failed")
+		return nil, &torznab.Error{Code: torznab.CodeUnknown, Description: "Search failed"}
 	}
 	releases := res.Msg.GetReleases()
-	releases = releases[min(offset, len(releases)):]
-	releases = releases[:min(limit, len(releases))]
+	releases = releases[min(req.Offset, len(releases)):]
+	releases = releases[:min(req.Limit, len(releases))]
 	for _, r := range releases {
 		f.Channel.Items = append(f.Channel.Items, itemOf(r))
 	}
-	if h.Probes != nil && (req.GetQuery() != "" || req.GetId() != nil) {
-		h.want(ctx, t, req, releases)
+	if h.Probes != nil && (sreq.GetQuery() != "" || sreq.GetId() != nil) {
+		h.want(ctx, req.T, sreq, releases)
 	}
-	return f, 0, nil
+	return f, nil
 }
 
 // want records the releases with Probes as returned by the search req of
@@ -175,28 +191,13 @@ func (h *Handler) want(ctx context.Context, t string, req *sniffarrv1.SearchRequ
 	}
 }
 
-func number(s string, def int) (int, error) {
-	if s == "" {
-		return def, nil
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 0 {
-		return 0, errors.New("not a non-negative integer")
-	}
-	return n, nil
-}
-
 // kindsOf returns the kinds the function t searches, narrowed by the
-// comma-separated categories cat when it is set.
-func kindsOf(t, cat string) ([]sniffarrv1.Kind, error) {
+// categories cats when there are any.
+func kindsOf(t string, cats []int) []sniffarrv1.Kind {
 	movies, series := t != "tvsearch", t != "movie"
-	if cat != "" {
+	if len(cats) > 0 {
 		var m, s bool
-		for c := range strings.SplitSeq(cat, ",") {
-			n, err := strconv.Atoi(strings.TrimSpace(c))
-			if err != nil {
-				return nil, errors.New("Incorrect parameter (cat)")
-			}
+		for _, n := range cats {
 			m = m || n/1000 == catMovies/1000
 			s = s || n/1000 == catTV/1000
 		}
@@ -209,20 +210,22 @@ func kindsOf(t, cat string) ([]sniffarrv1.Kind, error) {
 	if series {
 		out = append(out, sniffarrv1.Kind_KIND_SERIES)
 	}
-	return out, nil
+	return out
 }
 
-// idOf returns the first ID parameter the function t takes that is set.
-func idOf(t string, get func(string) string) (*sniffarrv1.ExternalId, error) {
+// idOf returns the first ID parameter the function of req takes that is
+// set.
+func idOf(req torznab.Request) (*sniffarrv1.ExternalId, *torznab.Error) {
 	var params []string
-	switch t {
+	switch req.T {
 	case "movie":
 		params = []string{"tmdbid", "imdbid"}
 	case "tvsearch":
 		params = []string{"tvdbid", "tmdbid", "imdbid"}
 	}
+	ids := map[string]string{"tmdbid": req.TMDbID, "imdbid": req.IMDbID, "tvdbid": req.TVDbID}
 	for _, p := range params {
-		v := strings.TrimSpace(get(p))
+		v := strings.TrimSpace(ids[p])
 		if v == "" {
 			continue
 		}
@@ -232,7 +235,7 @@ func idOf(t string, get func(string) string) (*sniffarrv1.ExternalId, error) {
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil || n <= 0 {
-			return nil, fmt.Errorf("Incorrect parameter (%s)", p)
+			return nil, torznab.IncorrectParameter(p)
 		}
 		if p == "imdbid" {
 			return &sniffarrv1.ExternalId{Provider: provider, Id: fmt.Sprintf("tt%07d", n)}, nil
@@ -245,12 +248,12 @@ func idOf(t string, get func(string) string) (*sniffarrv1.ExternalId, error) {
 // episodeOf reads the season and ep parameters of a TV search. An ep in
 // Sonarr's month/day form, for a daily series, is dated: names give no air
 // dates, so it matches nothing.
-func episodeOf(season, ep string) (s, e *int32, dated bool, err error) {
+func episodeOf(season, ep string) (s, e *int32, dated bool, err *torznab.Error) {
 	season, ep = strings.TrimSpace(season), strings.TrimSpace(ep)
 	if season != "" {
-		n, err := strconv.ParseInt(season, 10, 32)
-		if err != nil || n < 0 {
-			return nil, nil, false, errors.New("Incorrect parameter (season)")
+		n, perr := strconv.ParseInt(season, 10, 32)
+		if perr != nil || n < 0 {
+			return nil, nil, false, torznab.IncorrectParameter("season")
 		}
 		s = new(int32(n))
 	}
@@ -258,19 +261,19 @@ func episodeOf(season, ep string) (s, e *int32, dated bool, err error) {
 		return s, nil, false, nil
 	}
 	if s == nil {
-		return nil, nil, false, errors.New("Incorrect parameter (ep)")
+		return nil, nil, false, torznab.IncorrectParameter("ep")
 	}
 	if month, day, ok := strings.Cut(ep, "/"); ok {
 		m, merr := strconv.Atoi(month)
 		d, derr := strconv.Atoi(day)
 		if merr != nil || derr != nil || m < 1 || m > 12 || d < 1 || d > 31 {
-			return nil, nil, false, errors.New("Incorrect parameter (ep)")
+			return nil, nil, false, torznab.IncorrectParameter("ep")
 		}
 		return s, nil, true, nil
 	}
-	n, err := strconv.ParseInt(ep, 10, 32)
-	if err != nil || n <= 0 {
-		return nil, nil, false, errors.New("Incorrect parameter (ep)")
+	n, perr := strconv.ParseInt(ep, 10, 32)
+	if perr != nil || n <= 0 {
+		return nil, nil, false, torznab.IncorrectParameter("ep")
 	}
 	return s, new(int32(n)), false, nil
 }
@@ -364,46 +367,47 @@ func bracket(voices []voice, rus string) string {
 // release's distinct peers over the last 7 days, peers_week: the DHT does
 // not tell seeders apart, and a count over a shorter window would take a
 // sketch union per item.
-func itemOf(r *sniffarrv1.Release) item {
+func itemOf(r *sniffarrv1.Release) torznab.Item {
 	magnet := r.GetMagnet()
-	cat := strconv.Itoa(category(r))
+	cat := category(r)
 	peers := strconv.FormatInt(r.GetPeersWeek(), 10)
-	it := item{
-		Title:     title(r),
-		GUID:      guid{Value: magnet},
-		Link:      magnet,
-		PubDate:   r.GetFirstSeen().AsTime().Format(time.RFC1123Z),
-		Size:      r.GetSize(),
-		Category:  cat,
-		Enclosure: enclosure{URL: magnet, Length: r.GetSize(), Type: "application/x-bittorrent"},
-		Attrs: []attr{
-			{Name: "category", Value: cat},
-			{Name: "size", Value: strconv.FormatInt(r.GetSize(), 10)},
-			{Name: "infohash", Value: hex.EncodeToString(r.GetInfohash())},
-			{Name: "magneturl", Value: magnet},
-			{Name: "seeders", Value: peers},
-			{Name: "peers", Value: peers},
+	it := torznab.Item{
+		Title:      title(r),
+		GUID:       torznab.GUID{Value: magnet},
+		Link:       magnet,
+		PubDate:    r.GetFirstSeen().AsTime(),
+		Size:       r.GetSize(),
+		Categories: []int{cat},
+		Enclosure:  torznab.Enclosure{URL: magnet, Length: r.GetSize(), Type: torznab.EnclosureType},
+		Attrs: []torznab.Attr{
+			{Name: torznab.AttrCategory, Value: strconv.Itoa(cat)},
+			{Name: torznab.AttrSize, Value: strconv.FormatInt(r.GetSize(), 10)},
+			{Name: torznab.AttrInfohash, Value: hex.EncodeToString(r.GetInfohash())},
+			{Name: torznab.AttrMagnetURL, Value: magnet},
+			{Name: torznab.AttrSeeders, Value: peers},
+			{Name: torznab.AttrPeers, Value: peers},
 		},
 	}
 	for _, id := range r.GetIds() {
 		switch id.GetProvider() {
-		case "tmdb", "tvdb":
-			it.Attrs = append(it.Attrs, attr{Name: id.GetProvider() + "id", Value: id.GetId()})
+		case "tmdb":
+			it.Attrs = append(it.Attrs, torznab.Attr{Name: torznab.AttrTMDbID, Value: id.GetId()})
+		case "tvdb":
+			it.Attrs = append(it.Attrs, torznab.Attr{Name: torznab.AttrTVDbID, Value: id.GetId()})
 		case "imdb":
-			it.Attrs = append(it.Attrs, attr{Name: "imdbid", Value: strings.TrimPrefix(id.GetId(), "tt")})
+			it.Attrs = append(it.Attrs, torznab.Attr{Name: torznab.AttrIMDbID, Value: strings.TrimPrefix(id.GetId(), "tt")})
 		}
 	}
 	return it
 }
 
-func (h *Handler) write(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	_, _ = w.Write([]byte(xml.Header))
-	if err := xml.NewEncoder(w).Encode(v); err != nil {
+// check logs the error of writing a response.
+func (h *Handler) check(err error) {
+	if err != nil {
 		h.Log.Error("torznab response", "err", err)
 	}
 }
 
-func (h *Handler) fail(w http.ResponseWriter, code int, description string) {
-	h.write(w, newznabError{Code: code, Description: description})
+func (h *Handler) fail(w http.ResponseWriter, e *torznab.Error) {
+	h.check(torznab.WriteError(w, e))
 }
