@@ -71,6 +71,41 @@ go run ./hack/ports --context saraksh -n sniffarr -addr 95.168.161.76 -seeds 16
 `ExternalIP`, or else its public `InternalIP`. A check that finds no evidence
 either way, such as a torrent nobody announced, prints `skip`.
 
+## Load testing the order streams
+
+`hack/natsload` measures the fetch order stream on the NATS server `-api`
+embeds, started by the same broker code with the same streams and consumers.
+It publishes a backlog of `-orders` orders over the priority subjects, in the
+shares `-weights` gives P0 to P3, then drains a copy of that store for each
+case and prints a table per phase. Each step runs in a child process of its
+own.
+
+```shell
+go run ./hack/natsload
+go run ./hack/natsload -orders 200000 -batches 16 -naks 0,20 -profiles tmp/natsload
+go run ./hack/natsload -orders 5000000 -drain=false
+```
+
+- **Drains.** `-workers` pullers connect as the user `worker` over
+  loopback, and each fetches up to a batch from the highest priority that
+  has orders. A puller acks each order, except that on its first delivery a
+  share of the orders, set by `-naks`, gets a nak with `-nak-delay`. The
+  matrix crosses `-batches` with `-naks`. MaxAckPending is the pullers'
+  in-flight orders, `-workers` times the batch, and, for a case with naks,
+  also that plus every order naked over the drain.
+- **Columns.** `orders/s` counts first deliveries. A drain ends as stalled
+  when nothing is delivered for `-stall`, or not everything by `-limit`.
+  Each `%` column is the share of the process's CPU samples during the drain
+  whose stacks hold a server function: `checkPending` is the consumer's
+  lease timer, `removeMsg` the removal of an acked order, `removeMsgBlock`
+  the removal of an emptied block, and `loadMsgs` the load of a block to
+  remove from it. `-profiles` keeps each drain's CPU profile for
+  `go tool pprof`.
+- **Restarts.** The server starts on stores left by a clean stop and by
+  `SIGKILL`, holding the whole backlog or only the P3 orders left once P0
+  to P2 are taken. `start` is the broker's start with its recovery, and
+  `live heap` the heap after it.
+
 ## Releases
 
 `CHANGELOG.md` decides the version. To release, rename `## [Unreleased]` to
