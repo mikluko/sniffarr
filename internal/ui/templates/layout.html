@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="{{static "app.css"}}">
 <script src="{{static "vendor/htmx.min.js"}}" defer></script>
 <script src="{{static "vendor/idiomorph-ext.min.js"}}" defer></script>
+<script src="{{shared "app.js"}}" defer></script>
 <script src="{{static "app.js"}}" defer></script>
 </head>
 <body hx-ext="morph">
@@ -30,8 +31,8 @@
 {{template "main" .}}
 <footer class="attr mu"><a href="https://www.themoviedb.org/" rel="noreferrer" target="_blank"><img src="{{static "vendor/tmdb.svg"}}" alt="TMDB" height="12"></a> <span lang="en">{{.T "attr.text"}}</span>
   <span class="ver">
-    {{- with .Update}}<a class="tip upd" href="{{.URL}}" rel="noreferrer" target="_blank" aria-label="{{.Label}}: {{.Tip}}"><i class="mk" aria-hidden="true"></i>{{.Label}}<span class="tipb" aria-hidden="true">{{.Tip}}</span></a>{{end -}}
-    <a class="tip vl" href="{{.VersionURL}}" rel="noreferrer" target="_blank" aria-label="sniffarr {{.Build.Version}}: {{.VersionTip}}">sniffarr {{.Build.Version}}<span class="tipb" aria-hidden="true">{{.VersionTip}}</span></a></span></footer>
+    {{- with .Update}}<a class="tt upd" href="{{.URL}}" rel="noreferrer" target="_blank" aria-label="{{.Label}}: {{.Tip}}"><i class="mk" aria-hidden="true"></i>{{.Label}}<span class="tc" aria-hidden="true">{{.Tip}}</span></a>{{end -}}
+    <a class="tt vl" href="{{.VersionURL}}" rel="noreferrer" target="_blank" aria-label="sniffarr {{.Build.Version}}: {{.VersionTip}}">sniffarr {{.Build.Version}}<span class="tc" aria-hidden="true">{{.VersionTip}}</span></a></span></footer>
 </div>
 </body>
 </html>
@@ -76,10 +77,10 @@
 {{define "actbutton"}}<button id="act-{{.Action}}" type="submit"{{if .Off}} disabled{{end}}{{if .OOB}} hx-swap-oob="true"{{end}}>{{.B.T (concat "act." .Action)}}</button>{{end}}
 
 {{/* Label with the tooltip Text, shown on hover and on focus, so a tap opens it too. */}}
-{{define "tip"}}<span class="tip" tabindex="0" aria-label="{{.Label}}: {{.Text}}">{{.Label}}<span class="tipb" aria-hidden="true">{{.Text}}</span></span>{{end}}
+{{define "tip"}}<span class="tt" tabindex="0" aria-label="{{.Label}}: {{.Text}}">{{.Label}}<span class="tc" aria-hidden="true">{{.Text}}</span></span>{{end}}
 
 {{/* An icon button that copies Value; its tooltip names it and, once copied, says so. */}}
-{{define "copy"}}<span class="tip ic"><button type="button" class="ic" data-copy="{{.Value}}" data-done="{{.B.T "card.copied"}}" aria-label="{{.Label}}">{{icon "copy"}}</button><span class="tipb" role="status">{{.Label}}</span></span>{{end}}
+{{define "copy"}}<span class="tt ic"><button type="button" class="ic" data-copy="{{.Value}}" data-done="{{.B.T "card.copied"}}" aria-label="{{.Label}}">{{icon "copy"}}</button><span class="tc" role="status">{{.Label}}</span></span>{{end}}
 
 {{define "act"}}<div id="act-answer" class="act-ans{{if .NoProbers}} dw{{end}}" role="status">
   {{- if eq .Action "match"}}{{template "matched" .}}

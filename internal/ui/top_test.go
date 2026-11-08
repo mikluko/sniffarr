@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	libui "sarak.sh/mikluko/libarr/ui"
 )
 
 // renderTop renders the sample top of movies in lang with the Russian
@@ -31,8 +33,8 @@ func renderTop(t *testing.T, lang string, edit func(*TopPage)) string {
 
 // tip is the markup of a tooltip on label.
 func tip(label, text string) string {
-	return `<span class="tip" tabindex="0" aria-label="` + label + `: ` + text + `">` + label +
-		`<span class="tipb" aria-hidden="true">` + text + `</span></span>`
+	return `<span class="tt" tabindex="0" aria-label="` + label + `: ` + text + `">` + label +
+		`<span class="tc" aria-hidden="true">` + text + `</span></span>`
 }
 
 // A work within the top in the previous window reads the places it moved,
@@ -81,7 +83,7 @@ func TestTopChange(t *testing.T) {
 }
 
 func TestOnChart(t *testing.T) {
-	b := Base{Lang: "ru", msgs: map[string]string{"top.d": "дн", "top.w": "нед"}}
+	b := Base{Locale: libui.Locale{Lang: "ru", Messages: map[string]string{"top.d": "дн", "top.w": "нед"}}}
 	day := 24 * time.Hour
 	for d, want := range map[time.Duration]string{0: "< 1 дн", 23 * time.Hour: "< 1 дн", day: "1 дн",
 		14*day + 23*time.Hour: "14 дн", 15 * day: "2 нед", 26 * day: "3 нед", 120 * day: "17 нед"} {
@@ -135,7 +137,7 @@ func TestTopMarkup(t *testing.T) {
 		`<span class="mu">` + tip("Voice-over: ru", "Which releases count towards peers and place. “≥ 0.5”: an audio estimate of 0.5 or more. “explicit”: the audio is named in the torrent&#39;s name.") + `</span>`,
 		`<span class="th th-none" aria-hidden="true"></span>`,
 		"<td class=\"r rl\"><span class=\"dk\">95</span><span class=\"mb\">95 releases</span></td>",
-		`<table class="t tt fit">`,
+		`<table class="t topt fit">`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("no %s", want)
@@ -149,7 +151,7 @@ func TestTopMarkup(t *testing.T) {
 }
 
 func TestPrevPlace(t *testing.T) {
-	b := Base{Lang: "en", msgs: map[string]string{"top.prev_place": "{0}"}}
+	b := Base{Locale: libui.Locale{Lang: "en", Messages: map[string]string{"top.prev_place": "{0}"}}}
 	for n, want := range map[int]string{1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 11: "11th", 12: "12th", 13: "13th",
 		21: "21st", 101: "101st", 111: "111th", 112: "112th", 9787: "9,787th"} {
 		if got := b.PrevPlace(n); got != want {

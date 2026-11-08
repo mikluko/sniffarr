@@ -16,12 +16,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"connectrpc.com/connect"
 
+	libui "sarak.sh/mikluko/libarr/ui"
 	libversion "sarak.sh/mikluko/libarr/version"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
@@ -103,10 +103,9 @@ type Locales interface {
 }
 
 type server struct {
-	cfg   Config
-	ui    *ui.Renderer
-	cur   atomic.Pointer[current]
-	zones sync.Map // zone name → *time.Location, the ones tz cookies named
+	cfg Config
+	ui  *ui.Renderer
+	cur atomic.Pointer[current]
 }
 
 // current is the Settings the pages show with the tags of their languages.
@@ -151,6 +150,7 @@ func New(cfg Config) (*Handler, error) {
 	h.Apply(Settings{Languages: cfg.Languages, Probes: cfg.Probes, Classifier: cfg.Classifier, JournalRetention: cfg.JournalRetention, Latest: cfg.Latest, Notice: cfg.Notice})
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", r.Static())
+	mux.Handle("GET /ui/", r.Shared())
 	mux.HandleFunc("GET /{$}", s.data)
 	mux.HandleFunc("GET /movie/{id}", s.work("movie"))
 	mux.HandleFunc("GET /tv/{id}", s.work("series"))
@@ -198,7 +198,7 @@ func (s *server) lang(w http.ResponseWriter, req *http.Request) string {
 
 func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	c := s.settings()
-	b := s.ui.Base(req, lang, nav, c.tags, s.location(req))
+	b := s.ui.Base(req, lang, nav, c.tags, libui.Zone(req, s.cfg.Location))
 	b.Now = s.cfg.Now()
 	b.Seerr = s.cfg.SeerrURL
 	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
@@ -206,25 +206,6 @@ func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	b.JournalRetention = c.JournalRetention
 	b.Latest, b.Notice = c.Latest, c.Notice
 	return b
-}
-
-// location is the zone of the page's dates: the browser's, when the tz
-// cookie the page's script sets names a zone the process knows, else
-// Config.Location.
-func (s *server) location(req *http.Request) *time.Location {
-	c, err := req.Cookie("tz")
-	if err != nil || c.Value == "" || c.Value == "Local" || len(c.Value) > 64 {
-		return s.cfg.Location
-	}
-	if loc, ok := s.zones.Load(c.Value); ok {
-		return loc.(*time.Location)
-	}
-	loc, err := time.LoadLocation(c.Value)
-	if err != nil {
-		return s.cfg.Location
-	}
-	s.zones.Store(c.Value, loc)
-	return loc
 }
 
 func (s *server) render(w http.ResponseWriter, req *http.Request, page string, data any) {

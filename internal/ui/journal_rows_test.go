@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	libui "sarak.sh/mikluko/libarr/ui"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files of the journal's rows")
@@ -140,8 +142,8 @@ func TestJournalRowsGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	var missing []string
-	onMissing = func(lang, key string) { missing = append(missing, lang+":"+key) }
-	defer func() { onMissing = nil }()
+	libui.OnMissing = func(lang, key string) { missing = append(missing, lang+":"+key) }
+	defer func() { libui.OnMissing = nil }()
 
 	loc := time.FixedZone("CEST", 2*3600)
 	now := time.Date(2026, 10, 20, 14, 5, 0, 0, loc)
@@ -153,7 +155,7 @@ func TestJournalRowsGolden(t *testing.T) {
 		{"card", card},
 		{"retry", card[1:5]},
 		{"probe", card[9:12]},
-		{"journal-only", SampleTorrent(Base{Now: now}, false, "journal").Torrent.Journal},
+		{"journal-only", SampleTorrent(Base{Locale: libui.Locale{Now: now}}, false, "journal").Torrent.Journal},
 		{"tracks-32", journalTracks32(now)},
 		{"entries-200", journal200(now)},
 	} {

@@ -19,7 +19,7 @@ func DefaultVoiceLang(voiceLangs []string, uiLang string) string {
 	return ""
 }
 
-func (b Base) has(key string) bool { _, ok := b.msgs[key]; return ok }
+func (b Base) has(key string) bool { _, ok := b.Messages[key]; return ok }
 
 // DubLabel names the dub of a language: "Русская озвучка" / "Voice-over: ru".
 func (b Base) DubLabel(code string) string {

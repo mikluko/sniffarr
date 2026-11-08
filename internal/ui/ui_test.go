@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	libui "sarak.sh/mikluko/libarr/ui"
 	libversion "sarak.sh/mikluko/libarr/version"
 	"sarak.sh/mikluko/sniffarr/internal/latest"
 	"sarak.sh/mikluko/sniffarr/internal/version"
@@ -26,8 +27,8 @@ func TestRenderAll(t *testing.T) {
 		t.Fatal(err)
 	}
 	var missing []string
-	onMissing = func(lang, key string) { missing = append(missing, lang+":"+key) }
-	defer func() { onMissing = nil }()
+	libui.OnMissing = func(lang, key string) { missing = append(missing, lang+":"+key) }
+	defer func() { libui.OnMissing = nil }()
 
 	loc := time.FixedZone("CEST", 2*3600)
 	now := time.Date(2026, 10, 20, 14, 5, 0, 0, loc)
@@ -167,14 +168,14 @@ func TestRenderFooterVersion(t *testing.T) {
 		"notfound": func(b Base) any { return NotFoundPage{Base: b, Asked: "/x"} },
 	}
 	for page, data := range pages {
-		checkBody(t, "ru/"+page, render("ru", sampleBuild, page, data), []string{`class="tip upd"`}, []string{
-			`<span class="ver"><a class="tip vl" href="https://sarak.sh/mikluko/sniffarr/releases/tag/v0.44.0-alpha.2" rel="noreferrer" target="_blank" aria-label="sniffarr 0.44.0-alpha.2: Заметки к релизу. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.">sniffarr 0.44.0-alpha.2<span class="tipb" aria-hidden="true">Заметки к релизу. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.</span></a></span>`,
+		checkBody(t, "ru/"+page, render("ru", sampleBuild, page, data), []string{`class="tt upd"`}, []string{
+			`<span class="ver"><a class="tt vl" href="https://sarak.sh/mikluko/sniffarr/releases/tag/v0.44.0-alpha.2" rel="noreferrer" target="_blank" aria-label="sniffarr 0.44.0-alpha.2: Заметки к релизу. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.">sniffarr 0.44.0-alpha.2<span class="tc" aria-hidden="true">Заметки к релизу. Сборка 07.11.2026 14:02 UTC, коммит 1a2b3c4.</span></a></span>`,
 		})
 		checkBody(t, "en/"+page, render("en", sampleBuild, page, data), nil, []string{
 			`aria-label="sniffarr 0.44.0-alpha.2: Release notes. Built Nov 7, 2026, 14:02 UTC, commit 1a2b3c4."`,
 		})
 		checkBody(t, "dev/"+page, render("en", libversion.Info{Version: "dev"}, page, data), nil, []string{
-			`<a class="tip vl" href="https://sarak.sh/mikluko/sniffarr" rel="noreferrer" target="_blank" aria-label="sniffarr dev: Project page.">sniffarr dev<span class="tipb" aria-hidden="true">Project page.</span></a></span>`,
+			`<a class="tt vl" href="https://sarak.sh/mikluko/sniffarr" rel="noreferrer" target="_blank" aria-label="sniffarr dev: Project page.">sniffarr dev<span class="tc" aria-hidden="true">Project page.</span></a></span>`,
 		})
 	}
 }
@@ -205,20 +206,20 @@ func TestRenderFooterUpdate(t *testing.T) {
 		return renderAs(version.Lazy, lang, build, rel)
 	}
 	checkBody(t, "eager, one patch behind", renderAs(version.Eager, "ru", "0.44.0", release("0.44.1")), nil, []string{
-		`<i class="mk" aria-hidden="true"></i>вышла 0.44.1<span class="tipb" aria-hidden="true">Эта версия отстала от последнего релиза: 0.44.0, последний 0.44.1 от 01.12.2026. Ссылка на заметки к релизу.</span>`,
+		`<i class="mk" aria-hidden="true"></i>вышла 0.44.1<span class="tc" aria-hidden="true">Эта версия отстала от последнего релиза: 0.44.0, последний 0.44.1 от 01.12.2026. Ссылка на заметки к релизу.</span>`,
 	})
 	checkBody(t, "stable behind", render("ru", "0.44.0", release("0.46.0")), nil, []string{
-		`<span class="ver"><a class="tip upd" href="https://sarak.sh/mikluko/sniffarr/releases/tag/v0.46.0" rel="noreferrer" target="_blank" aria-label="вышла 0.46.0: Эта версия отстала от последнего релиза больше чем на одну минорную: 0.44.0, последний 0.46.0 от 01.12.2026. Ссылка на заметки к релизу."><i class="mk" aria-hidden="true"></i>вышла 0.46.0<span class="tipb" aria-hidden="true">Эта версия отстала от последнего релиза больше чем на одну минорную: 0.44.0, последний 0.46.0 от 01.12.2026. Ссылка на заметки к релизу.</span></a><a class="tip vl"`,
+		`<span class="ver"><a class="tt upd" href="https://sarak.sh/mikluko/sniffarr/releases/tag/v0.46.0" rel="noreferrer" target="_blank" aria-label="вышла 0.46.0: Эта версия отстала от последнего релиза больше чем на одну минорную: 0.44.0, последний 0.46.0 от 01.12.2026. Ссылка на заметки к релизу."><i class="mk" aria-hidden="true"></i>вышла 0.46.0<span class="tc" aria-hidden="true">Эта версия отстала от последнего релиза больше чем на одну минорную: 0.44.0, последний 0.46.0 от 01.12.2026. Ссылка на заметки к релизу.</span></a><a class="tt vl"`,
 	})
 	checkBody(t, "pre-release", render("en", "0.44.0-alpha.4", release("0.44.0")), nil, []string{
-		`<i class="mk" aria-hidden="true"></i>0.44.0 is out<span class="tipb" aria-hidden="true">This build is the pre-release 0.44.0-alpha.4, and the stable release 0.44.0 came out on Dec 1, 2026. Links to the release notes.</span>`,
+		`<i class="mk" aria-hidden="true"></i>0.44.0 is out<span class="tc" aria-hidden="true">This build is the pre-release 0.44.0-alpha.4, and the stable release 0.44.0 came out on Dec 1, 2026. Links to the release notes.</span>`,
 	})
 	for name, body := range map[string]string{
 		"one minor":  render("ru", "0.44.0", release("0.45.0")),
 		"dev":        render("ru", "dev", release("0.46.0")),
 		"no release": render("ru", "0.44.0", latest.Release{}),
 	} {
-		checkBody(t, name, body, []string{`class="tip upd"`}, []string{`class="tip vl"`})
+		checkBody(t, name, body, []string{`class="tt upd"`}, []string{`class="tt vl"`})
 	}
 }
 
@@ -313,7 +314,7 @@ func TestRenderFeaturesDegraded(t *testing.T) {
 		`<div class="meter full" role="img" aria-label="100,0%"><i style="width: 100%"></i></div>`,
 		`<span class="xs dw">` + b.Fmt("d.spent", b.Num(3412)) + `</span>`,
 		b.T("d.spent_tip"),
-		`<i class="m"></i><span class="tip" tabindex="0" aria-label="Нет проберов: ` + b.T("q.noprobers_tip"),
+		`<i class="m"></i><span class="tt" tabindex="0" aria-label="Нет проберов: ` + b.T("q.noprobers_tip"),
 		`aria-label="?: ` + b.T("q.noprobers_eta") + `"`,
 		`<span class="dw"><i class="m"></i>лимит на сутки исчерпан</span>`,
 		`<span class="dw"><i class="m"></i>нет проберов</span>`,
@@ -350,13 +351,13 @@ func TestRenderFeaturesDegraded(t *testing.T) {
 
 func TestFormat(t *testing.T) {
 	t5 := time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
-	ru := Base{Lang: "ru"}
-	c := Base{Lang: "en"}
-	units := Base{Lang: "ru", msgs: map[string]string{"unit.min": "мин", "unit.h": "ч", "unit.d": "д"}}
+	ru := Base{Locale: libui.Locale{Lang: "ru"}}
+	c := Base{Locale: libui.Locale{Lang: "en"}}
+	units := Base{Locale: libui.Locale{Lang: "ru", Messages: map[string]string{"unit.min": "мин", "unit.h": "ч", "unit.d": "д"}}}
 	files := map[string]string{"f.one": "файл", "f.few": "файла", "f.many": "файлов"}
-	ruf, enf := Base{Lang: "ru", msgs: files}, Base{Lang: "en", msgs: map[string]string{"f.one": "file", "f.many": "files"}}
-	tips := Base{Lang: "ru", Now: t5, Loc: time.UTC, msgs: map[string]string{"card.match.how.search": "Поиском TMDB",
-		"card.match.tip": "{0}, уверенность {1}, {2}.", "card.match.tip_nodate": "{0}, уверенность {1}."}}
+	ruf, enf := Base{Locale: libui.Locale{Lang: "ru", Messages: files}}, Base{Locale: libui.Locale{Lang: "en", Messages: map[string]string{"f.one": "file", "f.many": "files"}}}
+	tips := Base{Locale: libui.Locale{Lang: "ru", Now: t5, Loc: time.UTC, Messages: map[string]string{"card.match.how.search": "Поиском TMDB",
+		"card.match.tip": "{0}, уверенность {1}, {2}.", "card.match.tip_nodate": "{0}, уверенность {1}."}}}
 	for _, x := range []struct{ got, want string }{
 		{ruf.Count(1, "f"), "1 файл"},
 		{ruf.Count(3, "f"), "3 файла"},
@@ -371,7 +372,7 @@ func TestFormat(t *testing.T) {
 		{ru.Num(-1284), "-1\u00a0284"},
 		{c.Num(1284311), "1,284,311"},
 		{ru.Size(26629001216), "24,8\u00a0ГБ"},
-		{Base{Lang: "ru", msgs: map[string]string{"kind.movie": "фильм"}}.Facts("movie", &TMDBWork{}), "Фильм"},
+		{Base{Locale: libui.Locale{Lang: "ru", Messages: map[string]string{"kind.movie": "фильм"}}}.Facts("movie", &TMDBWork{}), "Фильм"},
 		{sentence("сериал"), "Сериал"},
 		{sentence(""), ""},
 		{c.Size(412 << 20), "412 MB"},
@@ -406,8 +407,8 @@ func TestFormat(t *testing.T) {
 		{units.Span(48 * time.Hour), "2\u00a0д"},
 		{ru.SE(2, 5), "S02E05"},
 		{ru.SE(2, 0), "S02"},
-		{Base{Lang: "en", Now: t5, msgs: map[string]string{"ago.min": "{0} min ago", "ago.now": "just now"}}.Ago(t5.Add(-125 * time.Minute)), "125 min ago"},
-		{Base{Lang: "en", Now: t5, msgs: map[string]string{"ago.now": "just now"}}.Ago(t5.Add(-59 * time.Second)), "just now"},
+		{Base{Locale: libui.Locale{Lang: "en", Now: t5, Messages: map[string]string{"ago.min": "{0} min ago", "ago.now": "just now"}}}.Ago(t5.Add(-125 * time.Minute)), "125 min ago"},
+		{Base{Locale: libui.Locale{Lang: "en", Now: t5, Messages: map[string]string{"ago.now": "just now"}}}.Ago(t5.Add(-59 * time.Second)), "just now"},
 	} {
 		if x.got != x.want {
 			t.Errorf("got %q, want %q", x.got, x.want)
@@ -443,7 +444,7 @@ func TestStatic(t *testing.T) {
 	if err := r.Render(w, req, "data", SampleData(r.Base(req, "en", "data", nil, time.UTC))); err != nil {
 		t.Fatal(err)
 	}
-	if m := regexp.MustCompile(`/static/[^"?]*"`).FindString(w.Body.String()); m != "" {
+	if m := regexp.MustCompile(`/(static|ui)/[^"?]*"`).FindString(w.Body.String()); m != "" {
 		t.Errorf("a static file linked without its version: %s", m)
 	}
 
@@ -486,7 +487,7 @@ func TestJournalMessages(t *testing.T) {
 	}
 	keys := func(lang string) []string {
 		var out []string
-		for k := range r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", nil, time.UTC).msgs {
+		for k := range r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", nil, time.UTC).Messages {
 			if strings.HasPrefix(k, "journal.") {
 				out = append(out, k)
 			}
@@ -650,8 +651,8 @@ func TestJournalDetail(t *testing.T) {
 		return r.Base(httptest.NewRequest("GET", "/t/x", nil), lang, "", []string{"ru"}, loc)
 	}
 	var missing []string
-	onMissing = func(lang, key string) { missing = append(missing, lang+":"+key) }
-	defer func() { onMissing = nil }()
+	libui.OnMissing = func(lang, key string) { missing = append(missing, lang+":"+key) }
+	defer func() { libui.OnMissing = nil }()
 
 	for _, c := range []struct {
 		name, lang string
@@ -836,6 +837,28 @@ func TestFonts(t *testing.T) {
 	}
 }
 
+// The pages load libarr's app.js from /ui/ at its version.
+func TestSharedAppJS(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	if err := r.Render(w, req, "data", SampleData(r.Base(req, "en", "data", nil, time.UTC))); err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`<script src="(/ui/app\.js\?v=\w+)" defer>`).FindStringSubmatch(w.Body.String())
+	if m == nil {
+		t.Fatal("libarr's app.js is not linked at its version")
+	}
+	sw := httptest.NewRecorder()
+	r.Shared().ServeHTTP(sw, httptest.NewRequest("GET", m[1], nil))
+	if sw.Code != 200 || !strings.Contains(sw.Header().Get("Content-Type"), "javascript") {
+		t.Errorf("%s: %d %q", m[1], sw.Code, sw.Header().Get("Content-Type"))
+	}
+}
+
 // A tooltip's trigger is its label, focusable and named by label and text
 // together; the text itself is hidden from assistive technology.
 func TestTip(t *testing.T) {
@@ -850,8 +873,8 @@ func TestTip(t *testing.T) {
 		t.Fatal(err)
 	}
 	label, text := b.T("d.queue"), b.T("q.note")
-	want := `<span class="tip" tabindex="0" aria-label="` + template.HTMLEscapeString(label+": "+text) + `">` +
-		label + `<span class="tipb" aria-hidden="true">` + template.HTMLEscapeString(text) + `</span></span>`
+	want := `<span class="tt" tabindex="0" aria-label="` + template.HTMLEscapeString(label+": "+text) + `">` +
+		label + `<span class="tc" aria-hidden="true">` + template.HTMLEscapeString(text) + `</span></span>`
 	if !strings.Contains(w.Body.String(), want) {
 		t.Errorf("no tooltip %s", want)
 	}
@@ -877,9 +900,9 @@ func TestCopyButtons(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, label := range []string{b.T("card.copy_hash"), b.T("card.copy_magnet")} {
-		re := regexp.MustCompile(`<span class="tip ic"><button type="button" class="ic" data-copy="[^"]+" data-done="` +
+		re := regexp.MustCompile(`<span class="tt ic"><button type="button" class="ic" data-copy="[^"]+" data-done="` +
 			regexp.QuoteMeta(b.T("card.copied")) + `" aria-label="` + regexp.QuoteMeta(label) + `">` +
-			regexp.QuoteMeta(string(svg)) + `</button><span class="tipb" role="status">` + regexp.QuoteMeta(label) + `</span></span>`)
+			regexp.QuoteMeta(string(svg)) + `</button><span class="tc" role="status">` + regexp.QuoteMeta(label) + `</span></span>`)
 		if !re.MatchString(body) {
 			t.Errorf("no copy button %q", label)
 		}
@@ -923,7 +946,7 @@ func TestDataStale(t *testing.T) {
 		{12 * time.Minute, 5 * time.Minute, true},
 		{90 * time.Second, 10 * time.Second, true},
 	} {
-		p := DataPage{Base: Base{Now: now}, Stats: Stats{Computed: now.Add(-c.age), Interval: c.interval}}
+		p := DataPage{Base: Base{Locale: libui.Locale{Now: now}}, Stats: Stats{Computed: now.Add(-c.age), Interval: c.interval}}
 		if got := p.Stale(); got != c.stale {
 			t.Errorf("age %v, interval %v: stale %v, want %v", c.age, c.interval, got, c.stale)
 		}
@@ -956,8 +979,8 @@ func TestDataMarkup(t *testing.T) {
 	for _, want := range []string{
 		`hx-trigger="every 30s [document.visibilityState=='visible'], tz"`,
 		`<button type="button" class="ic" hx-get="/" hx-target="#data" hx-swap="morph:outerHTML" aria-label="Refresh" aria-describedby="refresh-tip">` + string(svg) + `</button>`,
-		`<span class="tipb" id="refresh-tip" role="tooltip">Refresh. Data as of Oct 20, 14:02, updated 3 min ago. The page refreshes itself every 30 seconds. The server recomputes the data every 5 min.</span>`,
-		`<span class="tip" tabindex="0" aria-label="P0: asked for in the UI"><span class="badge"><span class="sw q0"></span>P0</span><span class="tipb" aria-hidden="true">P0: asked for in the UI</span></span>`,
+		`<span class="tc" id="refresh-tip" role="tooltip">Refresh. Data as of Oct 20, 14:02, updated 3 min ago. The page refreshes itself every 30 seconds. The server recomputes the data every 5 min.</span>`,
+		`<span class="tt" tabindex="0" aria-label="P0: asked for in the UI"><span class="badge"><span class="sw q0"></span>P0</span><span class="tc" aria-hidden="true">P0: asked for in the UI</span></span>`,
 		`<div class="qbar" role="img" aria-label="Probes: P0 1; P1 63; P3 2;"><i class="q0" style="flex-grow: 1"></i><i class="q1" style="flex-grow: 63"></i><i class="q3" style="flex-grow: 2"></i></div>`,
 		`<span class="xs dw">≈ 107.2% by 00:00 UTC</span>`,
 		`<span class="xs mu">≈ 79.0% by 00:00 UTC</span>`,
@@ -1064,11 +1087,11 @@ func TestTorrentsMarkup(t *testing.T) {
 		return w.Body.String()
 	}
 	tip := func(label, text string) string {
-		return `<span class="tip" tabindex="0" aria-label="` + template.HTMLEscapeString(label+": "+text) + `">` +
-			template.HTMLEscapeString(label) + `<span class="tipb" aria-hidden="true">` + template.HTMLEscapeString(text) + `</span></span>`
+		return `<span class="tt" tabindex="0" aria-label="` + template.HTMLEscapeString(label+": "+text) + `">` +
+			template.HTMLEscapeString(label) + `<span class="tc" aria-hidden="true">` + template.HTMLEscapeString(text) + `</span></span>`
 	}
 	ph := func(mark, text string) string {
-		return `<span class="th th-ph tip" tabindex="0" aria-label="` + text + `">` + mark + `<span class="tipb" aria-hidden="true">` + text + `</span></span>`
+		return `<span class="th th-ph tt" tabindex="0" aria-label="` + text + `">` + mark + `<span class="tc" aria-hidden="true">` + text + `</span></span>`
 	}
 	body := render(SampleTorrents(b, "", Filters{}))
 	for _, want := range []string{
@@ -1131,7 +1154,7 @@ func TestTorrentsMarkup(t *testing.T) {
 
 // A release filter's URL keeps the others, drops defaults and the offset.
 func TestReleaseURL(t *testing.T) {
-	p := WorkPage{Base: Base{Lang: "en", VoiceLangs: []string{"ru", "uk"}}, Releases: ReleaseTable{Path: "/tv/1",
+	p := WorkPage{Base: Base{Locale: libui.Locale{Lang: "en"}, VoiceLangs: []string{"ru", "uk"}}, Releases: ReleaseTable{Path: "/tv/1",
 		Filters: ReleaseFilters{Quality: "1080p", Season: "2", Sort: "peers"}}}
 	for _, c := range []struct{ got, want string }{
 		{p.ReleaseURL("episode", "4"), "/tv/1?episode=4&quality=1080p&season=2"},
@@ -1247,7 +1270,7 @@ func TestWorkPeakWithoutHistory(t *testing.T) {
 	}
 	body := w.Body.String()
 	for _, want := range []string{
-		`<span class="tip" tabindex="0" aria-label="Peak: `,
+		`<span class="tt" tabindex="0" aria-label="Peak: `,
 		`<span>24 h <span class="mu">—</span> · 7 days <span class="mu">—</span> · 30 days <span class="mu">—</span></span>`,
 	} {
 		if !strings.Contains(body, want) {

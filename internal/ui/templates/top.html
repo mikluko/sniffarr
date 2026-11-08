@@ -25,7 +25,7 @@
   </div>
   {{if .Works}}
   <div class="scroll">
-  <table class="t tt fit">
+  <table class="t topt fit">
     <thead><tr>
       <th class="r">{{.T "rank.col"}}</th><th>{{.T (concat "top.unit." .Kind)}}</th>
       <th class="r">{{template "tip" (tipArgs (.T "top.change") (.ChartTip "top.change_tip"))}}</th>

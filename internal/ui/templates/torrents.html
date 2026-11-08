@@ -114,4 +114,4 @@
 
 {{/* A row's placeholder for a poster, Label, with its meaning, Text, in a tooltip:
      "—" for a title TMDB has no poster of, "?" for a torrent matched to none. */}}
-{{define "tph"}}<span class="th th-ph tip" tabindex="0" aria-label="{{.Text}}">{{.Label}}<span class="tipb" aria-hidden="true">{{.Text}}</span></span>{{end}}
+{{define "tph"}}<span class="th th-ph tt" tabindex="0" aria-label="{{.Text}}">{{.Label}}<span class="tc" aria-hidden="true">{{.Text}}</span></span>{{end}}

@@ -231,9 +231,6 @@ func (b Base) DayLabel(t time.Time) string {
 	return b.Fmt("journal.day_year", day, month, strconv.Itoa(t.Year()))
 }
 
-// Clock is the time of t in Loc, "15:04".
-func (b Base) Clock(t time.Time) string { return t.In(b.loc()).Format("15:04") }
-
 // Stamp is t in Loc to the second: "19.10.2026 00:07:12", "Oct 19, 2026, 00:07:12".
 func (b Base) Stamp(t time.Time) string {
 	if b.ru() {

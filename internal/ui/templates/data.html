@@ -9,7 +9,7 @@
   <h1>{{$.T "nav.data"}}</h1>
   <div class="drefresh">
     {{- if $.Stale}}<span class="xs dw">{{$.T "d.updated"}} {{$.Ago .Computed}}</span>{{end -}}
-    <span class="tip ic rt"><button type="button" class="ic" hx-get="/" hx-target="#data" hx-swap="morph:outerHTML" aria-label="{{$.T "d.refresh"}}" aria-describedby="refresh-tip">{{icon "refresh"}}</button><span class="tipb" id="refresh-tip" role="tooltip">{{$.RefreshTip}}</span></span>
+    <span class="tt ic rt"><button type="button" class="ic" hx-get="/" hx-target="#data" hx-swap="morph:outerHTML" aria-label="{{$.T "d.refresh"}}" aria-describedby="refresh-tip">{{icon "refresh"}}</button><span class="tc" id="refresh-tip" role="tooltip">{{$.RefreshTip}}</span></span>
   </div>
 </div>
 
@@ -44,7 +44,7 @@
         <thead><tr><th>{{$.T "q.priority"}}</th><th class="r">{{$.T "q.tasks"}}</th><th class="r">{{$.T "q.eta"}}</th></tr></thead>
         <tbody>
         {{range .Levels}}{{$p := printf "P%d" .Priority}}{{$tip := concat $p ": " ($.Priority .Priority)}}
-          <tr><td><span class="tip" tabindex="0" aria-label="{{$tip}}"><span class="badge"><span class="sw q{{.Priority}}"></span>{{$p}}</span><span class="tipb" aria-hidden="true">{{$tip}}</span></span></td>
+          <tr><td><span class="tt" tabindex="0" aria-label="{{$tip}}"><span class="badge"><span class="sw q{{.Priority}}"></span>{{$p}}</span><span class="tc" aria-hidden="true">{{$tip}}</span></span></td>
             <td class="r">{{$.Num .Tasks}}</td>
             <td class="r">{{if $noprobers}}{{template "tip" (tipArgs "?" ($.T "q.noprobers_eta"))}}{{else if not .Known}}{{template "tip" (tipArgs "?" ($.T "q.nopace"))}}{{else if .ETA}}{{$.Span .ETA}}{{else}}<span class="mu">—</span>{{end}}</td></tr>
         {{end}}

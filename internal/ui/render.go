@@ -3,7 +3,6 @@ package ui
 import (
 	"bytes"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"sarak.sh/mikluko/libarr/static"
+	libui "sarak.sh/mikluko/libarr/ui"
 	"sarak.sh/mikluko/libarr/version"
 )
 
@@ -113,13 +113,13 @@ func baseOf(v any) Base {
 type Renderer struct {
 	tpl    map[string]*template.Template
 	msgs   map[string]map[string]string
-	langs  []string
 	static *static.Files
+	shared *libui.Assets
 	icons  map[string]template.HTML
 }
 
 func New() (*Renderer, error) {
-	r := &Renderer{tpl: map[string]*template.Template{}, msgs: map[string]map[string]string{}}
+	r := &Renderer{tpl: map[string]*template.Template{}}
 	sub, err := fs.Sub(files, "static")
 	if err != nil {
 		return nil, err
@@ -127,11 +127,15 @@ func New() (*Renderer, error) {
 	if r.static, err = static.New(sub, "/static/"); err != nil {
 		return nil, err
 	}
+	if r.shared, err = libui.New("/ui/"); err != nil {
+		return nil, err
+	}
 	if r.icons, err = loadIcons(); err != nil {
 		return nil, err
 	}
 	funcs := template.FuncMap{
 		"static":      r.static.URL,
+		"shared":      r.shared.URL,
 		"icon":        r.Icon,
 		"kinds":       func() []string { return Kinds },
 		"sources":     func() []string { return Sources },
@@ -195,67 +199,45 @@ func New() (*Renderer, error) {
 		}
 		r.tpl[name] = t
 	}
-	ents, err := fs.Glob(files, "i18n/*.json")
+	i18n, err := fs.Sub(files, "i18n")
 	if err != nil {
 		return nil, err
 	}
-	for _, p := range ents {
-		b, err := files.ReadFile(p)
-		if err != nil {
-			return nil, err
-		}
-		m := map[string]string{}
-		if err := json.Unmarshal(b, &m); err != nil {
-			return nil, fmt.Errorf("%s: %w", p, err)
-		}
-		lang := strings.TrimSuffix(strings.TrimPrefix(p, "i18n/"), ".json")
-		r.msgs[lang] = m
-		r.langs = append(r.langs, lang)
+	if r.msgs, err = libui.LoadMessages(i18n, langs); err != nil {
+		return nil, err
 	}
 	return r, nil
 }
+
+// langs are the languages of the UI, the default first.
+var langs = []string{"en", "ru"}
 
 // Base builds the common page model for a request.
 //
 //	lang: from Lang(); nav: "data" | "torrents" | "top" | "".
 func (r *Renderer) Base(req *http.Request, lang, nav string, voiceLangs []string, loc *time.Location) Base {
 	if _, ok := r.msgs[lang]; !ok {
-		lang = "en"
+		lang = langs[0]
 	}
 	return Base{
-		Lang: lang, Langs: []string{"ru", "en"}, Nav: nav,
-		VoiceLangs: voiceLangs, Path: req.URL.RequestURI(),
-		Build: version.Get(), Loc: loc, Now: time.Now(), msgs: r.msgs[lang],
+		Locale: libui.Locale{Lang: lang, Path: req.URL.RequestURI(), Loc: loc, Now: time.Now(), Messages: r.msgs[lang]},
+		Langs:  []string{"ru", "en"}, Nav: nav, VoiceLangs: voiceLangs, Build: version.Get(),
 	}
 }
 
-// Lang resolves the UI language: ?lang= (switcher, also sets a cookie) →
-// "lang" cookie → userLocale, the signed-in person's locale → en.
-// Any locale starting with "ru" maps to "ru"; "C", "POSIX" and "en*" map to "en".
+// Lang resolves the UI language as libarr's ui.Lang does, falling back on
+// userLocale, the signed-in person's locale: one starting with "ru" is
+// "ru"; "C", "POSIX" and one starting with "en" are "en".
 func Lang(w http.ResponseWriter, req *http.Request, userLocale string) string {
-	pick := func(s string) string {
-		if strings.HasPrefix(strings.ToLower(s), "ru") {
+	return libui.Lang(w, req, langs, func(*http.Request) string {
+		switch l := strings.ToLower(userLocale); {
+		case strings.HasPrefix(l, "ru"):
 			return "ru"
-		}
-		if s == "C" || s == "POSIX" || strings.HasPrefix(strings.ToLower(s), "en") {
+		case userLocale == "C", userLocale == "POSIX", strings.HasPrefix(l, "en"):
 			return "en"
 		}
 		return ""
-	}
-	if l := pick(req.URL.Query().Get("lang")); l != "" {
-		http.SetCookie(w, &http.Cookie{Name: "lang", Value: l, Path: "/", MaxAge: 365 * 24 * 3600,
-			HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
-		return l
-	}
-	if c, err := req.Cookie("lang"); err == nil {
-		if l := pick(c.Value); l != "" {
-			return l
-		}
-	}
-	if l := pick(userLocale); l != "" {
-		return l
-	}
-	return "en"
+	})
 }
 
 // Render writes the full page, or only the fragment htmx asked for:
@@ -326,14 +308,8 @@ func (r *Renderer) Static() *static.Files {
 	return r.static
 }
 
-// LangURL returns the current URL with lang=<l>, for the switcher.
-func (b Base) LangURL(l string) string {
-	u, err := url.Parse(b.Path)
-	if err != nil {
-		return "?lang=" + l
-	}
-	q := u.Query()
-	q.Set("lang", l)
-	u.RawQuery = q.Encode()
-	return u.RequestURI()
+// Shared serves /ui/, libarr's design system, of which the pages load
+// app.js.
+func (r *Renderer) Shared() http.Handler {
+	return r.shared.Handler()
 }
