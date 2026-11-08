@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.3] - 2026-11-08
+
+### Fixed
+
+- Fetchers and probers no longer crash on the metadata of a v2 torrent whose large files have no piece hashes yet.
+
 ## [0.44.2] - 2026-11-08
 
 ### Fixed
@@ -974,7 +980,8 @@ Changes since 0.43.0, the pre-releases taken together: the web UI's new look, a 
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.2...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.3...HEAD
+[0.44.3]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.2...v0.44.3
 [0.44.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.1...v0.44.2
 [0.44.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0...v0.44.1
 [0.44.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.43.0...v0.44.0
