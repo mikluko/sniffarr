@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 )
 
 // walLimit is the WAL size, in bytes, at which truncateWAL truncates it.

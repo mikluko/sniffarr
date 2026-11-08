@@ -51,7 +51,7 @@ jobs:
       - name: Build
         run: |
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
-          pkg=sarak.sh/mikluko/sniffarr/internal/version
+          pkg=sarak.sh/mikluko/libarr/version
           commit=$(git rev-parse HEAD)
           built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           for GOARCH in amd64 arm64; do

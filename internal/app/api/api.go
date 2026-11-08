@@ -16,12 +16,12 @@ import (
 
 	"go.uber.org/fx"
 
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/app"
 	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/arr"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	"sarak.sh/mikluko/sniffarr/internal/ingest"
 	"sarak.sh/mikluko/sniffarr/internal/latest"
 	"sarak.sh/mikluko/sniffarr/internal/memconn"

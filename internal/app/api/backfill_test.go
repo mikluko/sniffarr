@@ -9,13 +9,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 func TestBackfill(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer db.Close()
 	s, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})

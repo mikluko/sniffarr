@@ -12,8 +12,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"sarak.sh/mikluko/libarr/telemetry/telemetrytest"
 	"sarak.sh/mikluko/sniffarr/internal/store"
-	"sarak.sh/mikluko/sniffarr/internal/telemetry/telemetrytest"
 )
 
 // fakeArr serves records as the history API of the app does, paged in date

@@ -17,7 +17,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
@@ -327,7 +327,7 @@ func counters(t *testing.T, reader *sdkmetric.ManualReader) map[string]int64 {
 
 func TestSweepJournal(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	reader := sdkmetric.NewManualReader()

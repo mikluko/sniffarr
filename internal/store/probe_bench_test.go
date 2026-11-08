@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 )
 
 // benchReleases is how many releases openProbeBench stores, or
@@ -34,7 +34,7 @@ func benchReleases(tb testing.TB) int {
 func openProbeBench(tb testing.TB, n, queued int) (*Store, *database.DB) {
 	tb.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(tb.TempDir(), "bench.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(tb.TempDir(), "bench.db"), database.Options{Service: "sniffarr"})
 	require.NoError(tb, err)
 	tb.Cleanup(func() { db.Close() })
 	s, err := New(ctx, db, Options{Languages: []string{"ru"}})

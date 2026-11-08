@@ -16,6 +16,8 @@ import (
 
 	"go.uber.org/fx"
 
+	"sarak.sh/mikluko/libarr/cli"
+	"sarak.sh/mikluko/libarr/version"
 	"sarak.sh/mikluko/sniffarr/internal/app"
 	"sarak.sh/mikluko/sniffarr/internal/app/api"
 	"sarak.sh/mikluko/sniffarr/internal/app/broker"
@@ -27,8 +29,6 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/app/peers"
 	"sarak.sh/mikluko/sniffarr/internal/app/sniff"
 	"sarak.sh/mikluko/sniffarr/internal/app/ui"
-	"sarak.sh/mikluko/sniffarr/internal/cli"
-	"sarak.sh/mikluko/sniffarr/internal/version"
 	"sarak.sh/mikluko/sniffarr/internal/waitapi"
 )
 
@@ -66,7 +66,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	build := version.Get()
 	log.Info("sniffarr", "version", build.Version, "commit", build.Commit, "built", build.Built)
 	if cfg.waitAPI {
-		return waitapi.Run(ctx, &http.Client{Timeout: waitapi.Interval}, cfg.client.URL, build.Server(), waitapi.Interval, log)
+		return waitapi.Run(ctx, &http.Client{Timeout: waitapi.Interval}, cfg.client.URL, build.Server("sniffarr"), waitapi.Interval, log)
 	}
 	a := fx.New(options(cfg, log)...)
 	if err := a.Err(); err != nil {

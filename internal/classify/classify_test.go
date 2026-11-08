@@ -16,11 +16,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"sarak.sh/mikluko/libarr/database"
+	"sarak.sh/mikluko/libarr/telemetry/telemetrytest"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
-	"sarak.sh/mikluko/sniffarr/internal/telemetry/telemetrytest"
 )
 
 const answer200 = `{
@@ -206,7 +206,7 @@ func TestClientNoKey(t *testing.T) {
 func setup(t *testing.T, names ...string) *store.Store {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(russian)})

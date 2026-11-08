@@ -19,9 +19,9 @@ const (
 // Outdated reports whether a build of version running is far enough behind
 // the stable release latest, under p, to announce it. A pre-release build
 // is, under either policy, as soon as latest is its base version or later.
-// Dev, a version that is not MAJOR.MINOR.PATCH with an optional
-// pre-release, and a pre-release latest are never outdated. Either may lead
-// with "v".
+// libarr's version.Dev, a version that is not MAJOR.MINOR.PATCH with an
+// optional pre-release, and a pre-release latest are never outdated. Either
+// may lead with "v".
 func Outdated(running, latest string, p Policy) bool {
 	run, ok := parseSemver(running)
 	if !ok {

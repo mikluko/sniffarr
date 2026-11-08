@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 )
 
 // alienHit is Alien as an English search answer gives it.
@@ -335,7 +335,7 @@ func TestFillFeaturesAndMarks(t *testing.T) {
 
 func TestMigrateWorks(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer db.Close()
 	old := fstest.MapFS{}
@@ -441,7 +441,7 @@ func TestMigrateWorks(t *testing.T) {
 	require.False(t, rows.Next(), "no foreign key is broken")
 	require.NoError(t, rows.Close())
 
-	fresh, err := database.Open(ctx, filepath.Join(t.TempDir(), "fresh.db"), database.Options{})
+	fresh, err := database.Open(ctx, filepath.Join(t.TempDir(), "fresh.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer fresh.Close()
 	_, err = New(ctx, fresh, Options{})

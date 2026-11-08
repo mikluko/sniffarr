@@ -13,11 +13,11 @@ docker run -e SNIFFARR_DB=/data/sniffarr.db sniffarr -api -ui
 ## Version
 
 A binary knows its version, its commit (7 characters) and its build time
-(UTC) from three variables of `internal/version`, set at link time with
-`-ldflags -X`. The image takes them as the build arguments `VERSION`,
-`COMMIT` and `BUILD_TIME`, and the release workflow passes the version it
-cuts, the commit it builds and the time of the build to the image, and as
-`-X` flags to the archives and packages. Without them a build reads version
+(UTC) from three variables of `sarak.sh/mikluko/libarr/version`, set at link
+time with `-ldflags -X`. The image takes them as the build arguments
+`VERSION`, `COMMIT` and `BUILD_TIME`, and the release workflow passes the
+version it cuts, the commit it builds and the time of the build to the
+image, and as `-X` flags to the archives and packages. Without them a build reads version
 `dev`, and takes the commit and the time from the VCS stamp `go build`
 leaves in a checkout, when there is one.
 

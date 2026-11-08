@@ -7,9 +7,9 @@ COPY . .
 ARG VERSION COMMIT BUILD_TIME
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /out/sniffarr \
     -ldflags="-s \
-    -X sarak.sh/mikluko/sniffarr/internal/version.version=$VERSION \
-    -X sarak.sh/mikluko/sniffarr/internal/version.commit=$COMMIT \
-    -X sarak.sh/mikluko/sniffarr/internal/version.built=$BUILD_TIME" .
+    -X sarak.sh/mikluko/libarr/version.version=$VERSION \
+    -X sarak.sh/mikluko/libarr/version.commit=$COMMIT \
+    -X sarak.sh/mikluko/libarr/version.built=$BUILD_TIME" .
 
 FROM gcr.io/distroless/static-debian13:nonroot
 COPY --from=build /out/sniffarr /sniffarr

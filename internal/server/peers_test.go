@@ -12,9 +12,9 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
+	"sarak.sh/mikluko/libarr/database"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	"sarak.sh/mikluko/sniffarr/internal/memconn"
 	"sarak.sh/mikluko/sniffarr/internal/rot13"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
@@ -28,7 +28,7 @@ import (
 func serveMem(t *testing.T) (*store.Store, sniffarrv1connect.IngestServiceClient) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{})

@@ -19,10 +19,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"sarak.sh/mikluko/libarr/database"
+	"sarak.sh/mikluko/libarr/version"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	"sarak.sh/mikluko/sniffarr/internal/memconn"
 	"sarak.sh/mikluko/sniffarr/internal/names"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
@@ -30,7 +31,6 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/sketch"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 	"sarak.sh/mikluko/sniffarr/internal/ui"
-	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 var now = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
@@ -147,7 +147,7 @@ const longJournal = ui.JournalPageSize + 3
 func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Tasks) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	languages, err := audio.Parse(langs)
@@ -317,7 +317,7 @@ func TestRoot(t *testing.T) {
 
 func TestServerHeader(t *testing.T) {
 	h := handler(t, nil)
-	want := version.Get().Server()
+	want := version.Get().Server("sniffarr")
 	for path, code := range map[string]int{
 		"/":                       http.StatusOK,
 		"/static/app.css":         http.StatusOK,

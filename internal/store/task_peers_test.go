@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 )
 
 func TestWantPeers(t *testing.T) {
@@ -117,7 +117,7 @@ func TestTrimNoProbes(t *testing.T) {
 
 func TestMigrateTaskQueue(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer db.Close()
 	old := fstest.MapFS{}

@@ -22,6 +22,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	libversion "sarak.sh/mikluko/libarr/version"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
@@ -164,7 +165,7 @@ func New(cfg Config) (*Handler, error) {
 	mux.Handle("POST /movie/{id}/{action}", cop.Handler(s.requestWork("movie")))
 	mux.Handle("POST /tv/{id}/{action}", cop.Handler(s.requestWork("series")))
 	mux.HandleFunc("/", s.notFound)
-	h.Handler = version.Middleware(mux)
+	h.Handler = libversion.Middleware("sniffarr", mux)
 	return h, nil
 }
 

@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
+	"sarak.sh/mikluko/libarr/telemetry"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/rot13"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
-	"sarak.sh/mikluko/sniffarr/internal/telemetry"
 )
 
 // DefaultURL is TypeSafe's evaluation endpoint.

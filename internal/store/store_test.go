@@ -14,14 +14,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 func openAt(t *testing.T, path string) (*Store, *database.DB) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, path, database.Options{})
+	db, err := database.Open(ctx, path, database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	s, err := New(ctx, db, Options{Languages: []string{"ru"}})
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestSweepPlans(t *testing.T) {
 
 func TestMigrateAudio(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer db.Close()
 	old := fstest.MapFS{}
@@ -274,7 +274,7 @@ func schema(t *testing.T, db *database.DB) []string {
 
 func TestMigrateModules(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer db.Close()
 	old := fstest.MapFS{}
@@ -395,7 +395,7 @@ func TestMigrateModules(t *testing.T) {
 		require.Zero(t, n, "%s cascades from torrent_releases", table)
 	}
 
-	fresh, err := database.Open(ctx, filepath.Join(t.TempDir(), "fresh.db"), database.Options{})
+	fresh, err := database.Open(ctx, filepath.Join(t.TempDir(), "fresh.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer fresh.Close()
 	_, err = New(ctx, fresh, Options{})
@@ -405,7 +405,7 @@ func TestMigrateModules(t *testing.T) {
 
 func TestMigrateClassifierLayer(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	old := fstest.MapFS{}

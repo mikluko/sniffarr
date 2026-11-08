@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	libversion "sarak.sh/mikluko/libarr/version"
 	"sarak.sh/mikluko/sniffarr/internal/latest"
 	"sarak.sh/mikluko/sniffarr/internal/version"
 )
@@ -141,7 +142,7 @@ func TestRenderAll(t *testing.T) {
 	}
 }
 
-var sampleBuild = version.Info{Version: "0.44.0-alpha.2", Commit: "1a2b3c4", Built: time.Date(2026, 11, 7, 14, 2, 0, 0, time.UTC)}
+var sampleBuild = libversion.Info{Version: "0.44.0-alpha.2", Commit: "1a2b3c4", Built: time.Date(2026, 11, 7, 14, 2, 0, 0, time.UTC)}
 
 // The footer of every page names the build and links the project page; its
 // tooltip adds the build time in UTC and the commit while both are known.
@@ -150,7 +151,7 @@ func TestRenderFooterVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	render := func(lang string, build version.Info, page string, data func(Base) any) string {
+	render := func(lang string, build libversion.Info, page string, data func(Base) any) string {
 		t.Helper()
 		req := httptest.NewRequest("GET", "/", nil)
 		b := r.Base(req, lang, "", []string{"ru"}, time.FixedZone("CEST", 2*3600))
@@ -172,7 +173,7 @@ func TestRenderFooterVersion(t *testing.T) {
 		checkBody(t, "en/"+page, render("en", sampleBuild, page, data), nil, []string{
 			`aria-label="sniffarr 0.44.0-alpha.2: Release notes. Built Nov 7, 2026, 14:02 UTC, commit 1a2b3c4."`,
 		})
-		checkBody(t, "dev/"+page, render("en", version.Info{Version: "dev"}, page, data), nil, []string{
+		checkBody(t, "dev/"+page, render("en", libversion.Info{Version: "dev"}, page, data), nil, []string{
 			`<a class="tip vl" href="https://sarak.sh/mikluko/sniffarr" rel="noreferrer" target="_blank" aria-label="sniffarr dev: Project page.">sniffarr dev<span class="tipb" aria-hidden="true">Project page.</span></a></span>`,
 		})
 	}
@@ -192,7 +193,7 @@ func TestRenderFooterUpdate(t *testing.T) {
 		t.Helper()
 		req := httptest.NewRequest("GET", "/", nil)
 		b := r.Base(req, lang, "", []string{"ru"}, time.FixedZone("CEST", 2*3600))
-		b.Build, b.Latest, b.Notice = version.Info{Version: build}, rel, p
+		b.Build, b.Latest, b.Notice = libversion.Info{Version: build}, rel, p
 		w := httptest.NewRecorder()
 		if err := r.Render(w, req, "notfound", NotFoundPage{Base: b, Asked: "/x"}); err != nil {
 			t.Fatal(err)
@@ -430,12 +431,12 @@ func TestStatic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u := r.StaticURL("app.css")
+	u := r.Static().URL("app.css")
 	if !strings.HasPrefix(u, "/static/app.css?v=") || len(u) != len("/static/app.css?v=")+16 {
-		t.Fatalf("StaticURL = %q", u)
+		t.Fatalf("URL = %q", u)
 	}
-	if got := r.StaticURL("nope.css"); got != "/static/nope.css" {
-		t.Errorf("StaticURL of a missing file = %q", got)
+	if got := r.Static().URL("nope.css"); got != "/static/nope.css" {
+		t.Errorf("URL of a missing file = %q", got)
 	}
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -812,7 +813,7 @@ func TestFonts(t *testing.T) {
 	}
 	body := w.Body.String()
 	for _, f := range []string{"fonts/jetbrains-mono-400.woff2", "fonts/jetbrains-mono-600.woff2"} {
-		u := r.StaticURL(f)
+		u := r.Static().URL(f)
 		if !strings.Contains(u, "?v=") {
 			t.Fatalf("%s has no version: %q", f, u)
 		}

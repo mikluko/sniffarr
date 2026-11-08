@@ -5,7 +5,6 @@ go 1.27.3
 require (
 	connectrpc.com/connect v1.21.1
 	connectrpc.com/otelconnect v0.12.0
-	github.com/XSAM/otelsql v0.44.0
 	github.com/anacrolix/dht/v2 v2.24.1-0.20260924041734-a9c967f9d68b
 	github.com/anacrolix/generics v0.2.0
 	github.com/anacrolix/torrent v1.61.1-0.20261108082052-e93a3fc0da93
@@ -17,7 +16,6 @@ require (
 	github.com/pion/stun/v3 v3.1.7
 	github.com/segmentio/go-hll v1.0.1
 	github.com/stretchr/testify v1.12.1
-	go.opentelemetry.io/contrib/exporters/autoexport v0.72.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/metric v1.47.0
@@ -30,11 +28,13 @@ require (
 	golang.org/x/time v0.16.0
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.62.0
+	sarak.sh/mikluko/libarr v0.4.0
 )
 
 require (
 	connectrpc.com/connect/v2 v2.0.2 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.16.0 // indirect
+	github.com/XSAM/otelsql v0.44.0 // indirect
 	github.com/anacrolix/btree v0.1.1 // indirect
 	github.com/anacrolix/chansync v0.8.0 // indirect
 	github.com/anacrolix/envpprof v1.6.0 // indirect
@@ -48,6 +48,7 @@ require (
 	github.com/anacrolix/multiless v0.4.0 // indirect
 	github.com/anacrolix/sync v0.6.0 // indirect
 	github.com/anacrolix/upnp v0.1.4 // indirect
+	github.com/andybalholm/brotli v1.2.8 // indirect
 	github.com/antithesishq/antithesis-sdk-go v0.8.0-default-no-op // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/benbjohnson/immutable v0.4.3 // indirect
@@ -120,6 +121,7 @@ require (
 	go.etcd.io/bbolt v1.5.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/bridges/prometheus v0.72.0 // indirect
+	go.opentelemetry.io/contrib/exporters/autoexport v0.72.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.23.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.23.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.47.0 // indirect

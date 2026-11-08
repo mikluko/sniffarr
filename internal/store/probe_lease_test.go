@@ -17,7 +17,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 )
 
 // queueProbeOrder stores ten releases a probe reads, b 1 to 10 with b*10
@@ -57,7 +57,7 @@ func TestLeaseProbeBatchOrder(t *testing.T) {
 }
 
 func TestLeaseProbeConcurrent(t *testing.T) {
-	db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	s, err := New(context.Background(), db, Options{ProbeBatch: 4})
@@ -133,7 +133,7 @@ func TestLeaseProbeCallerGone(t *testing.T) {
 
 func TestLeaseProbeFailedBatch(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	var log bytes.Buffer
 	s, err := New(ctx, db, Options{Log: slog.New(slog.NewTextHandler(&log, nil))})
@@ -160,7 +160,7 @@ func TestLeaseProbeSearchesOutsideTheWriter(t *testing.T) {
 	ctx := context.Background()
 	spans := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spans))
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Tracer: tp})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr", Tracer: tp})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	s, err := New(ctx, db, Options{})

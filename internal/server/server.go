@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
 
+	libversion "sarak.sh/mikluko/libarr/version"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/arr"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
@@ -151,7 +152,7 @@ func New(c Config) (http.Handler, error) {
 		}
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	return version.Middleware(mux), nil
+	return libversion.Middleware("sniffarr", mux), nil
 }
 
 // Protocols are the protocols the server speaks: HTTP/1.1 and HTTP/2

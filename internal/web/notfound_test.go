@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"sarak.sh/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/libarr/version"
 )
 
 // notFound returns the body of a 404 answer, the page in full.

@@ -10,8 +10,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
+	"sarak.sh/mikluko/libarr/database"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	titles "sarak.sh/mikluko/sniffarr/internal/names"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
@@ -21,7 +21,7 @@ import (
 func matched(t *testing.T) *Browser {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{TMDB: true})

@@ -18,12 +18,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
 
+	"sarak.sh/mikluko/libarr/version"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/bus"
 	"sarak.sh/mikluko/sniffarr/internal/store"
-	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 func TestGraph(t *testing.T) {
@@ -136,7 +136,7 @@ func TestRunWithTelemetryOff(t *testing.T) {
 		res, err := http.Get(url)
 		require.NoError(t, err)
 		require.NoError(t, res.Body.Close())
-		require.Equal(t, version.Get().Server(), res.Header.Get("Server"), url)
+		require.Equal(t, version.Get().Server("sniffarr"), res.Header.Get("Server"), url)
 	}
 
 	var p http.Protocols
@@ -171,7 +171,7 @@ func TestRunWithTelemetryOff(t *testing.T) {
 }
 
 func TestRunWaitsForAPI(t *testing.T) {
-	srv := httptest.NewServer(version.Middleware(http.NotFoundHandler()))
+	srv := httptest.NewServer(version.Middleware("sniffarr", http.NotFoundHandler()))
 	t.Cleanup(srv.Close)
 	cfg, err := load([]string{"-wait-api"}, env("SNIFFARR_URL", srv.URL), io.Discard)
 	require.NoError(t, err)

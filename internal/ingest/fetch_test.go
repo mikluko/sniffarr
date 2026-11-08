@@ -12,10 +12,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"sarak.sh/mikluko/libarr/database"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
@@ -27,7 +27,7 @@ func infohash(b byte) []byte {
 
 func TestResultOutlivesStream(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
@@ -60,7 +60,7 @@ func TestResultOutlivesStream(t *testing.T) {
 
 func TestResultFailures(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	q, err := store.NewTasks(ctx, db, store.TaskOptions{})
@@ -100,7 +100,7 @@ func journal(t *testing.T, st *store.Store, h store.Hash) []string {
 
 func TestResultJournals(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
@@ -142,7 +142,7 @@ func TestResultJournals(t *testing.T) {
 
 func TestSightStoredFlags(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})
@@ -170,7 +170,7 @@ func TestSightStoredFlags(t *testing.T) {
 
 func TestResultStoresFeatures(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{Languages: []string{"ru"}})
@@ -214,7 +214,7 @@ func TestResultStoresFeatures(t *testing.T) {
 
 func TestFetchLookups(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	st, err := store.New(ctx, db, store.Options{})

@@ -1,4 +1,4 @@
-package database
+package store
 
 import (
 	"context"
@@ -8,11 +8,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 
-// peers returns a sketch of n peers numbered from first.
-func peers(first, n int) []byte {
+// peerSketch returns a sketch of n peers numbered from first.
+func peerSketch(first, n int) []byte {
 	var k sketch.Key
 	s := sketch.New()
 	for i := first; i < first+n; i++ {
@@ -23,12 +24,12 @@ func peers(first, n int) []byte {
 
 func TestHLLFunctions(t *testing.T) {
 	ctx := context.Background()
-	db, err := Open(ctx, filepath.Join(t.TempDir(), "test.db"), Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { require.NoError(t, db.Close()) }()
 	_, err = db.W.ExecContext(ctx, "CREATE TABLE s (k INTEGER, sketch BLOB)")
 	require.NoError(t, err)
-	for i, b := range [][]byte{peers(0, 100), peers(50, 100), peers(100, 100), nil} {
+	for i, b := range [][]byte{peerSketch(0, 100), peerSketch(50, 100), peerSketch(100, 100), nil} {
 		_, err = db.W.ExecContext(ctx, "INSERT INTO s (k, sketch) VALUES (?, ?)", i, b)
 		require.NoError(t, err)
 	}

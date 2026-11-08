@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	libversion "sarak.sh/mikluko/libarr/version"
 	"sarak.sh/mikluko/sniffarr/internal/latest"
 	"sarak.sh/mikluko/sniffarr/internal/version"
 )
@@ -15,17 +16,17 @@ import (
 // Base is embedded in every page model. Templates call its methods for
 // translation and locale-aware formatting: {{.T "key"}}, {{$.Num .N}}, ...
 type Base struct {
-	Lang       string       // "ru" | "en"
-	Langs      []string     // switcher entries
-	Nav        string       // "torrents" | "top" select that header tab; "data" is the logo's page, which selects none; "" is any other
-	VoiceLangs []string     // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
-	Path       string       // current path+query, for the language switcher
-	Seerr      string       // base URL of a Seerr the cards link titles to; "" links none
-	Radarr     string       // root URL of a Radarr the cards link movies to; "" links none
-	Sonarr     string       // root URL of a Sonarr the cards link series to; "" links none
-	Probes     bool         // whether the API probes releases; false hides the probe button, meter and queue
-	Classifier bool         // whether the API runs the classifier; false hides its meter and layer on the data page
-	Build      version.Info // the build the footer names
+	Lang       string          // "ru" | "en"
+	Langs      []string        // switcher entries
+	Nav        string          // "torrents" | "top" select that header tab; "data" is the logo's page, which selects none; "" is any other
+	VoiceLangs []string        // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
+	Path       string          // current path+query, for the language switcher
+	Seerr      string          // base URL of a Seerr the cards link titles to; "" links none
+	Radarr     string          // root URL of a Radarr the cards link movies to; "" links none
+	Sonarr     string          // root URL of a Sonarr the cards link series to; "" links none
+	Probes     bool            // whether the API probes releases; false hides the probe button, meter and queue
+	Classifier bool            // whether the API runs the classifier; false hides its meter and layer on the data page
+	Build      libversion.Info // the build the footer names
 	Loc        *time.Location
 	Now        time.Time
 

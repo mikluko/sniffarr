@@ -17,9 +17,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"sarak.sh/mikluko/libarr/database"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	"sarak.sh/mikluko/sniffarr/internal/names"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
@@ -36,7 +36,7 @@ type stored struct {
 func serve(t *testing.T, torrents ...stored) (*httptest.Server, *store.Store) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{TMDB: true})
@@ -393,7 +393,7 @@ func TestResolutionInLetters(t *testing.T) {
 
 func TestSearchRussianAudio(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{TMDB: true, Languages: []string{"ru"}})
@@ -497,7 +497,7 @@ func TestSearchWantsProbes(t *testing.T) {
 
 func TestSearchProbedTitle(t *testing.T) {
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{TMDB: true, Languages: []string{"ru"}})

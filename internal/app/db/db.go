@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/fx"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
@@ -27,7 +27,7 @@ type Config struct {
 var Module = fx.Module("db", fx.Provide(open, newStore, newQueue))
 
 func open(lc fx.Lifecycle, cfg Config, log *slog.Logger) (*database.DB, error) {
-	db, err := database.Open(context.Background(), cfg.Path, database.Options{Meter: cfg.Store.Meter, Log: log})
+	db, err := database.Open(context.Background(), cfg.Path, database.Options{Service: "sniffarr", Meter: cfg.Store.Meter, Log: log})
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", cfg.Path, err)
 	}

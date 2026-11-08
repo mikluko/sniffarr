@@ -24,7 +24,7 @@ import (
 
 	"github.com/mikluko/batcher"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 

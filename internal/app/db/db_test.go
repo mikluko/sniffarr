@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
 
-	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/libarr/database"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
@@ -20,7 +20,7 @@ import (
 func leased(t *testing.T, path string) store.Hash {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, path, database.Options{})
+	db, err := database.Open(ctx, path, database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	defer func() { require.NoError(t, db.Close()) }()
 	q, err := store.NewTasks(ctx, db, store.TaskOptions{})

@@ -17,21 +17,21 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"sarak.sh/mikluko/libarr/database"
+	"sarak.sh/mikluko/libarr/version"
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/arr"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
-	"sarak.sh/mikluko/sniffarr/internal/database"
 	"sarak.sh/mikluko/sniffarr/internal/rot13"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	"sarak.sh/mikluko/sniffarr/internal/store"
-	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 func start(t *testing.T, cfg Config, qopts ...store.TaskOptions) (*httptest.Server, *http.Client) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{})
+	db, err := database.Open(ctx, filepath.Join(t.TempDir(), "test.db"), database.Options{Service: "sniffarr"})
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	s, err := store.New(ctx, db, store.Options{Languages: audio.Tags(cfg.Languages)})
@@ -505,7 +505,7 @@ func TestReadyAfterCounts(t *testing.T) {
 
 func TestServerHeader(t *testing.T) {
 	srv, hc := start(t, Config{Counts: &search.Counts{}})
-	want := version.Get().Server()
+	want := version.Get().Server("sniffarr")
 	for path, code := range map[string]int{
 		"/healthz":                          http.StatusOK,
 		"/readyz":                           http.StatusServiceUnavailable,
