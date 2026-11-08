@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-11-08
+
+The web UI's new design, a journal of what happens to each infohash, and the chart's API as a StatefulSet.
+
+### Added
+
+- What happens to an infohash is recorded in the journal, `torrent_journal`: its sighting and queueing, leases, fetches, classifications, title matches, Radarr and Sonarr grabs and imports, feed listings, probes, requests for peers and its deletion, kept for `SNIFFARR_RETENTION_JOURNAL`, `720h` by default.
+- The release card shows the journal in rows by day, each opening on its task's steps and particulars, with failures marked; the card of an infohash with no stored torrent shows its journal and what ended it.
+- `BrowseService.Journal` returns the journal of one infohash or of all, narrowed by `kind` and `outcome` and paged by `before`; `Card` returns its newest 200 entries.
+- Every response of the API and the web UI carries `Server: sniffarr/<version>`, and the web UI's footer shows the version, linking its release notes.
+- The API checks the releases feed for a newer stable release once a day, reports it as `BrowseService.Settings.latest_release`, and the web UI's footer announces it; `SNIFFARR_RELEASE_CHECK` is `lazy` by default, `eager`, or `off`.
+- The top reads as a chart: the change against the previous window, time in the top, peak and debut, which `BrowseService.Top` and `Title` return too.
+- "Match now" on a release card, and `BrowseService.RequestMatch`, look a title matched to no work up on TMDB at once.
+- With `SNIFFARR_RADARR_URL` or `SNIFFARR_SONARR_URL` set for the UI, the pages link a matched work in Radarr or Sonarr; `SNIFFARR_RADARR_API_URL` and `SNIFFARR_SONARR_API_URL` name the API where the API reaches it at another address.
+- `SNIFFARR_CLASSIFY_URL` and `SNIFFARR_CLASSIFY_API_KEY` set the classifier's endpoint and key; an endpoint other than TypeSafe's turns the classifier on with or without a key.
+- `BrowseService.Settings` reports the optional features, whether each is on and works, and what turns it on; the data page lists them.
+- `-wait-api` waits until the API serves the binary's own version, and the chart runs it as an init container of the ui, sniff, fetch and probe pods.
+- `-port-offset` adds a number, such as a StatefulSet pod's index, to `-port`.
+- `SNIFFARR_PROBE_BATCH` sets how many probe tasks are handed out together, 64 by default.
+
+### Changed
+
+- **Breaking:** probes turn on with `-probe` alone, on the fetchers that probe and on the process running `-api`; the other probe flags without it stop sniffarr at start, and `-probe-dir` is optional. With the Helm chart, `probe.enabled` renders it.
+- **Breaking:** TMDB matching cannot be turned off: an empty `TMDB_API_KEY` uses the built-in token.
+- **Breaking:** the chart's probe StatefulSet is governed by the headless Service `<release>-probe`, not `<release>-probe-pods`, so delete it once with `kubectl delete statefulset <release>-probe --cascade=orphan` before the upgrade; with a fixed port, each replica listens on the port plus its index behind a Service of its own, `<release>-probe-<index>`.
+- The chart runs the API as a StatefulSet of one, `<release>-api`, keeping the claim `<release>-api` of an earlier install; a new install's claim is `data-<release>-api-0`.
+- After a restart, the API serves its last counts and answers `/readyz` at once, until it computes new ones.
+- The table `settings` is named `state`.
+- The classifier's layer `jev` is `classifier` in the API, the metrics and the stored data, and the web UI and the docs name it without Jev.
+- Metrics carry the instrumentation scope `sarak.sh/mikluko/sniffarr/...`, not `github.com/mikluko/sniffarr/...`.
+- The web UI has a new design: a new look, explanations in tooltips, Torrents and Top in the header, back links, a 404 page, and dates, numbers and wording consistent across pages and languages.
+- The data page leads with its figures and meters, shows the task queue per kind and the store as three tables, refreshes on request and marks stale counts.
+- The torrents page fits its table at 1280 px and folds its filters on a phone; its search, and `BrowseService.Torrents`, find a release by the titles of its matched work too.
+- A movie or series page shows the TMDB details beside the poster, the work's peak in the top, and its releases filtered by season, quality, size and episode.
+
+### Deprecated
+
+- `TYPESAFE_API_KEY`: use `SNIFFARR_CLASSIFY_API_KEY`.
+
+### Removed
+
+- The top's audio and sources columns, and the source and dub filters of a movie's or series' releases.
+
+### Fixed
+
+- Behind a NodePort, the DHT names a probe's seeds at the node port.
+- Fetches no longer slow down while many fetchers ask for probe tasks.
+- A web UI started before a new API no longer shows probes, audio languages and features as off until restarted.
+- The magnet link on the release card opens the torrent in a client.
+- The probe button says when a release has no file a probe can read.
+- Releases that had failed probes before a successful one get their full number of probe attempts.
+- A probe that reads more than 128 tracks is recorded as unknown, so a crafted file header cannot stall the database.
+
 ## [0.44.0-rc.2] - 2026-11-08
 
 No changes since rc.1.
@@ -909,7 +962,8 @@ Changes since 0.43.0, the pre-releases taken together: the web UI's new look, a 
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-rc.2...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0...HEAD
+[0.44.0]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.43.0...v0.44.0
 [0.44.0-rc.2]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-rc.1...v0.44.0-rc.2
 [0.44.0-rc.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.8...v0.44.0-rc.1
 [0.44.0-beta.8]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.7...v0.44.0-beta.8
