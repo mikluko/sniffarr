@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.44.0-rc.1] - 2026-11-08
+
+Changes since 0.43.0, the pre-releases taken together: the web UI's new look, a journal of what happens to each infohash, and the chart's API as a StatefulSet.
+
+### Added
+
+- What happens to an infohash is recorded in the journal, the table `torrent_journal`, one entry per event in the transaction of the change: its sighting and queueing, leases, fetches, classifications, title matches, Radarr and Sonarr grabs and imports, feed listings, probes, the web UI's requests for peers, and its deletion. Entries are kept for `SNIFFARR_RETENTION_JOURNAL`, `720h` by default, and `sniffarr.store.journal.deletions` counts those deleted.
+- The release card shows the journal in rows by day: a fetch or a probe with all its attempts, or a title's feed listings, form one row that opens on its steps, particulars and tracks. Failures are marked amber or red, in words for screen readers too, and the heading counts those no later entry settled.
+- The release card shows the journal's newest 5 rows and loads older entries in place, 200 at a time. The card of an infohash with no stored torrent shows its journal, says what ended it, and notes when retention may have cut its start.
+- `BrowseService.Journal` returns the newest journal entries, up to 1000, of one infohash or of all, narrowed by `kind` and `outcome` and paged by `before`; for one infohash it returns `total` and `older`. Each entry carries its `id` and `infohash`.
+- `BrowseService.Card` returns the newest 200 journal entries as `journal`, with `journal_total`; `Settings` reports `journal_retention`.
+- Every response of the API and the web UI carries the header `Server: sniffarr/<version>`, and the process logs its version, commit and build time at start.
+- The image takes the build arguments `VERSION`, `COMMIT` and `BUILD_TIME`; a build without them reads `dev`.
+- The web UI's footer shows the version, linking its release notes, or the project page for a build without a release's version, with the build time and commit in a tooltip.
+- The API reads the latest stable release from the releases feed, `https://sarak.sh/mikluko/sniffarr/releases.rss`, once a day and reports it as `BrowseService.Settings.latest_release`, with `release_notice`; the web UI's footer announces it beside the version.
+- `SNIFFARR_RELEASE_CHECK` is `lazy` by default, announcing a release when the build is behind it by a major or by more than one minor version, or is a pre-release of it or of an earlier one; `eager` announces any newer stable release, and `no` or `off` turns the check off.
+- `-wait-api` polls the API at `SNIFFARR_URL` every 2 seconds and exits once its `Server` header names the binary's own version. The chart runs it as the init container `wait-api` of the ui, sniff, fetch and probe pods, turned off with `waitForAPI.enabled: false`.
+- `-port-offset` adds a number, such as a StatefulSet pod's index, to `-port`.
+- `SNIFFARR_PROBE_BATCH` sets how many probe tasks asked for at once are handed out together, 64 by default.
+- `BrowseService.Settings` reports `probes`, and `features`: for the classifier, probes, audio and tracker feeds, whether each is on, whether it works now, and the flag or variable that turns it on. The data page lists the features likewise.
+- `BrowseService.Stats` reports `probers`, the fetchers that asked for a probe task in the last 15 minutes, and `counts_interval`, how often the counts are recomputed.
+- `SNIFFARR_CLASSIFY_URL` sets the classifier's System One endpoint; an endpoint other than TypeSafe's turns the classifier on with or without a key. `SNIFFARR_CLASSIFY_API_KEY` sets the key sent to it.
+- A release card offers "Match now" for a movie or series matched to no work: it looks the title up on TMDB at once and answers with the work found or that TMDB still finds nothing. `BrowseService.RequestMatch` does the same.
+- With `SNIFFARR_RADARR_URL` or `SNIFFARR_SONARR_URL` set for the UI, the title page and the release card link a matched movie in that Radarr and a series in that Sonarr.
+- `SNIFFARR_RADARR_API_URL` and `SNIFFARR_SONARR_API_URL` name the root of the app's v3 API where the API reaches it by another address than the root URL, such as a cluster service.
+- The top reads as a chart: the change against the previous window ("=", "new", "re-entry"), time in the top, peak and debut, from a history of places kept from this version on; a work already in the top when the history began shows its debut as "≤ date".
+- `BrowseService.Top` returns each entry's `debut`, `on_chart`, `peak` and `reentry`, and `history_since`; `Title` returns `peaks` per window, which a movie or series page shows as a "Peak" row.
+
+### Changed
+
+- **Breaking:** probes no longer turn on with `-probe-dir` alone, and `-probe-dir`, `-probers`, `-probe-timeout`, `-seed-max-size` or `-seed-max-age` without `-probe` stops sniffarr at start: add `-probe` to the fetchers that probe and to the process running `-api`. With the Helm chart, `probe.enabled` renders it. While the API does not probe, `RequestProbe` fails with `FAILED_PRECONDITION` and the web UI hides the probe button, meter and queue card.
+- `-probe-dir` is optional: without it, `-fetch -probe` keeps the pieces in a temporary directory removed at stop.
+- **Breaking:** TMDB matching is part of the core and cannot be turned off: an empty `TMDB_API_KEY` uses the built-in token instead of turning matching off.
+- **Breaking:** the chart's probe StatefulSet is governed by the headless Service `<release>-probe`, not `<release>-probe-pods`; delete the StatefulSet once with `kubectl delete statefulset <release>-probe --cascade=orphan` before the upgrade.
+- **Breaking:** with a fixed port, each probe replica listens on the port plus its index, and `probe.service` is a Service per replica, `<release>-probe-<index>`, on that port and on `probe.service.nodePort` plus the index.
+- The chart runs the API as a StatefulSet of one, `<release>-api`, in place of a Deployment, so a replacement starts only once the old pod is gone; a command naming `deployment/<release>-api` names `statefulset/<release>-api`. With `api.persistence.type: pvc` and no `existingClaim`, the claim `<release>-api` of an earlier install stays `/data`, kept on uninstall, and a new install's is `data-<release>-api-0`.
+- The API keeps its last counts in the database and, after a restart, serves them and answers `/readyz` at once, until its first computation replaces them; the data page marks them stale by their age.
+- The table `settings` is named `state`; a migration renames it.
+- The classifier's layer and journal outcome `jev` are `classifier`, in the API, the metrics' `sniffarr.classify.layer` and `sniffarr.tmdb.layer`, and the stored data.
+- `BrowseService.Settings` names `SNIFFARR_CLASSIFY_API_KEY` as the classifier's setting, `SNIFFARR_CLASSIFY_URL` with another endpoint, and `TYPESAFE_API_KEY` only when that key turned it on. The web UI shows the classifier turned off as "off", and names it without Jev, as the docs do.
+- Metrics carry the instrumentation scope `sarak.sh/mikluko/sniffarr/...`, not `github.com/mikluko/sniffarr/...`.
+- The web UI has a new look: JetBrains Mono served by sniffarr itself, neutral colours with blue for data and links, amber for a state or a failure that is retried, red for a final failure, and borders only on blocks with a state of their own and on controls. The dark theme keeps 0.43.0's background, surfaces and lines.
+- Explanations open as a tooltip on a dotted-underlined label, on hover or focus; the notes under the data page's task queue and the top's controls are such tooltips. The data page's chart bars show their value in the web UI's own tooltip, opened by hover or a tap.
+- Labels and headings are in sentence case, and controls are at least 40 px tall on a phone.
+- The header's tabs are Torrents and Top; the logo leads to the data page. A movie or series page links back to the top, the search results or the release it was reached from.
+- The web UI answers a path it does not serve, and an unknown movie, series or infohash, with a 404 page naming the path and linking home.
+- The data page leads with its figures and the classifier and probe meters, then the task queue as one card per kind with its priority bar; the current hour's and day's projection is a dashed outline. The store is a grid of three tables, each row with its share as a bar. A refresh button sits at the top, and counts older than two of their recomputation intervals show "updated N min ago" beside it in amber.
+- On the data page, the classifier's meter is left out while it is off and turns amber with its daily limit spent, saying how many torrents wait until 00:00 UTC. With probes on and no prober connected, the probe queue card says "No probers", and "Probe tracks" answers that the probe starts once a prober connects.
+- The priority badges in the data page's tables have no border: a square of the priority's colour and the label, with the meaning in the tooltip.
+- The release card follows the new design: how the title was matched is in a tooltip, size and file count share a line, an action's answer shows under the buttons, and the infohash and magnet copy buttons are icons.
+- The torrents page fits its table at 1280 px, cuts names at two lines with the movie or series linked under them, and shows a torrent's kind alone, with the deciding layer and the classifier's confidence in its tooltip. A set filter is bordered, "Reset filters" shows only then, and on a phone the filters sit behind a "Filters · N" button.
+- A search on the torrents page, and `BrowseService.Torrents`, finds a release by the titles of its matched movie or series too, original or translated.
+- A movie or series page sets a 185 px poster, 96 px on a phone, beside the TMDB details, lists the place in the top, peers, releases and dub as a table, and answers "Refresh peers" and "Probe tracks" beside the buttons. Its releases are filtered by season and quality, with size and episode as fields, the episode as `E05` or `5`, and sort by "peers, 7 days", "first seen" and "size".
+- The top filters by segmented switches and frames a work with no poster dashed; on a phone it shows a title's first-entry date in its meta line while the history is short.
+- The web UI writes dates one way per language ("Nov 7, 16:10" in English, "07.11 16:10" in Russian), groups the thousands of every count, and writes a place in the top as "#2" or "№2".
+- In English, the web UI calls dubbing "Voice-over", with the configured language, the title-reuse layer "same title", and the title page's facts "Chart position"; the voice-over filter reads "any / ≥ 0.5 / explicit" on the torrents and top pages alike. TMDB genres are lower-cased.
+
+### Deprecated
+
+- `TYPESAFE_API_KEY`: use `SNIFFARR_CLASSIFY_API_KEY`; it is still read when that is unset, and sent to TypeSafe's endpoint only.
+
+### Removed
+
+- The top's audio and sources columns.
+- The source and dub filters and columns of a movie's or series' releases; the torrents page and a release's card keep them.
+
+### Fixed
+
+- Behind a NodePort, the DHT names a probe's seeds at the node port, not at a port the masquerade picked.
+- Fetches no longer slow down while many fetchers ask for probe tasks.
+- The web UI asks the API for its settings every minute, so a UI started before a new API no longer shows probes, audio languages and features as off until restarted.
+- The torrents page's layer filter no longer offers the classifier while it is off.
+- The task queue's tables on the data page are no longer cut off on the right at 1280 px and on a phone.
+- The magnet link on the release card opens the torrent in a client and carries its name.
+- The probe button says when a release has no file a probe can read, rather than reporting a probe that never runs.
+- Releases that had failed probes before a successful one, probed before 0.43.0, get their full number of probe attempts.
+- A probe that reads more than 128 tracks is recorded as unknown, so a crafted file header cannot stall the database.
+
 ## [0.44.0-beta.8] - 2026-11-08
 
 ### Added
@@ -827,7 +905,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenTelemetry traces and metrics over OTLP.
 - A container image with both binaries, and a Helm chart at `oci://ghcr.io/mikluko/charts/sniffarr`.
 
-[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.8...HEAD
+[Unreleased]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-rc.1...HEAD
+[0.44.0-rc.1]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.8...v0.44.0-rc.1
 [0.44.0-beta.8]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.7...v0.44.0-beta.8
 [0.44.0-beta.7]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.6...v0.44.0-beta.7
 [0.44.0-beta.6]: https://forge.sarak.sh/mikluko/sniffarr/compare/v0.44.0-beta.5...v0.44.0-beta.6
