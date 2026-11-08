@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/mikluko/sniffarr/internal/classify"
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/classify"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // DefaultConcurrency is the default Worker.Concurrency.

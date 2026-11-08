@@ -19,10 +19,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"golang.org/x/time/rate"
 
-	"github.com/mikluko/sniffarr/internal/classify"
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/telemetry/telemetrytest"
+	"sarak.sh/mikluko/sniffarr/internal/classify"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/telemetry/telemetrytest"
 )
 
 type result struct {

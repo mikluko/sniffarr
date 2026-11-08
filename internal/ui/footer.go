@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"github.com/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 // projectURL is the project page.

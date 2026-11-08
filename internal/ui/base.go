@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/latest"
-	"github.com/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/sniffarr/internal/latest"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 // Base is embedded in every page model. Templates call its methods for

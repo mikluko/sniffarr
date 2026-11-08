@@ -74,7 +74,7 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 	if mp == nil {
 		mp = otel.GetMeterProvider()
 	}
-	if err := db.observeWAL(mp.Meter("github.com/mikluko/sniffarr/internal/database")); err != nil {
+	if err := db.observeWAL(mp.Meter("sarak.sh/mikluko/sniffarr/internal/database")); err != nil {
 		db.Close()
 		return nil, err
 	}

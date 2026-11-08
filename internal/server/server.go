@@ -13,15 +13,15 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/arr"
-	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/ingest"
-	"github.com/mikluko/sniffarr/internal/rules"
-	"github.com/mikluko/sniffarr/internal/search"
-	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/torznab"
-	"github.com/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"sarak.sh/mikluko/sniffarr/internal/arr"
+	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/ingest"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/search"
+	"sarak.sh/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/torznab"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 // MaxMessage is the largest request message, in bytes, either API accepts.

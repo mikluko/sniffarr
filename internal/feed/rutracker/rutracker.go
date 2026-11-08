@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/feed"
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/feed"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // Name is the source's name.

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // MaxFiles is how many of a torrent's files the classifier is shown.

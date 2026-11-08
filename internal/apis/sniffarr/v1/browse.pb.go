@@ -3950,7 +3950,7 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\bSettings\x12\x1c.sniffarr.v1.SettingsRequest\x1a\x1d.sniffarr.v1.SettingsResponse\x12S\n" +
 	"\fRefreshPeers\x12 .sniffarr.v1.RefreshPeersRequest\x1a!.sniffarr.v1.RefreshPeersResponse\x12S\n" +
 	"\fRequestProbe\x12 .sniffarr.v1.RequestProbeRequest\x1a!.sniffarr.v1.RequestProbeResponse\x12S\n" +
-	"\fRequestMatch\x12 .sniffarr.v1.RequestMatchRequest\x1a!.sniffarr.v1.RequestMatchResponseBBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
+	"\fRequestMatch\x12 .sniffarr.v1.RequestMatchRequest\x1a!.sniffarr.v1.RequestMatchResponseB@Z>sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
 
 var (
 	file_sniffarr_v1_browse_proto_rawDescOnce sync.Once

@@ -10,9 +10,9 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/rot13"
-	"github.com/mikluko/sniffarr/internal/rules"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/rot13"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 // value returns the int64 data point of the named metric whose attributes

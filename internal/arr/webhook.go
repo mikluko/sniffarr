@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // maxPayload is the largest webhook body read, in bytes.

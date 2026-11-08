@@ -7,9 +7,9 @@ import (
 
 	"connectrpc.com/connect"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/sketch"
-	"github.com/mikluko/sniffarr/internal/store"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // peersBatch is how many sketches Peers merges in one transaction.

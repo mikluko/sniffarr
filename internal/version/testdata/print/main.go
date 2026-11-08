@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 func main() {

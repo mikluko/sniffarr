@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/mikluko/sniffarr/internal/arr"
+	"sarak.sh/mikluko/sniffarr/internal/arr"
 )
 
 const (

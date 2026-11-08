@@ -13,10 +13,10 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/rules"
-	"github.com/mikluko/sniffarr/internal/store"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // fakeClassifier classifies by name: answers maps a name to its classification,

@@ -9,8 +9,8 @@ import (
 
 	"go.uber.org/fx"
 
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // Config is what Module needs.

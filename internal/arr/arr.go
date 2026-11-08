@@ -19,10 +19,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
-const scope = "github.com/mikluko/sniffarr/internal/arr"
+const scope = "sarak.sh/mikluko/sniffarr/internal/arr"
 
 // Event is a grab or an import as Radarr or Sonarr tells it.
 type Event struct {

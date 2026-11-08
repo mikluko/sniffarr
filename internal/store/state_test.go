@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/sketch"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 
 func TestHashKeyOutlivesRestart(t *testing.T) {

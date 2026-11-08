@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 func TestBackfill(t *testing.T) {

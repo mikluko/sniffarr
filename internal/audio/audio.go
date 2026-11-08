@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 // Language is an audio language the extension knows.

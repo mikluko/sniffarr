@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/charmap"
 
-	"github.com/mikluko/sniffarr/internal/feed"
-	"github.com/mikluko/sniffarr/internal/feed/feedtest"
+	"sarak.sh/mikluko/sniffarr/internal/feed"
+	"sarak.sh/mikluko/sniffarr/internal/feed/feedtest"
 )
 
 // rss is two items as nnmclub.to/forum/rss.php served them on 2026-11-05,

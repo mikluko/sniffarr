@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // DefaultDailyTokens is the default daily token budget: at about 1,300
@@ -69,7 +69,7 @@ func (j *Classifier) metrics() *metrics {
 		if mp == nil {
 			mp = otel.GetMeterProvider()
 		}
-		m := mp.Meter("github.com/mikluko/sniffarr/internal/classify")
+		m := mp.Meter("sarak.sh/mikluko/sniffarr/internal/classify")
 		counter := func(name, unit, desc string) metric.Int64Counter {
 			c, err := m.Int64Counter(name, metric.WithUnit(unit), metric.WithDescription(desc))
 			if err != nil {

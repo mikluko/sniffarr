@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/mikluko/sniffarr/internal/sketch"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 
 // The state keys of the peer hash key and the DHT node ID.

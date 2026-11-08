@@ -17,8 +17,8 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 // hexOf is the hash as a journal detail writes it.

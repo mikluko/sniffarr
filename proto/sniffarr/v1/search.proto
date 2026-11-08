@@ -5,7 +5,7 @@ package sniffarr.v1;
 import "google/protobuf/timestamp.proto";
 import "sniffarr/v1/track.proto";
 
-option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
+option go_package = "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
 // SearchService looks up stored torrents.
 service SearchService {

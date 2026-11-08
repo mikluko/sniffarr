@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/names"
+	"sarak.sh/mikluko/sniffarr/internal/names"
 )
 
 // LayerTMDB names a title match TMDB's search decided alone.

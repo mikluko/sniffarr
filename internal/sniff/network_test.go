@@ -17,7 +17,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/stretchr/testify/require"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 )
 
 // testID is the node ID the tests start active nodes under.

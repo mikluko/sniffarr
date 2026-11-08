@@ -49,7 +49,7 @@ func TestLinkerFlags(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	require.NoError(t, err)
 	bin := filepath.Join(t.TempDir(), "print")
-	pkg := "github.com/mikluko/sniffarr/internal/version"
+	pkg := "sarak.sh/mikluko/sniffarr/internal/version"
 	flags := "-X " + pkg + ".version=0.44.0-alpha.2 -X " + pkg + ".commit=1a2b3c4d5e6f7890 -X " + pkg + ".built=2026-11-07T14:02:00Z"
 	build := exec.Command("go", "build", "-ldflags", flags, "-o", bin, "./internal/version/testdata/print")
 	build.Dir = root

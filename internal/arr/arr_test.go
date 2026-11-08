@@ -18,10 +18,10 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/search"
-	"github.com/mikluko/sniffarr/internal/store"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/search"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // fakeFinder knows Breaking Bad, TVDB 81189, as TMDB 1396.

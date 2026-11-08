@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/sketch"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 
 // addrs returns n peers numbered from first.

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/latest"
-	"github.com/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/sniffarr/internal/latest"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 // Renders every page and fragment in both languages, fails on template errors

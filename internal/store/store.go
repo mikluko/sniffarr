@@ -24,8 +24,8 @@ import (
 
 	"github.com/mikluko/batcher"
 
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/sketch"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 
 // ErrNotFound is returned for an infohash that is not stored.
@@ -111,7 +111,7 @@ func New(ctx context.Context, db *database.DB, opts Options) (*Store, error) {
 	if err := migrate(ctx, db); err != nil {
 		return nil, err
 	}
-	m := opts.Meter.Meter("github.com/mikluko/sniffarr/internal/store")
+	m := opts.Meter.Meter("sarak.sh/mikluko/sniffarr/internal/store")
 	deleted, err := m.Int64Counter("sniffarr.store.retention.deletions",
 		metric.WithUnit("{torrent}"), metric.WithDescription("Stored torrents deleted for not being seen within the retention period, by which period."))
 	if err != nil {

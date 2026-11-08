@@ -8,8 +8,8 @@ import (
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
-	v1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	http "net/http"
+	v1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	strings "strings"
 )
 

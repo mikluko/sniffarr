@@ -4,7 +4,7 @@ package sniffarr.v1;
 
 import "sniffarr/v1/track.proto";
 
-option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
+option go_package = "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
 // IngestService is the work queue between sniffers: discoverers report the
 // infohashes they sight, fetchers take them as tasks and return metadata,

@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 func russian(t *testing.T) Language {

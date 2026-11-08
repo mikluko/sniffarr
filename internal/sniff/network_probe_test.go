@@ -17,7 +17,7 @@ import (
 	"github.com/anacrolix/torrent/storage"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/container"
+	"sarak.sh/mikluko/sniffarr/internal/container"
 )
 
 // element is an EBML element of the ID, its size in 8 bytes.

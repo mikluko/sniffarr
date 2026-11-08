@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/sketch"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 
 // Retention of peer sketches: hours older than HourRetention are unioned

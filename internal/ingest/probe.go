@@ -8,9 +8,9 @@ import (
 
 	"connectrpc.com/connect"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/container"
-	"github.com/mikluko/sniffarr/internal/store"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/container"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 const (

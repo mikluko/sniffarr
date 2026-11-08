@@ -10,12 +10,12 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/latest"
-	"github.com/mikluko/sniffarr/internal/rules"
-	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/version"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/latest"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 var now = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)

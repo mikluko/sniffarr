@@ -15,11 +15,11 @@ import (
 	"connectrpc.com/connect"
 	"go.opentelemetry.io/otel/metric"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/names"
-	"github.com/mikluko/sniffarr/internal/rules"
-	"github.com/mikluko/sniffarr/internal/store"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/names"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 const (

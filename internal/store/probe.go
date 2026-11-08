@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/text/language"
 
-	"github.com/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/audio"
 )
 
 // LayerProbe decides an audio probability by the tracks a probe read in the

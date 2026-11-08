@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sniffarr.v1;
 
-option go_package = "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
+option go_package = "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1";
 
 // Track is one track of a video file as its container header declares it.
 message Track {

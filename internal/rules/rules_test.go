@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/rot13"
+	"sarak.sh/mikluko/sniffarr/internal/rot13"
 )
 
 const (

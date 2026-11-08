@@ -1540,7 +1540,7 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x05Peers\x12\x19.sniffarr.v1.PeersRequest\x1a\x1a.sniffarr.v1.PeersResponse(\x01\x12J\n" +
 	"\tProbeTask\x12\x1d.sniffarr.v1.ProbeTaskRequest\x1a\x1e.sniffarr.v1.ProbeTaskResponse\x12P\n" +
 	"\vProbeResult\x12\x1f.sniffarr.v1.ProbeResultRequest\x1a .sniffarr.v1.ProbeResultResponse\x12P\n" +
-	"\vProbeUpload\x12\x1f.sniffarr.v1.ProbeUploadRequest\x1a .sniffarr.v1.ProbeUploadResponseBBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
+	"\vProbeUpload\x12\x1f.sniffarr.v1.ProbeUploadRequest\x1a .sniffarr.v1.ProbeUploadResponseB@Z>sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
 
 var (
 	file_sniffarr_v1_ingest_proto_rawDescOnce sync.Once

@@ -12,15 +12,15 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/memconn"
-	"github.com/mikluko/sniffarr/internal/rot13"
-	"github.com/mikluko/sniffarr/internal/rules"
-	"github.com/mikluko/sniffarr/internal/sketch"
-	"github.com/mikluko/sniffarr/internal/sniff"
-	"github.com/mikluko/sniffarr/internal/store"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/memconn"
+	"sarak.sh/mikluko/sniffarr/internal/rot13"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
+	"sarak.sh/mikluko/sniffarr/internal/sniff"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 // serveMem serves the handler over memconn with Alien stored, and returns

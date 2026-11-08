@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/mikluko/sniffarr/internal/rot13"
+	"sarak.sh/mikluko/sniffarr/internal/rot13"
 )
 
 // MinSize is the smallest torrent, in bytes, that Check accepts.

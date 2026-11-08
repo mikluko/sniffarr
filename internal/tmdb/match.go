@@ -19,12 +19,12 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/mikluko/sniffarr/internal/classify"
-	"github.com/mikluko/sniffarr/internal/names"
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/classify"
+	"sarak.sh/mikluko/sniffarr/internal/names"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
-const scope = "github.com/mikluko/sniffarr/internal/tmdb"
+const scope = "sarak.sh/mikluko/sniffarr/internal/tmdb"
 
 // DefaultRetry is how long a key no work was found for waits before it is
 // looked up again.

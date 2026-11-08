@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/names"
-	"github.com/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/names"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 // backfillBatch is the default of Store.backfillBatch.

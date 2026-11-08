@@ -8,9 +8,9 @@ import (
 
 	"connectrpc.com/connect"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/classify"
-	"github.com/mikluko/sniffarr/internal/store"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/classify"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 func (b *Browser) RefreshPeers(ctx context.Context, req *connect.Request[sniffarrv1.RefreshPeersRequest]) (*connect.Response[sniffarrv1.RefreshPeersResponse], error) {

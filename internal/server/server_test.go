@@ -17,15 +17,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/arr"
-	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/rot13"
-	"github.com/mikluko/sniffarr/internal/search"
-	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/version"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"sarak.sh/mikluko/sniffarr/internal/arr"
+	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/rot13"
+	"sarak.sh/mikluko/sniffarr/internal/search"
+	"sarak.sh/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 func start(t *testing.T, cfg Config, qopts ...store.TaskOptions) (*httptest.Server, *http.Client) {

@@ -16,11 +16,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/database"
-	"github.com/mikluko/sniffarr/internal/rules"
-	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/telemetry/telemetrytest"
+	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/telemetry/telemetrytest"
 )
 
 const answer200 = `{

@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/database"
 )
 
 func TestTruncateWAL(t *testing.T) {

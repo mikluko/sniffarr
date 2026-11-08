@@ -10,11 +10,11 @@ import (
 
 	"connectrpc.com/connect"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/audio"
-	"github.com/mikluko/sniffarr/internal/latest"
-	"github.com/mikluko/sniffarr/internal/version"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/latest"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 // DefaultBackoff is the wait between attempts of ObtainSettings.

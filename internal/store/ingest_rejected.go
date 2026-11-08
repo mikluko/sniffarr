@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 // Reject remembers a hash as rejected for reason; the torrent's name and

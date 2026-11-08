@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 //go:embed templates/*.html static i18n/*.json icons/*.svg

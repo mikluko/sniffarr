@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/ui"
+	"sarak.sh/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/ui"
 )
 
 // journalSpec marks up exactly the kinds and outcomes the store journals.

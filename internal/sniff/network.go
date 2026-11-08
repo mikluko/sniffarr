@@ -21,7 +21,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 )
 
 const (

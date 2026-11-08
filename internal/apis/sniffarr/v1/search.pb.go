@@ -1329,7 +1329,7 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\x12VIDEO_SOURCE_OTHER\x10\x052\x8c\x01\n" +
 	"\rSearchService\x12A\n" +
 	"\x06Search\x12\x1a.sniffarr.v1.SearchRequest\x1a\x1b.sniffarr.v1.SearchResponse\x128\n" +
-	"\x03Get\x12\x17.sniffarr.v1.GetRequest\x1a\x18.sniffarr.v1.GetResponseBBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
+	"\x03Get\x12\x17.sniffarr.v1.GetRequest\x1a\x18.sniffarr.v1.GetResponseB@Z>sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
 
 var (
 	file_sniffarr_v1_search_proto_rawDescOnce sync.Once

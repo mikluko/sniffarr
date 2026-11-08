@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
 
-	"github.com/mikluko/sniffarr/internal/telemetry"
+	"sarak.sh/mikluko/sniffarr/internal/telemetry"
 )
 
 // DefaultURL is the base URL of the TMDB API.

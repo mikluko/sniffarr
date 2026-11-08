@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/store"
 )
 
 const (
@@ -78,7 +78,7 @@ func (l *Lazy) init() {
 		if mp == nil {
 			mp = otel.GetMeterProvider()
 		}
-		m := mp.Meter("github.com/mikluko/sniffarr/internal/search")
+		m := mp.Meter("sarak.sh/mikluko/sniffarr/internal/search")
 		var err error
 		l.duration, err = m.Float64Histogram("sniffarr.search.lazy.duration", metric.WithUnit("s"),
 			metric.WithDescription("Time a search spent classifying its candidates and matching their titles."),

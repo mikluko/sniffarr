@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-const scope = "github.com/mikluko/sniffarr/internal/ingest"
+const scope = "sarak.sh/mikluko/sniffarr/internal/ingest"
 
 type metrics struct {
 	sightings, expiries, results, rejections, stored, classifications, sketches metric.Int64Counter

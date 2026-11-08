@@ -16,18 +16,18 @@ import (
 
 	"go.uber.org/fx"
 
-	"github.com/mikluko/sniffarr/internal/app"
-	"github.com/mikluko/sniffarr/internal/app/api"
-	"github.com/mikluko/sniffarr/internal/app/client"
-	"github.com/mikluko/sniffarr/internal/app/db"
-	"github.com/mikluko/sniffarr/internal/app/dht"
-	"github.com/mikluko/sniffarr/internal/app/fetch"
-	"github.com/mikluko/sniffarr/internal/app/peers"
-	"github.com/mikluko/sniffarr/internal/app/sniff"
-	"github.com/mikluko/sniffarr/internal/app/ui"
-	"github.com/mikluko/sniffarr/internal/cli"
-	"github.com/mikluko/sniffarr/internal/version"
-	"github.com/mikluko/sniffarr/internal/waitapi"
+	"sarak.sh/mikluko/sniffarr/internal/app"
+	"sarak.sh/mikluko/sniffarr/internal/app/api"
+	"sarak.sh/mikluko/sniffarr/internal/app/client"
+	"sarak.sh/mikluko/sniffarr/internal/app/db"
+	"sarak.sh/mikluko/sniffarr/internal/app/dht"
+	"sarak.sh/mikluko/sniffarr/internal/app/fetch"
+	"sarak.sh/mikluko/sniffarr/internal/app/peers"
+	"sarak.sh/mikluko/sniffarr/internal/app/sniff"
+	"sarak.sh/mikluko/sniffarr/internal/app/ui"
+	"sarak.sh/mikluko/sniffarr/internal/cli"
+	"sarak.sh/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/sniffarr/internal/waitapi"
 )
 
 func main() {

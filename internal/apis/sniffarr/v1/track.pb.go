@@ -211,7 +211,7 @@ const file_sniffarr_v1_track_proto_rawDesc = "" +
 	"\x16TRACK_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10TRACK_KIND_VIDEO\x10\x01\x12\x14\n" +
 	"\x10TRACK_KIND_AUDIO\x10\x02\x12\x17\n" +
-	"\x13TRACK_KIND_SUBTITLE\x10\x03BBZ@github.com/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
+	"\x13TRACK_KIND_SUBTITLE\x10\x03B@Z>sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1;sniffarrv1b\x06proto3"
 
 var (
 	file_sniffarr_v1_track_proto_rawDescOnce sync.Once

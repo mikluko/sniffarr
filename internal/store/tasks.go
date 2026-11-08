@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/database"
 )
 
 // ErrNotQueued is returned for a hash that is not in the queue.
@@ -515,7 +515,7 @@ func (q *Tasks) NoPeers(ctx context.Context, h Hash, owner int64, now time.Time)
 }
 
 func (q *Tasks) observe(mp metric.MeterProvider) error {
-	m := mp.Meter("github.com/mikluko/sniffarr/internal/store")
+	m := mp.Meter("sarak.sh/mikluko/sniffarr/internal/store")
 	var err error
 	q.evictions, err = m.Int64Counter("sniffarr.queue.evictions", metric.WithUnit("{infohash}"),
 		metric.WithDescription("Infohashes evicted from the queue, by why."))

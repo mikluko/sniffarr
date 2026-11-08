@@ -8,9 +8,9 @@ import (
 
 	"go.uber.org/fx"
 
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/app"
-	"github.com/mikluko/sniffarr/internal/sniff"
+	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"sarak.sh/mikluko/sniffarr/internal/app"
+	"sarak.sh/mikluko/sniffarr/internal/sniff"
 )
 
 // Module provides *sniff.Peers and runs it from start to stop.

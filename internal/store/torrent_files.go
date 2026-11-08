@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 // files returns the first limit stored files of the torrent with the ID, in

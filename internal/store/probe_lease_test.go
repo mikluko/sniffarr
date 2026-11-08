@@ -17,7 +17,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 
-	"github.com/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/database"
 )
 
 // queueProbeOrder stores ten releases a probe reads, b 1 to 10 with b*10

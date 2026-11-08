@@ -13,9 +13,9 @@ import (
 	"connectrpc.com/otelconnect"
 	"go.uber.org/fx"
 
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/memconn"
-	"github.com/mikluko/sniffarr/internal/server"
+	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"sarak.sh/mikluko/sniffarr/internal/memconn"
+	"sarak.sh/mikluko/sniffarr/internal/server"
 )
 
 // Config is what Module needs.

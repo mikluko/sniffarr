@@ -78,7 +78,7 @@ func TestTelemetry(t *testing.T) {
 		}
 		op, _ := p.Attributes.Value(semconv.DBOperationNameKey)
 		fn, _ := p.Attributes.Value(semconv.CodeFunctionNameKey)
-		if op.AsString() == "sql.conn.exec" && fn.AsString() == "github.com/mikluko/sniffarr/internal/database.TestTelemetry" {
+		if op.AsString() == "sql.conn.exec" && fn.AsString() == "sarak.sh/mikluko/sniffarr/internal/database.TestTelemetry" {
 			execs += p.Count
 		}
 	}

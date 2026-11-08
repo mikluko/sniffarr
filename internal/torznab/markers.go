@@ -7,8 +7,8 @@ import (
 
 	"golang.org/x/text/language"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/audio"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/audio"
 )
 
 // voice is a kind of Russian audio a track's name can say, labelled as the

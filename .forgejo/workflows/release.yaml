@@ -149,7 +149,7 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
           go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
-          pkg=github.com/mikluko/sniffarr/internal/version
+          pkg=sarak.sh/mikluko/sniffarr/internal/version
           built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           for GOARCH in amd64 arm64; do
             export GOARCH

@@ -5,14 +5,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 )
 
 func meter(mp metric.MeterProvider) metric.Meter {
 	if mp == nil {
 		mp = otel.GetMeterProvider()
 	}
-	return mp.Meter("github.com/mikluko/sniffarr/internal/sniff")
+	return mp.Meter("sarak.sh/mikluko/sniffarr/internal/sniff")
 }
 
 func counter(m metric.Meter, name, unit, desc string) metric.Int64Counter {

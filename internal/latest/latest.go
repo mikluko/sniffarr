@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/version"
+	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
 // URL is the RSS feed of the project's releases.

@@ -12,7 +12,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mikluko/sniffarr/internal/telemetry"
+	"sarak.sh/mikluko/sniffarr/internal/telemetry"
 )
 
 // Config is a configuration that names the level to log at.

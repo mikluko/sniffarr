@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/database"
+	"sarak.sh/mikluko/sniffarr/internal/database"
 )
 
 // alienHit is Alien as an English search answer gives it.

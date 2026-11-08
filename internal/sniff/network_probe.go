@@ -14,7 +14,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
-	"github.com/mikluko/sniffarr/internal/container"
+	"sarak.sh/mikluko/sniffarr/internal/container"
 )
 
 // piecePoll is how often a probe looks whether a requested piece is done.
@@ -64,7 +64,7 @@ func (n *Network) dropSeed(t *torrent.Torrent, h Hash) error {
 	t.Drop()
 	var errs []error
 	for i := range pieces {
-		errs = append(errs, n.completion.Set(metainfo.PieceKey{InfoHash: metainfo.Hash(h), Index: i}, false))
+		errs = append(errs, n.completion.Set(metainfo.PieceKey{InfoHash: metainfo.Hash(h), Index: i}, g.None[bool]()))
 	}
 	errs = append(errs, os.RemoveAll(filepath.Join(n.cfg.Seed.Dir, "data", metainfo.Hash(h).HexString())))
 	return errors.Join(errs...)

@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/names"
+	"sarak.sh/mikluko/sniffarr/internal/names"
 )
 
 // named returns a torrent of the name with the kind, keyed and featured as

@@ -21,11 +21,11 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/telemetry"
+	"sarak.sh/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/telemetry"
 )
 
-const scope = "github.com/mikluko/sniffarr/internal/feed"
+const scope = "sarak.sh/mikluko/sniffarr/internal/feed"
 
 // Item is one release a feed lists.
 type Item struct {

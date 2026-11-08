@@ -7,7 +7,7 @@ import (
 
 	"modernc.org/sqlite"
 
-	"github.com/mikluko/sniffarr/internal/sketch"
+	"sarak.sh/mikluko/sniffarr/internal/sketch"
 )
 
 // The SQL functions over peer sketches, available on every connection:

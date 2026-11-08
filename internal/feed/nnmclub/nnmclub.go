@@ -16,7 +16,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/charset"
 
-	"github.com/mikluko/sniffarr/internal/feed"
+	"sarak.sh/mikluko/sniffarr/internal/feed"
 )
 
 // Name is the source's name.

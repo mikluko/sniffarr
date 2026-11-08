@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mikluko/sniffarr/internal/store"
-	"github.com/mikluko/sniffarr/internal/telemetry"
+	"sarak.sh/mikluko/sniffarr/internal/store"
+	"sarak.sh/mikluko/sniffarr/internal/telemetry"
 )
 
 // Defaults of History.

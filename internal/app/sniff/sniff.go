@@ -8,11 +8,11 @@ import (
 
 	"go.uber.org/fx"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
-	"github.com/mikluko/sniffarr/internal/app"
-	"github.com/mikluko/sniffarr/internal/app/dht"
-	sniffer "github.com/mikluko/sniffarr/internal/sniff"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"sarak.sh/mikluko/sniffarr/internal/app"
+	"sarak.sh/mikluko/sniffarr/internal/app/dht"
+	sniffer "sarak.sh/mikluko/sniffarr/internal/sniff"
 )
 
 // Config is what Module needs.

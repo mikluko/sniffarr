@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/mikluko/sniffarr/internal/rules"
+	"sarak.sh/mikluko/sniffarr/internal/rules"
 )
 
 // Layers name what decided a torrent's kind or audio probability.

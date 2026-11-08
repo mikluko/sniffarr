@@ -9,8 +9,8 @@ import (
 	"connectrpc.com/connect"
 	"go.opentelemetry.io/otel/metric"
 
-	sniffarrv1 "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
-	"github.com/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 )
 
 // DiscovererConfig tunes a Discoverer. Zero fields take the default named in

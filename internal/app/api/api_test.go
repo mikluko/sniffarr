@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mikluko/sniffarr/internal/classify"
+	"sarak.sh/mikluko/sniffarr/internal/classify"
 )
 
 func TestClassifierEndpoint(t *testing.T) {

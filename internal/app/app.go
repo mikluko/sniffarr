@@ -14,7 +14,7 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 
-	"github.com/mikluko/sniffarr/internal/telemetry"
+	"sarak.sh/mikluko/sniffarr/internal/telemetry"
 )
 
 // ServiceName is the telemetry service name; OTEL_SERVICE_NAME overrides it.

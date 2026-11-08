@@ -24,7 +24,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/dynamicpb"
 
-	_ "github.com/mikluko/sniffarr/internal/apis/sniffarr/v1"
+	_ "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 )
 
 // pkg is the protobuf package of the API, prefixed to short method names.
