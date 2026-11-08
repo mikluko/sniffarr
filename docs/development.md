@@ -34,10 +34,11 @@ in the footer of every page.
 
 The generated code under `internal/apis` is committed. After changing a `.proto` file,
 regenerate it with [buf](https://buf.build). buf and the protoc plugins are
-Go tool dependencies in `go.mod`, so no separate install is needed.
+tool dependencies of the module in `tools`, apart from the build's, so no
+separate install is needed.
 
 ```shell
-go tool buf lint
+go tool -modfile=tools/go.mod buf lint
 go generate ./...
 ```
 
