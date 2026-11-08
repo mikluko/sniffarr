@@ -128,3 +128,27 @@ func TestProbeDownloadsTheHeadAndSeeds(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, again.Downloaded, "a seeded torrent's pieces are not downloaded again")
 }
+
+// announceRecorder records the port and impliedPort of each announce.
+type announceRecorder struct {
+	torrent.DhtServer
+	port    int
+	implied bool
+}
+
+func (r *announceRecorder) Announce(_ [20]byte, port int, implied bool) (torrent.DhtAnnounce, error) {
+	r.port, r.implied = port, implied
+	return nil, nil
+}
+
+func TestExplicitPortAnnouncesTheListeningPort(t *testing.T) {
+	r := &announceRecorder{}
+	_, err := explicitPort{r}.Announce([20]byte{1}, 30070, true)
+	require.NoError(t, err)
+	require.Equal(t, 30070, r.port)
+	require.False(t, r.implied, "a NAT may rewrite the source port")
+
+	_, err = explicitPort{r}.Announce([20]byte{1}, 0, true)
+	require.NoError(t, err)
+	require.True(t, r.implied, "no port to name")
+}

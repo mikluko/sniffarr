@@ -180,7 +180,7 @@ func (s clientSeed) uploaded() int64 {
 }
 
 func (s clientSeed) announce() {
-	done, stop, err := s.t.AnnounceToDht(torrent.AnacrolixDhtServerWrapper{Server: s.n.dht})
+	done, stop, err := s.t.AnnounceToDht(explicitPort{torrent.AnacrolixDhtServerWrapper{Server: s.n.dht}})
 	if err != nil {
 		return
 	}
@@ -195,3 +195,13 @@ func (s clientSeed) announce() {
 }
 
 func (s clientSeed) remove() error { return s.n.dropSeed(s.t, s.h) }
+
+// explicitPort announces the port the client listens on, where the
+// torrent client asks for the query's source port, which a NAT in front of
+// the node rewrites: Cilium's masquerade behind a NodePort, for one. Port 0,
+// no listener, still asks for the source port.
+type explicitPort struct{ torrent.DhtServer }
+
+func (s explicitPort) Announce(h [20]byte, port int, implied bool) (torrent.DhtAnnounce, error) {
+	return s.DhtServer.Announce(h, port, implied && port == 0)
+}
