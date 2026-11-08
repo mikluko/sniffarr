@@ -142,3 +142,7 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	zombiezen.com/go/sqlite v1.4.2 // indirect
 )
+
+// anacrolix/torrent#1193: a v2 torrent with empty files panics in mustGetOnlyFile once its info is
+// set. The fork carries the fix, anacrolix/torrent#1194, until it lands.
+replace github.com/anacrolix/torrent => github.com/mikluko/torrent v1.61.1-0.20261108154127-74d7dda83d4d

@@ -72,8 +72,6 @@ github.com/anacrolix/sync v0.6.0/go.mod h1:zigHZiBXkcjo9uNACGCpovT+wNKMbzjO1qN2+
 github.com/anacrolix/tagflag v0.0.0-20180109131632-2146c8d41bf0/go.mod h1:1m2U/K6ZT+JZG0+bdMK6qauP49QT4wE5pmhJXOKKCHw=
 github.com/anacrolix/tagflag v1.0.0/go.mod h1:1m2U/K6ZT+JZG0+bdMK6qauP49QT4wE5pmhJXOKKCHw=
 github.com/anacrolix/tagflag v1.1.0/go.mod h1:Scxs9CV10NQatSmbyjqmqmeQNwGzlNe0CMUMIxqHIG8=
-github.com/anacrolix/torrent v1.61.1-0.20261108082052-e93a3fc0da93 h1:qIna9kVhwb19fZunvwbscyJcDCZy8g+ltrSc+zWdTsY=
-github.com/anacrolix/torrent v1.61.1-0.20261108082052-e93a3fc0da93/go.mod h1:gmJQGJUN/XDHLWSKeHTPEH9nAM2E7Mr5cI1NidmdvSU=
 github.com/anacrolix/upnp v0.1.4 h1:+2t2KA6QOhm/49zeNyeVwDu1ZYS9dB9wfxyVvh/wk7U=
 github.com/anacrolix/upnp v0.1.4/go.mod h1:Qyhbqo69gwNWvEk1xNTXsS5j7hMHef9hdr984+9fIic=
 github.com/apache/thrift v0.12.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
@@ -240,6 +238,8 @@ github.com/mattn/go-isatty v0.0.24/go.mod h1:nMCL3Zebbrt45jsMDgnfIwz6ydEQApk5oEI
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
 github.com/mikluko/batcher v0.10.0 h1:ND7PWcCrECoU5LUC53YnOhu7gNLDtd2tgdCiMdjXats=
 github.com/mikluko/batcher v0.10.0/go.mod h1:eS3vzcXMP0oN4V5H/WbEvlGt4pR4ZdoixS7LV+1Z72Q=
+github.com/mikluko/torrent v1.61.1-0.20261108154127-74d7dda83d4d h1:kxw3pD+OgC6eMg03qiqBEnkb3pE0cQRvldjgkYf/lwA=
+github.com/mikluko/torrent v1.61.1-0.20261108154127-74d7dda83d4d/go.mod h1:gmJQGJUN/XDHLWSKeHTPEH9nAM2E7Mr5cI1NidmdvSU=
 github.com/minio/sha256-simd v1.0.1 h1:6kaan5IFmwTNynnKKpDHe6FWHohJOHhCPchzK49dzMM=
 github.com/minio/sha256-simd v1.0.1/go.mod h1:Pz6AKMiUdngCLpeTL/RJY1M9rUuPMYujV5xJjtbRSN8=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
