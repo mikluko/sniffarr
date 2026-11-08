@@ -1,5 +1,7 @@
 api:
   existingSecret: sniffarr-tokens
+  nats:
+    enabled: true
   env:
     SNIFFARR_CLASSIFY_SEARCH_RESERVE: 40
     SNIFFARR_SCRIPTS: Latin,Cyrillic,Greek

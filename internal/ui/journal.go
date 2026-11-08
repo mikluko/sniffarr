@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"maps"
 	"math"
-	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -80,12 +79,6 @@ var journalSpec = map[string]map[string]journalOutcome{
 	"arr": {
 		"grab":   {always(SeverityNormal), []string{"app", "indexer", "title"}},
 		"import": {always(SeverityNormal), []string{"app", "indexer", "title"}},
-	},
-	"feed": {
-		"stored":         {always(SeverityNormal), []string{"source", "size", "published_at"}},
-		"queued":         {always(SeverityNormal), []string{"source", "size", "published_at"}},
-		"already_queued": {always(SeverityNormal), []string{"source", "size", "published_at"}},
-		"rejected":       {always(SeverityFinal), []string{"source", "size", "published_at"}},
 	},
 	"probe_wanted": {
 		"search":  {always(SeverityNormal), []string{"id", "query", "t"}},
@@ -233,11 +226,6 @@ type ID int64
 // Infohash is the hex form of an infohash.
 type Infohash string
 
-// Link is a page and the label it is written by.
-type Link struct {
-	URL, Label string
-}
-
 // Track is a track a probe read, as the store journals it:
 // "kind:language:codec".
 type Track struct {
@@ -256,8 +244,7 @@ var idKeys = map[string]bool{"tmdb_id": true, "previous": true}
 // Fields returns the entry's particulars in the order of their keys, each
 // value typed by its key and form: a moment as time.Time, bytes as Bytes, the
 // leases of an attempt as Times, an identifier as ID, another whole number as
-// int64; the hex form of an infohash as Infohash, a feed item's http or https
-// page as a Link labelled by the entry's source; a track that parses as Track.
+// int64; the hex form of an infohash as Infohash; a track that parses as Track.
 // Lists and objects keep their shape, their elements typed; the audio
 // probabilities stay float64.
 func (e JournalEntry) Fields() []JournalField {
@@ -288,7 +275,7 @@ func (e JournalEntry) typed(key string, v any) any {
 	case float64:
 		return typedNumber(key, x)
 	case string:
-		return e.typedString(key, x)
+		return typedString(x)
 	case []any:
 		out := make([]any, len(x))
 		for i, el := range x {
@@ -331,17 +318,10 @@ func typedNumber(key string, x float64) any {
 	return int64(x)
 }
 
-// typedString is a string of the key typed as Fields does.
-func (e JournalEntry) typedString(key, s string) any {
+// typedString is a string typed as Fields does.
+func typedString(s string) any {
 	if isInfohash(s) {
 		return Infohash(strings.ToLower(s))
-	}
-	if u, err := url.Parse(s); key == "url" && err == nil && (u.Scheme == "http" || u.Scheme == "https") {
-		label, _ := e.Detail["source"].(string)
-		if label == "" {
-			label = s
-		}
-		return Link{URL: s, Label: label}
 	}
 	return s
 }

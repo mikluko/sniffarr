@@ -25,7 +25,6 @@ type Base struct {
 	Sonarr     string       // root URL of a Sonarr the cards link series to; "" links none
 	Probes     bool         // whether the API probes releases; false hides the probe button, meter and queue
 	Classifier bool         // whether the API runs the classifier; false hides its meter and layer on the data page
-	Feeds      bool         // whether the API reads tracker feeds; false labels P2 as feeds turned off
 	Build      version.Info // the build the footer names
 	Loc        *time.Location
 	Now        time.Time
@@ -59,13 +58,10 @@ var onMissing func(lang, key string)
 func (b Base) ru() bool { return b.Lang == "ru" }
 
 // Priority is what queues tasks at priority p, naming probes only while the
-// API probes and feeds as off while it reads none.
+// API probes.
 func (b Base) Priority(p int) string {
-	switch {
-	case !b.Probes && (p == 1 || p == 4):
+	if !b.Probes && (p == 1 || p == 3) {
 		return b.T(fmt.Sprintf("q.p%d_noprobes", p))
-	case !b.Feeds && p == 2:
-		return b.T("q.p2_nofeeds")
 	}
 	return b.T(fmt.Sprintf("q.p%d", p))
 }

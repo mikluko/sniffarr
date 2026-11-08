@@ -35,8 +35,8 @@ The queue holds three kinds of task: the fetch of an infohash's metadata,
 the lookup of a stored release's peers and the probe of its tracks. It
 serves them by priority: the lookups and probes asked for in the web UI
 first, then the infohashes Radarr or Sonarr grabbed and the probes of
-releases a search returned, then feeds, then announced infohashes before
-sampled ones, then the oldest first. Fetchers take fetches and lookups,
+releases a search returned, then announced infohashes before sampled
+ones, then the oldest first. Fetchers take fetches and lookups,
 and probers take probes. It lives in the same SQLite database and survives restarts; a task
 whose fetcher goes away, or whose lease expires, goes back to the queue. A
 task whose fetcher finds no peers, or fewer than its `-min-peers`, is dropped
@@ -53,16 +53,14 @@ What happens to an infohash is recorded in the store, `torrent_journal`, one
 row per event in the transaction of the change it records: queued, promoted
 or queued again, leased once per attempt and per promotion, failed for no
 peers or a timeout, with the leases the attempt took when it took more than
-one, dropped and evicted, for an infohash sighted by announce, a feed or
-Radarr or Sonarr; metadata fetched and stored, with the leases its attempt
+one, dropped and evicted, for an infohash sighted by announce or Radarr
+or Sonarr; metadata fetched and stored, with the leases its attempt
 took when it took more than one, rejected or already stored;
 a classification by the classifier, with who asked for it, a kind copied from a release
 of the same title key, and a classification that failed; a title lookup's
 match, no match or error, with who asked for it, and the earlier match of its
 title key a release takes as it is stored; the grabs and imports Radarr and
-Sonarr report; its first listing in each feed, journaled after it is
-recorded, in a transaction of its own, as already queued when the infohash
-was queued and stayed where it was; the probes wanted, started, with when the
+Sonarr report; the probes wanted, started, with when the
 lease ends, and done; and its deletion. The queue's events of an infohash
 only ever sampled are left out: the journal of a sampled infohash begins with
 its metadata. What repeats without changing is left out too: a lease of the
@@ -247,3 +245,19 @@ marker. A release that belongs to no work is in no top; the episodes and
 seasons of a series all count towards it. It refreshes the distinct peers
 over the last 7 days of each torrent and each work at the same time, so a
 page can sort by them.
+
+`-api` embeds a NATS server with JetStream, started before the API serves
+and shut down cleanly after it stops; no other component runs one. Its
+store is the directory `SNIFFARR_NATS_DIR`, by default `nats` beside the
+SQLite database, so it shares the API's volume. At start the API connects
+to it in process and creates or updates the pipeline's streams: sightings,
+which drop a sighting repeated within 5 minutes under the same
+`Nats-Msg-Id` header and keep one nobody consumed for a day, fetch and
+probe orders on a subject per priority, P0 to P3, and fetch and probe
+results. The order and result streams are work queues without limits: a
+message stays until a consumer acknowledges it. No component publishes or
+consumes them yet. With `SNIFFARR_NATS_PASSWORD` set, the server also
+listens at `SNIFFARR_NATS_ADDR` for the user `worker`, which may publish
+sightings and results, take and acknowledge orders through their durable consumers, and
+subscribe only to its own inboxes, under `_INBOX_worker`. The API's own
+user connects in process only; the server has no monitoring port.

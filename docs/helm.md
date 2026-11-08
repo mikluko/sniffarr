@@ -12,6 +12,12 @@ helm install sniffarr oci://sarak.sh/mikluko/charts/sniffarr --version X.Y.Z \
 such as `SNIFFARR_CLASSIFY_API_KEY`, `SNIFFARR_TORZNAB_TOKEN` and
 `SNIFFARR_WEBHOOK_TOKEN`; without it the pod takes none. With
 `api.litestream.enabled`, `api.litestream.existingConfigMap` is required.
+With `api.nats.enabled`, the API's embedded NATS server listens for the user
+`worker` on the container port and the `<release>-api` Service port `nats`,
+4222, its password `SNIFFARR_NATS_PASSWORD` taken from the key of that name
+in `api.existingSecret`, which is then required; a Secret without the key
+keeps the pod from starting. The store of the NATS server is `/data/nats`,
+on the API's volume.
 Every value is described in [`values.yaml`](../charts/sniffarr/values.yaml).
 
 With `api.networkPolicy.enabled`, true by default, a NetworkPolicy
@@ -128,7 +134,7 @@ of every enabled component, `ui.addr`, the `flags` and `upnp` of `sniff` and
 `nodeSelector`, `tolerations` and `affinity` come from the `single` block; the
 components' own are not read. With `probe.enabled` the process renders
 `-probe`, and the probe flags and `/seeds` too while `fetch.enabled`. With `sniff.hostNetwork`, every listener binds on
-the host, the API's and the UI's too.
+the host, the API's, the UI's and the NATS server's too.
 
 One process has one DHT node, so `sniff.service` or `fetch.service`, not both,
 exposes it as the Service `<release>-dht`. The chart refuses values the one

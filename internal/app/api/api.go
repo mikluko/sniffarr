@@ -20,10 +20,6 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
 	"sarak.sh/mikluko/sniffarr/internal/database"
-	"sarak.sh/mikluko/sniffarr/internal/feed"
-	"sarak.sh/mikluko/sniffarr/internal/feed/nnmclub"
-	"sarak.sh/mikluko/sniffarr/internal/feed/rutor"
-	"sarak.sh/mikluko/sniffarr/internal/feed/rutracker"
 	"sarak.sh/mikluko/sniffarr/internal/ingest"
 	"sarak.sh/mikluko/sniffarr/internal/latest"
 	"sarak.sh/mikluko/sniffarr/internal/memconn"
@@ -44,9 +40,6 @@ type Config struct {
 	ClassifyURL string
 	// ClassifyKey is the key sent to ClassifyURL; empty sends none.
 	ClassifyKey string
-	// TypesafeKey is ClassifyKey's deprecated fallback, sent to
-	// classify.DefaultURL only.
-	TypesafeKey string
 	// TMDBKey is the TMDB API key or read access token; empty matches no
 	// titles.
 	TMDBKey string
@@ -95,8 +88,6 @@ type Config struct {
 	Probe ingest.ProbeConfig
 	// Probes has the API queue and lease probes; without it none is queued.
 	Probes bool
-	// Feeds are the tracker feeds read, by source name; none reads no feed.
-	Feeds Feeds
 	// ReleaseCheck has the API ask the forge for the latest stable release
 	// once a day and report it in BrowseService.Settings.
 	ReleaseCheck bool
@@ -104,22 +95,6 @@ type Config struct {
 	// the web UI announces it.
 	ReleaseNotice version.Policy
 }
-
-// Feeds is which tracker feeds are read and how.
-type Feeds struct {
-	// Sources names the feeds read: rutracker.Name.
-	Sources []string
-	// Interval is how often each is read; feed.DefaultInterval when zero.
-	Interval time.Duration
-	// Rutracker, Nnmclub and Rutor are the sources of those names, each
-	// read when Sources names it.
-	Rutracker rutracker.Config
-	Nnmclub   nnmclub.Config
-	Rutor     rutor.Config
-}
-
-// feedTimeout bounds one request to a feed.
-const feedTimeout = time.Minute
 
 // ArrHistory is where a Radarr or Sonarr serves its API, URL the root of
 // its v3 API; a zero one imports no history.
@@ -184,18 +159,12 @@ func classifierEndpoint(cfg Config) (endpoint, bool) {
 		return endpoint{url: cfg.ClassifyURL, key: cfg.ClassifyKey, setting: "SNIFFARR_CLASSIFY_URL"}, true
 	}
 	e := endpoint{url: classify.DefaultURL, key: cfg.ClassifyKey, dailyTokens: cfg.DailyTokens, setting: "SNIFFARR_CLASSIFY_API_KEY"}
-	if e.key == "" && cfg.TypesafeKey != "" {
-		e.key, e.setting = cfg.TypesafeKey, "TYPESAFE_API_KEY"
-	}
 	return e, e.key != ""
 }
 
 func newClassifiers(cfg Config, s *store.Store, log *slog.Logger) *classifiers {
 	e, on := classifierEndpoint(cfg)
 	c := &classifiers{endpoint: e}
-	if cfg.TypesafeKey != "" {
-		log.Warn("TYPESAFE_API_KEY is deprecated: set SNIFFARR_CLASSIFY_API_KEY")
-	}
 	if !on && cfg.TMDBKey == "" {
 		log.Info("the classifier is off and TMDB_API_KEY is not set: torrents are classified by their names only")
 		return c
@@ -276,7 +245,6 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, s *s
 		Probes:            cfg.Probes,
 		Classifier:        c.classifier != nil,
 		ClassifierSetting: c.endpoint.setting,
-		Feeds:             cfg.Feeds.Sources,
 		JournalRetention:  cfg.RetentionJournal,
 		Releases:          releases,
 		ReleaseNotice:     cfg.ReleaseNotice,
@@ -338,30 +306,6 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		hist := &arr.History{App: name, URL: h.URL, APIKey: h.APIKey, HTTP: &http.Client{Timeout: arrTimeout}, Recorder: rec, Log: log}
 		app.Go(lc, sd, log, name+" history", hist.Run)
 	}
-	if len(cfg.Feeds.Sources) > 0 {
-		frec := &feed.Recorder{Store: s, Tasks: q, Log: log}
-		for _, src := range feedSources(cfg.Feeds) {
-			p := &feed.Poller{Source: src, Recorder: frec, Interval: cfg.Feeds.Interval, HTTP: &http.Client{Timeout: feedTimeout}, Log: log}
-			app.Go(lc, sd, log, src.Name()+" feed", p.Run)
-		}
-	}
-}
-
-// feedSources are the sources Feeds names; a name it does not know was
-// refused by the configuration.
-func feedSources(f Feeds) []feed.Source {
-	var out []feed.Source
-	for _, name := range f.Sources {
-		switch name {
-		case rutracker.Name:
-			out = append(out, &rutracker.Source{Config: f.Rutracker})
-		case nnmclub.Name:
-			out = append(out, &nnmclub.Source{Config: f.Nnmclub})
-		case rutor.Name:
-			out = append(out, &rutor.Source{Config: f.Rutor})
-		}
-	}
-	return out
 }
 
 // maintain trims the queue, deletes the torrents not seen within

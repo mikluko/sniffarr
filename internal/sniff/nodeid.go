@@ -12,15 +12,15 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 )
 
-// ObtainNodeID asks the server for the DHT node ID, retrying after backoff
-// until it answers with one or ctx is done. Every failed attempt after the
-// first is logged as a warning.
-func ObtainNodeID(ctx context.Context, ingest sniffarrv1connect.IngestServiceClient, backoff time.Duration, log *slog.Logger) ([20]byte, error) {
+// ObtainNodeID asks the server for the DHT node ID of a node listening on
+// port, retrying after backoff until it answers with one or ctx is done.
+// Every failed attempt after the first is logged as a warning.
+func ObtainNodeID(ctx context.Context, ingest sniffarrv1connect.IngestServiceClient, port int, backoff time.Duration, log *slog.Logger) ([20]byte, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	for attempt := 1; ; attempt++ {
-		res, err := ingest.HashKey(ctx, connect.NewRequest(&sniffarrv1.HashKeyRequest{}))
+		res, err := ingest.HashKey(ctx, connect.NewRequest(&sniffarrv1.HashKeyRequest{DhtPort: uint32(port)}))
 		if err == nil {
 			id := res.Msg.GetNodeId()
 			if len(id) == 20 && [20]byte(id) != [20]byte{} {

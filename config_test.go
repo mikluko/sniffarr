@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"sarak.sh/mikluko/sniffarr/internal/app/api"
+	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/app/client"
 	"sarak.sh/mikluko/sniffarr/internal/app/db"
 	"sarak.sh/mikluko/sniffarr/internal/app/dht"
@@ -19,9 +20,6 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/app/ui"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
-	"sarak.sh/mikluko/sniffarr/internal/feed/nnmclub"
-	"sarak.sh/mikluko/sniffarr/internal/feed/rutor"
-	"sarak.sh/mikluko/sniffarr/internal/feed/rutracker"
 	"sarak.sh/mikluko/sniffarr/internal/ingest"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
@@ -69,6 +67,7 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, components{api: true}, c.on)
 			require.Equal(t, "/data/sniffarr.db", c.db.Path)
 			require.Equal(t, ":8080", c.api.Addr)
+			require.Equal(t, broker.Config{Dir: "/data/nats"}, c.broker, "no listener without a password")
 			require.Equal(t, client.Config{}, c.client, "clients would reach this process")
 			require.Equal(t, ui.Config{}, c.ui, "the UI's variables are not read")
 			require.Equal(t, slog.LevelInfo, c.logLevel)
@@ -79,30 +78,13 @@ func TestLoadComponents(t *testing.T) {
 			require.Equal(t, ui.Config{Addr: defaultUIAddr}, c.ui)
 		}},
 		{name: "api with a URL", args: []string{"-api", "-ui"}, env: append(apiEnv, "SNIFFARR_URL", "http://api:8080"), err: "SNIFFARR_URL is set, but -api serves the API in this process: unset it"},
-		{name: "no feeds", args: []string{"-api"}, env: apiEnv, want: func(t *testing.T, c config) {
-			require.Equal(t, api.Feeds{}, c.api.Feeds, "feeds are off unless named")
-		}},
-		{name: "feeds", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "rutracker, nnmclub,rutor", "SNIFFARR_RUTRACKER_FORUMS", "0, 1457", "SNIFFARR_FEED_INTERVAL", "30m",
-			"SNIFFARR_NNMCLUB_FORUMS", "218", "SNIFFARR_RUTOR_DEPTH", "3"),
-			want: func(t *testing.T, c config) {
-				require.Equal(t, api.Feeds{Sources: []string{"rutracker", "nnmclub", "rutor"}, Interval: 30 * time.Minute,
-					Rutracker: rutracker.Config{URL: "https://feed.rutracker.cc", Forums: []int{0, 1457}},
-					Nnmclub:   nnmclub.Config{URL: "https://nnmclub.to/forum", Forums: []int{218}},
-					Rutor:     rutor.Config{URL: "https://rutor.info", Categories: []int{0}, Depth: 3}}, c.api.Feeds)
-			}},
-		{name: "feed defaults", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "nnmclub"), want: func(t *testing.T, c config) {
-			require.Nil(t, c.api.Feeds.Nnmclub.Forums, "every public forum")
-			require.Equal(t, 10, c.api.Feeds.Rutor.Depth)
-		}},
-		{name: "a feed that is not one", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "kinozal"), err: `SNIFFARR_FEEDS: "kinozal" is not a feed; rutracker, nnmclub and rutor are`},
-		{name: "a forum that is not a number", args: []string{"-api"}, env: append(apiEnv, "SNIFFARR_FEEDS", "rutracker", "SNIFFARR_RUTRACKER_FORUMS", "uhd"),
-			err: "SNIFFARR_RUTRACKER_FORUMS: want comma-separated forum numbers, 0 for the whole tracker"},
 		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_SEERR_URL", "https://seerr.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},
 			want: func(t *testing.T, c config) {
 				require.Equal(t, client.Config{URL: &url.URL{Scheme: "http", Host: "api:8080"}}, c.client)
 				require.Equal(t, ui.Config{Addr: ":9001", OIDCIssuer: "https://id.example.com", SeerrURL: "https://seerr.example.com"}, c.ui)
 				require.Equal(t, api.Config{}, c.api, "the API's variables are not read, the unknown audio language among them")
 				require.Equal(t, db.Config{}, c.db)
+				require.Equal(t, broker.Config{}, c.broker)
 			}},
 		{name: "ui with Radarr and Sonarr", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_RADARR_URL", "https://radarr.example.com", "SNIFFARR_SONARR_URL", "https://example.com/sonarr/"},
 			want: func(t *testing.T, c config) {
@@ -243,7 +225,7 @@ func TestLoadAPI(t *testing.T) {
 	}{
 		{name: "defaults", env: required, want: func(*api.Config, *db.Config) {}},
 		{name: "tmdb key empty", env: with("TMDB_API_KEY", ""), want: func(*api.Config, *db.Config) {}},
-		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "TYPESAFE_API_KEY", "ts", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
+		{name: "everything set", env: with("SNIFFARR_ADDR", ":9000", "SNIFFARR_CLASSIFY_API_KEY", "ck", "SNIFFARR_CLASSIFY_CONCURRENCY", "8", "SNIFFARR_CLASSIFY_DAILY_TOKENS", "1000000",
 			"SNIFFARR_CLASSIFY_SEARCH_RESERVE", "40",
 			"SNIFFARR_FETCH_LEASE", "2m", "SNIFFARR_FETCH_ATTEMPTS", "5", "SNIFFARR_FETCH_BACKOFF", "1h",
 			"SNIFFARR_PROBE_DAILY_BYTES", "20GiB", "SNIFFARR_PROBE_SEARCH_RESERVE", "10", "SNIFFARR_PROBE_MAX_BYTES", "32MiB",
@@ -254,7 +236,7 @@ func TestLoadAPI(t *testing.T) {
 			"SNIFFARR_SCRIPTS", "Latin,Cyrillic,Greek", "SNIFFARR_AUDIO_LANGUAGES", "ru",
 			"TMDB_API_KEY", "tm", "SNIFFARR_TORZNAB_TOKEN", "tz", "SNIFFARR_TMDB_CONCURRENCY", "3", "SNIFFARR_TMDB_RATE", "10", "SNIFFARR_TMDB_RETRY", "240h", "SNIFFARR_SEARCH_TMDB_MAX", "7"),
 			want: func(a *api.Config, d *db.Config) {
-				*a = api.Config{Addr: ":9000", TypesafeKey: "ts", TMDBKey: "tm", TorznabToken: "tz", ClassifyConcurrency: 8,
+				*a = api.Config{Addr: ":9000", ClassifyKey: "ck", TMDBKey: "tm", TorznabToken: "tz", ClassifyConcurrency: 8,
 					TMDBConcurrency: 3, TMDBRate: 10, TMDBRetry: 240 * time.Hour, LazyTMDB: 7, DailyTokens: 1000000, SearchReserve: 40,
 					Lease: 2 * time.Minute, Attempts: 5, Backoff: time.Hour, Retention: 720 * time.Hour, RetentionIdle: 72 * time.Hour, RetentionJournal: 168 * time.Hour,
 					StatsInterval: time.Minute, LazyMax: 5, LazyWait: 500 * time.Millisecond,
@@ -338,6 +320,40 @@ func TestLoadAPI(t *testing.T) {
 			tt.want(&a, &d)
 			require.Equal(t, a, c.api)
 			require.Equal(t, d, c.db)
+		})
+	}
+}
+
+func TestLoadBroker(t *testing.T) {
+	with := func(kv ...string) []string { return append([]string{"SNIFFARR_DB", "/data/sniffarr.db"}, kv...) }
+	tests := []struct {
+		name string
+		env  []string
+		want broker.Config
+		err  string
+	}{
+		{name: "defaults", env: with(), want: broker.Config{Dir: "/data/nats"}},
+		{name: "relative database", env: []string{"SNIFFARR_DB", "sniffarr.db"}, want: broker.Config{Dir: "nats"}},
+		{name: "store directory", env: with("SNIFFARR_NATS_DIR", "/var/lib/nats"), want: broker.Config{Dir: "/var/lib/nats"}},
+		{name: "password", env: with("SNIFFARR_NATS_PASSWORD", "pw"), want: broker.Config{Dir: "/data/nats", Addr: defaultNATSAddr, Password: "pw"}},
+		{name: "password and address", env: with("SNIFFARR_NATS_PASSWORD", "pw", "SNIFFARR_NATS_ADDR", "127.0.0.1:0"),
+			want: broker.Config{Dir: "/data/nats", Addr: "127.0.0.1:0", Password: "pw"}},
+		{name: "address without password", env: with("SNIFFARR_NATS_ADDR", ":4222"),
+			err: "SNIFFARR_NATS_ADDR: the workers' listener is off without SNIFFARR_NATS_PASSWORD"},
+		{name: "address without port", env: with("SNIFFARR_NATS_PASSWORD", "pw", "SNIFFARR_NATS_ADDR", "4222"),
+			err: "SNIFFARR_NATS_ADDR: want host:port, the host optional and the port 0 to 65535"},
+		{name: "port out of range", env: with("SNIFFARR_NATS_PASSWORD", "pw", "SNIFFARR_NATS_ADDR", ":65536"),
+			err: "SNIFFARR_NATS_ADDR: want host:port, the host optional and the port 0 to 65535"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := load([]string{"-api"}, env(tt.env...), io.Discard)
+			if tt.err != "" {
+				require.EqualError(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, c.broker)
 		})
 	}
 }

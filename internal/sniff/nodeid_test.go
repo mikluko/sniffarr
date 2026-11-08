@@ -35,9 +35,10 @@ func TestObtainNodeIDRetries(t *testing.T) {
 	ingest := newFake()
 	ingest.failKey = 3
 	log := &levels{}
-	id, err := ObtainNodeID(context.Background(), ingest.client(t), time.Millisecond, slog.New(log))
+	id, err := ObtainNodeID(context.Background(), ingest.client(t), 42069, time.Millisecond, slog.New(log))
 	require.NoError(t, err)
 	require.Equal(t, ingest.nodeID, id)
+	require.EqualValues(t, 42069, ingest.dhtPort, "the server is told the port")
 	log.mu.Lock()
 	defer log.mu.Unlock()
 	require.Equal(t, 2, log.count[slog.LevelWarn], "every failure after the first warns")
@@ -49,7 +50,7 @@ func TestObtainNodeIDStopsWithContext(t *testing.T) {
 	ingest.failKey = 1 << 20
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	_, err := ObtainNodeID(ctx, ingest.client(t), time.Millisecond, nil)
+	_, err := ObtainNodeID(ctx, ingest.client(t), 42069, time.Millisecond, nil)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
@@ -58,6 +59,6 @@ func TestObtainNodeIDRejectsShortID(t *testing.T) {
 	ingest.nodeID = [20]byte{}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	_, err := ObtainNodeID(ctx, ingest.client(t), time.Millisecond, nil)
+	_, err := ObtainNodeID(ctx, ingest.client(t), 42069, time.Millisecond, nil)
 	require.ErrorIs(t, err, context.DeadlineExceeded, "a zero ID is retried, not used")
 }

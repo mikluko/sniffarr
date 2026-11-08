@@ -7,12 +7,15 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"net"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"sarak.sh/mikluko/sniffarr/internal/app/api"
+	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/app/client"
 	"sarak.sh/mikluko/sniffarr/internal/app/db"
 	"sarak.sh/mikluko/sniffarr/internal/app/dht"
@@ -21,10 +24,6 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/app/ui"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
 	"sarak.sh/mikluko/sniffarr/internal/classify"
-	"sarak.sh/mikluko/sniffarr/internal/feed"
-	"sarak.sh/mikluko/sniffarr/internal/feed/nnmclub"
-	"sarak.sh/mikluko/sniffarr/internal/feed/rutor"
-	"sarak.sh/mikluko/sniffarr/internal/feed/rutracker"
 	"sarak.sh/mikluko/sniffarr/internal/ingest"
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
@@ -52,6 +51,7 @@ type config struct {
 	probe    bool
 	api      api.Config
 	db       db.Config
+	broker   broker.Config
 	ui       ui.Config
 	client   client.Config
 	dht      dht.Config
@@ -80,6 +80,10 @@ const defaultStatsInterval = 5 * time.Minute
 
 // defaultUIAddr is the UI's listen address when SNIFFARR_UI_ADDR is unset.
 const defaultUIAddr = ":8081"
+
+// defaultNATSAddr is the workers' NATS listen address when
+// SNIFFARR_NATS_ADDR is unset.
+const defaultNATSAddr = ":4222"
 
 // load reads the configuration from args and lookup, writing flag usage and
 // errors to output. Each component's variables are read only when it is on.
@@ -183,6 +187,9 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 		if c.api, c.db, err = loadAPI(lookup); err != nil {
 			return c, err
 		}
+		if c.broker, err = loadBroker(getenv, c.db.Path); err != nil {
+			return c, err
+		}
 		c.api.Probes, c.db.Tasks.NoProbes = c.probe, !c.probe
 	}
 	return c, nil
@@ -267,7 +274,6 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	a := api.Config{
 		Addr:         or(getenv("SNIFFARR_ADDR"), ":8080"),
 		ClassifyKey:  getenv("SNIFFARR_CLASSIFY_API_KEY"),
-		TypesafeKey:  getenv("TYPESAFE_API_KEY"),
 		TorznabToken: getenv("SNIFFARR_TORZNAB_TOKEN"),
 		WebhookToken: getenv("SNIFFARR_WEBHOOK_TOKEN"),
 	}
@@ -345,9 +351,6 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.Scripts, err = rules.ParseScripts(getenv("SNIFFARR_SCRIPTS")); err != nil {
 		return a, d, fmt.Errorf("SNIFFARR_SCRIPTS: %w", err)
 	}
-	if a.Feeds, err = loadFeeds(getenv); err != nil {
-		return a, d, err
-	}
 	if a.ReleaseCheck, a.ReleaseNotice, err = releaseCheck(getenv("SNIFFARR_RELEASE_CHECK")); err != nil {
 		return a, d, err
 	}
@@ -357,6 +360,29 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	d.Store.TMDB = a.TMDBKey != ""
 	d.Store.Languages = audio.Tags(a.Languages)
 	return a, d, nil
+}
+
+// loadBroker reads the embedded NATS server's settings: its store, nats
+// beside the database unless SNIFFARR_NATS_DIR is set, and the workers'
+// listener, on only with SNIFFARR_NATS_PASSWORD.
+func loadBroker(getenv func(string) string, dbPath string) (broker.Config, error) {
+	b := broker.Config{Dir: or(getenv("SNIFFARR_NATS_DIR"), filepath.Join(filepath.Dir(dbPath), "nats"))}
+	addr := getenv("SNIFFARR_NATS_ADDR")
+	if b.Password = getenv("SNIFFARR_NATS_PASSWORD"); b.Password == "" {
+		if addr != "" {
+			return b, errors.New("SNIFFARR_NATS_ADDR: the workers' listener is off without SNIFFARR_NATS_PASSWORD")
+		}
+		return b, nil
+	}
+	b.Addr = or(addr, defaultNATSAddr)
+	_, port, err := net.SplitHostPort(b.Addr)
+	if err == nil {
+		_, err = strconv.ParseUint(port, 10, 16)
+	}
+	if err != nil {
+		return b, errors.New("SNIFFARR_NATS_ADDR: want host:port, the host optional and the port 0 to 65535")
+	}
+	return b, nil
 }
 
 // loadStore reads the store's settings that the environment sets.
@@ -407,64 +433,6 @@ func loadProbe(getenv func(string) string) (ingest.ProbeConfig, error) {
 	}
 	p.Backoff, err = duration(getenv, "SNIFFARR_PROBE_BACKOFF", ingest.DefaultProbeBackoff)
 	return p, err
-}
-
-// loadFeeds reads SNIFFARR_FEEDS, the comma-separated names of the feeds
-// read, and each named feed's settings.
-func loadFeeds(getenv func(string) string) (api.Feeds, error) {
-	var f api.Feeds
-	for _, name := range strings.Split(getenv("SNIFFARR_FEEDS"), ",") {
-		name = strings.TrimSpace(name)
-		switch name {
-		case "":
-		case rutracker.Name, nnmclub.Name, rutor.Name:
-			f.Sources = append(f.Sources, name)
-		default:
-			return f, fmt.Errorf("SNIFFARR_FEEDS: %q is not a feed; %s, %s and %s are", name, rutracker.Name, nnmclub.Name, rutor.Name)
-		}
-	}
-	if len(f.Sources) == 0 {
-		return f, nil
-	}
-	var err error
-	if f.Interval, err = duration(getenv, "SNIFFARR_FEED_INTERVAL", feed.DefaultInterval); err != nil {
-		return f, err
-	}
-	f.Rutracker.URL = or(getenv("SNIFFARR_RUTRACKER_FEED_URL"), rutracker.DefaultURL)
-	if f.Rutracker.Forums, err = numbers(getenv, "SNIFFARR_RUTRACKER_FORUMS", "0", "forum numbers, 0 for the whole tracker"); err != nil {
-		return f, err
-	}
-	f.Nnmclub.URL = or(getenv("SNIFFARR_NNMCLUB_URL"), nnmclub.DefaultURL)
-	if f.Nnmclub.Forums, err = numbers(getenv, "SNIFFARR_NNMCLUB_FORUMS", "", "forum numbers, none for every public forum"); err != nil {
-		return f, err
-	}
-	f.Rutor.URL = or(getenv("SNIFFARR_RUTOR_URL"), rutor.DefaultURL)
-	if f.Rutor.Categories, err = numbers(getenv, "SNIFFARR_RUTOR_CATEGORIES", "0", "category numbers, 0 for every one"); err != nil {
-		return f, err
-	}
-	if f.Rutor.Depth, err = positive(getenv, "SNIFFARR_RUTOR_DEPTH", rutor.DefaultDepth); err != nil {
-		return f, err
-	}
-	return f, nil
-}
-
-// numbers reads a comma-separated list of non-negative integers from the
-// variable, def when it is unset; empty is none. want names the list in
-// the error.
-func numbers(getenv func(string) string, name, def, want string) ([]int, error) {
-	var out []int
-	for _, s := range strings.Split(or(getenv(name), def), ",") {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		n, err := strconv.Atoi(s)
-		if err != nil || n < 0 {
-			return nil, fmt.Errorf("%s: want comma-separated %s", name, want)
-		}
-		out = append(out, n)
-	}
-	return out, nil
 }
 
 // arrHistory reads where the app's v3 API is: SNIFFARR_<app>_API_URL, or

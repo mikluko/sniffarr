@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"net"
 	"net/netip"
 	"slices"
@@ -37,6 +38,11 @@ type result struct {
 }
 
 func (r result) String() string { return fmt.Sprintf("%-4s  %s: %s", r.status, r.subject, r.detail) }
+
+// short is h in hex, its first and last two bytes only: 1234..abcd.
+func short(h [20]byte) string {
+	return hex.EncodeToString(h[:2]) + ".." + hex.EncodeToString(h[18:])
+}
 
 // checks are the inputs of every check.
 type checks struct {
@@ -195,11 +201,11 @@ func judgeSniffID(t target, got [20]byte, err error, id [20]byte) result {
 	case err != nil:
 		r.status, r.detail = statusFail, "no answer to ping: "+err.Error()
 	case got == want:
-		r.status, r.detail = statusOK, fmt.Sprintf("answers as %x, the stored ID with the BEP 42 prefix of %s", got, t.addr)
+		r.status, r.detail = statusOK, fmt.Sprintf("answers as %s, the stored ID with the BEP 42 prefix of %s", short(got), t.addr)
 	case got == id:
-		r.status, r.detail = statusFail, fmt.Sprintf("answers as %x, the stored ID without the BEP 42 prefix of %s: STUN reported another address, or none", got, t.addr)
+		r.status, r.detail = statusFail, fmt.Sprintf("answers as %s, the stored ID without the BEP 42 prefix of %s: STUN reported another address, or none", short(got), t.addr)
 	default:
-		r.status, r.detail = statusFail, fmt.Sprintf("answers as %x, not this release's sniff, %x", got, want)
+		r.status, r.detail = statusFail, fmt.Sprintf("answers as %s, not this release's sniff, %s", short(got), short(want))
 	}
 	return r
 }
@@ -216,20 +222,29 @@ func judgeReach(t target, err error) result {
 }
 
 // judgeContacts judges the addresses other DHT nodes list the sniff at t
-// at: the NodePort, unless its queries leave from another port.
-func judgeContacts(t target, seen []netip.AddrPort) result {
+// at, given with the nodes that list each: its port, unless its queries
+// leave from another one. A wrong address names how many nodes list it and
+// how many of those are at t's own address, the release's other processes.
+func judgeContacts(t target, seen map[netip.AddrPort][]netip.AddrPort) result {
 	r := result{subject: t.name + " as others list it"}
 	var other []string
-	for _, ap := range seen {
-		if ap != t.udpAddr() {
-			other = append(other, ap.String())
+	for _, ap := range slices.SortedFunc(maps.Keys(seen), netip.AddrPort.Compare) {
+		if ap == t.udpAddr() {
+			continue
 		}
+		own := 0
+		for _, from := range seen[ap] {
+			if from.Addr() == t.addr {
+				own++
+			}
+		}
+		other = append(other, fmt.Sprintf("%s (by %d, %d of them at %s)", ap, len(seen[ap]), own, t.addr))
 	}
 	switch {
 	case len(seen) == 0:
 		r.status, r.detail = statusSkip, "no node the lookup asked lists it"
 	case len(other) > 0:
-		r.status, r.detail = statusFail, fmt.Sprintf("at %s, not %s: its queries leave from another port than the NodePort", strings.Join(other, ", "), t.udpAddr())
+		r.status, r.detail = statusFail, fmt.Sprintf("at %s, not %s: its queries leave from another port than the one it listens on", strings.Join(other, ", "), t.udpAddr())
 	default:
 		r.status, r.detail = statusOK, fmt.Sprintf("at %s", t.udpAddr())
 	}
@@ -246,7 +261,7 @@ func judgeProbe(t target, err error, promiscuous bool, served, seeds int) result
 	case promiscuous:
 		r.status, r.detail = statusFail, "answers a handshake for a random infohash"
 	case t.tcp != t.udp:
-		r.status, r.detail = statusFail, fmt.Sprintf("TCP NodePort %d differs from UDP %d, the port the DHT announces", t.tcp, t.udp)
+		r.status, r.detail = statusFail, fmt.Sprintf("TCP port %d differs from UDP %d, the port the DHT announces", t.tcp, t.udp)
 	default:
 		r.detail += fmt.Sprintf(", serves %d of %d seeds", served, seeds)
 	}
@@ -254,7 +269,7 @@ func judgeProbe(t target, err error, promiscuous bool, served, seeds int) result
 }
 
 // judgeSeeds judges, for every seed, the peers the DHT holds at the
-// probes' addresses: each must be at a probe's NodePort. It fails too when
+// probes' addresses: each must be at a probe's port. It fails too when
 // no seed is announced at all.
 func judgeSeeds(seeds [][20]byte, announced [][]netip.AddrPort, served [][]target, probes []target) []result {
 	ports := map[netip.AddrPort]string{}
@@ -264,7 +279,7 @@ func judgeSeeds(seeds [][20]byte, announced [][]netip.AddrPort, served [][]targe
 	var out []result
 	seen := false
 	for i, h := range seeds {
-		r := result{subject: "seed " + hex.EncodeToString(h[:])}
+		r := result{subject: "seed " + short(h)}
 		var at, bad []string
 		for _, ap := range announced[i] {
 			if !slices.ContainsFunc(probes, func(p target) bool { return p.addr == ap.Addr() }) {
@@ -282,7 +297,7 @@ func judgeSeeds(seeds [][20]byte, announced [][]netip.AddrPort, served [][]targe
 		}
 		switch {
 		case len(bad) > 0:
-			r.status, r.detail = statusFail, fmt.Sprintf("announced at %s, no probe's NodePort; served by %s", strings.Join(bad, ", "), by)
+			r.status, r.detail = statusFail, fmt.Sprintf("announced at %s, no probe's port; served by %s", strings.Join(bad, ", "), by)
 		case len(at) > 0:
 			r.status, r.detail = statusOK, fmt.Sprintf("announced at %s, served by %s", strings.Join(at, ", "), by)
 		default:

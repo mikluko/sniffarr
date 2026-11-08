@@ -132,25 +132,29 @@ type finder func(ctx context.Context, addr netip.AddrPort, target [20]byte) ([]k
 
 // contacts walks the DHT from start toward target, lookupWidth closest
 // unasked nodes a round, and returns the addresses other nodes list for
-// the node of ID target.
-func contacts(ctx context.Context, find finder, start []krpc.NodeInfo, target [20]byte) []netip.AddrPort {
+// the node of ID target, each with the addresses of the nodes that listed
+// it, sorted; start's own entries count as listed by the zero address.
+func contacts(ctx context.Context, find finder, start []krpc.NodeInfo, target [20]byte) map[netip.AddrPort][]netip.AddrPort {
 	t := int160.FromByteArray(target)
 	known := map[netip.AddrPort][20]byte{}
 	asked := map[netip.AddrPort]bool{}
-	found := map[netip.AddrPort]bool{}
-	add := func(ni krpc.NodeInfo) {
+	found := map[netip.AddrPort]map[netip.AddrPort]bool{}
+	add := func(from netip.AddrPort, ni krpc.NodeInfo) {
 		ap, ok := addrPort(ni.Addr)
 		if !ok {
 			return
 		}
 		if ni.ID == target {
-			found[ap] = true
+			if found[ap] == nil {
+				found[ap] = map[netip.AddrPort]bool{}
+			}
+			found[ap][from] = true
 			return
 		}
 		known[ap] = ni.ID
 	}
 	for _, ni := range start {
-		add(ni)
+		add(netip.AddrPort{}, ni)
 	}
 	for range lookupRounds {
 		next := closest(known, asked, t, lookupWidth)
@@ -171,13 +175,17 @@ func contacts(ctx context.Context, find finder, start []krpc.NodeInfo, target [2
 				mu.Lock()
 				defer mu.Unlock()
 				for _, ni := range nis {
-					add(ni)
+					add(ap, ni)
 				}
 			})
 		}
 		wg.Wait()
 	}
-	return slices.SortedFunc(maps.Keys(found), netip.AddrPort.Compare)
+	out := make(map[netip.AddrPort][]netip.AddrPort, len(found))
+	for ap, from := range found {
+		out[ap] = slices.SortedFunc(maps.Keys(from), netip.AddrPort.Compare)
+	}
+	return out
 }
 
 // closest returns up to n addresses of known not yet asked, nearest to t

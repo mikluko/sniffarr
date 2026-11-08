@@ -30,11 +30,11 @@ func TestJournalView(t *testing.T) {
 		t.Errorf("days %+v", v.Days)
 	}
 	card := TorrentPage{Base: b, Torrent: Torrent{Journal: sampleJournal(now.Add(-41*time.Hour), "x")}}
-	if v = card.JournalView(); v.Rows != 8 || v.Shown != JournalCardRows || len(v.Days[0].Rows)+len(v.Days[1].Rows) != JournalCardRows {
+	if v = card.JournalView(); v.Rows != 7 || v.Shown != JournalCardRows || len(v.Days[0].Rows)+len(v.Days[1].Rows) != JournalCardRows {
 		t.Errorf("the card: %d of %d rows shown", v.Shown, v.Rows)
 	}
 	card.Torrent.JournalAll = true
-	if v = card.JournalView(); v.Shown != 8 {
+	if v = card.JournalView(); v.Shown != 7 {
 		t.Errorf("the whole journal: %d of %d rows shown", v.Shown, v.Rows)
 	}
 
@@ -128,7 +128,7 @@ func TestJournalFailuresSettled(t *testing.T) {
 		es              []JournalEntry
 		retries, finals int
 	}{
-		{"a fetch that failed for good, then stored after a feed queued it", []JournalEntry{noPeers, e(68, "feed", "queued", nil), stored}, 0, 0},
+		{"a fetch that failed for good, then stored after a sighting revived it", []JournalEntry{noPeers, e(68, "sighted", "revived", nil), stored}, 0, 0},
 		{"a timeout after a final failure settles neither", []JournalEntry{noPeers, timeout}, 1, 1},
 		{"retries before a final failure, settled by it", []JournalEntry{timeout, noPeers}, 0, 1},
 		{"a failure of another task is not settled by a fetch", []JournalEntry{classifyFailed, probeTimeout, e(110, "fetched", "stored", nil)}, 1, 1},

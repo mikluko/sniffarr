@@ -10,17 +10,18 @@ import (
 	"sarak.sh/mikluko/sniffarr/hack/internal/cluster"
 )
 
-// Components with node ports, as the chart labels them.
+// Components reachable from outside, as the chart labels them.
 const (
 	componentSniff = "sniff"
 	componentProbe = "probe"
 )
 
-// target is one NodePort Service of the release: the node address and the
-// ports the internet reaches its pod at.
+// target is one pod of the release reachable from outside, through a NodePort
+// Service or a hostPort: the node address and the ports the internet reaches
+// it at.
 type target struct {
 	// name is the Service's name without the release prefix, such as
-	// "sniff" or "probe-1".
+	// "sniff" or "probe-1", or for a hostPort the component's name.
 	name      string
 	component string
 	addr      netip.Addr
@@ -49,13 +50,21 @@ type serviceList struct {
 	} `json:"items"`
 }
 
+type pod struct {
+	Metadata meta `json:"metadata"`
+	Spec     struct {
+		NodeName   string `json:"nodeName"`
+		Containers []struct {
+			Ports []struct {
+				Protocol string `json:"protocol"`
+				HostPort uint16 `json:"hostPort"`
+			} `json:"ports"`
+		} `json:"containers"`
+	} `json:"spec"`
+}
+
 type podList struct {
-	Items []struct {
-		Metadata meta `json:"metadata"`
-		Spec     struct {
-			NodeName string `json:"nodeName"`
-		} `json:"spec"`
-	} `json:"items"`
+	Items []pod `json:"items"`
 }
 
 type nodeAddress struct {
@@ -72,8 +81,8 @@ type nodeList struct {
 	} `json:"items"`
 }
 
-// discover reads the release's NodePort Services, their pods and the pods'
-// nodes through kubectl and returns the targets.
+// discover reads the release's Services, its pods and their nodes through
+// kubectl and returns the targets.
 func discover(ctx context.Context, k cluster.Kube, release string, addr netip.Addr) ([]target, error) {
 	sel := "app.kubernetes.io/instance=" + release
 	var svcs serviceList
@@ -93,13 +102,36 @@ func discover(ctx context.Context, k cluster.Kube, release string, addr netip.Ad
 	return targets(release, svcs, pods, nodes, addr)
 }
 
-// targets pairs every NodePort Service of the sniff or a probe with the
-// address of the node its pod runs on, or with addr when it is valid.
+// targets pairs every NodePort Service of the sniff or a probe, and every
+// pod of theirs with a hostPort that no such Service selects, with the
+// address of the node the pod runs on, or with addr when it is valid.
 func targets(release string, svcs serviceList, pods podList, nodes nodeList, addr netip.Addr) ([]target, error) {
+	out, err := serviceTargets(release, svcs, pods, nodes, addr)
+	if err != nil {
+		return nil, err
+	}
+	hosted, err := hostPortTargets(svcs, pods, nodes, addr)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, hosted...)
+	if len(out) == 0 {
+		return nil, fmt.Errorf("release %s has no NodePort Service or hostPort of the sniff or a probe", release)
+	}
+	slices.SortFunc(out, func(a, b target) int { return strings.Compare(a.name, b.name) })
+	return out, nil
+}
+
+// reachable reports whether c is the sniff or the probe.
+func reachable(c string) bool { return c == componentSniff || c == componentProbe }
+
+// serviceTargets returns a target per NodePort Service of the sniff or a
+// probe.
+func serviceTargets(release string, svcs serviceList, pods podList, nodes nodeList, addr netip.Addr) ([]target, error) {
 	var out []target
 	for _, s := range svcs.Items {
 		c := s.Metadata.Labels["app.kubernetes.io/component"]
-		if s.Spec.Type != "NodePort" || (c != componentSniff && c != componentProbe) {
+		if s.Spec.Type != "NodePort" || !reachable(c) {
 			continue
 		}
 		t := target{name: strings.TrimPrefix(s.Metadata.Name, release+"-"), component: c, addr: addr}
@@ -120,11 +152,65 @@ func targets(release string, svcs serviceList, pods podList, nodes nodeList, add
 		}
 		out = append(out, t)
 	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("release %s has no NodePort service of the sniff or a probe", release)
-	}
-	slices.SortFunc(out, func(a, b target) int { return strings.Compare(a.name, b.name) })
 	return out, nil
+}
+
+// hostPortTargets returns a target per pod of the sniff or a probe that
+// publishes a hostPort and that no NodePort Service selects, named by its
+// component; two such pods of one component are an error.
+func hostPortTargets(svcs serviceList, pods podList, nodes nodeList, addr netip.Addr) ([]target, error) {
+	var out []target
+	seen := map[string]bool{}
+	for _, p := range pods.Items {
+		c := p.Metadata.Labels["app.kubernetes.io/component"]
+		if !reachable(c) || nodePorted(p, svcs) {
+			continue
+		}
+		t := target{name: c, component: c, addr: addr}
+		t.udp, t.tcp = hostPorts(p)
+		if t.udp == 0 && t.tcp == 0 {
+			continue
+		}
+		if seen[c] {
+			return nil, fmt.Errorf("%s: more than one pod with a hostPort", c)
+		}
+		seen[c] = true
+		if !t.addr.IsValid() {
+			a, err := nodeAddr(p.Spec.NodeName, nodes)
+			if err != nil {
+				return nil, fmt.Errorf("pod %s: %w", p.Metadata.Name, err)
+			}
+			t.addr = a
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// hostPorts returns the UDP and TCP hostPorts of p's containers, 0 for none.
+func hostPorts(p pod) (udp, tcp uint16) {
+	for _, ct := range p.Spec.Containers {
+		for _, cp := range ct.Ports {
+			switch {
+			case cp.HostPort == 0:
+			case cp.Protocol == "UDP":
+				udp = cp.HostPort
+			case cp.Protocol == "TCP", cp.Protocol == "":
+				tcp = cp.HostPort
+			}
+		}
+	}
+	return udp, tcp
+}
+
+// nodePorted reports whether a NodePort Service selects p.
+func nodePorted(p pod, svcs serviceList) bool {
+	for _, s := range svcs.Items {
+		if s.Spec.Type == "NodePort" && selects(s.Spec.Selector, p.Metadata.Labels) {
+			return true
+		}
+	}
+	return false
 }
 
 // podAddr is the public address of the node of the one pod selector
@@ -143,7 +229,13 @@ func podAddr(selector map[string]string, pods podList, nodes nodeList) (netip.Ad
 		return netip.Addr{}, fmt.Errorf("no pod")
 	case n > 1:
 		return netip.Addr{}, fmt.Errorf("%d pods: give -addr", n)
-	case node == "":
+	}
+	return nodeAddr(node, nodes)
+}
+
+// nodeAddr is the public address of the named node.
+func nodeAddr(node string, nodes nodeList) (netip.Addr, error) {
+	if node == "" {
 		return netip.Addr{}, fmt.Errorf("pod not scheduled")
 	}
 	for _, nd := range nodes.Items {

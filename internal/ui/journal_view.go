@@ -309,18 +309,8 @@ func (b Base) SeverityText(s Severity) string {
 }
 
 // Inline reports whether the row's step i shows its particulars under it:
-// every step of the feeds of a title, else every step but the last, whose
-// are the row's Details.
-func (r JournalRow) Inline(i int) bool { return r.Kind == "feed" || i < len(r.Steps)-1 }
-
-// KV is the particulars the open row lists apart: the last step's, unless
-// its steps show each their own.
-func (r JournalRow) KV() []DetailPair {
-	if r.Kind == "feed" && len(r.Steps) > 0 {
-		return nil
-	}
-	return r.Details
-}
+// every step but the last, whose are the row's Details.
+func (r JournalRow) Inline(i int) bool { return i < len(r.Steps)-1 }
 
 // Retention writes a period as days, or as hours when not whole days, by
 // the noun key: "30 дней", "36 часов"; key "_gen" after the noun takes the

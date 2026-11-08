@@ -24,9 +24,11 @@ the same to each.
 | ---------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `SNIFFARR_DB`                      |                  | Path of the SQLite database; required                                                                                  |
 | `SNIFFARR_ADDR`                    | `:8080`          | Listen address                                                                                                         |
+| `SNIFFARR_NATS_DIR`                | `nats` beside `SNIFFARR_DB` | JetStream store directory of the embedded NATS server, created when missing                                 |
+| `SNIFFARR_NATS_PASSWORD`           |                  | Password of the NATS user `worker`; set, it opens the workers' listener at `SNIFFARR_NATS_ADDR`, unset or empty, the server listens on no port |
+| `SNIFFARR_NATS_ADDR`               | `:4222`          | Listen address of the workers' NATS listener, port `0` picking a free one; refused without `SNIFFARR_NATS_PASSWORD`    |
 | `SNIFFARR_CLASSIFY_URL`            | `https://api.typesafe.ai/v1/systemone` | Classifier endpoint serving the System One protocol, `POST /v1/systemone`; another endpoint than the default turns the classifier on, with or without a key, and has no daily token limit |
 | `SNIFFARR_CLASSIFY_API_KEY`        |                  | Key sent to `SNIFFARR_CLASSIFY_URL` as a bearer token; with the default endpoint and no key the classifier is off, and only rules and reuse classify |
-| `TYPESAFE_API_KEY`                 |                  | Deprecated: use `SNIFFARR_CLASSIFY_API_KEY`. Read when that is unset, and sent to the default endpoint only            |
 | `SNIFFARR_CLASSIFY_CONCURRENCY`    | `4`              | Background classification requests at once                                                                             |
 | `SNIFFARR_CLASSIFY_DAILY_TOKENS`   | `2000000`        | Classifier tokens per UTC day at most with the default endpoint; `0` is no limit                                       |
 | `SNIFFARR_CLASSIFY_SEARCH_RESERVE` | `25`             | Percentage of the daily tokens background classification leaves for searches, `0` to `100`                             |
@@ -59,15 +61,6 @@ the same to each.
 | `SNIFFARR_SONARR_URL`              |                  | Root URL of the Sonarr whose grab history is imported; set with `SNIFFARR_SONARR_API_KEY` or not at all                |
 | `SNIFFARR_SONARR_API_URL`          | `/api/v3` under `SNIFFARR_SONARR_URL` | Root of that Sonarr's v3 API, such as `http://sonarr:8989/api/v3`, where the API reaches it by another address |
 | `SNIFFARR_SONARR_API_KEY`          |                  | That Sonarr's API key                                                                                                  |
-| `SNIFFARR_FEEDS`                   |                  | Comma-separated tracker feeds read: `rutracker`; empty reads none                                                      |
-| `SNIFFARR_FEED_INTERVAL`           | `1h`             | How often each feed is read                                                                                            |
-| `SNIFFARR_RUTRACKER_FEED_URL`      | `https://feed.rutracker.cc` | Where rutracker's feeds are served                                                                          |
-| `SNIFFARR_RUTRACKER_FORUMS`        | `0`              | Comma-separated rutracker forums whose feeds are read; `0` is the whole tracker                                        |
-| `SNIFFARR_NNMCLUB_URL`             | `https://nnmclub.to/forum` | The NNM-Club forum whose RSS and topics are read                                                             |
-| `SNIFFARR_NNMCLUB_FORUMS`          |                  | Comma-separated NNM-Club forums whose RSS is read; empty reads the RSS of every public forum                           |
-| `SNIFFARR_RUTOR_URL`               | `https://rutor.info` | The rutor site whose listing pages are read                                                                        |
-| `SNIFFARR_RUTOR_CATEGORIES`        | `0`              | Comma-separated rutor categories whose listings are read; `0` is every one                                             |
-| `SNIFFARR_RUTOR_DEPTH`             | `10`             | Listing pages of each rutor category the first pass reads                                                              |
 | `SNIFFARR_PROBE_DAILY_BYTES`       | `100GiB`         | Piece data probes download per UTC day at most, in bytes or with a unit of `B`, `KiB`, `MiB`, `GiB` or `TiB`; `0` is no limit |
 | `SNIFFARR_PROBE_SEARCH_RESERVE`    | `25`             | Percentage of the daily bytes left to releases a Torznab search returned, `0` to `100`                                 |
 | `SNIFFARR_PROBE_MAX_BYTES`         | `64MiB`          | Piece data one probe downloads at most, units as above                                                                 |

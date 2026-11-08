@@ -54,10 +54,12 @@ type fakeIngest struct {
 	// many results; 0 never does.
 	failFetchAfter int
 
-	// key and nodeID are what HashKey answers after failKey failures.
+	// key and nodeID are what HashKey answers after failKey failures;
+	// dhtPort is the port the last HashKey request named.
 	key     sketch.Key
 	nodeID  [20]byte
 	failKey int
+	dhtPort uint32
 	// sketches holds the Peers requests received, by hash; a hash in
 	// unknown is dropped. failPeers is how many Peers streams fail first.
 	sketches  map[Hash][]*sniffarrv1.PeersRequest
@@ -78,9 +80,10 @@ func newFake() *fakeIngest {
 	return f
 }
 
-func (f *fakeIngest) HashKey(context.Context, *connect.Request[sniffarrv1.HashKeyRequest]) (*connect.Response[sniffarrv1.HashKeyResponse], error) {
+func (f *fakeIngest) HashKey(_ context.Context, req *connect.Request[sniffarrv1.HashKeyRequest]) (*connect.Response[sniffarrv1.HashKeyResponse], error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.dhtPort = req.Msg.GetDhtPort()
 	if f.failKey > 0 {
 		f.failKey--
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("down"))

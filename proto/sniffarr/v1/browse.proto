@@ -181,8 +181,8 @@ enum Feature {
   FEATURE_PROBES = 2;
   // Audio languages, whose signs in releases are counted and scored.
   FEATURE_AUDIO = 3;
-  // Tracker feeds, whose releases are fetched at priority P2.
-  FEATURE_FEEDS = 4;
+  reserved 4;
+  reserved "FEATURE_FEEDS";
 }
 
 // FeatureState is whether an optional feature is on and works now.
@@ -191,14 +191,13 @@ message FeatureState {
   bool on = 2;
   // Whether the feature does its work now; false while it is off. The
   // classifier does not while its daily token budget is spent, probes do
-  // not while Stats.probers is 0; audio and feeds do whenever they are on.
+  // not while Stats.probers is 0; audio does whenever it is on.
   bool works = 3;
   // The command-line flag, "-probe", or the environment variable,
   // "SNIFFARR_CLASSIFY_API_KEY", that turns the feature on.
   string setting = 4;
   // What the feature is on with: the audio languages, BCP-47 tags in the
-  // server's order, or the names of the feeds read; empty for the others
-  // and while it is off.
+  // server's order; empty for the others and while it is off.
   repeated string values = 5;
 }
 
@@ -450,11 +449,10 @@ message JournalResponse {
 // revived), leased (fetch), fetched (stored, rejected, duplicate),
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
 // classified (classifier, reuse, failed), matched (tmdb, classifier, arr,
-// earlier, none, error), arr (grab, import), feed (stored, queued, already_queued,
-// rejected), probe_wanted
-// (search, request), probe_leased (request, retry, search, background),
-// probed (tracks, unknown, no_peers, timeout), peers_wanted (request),
-// deleted (idle, expired).
+// earlier, none, error), arr (grab, import), probe_wanted (search,
+// request), probe_leased (request, retry, search, background), probed
+// (tracks, unknown, no_peers, timeout), peers_wanted (request), deleted
+// (idle, expired).
 message JournalEntry {
   // When the event happened; for a grab or an import Radarr or Sonarr
   // reports, the event's own time.

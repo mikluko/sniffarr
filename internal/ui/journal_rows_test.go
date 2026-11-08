@@ -24,7 +24,6 @@ func TestJournalGroups(t *testing.T) {
 	}
 	attempt := func(n float64) map[string]any { return map[string]any{"attempt": n} }
 	final := func(f bool) map[string]any { return map[string]any{"final": f} }
-	title := func(s string) map[string]any { return map[string]any{"title": s} }
 	for _, c := range []struct {
 		name string
 		es   []JournalEntry
@@ -80,13 +79,6 @@ func TestJournalGroups(t *testing.T) {
 			e(0, "probe_wanted", "search", nil),
 			e(1, "probe_wanted", "request", nil),
 		}, [][]int{{0, 1}}},
-		{"feeds of one title", []JournalEntry{
-			e(0, "feed", "queued", title("a")),
-			e(1, "feed", "already_queued", title("b")),
-			e(2, "feed", "already_queued", title("a")),
-			e(3, "sighted", "queued", nil),
-			e(4, "feed", "already_queued", title("a")),
-		}, [][]int{{1}, {0, 2}, {3}, {4}}},
 		{"an unknown kind", []JournalEntry{e(0, "novel", "x", nil), e(1, "novel", "x", nil)}, [][]int{{0}, {1}}},
 		{"nothing", nil, nil},
 	} {
@@ -159,9 +151,8 @@ func TestJournalRowsGolden(t *testing.T) {
 		es   []JournalEntry
 	}{
 		{"card", card},
-		{"retry", card[3:7]},
-		{"probe", card[11:14]},
-		{"feeds", card[0:2]},
+		{"retry", card[1:5]},
+		{"probe", card[9:12]},
 		{"journal-only", SampleTorrent(Base{Now: now}, false, "journal").Torrent.Journal},
 		{"tracks-32", journalTracks32(now)},
 		{"entries-200", journal200(now)},
@@ -249,7 +240,7 @@ func journalTracks32(now time.Time) []JournalEntry {
 }
 
 // journal200 is a torrent's journal at the store's 200 entries: a fetch
-// retried, then feeds, failed matches and probes retried in turn.
+// retried, then failed matches and probes retried in turn.
 func journal200(now time.Time) []JournalEntry {
 	at := now.Add(-20 * 24 * time.Hour)
 	sec := func(t time.Time) float64 { return float64(t.Unix()) }
@@ -262,14 +253,11 @@ func journal200(now time.Time) []JournalEntry {
 	}
 	for i := 0; len(es) < 200; i++ {
 		t := at.Add(time.Duration(i+1) * 2 * time.Hour)
-		feed := map[string]any{"source": "rutor", "title": "x", "size": 1073741824.0, "published_at": sec(t)}
 		probed := map[string]any{"attempt": float64(i%3 + 1), "final": i%3 == 2}
 		if i%3 != 2 {
 			probed["retry_at"] = sec(t.Add(time.Hour))
 		}
 		es = append(es,
-			JournalEntry{At: t, Kind: "feed", Outcome: "already_queued", Detail: feed},
-			JournalEntry{At: t.Add(time.Minute), Kind: "feed", Outcome: "stored", Detail: feed},
 			JournalEntry{At: t.Add(2 * time.Minute), Kind: "matched", Outcome: "none", Detail: map[string]any{"trigger": "worker"}},
 			JournalEntry{At: t.Add(40 * time.Minute), Kind: "probe_leased", Outcome: "background", Detail: map[string]any{"attempt": float64(i%3 + 1)}},
 			JournalEntry{At: t.Add(45 * time.Minute), Kind: "probed", Outcome: "timeout", Detail: probed},

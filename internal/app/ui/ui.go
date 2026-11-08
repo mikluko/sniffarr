@@ -52,7 +52,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, brow
 		if err != nil {
 			return err
 		}
-		wc := web.Config{Browse: browse, Languages: settings.Languages, Probes: settings.Probes, Classifier: settings.Classifier, Feeds: settings.Feeds, JournalRetention: settings.JournalRetention, Latest: settings.Latest, Notice: settings.Notice,
+		wc := web.Config{Browse: browse, Languages: settings.Languages, Probes: settings.Probes, Classifier: settings.Classifier, JournalRetention: settings.JournalRetention, Latest: settings.Latest, Notice: settings.Notice,
 			SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Log: log}
 		if cfg.OIDCIssuer != "" {
 			wc.Locales = userinfo.New(cfg.OIDCIssuer, &http.Client{Timeout: 10 * time.Second}, localeTTL)

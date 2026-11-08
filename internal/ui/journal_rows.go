@@ -2,17 +2,16 @@ package ui
 
 import (
 	"slices"
-	"strings"
 	"time"
 )
 
-// JournalRow is one row of the card's journal: a single entry, a fetch or
-// probe chain of attempts, or the feeds of one title in a row.
+// JournalRow is one row of the card's journal: a single entry, or a fetch
+// or probe chain of attempts.
 type JournalRow struct {
 	// ID is the ID of the last step, the row's anchor.
 	ID int64
-	// Kind is "fetch", "probe" or "feed" for a group, the entry's kind for a
-	// single entry.
+	// Kind is "fetch" or "probe" for a group, the entry's kind for a single
+	// entry.
 	Kind string
 	// At is the time of the last step.
 	At time.Time
@@ -86,10 +85,6 @@ func (b Base) journalRow(es []JournalEntry, levels []Severity, g []int) JournalR
 		r.Steps = append(r.Steps, JournalStep{e.At, e.Kind, e.Outcome, levels[i], b.JournalSummary(e), b.JournalDetail(e)})
 	}
 	r.Kind = journalFamily(last.Kind)
-	if r.Kind == "feed" {
-		r.Outcome, r.Summary = b.feedOutcome(steps), b.feedSummary(steps)
-		return r
-	}
 	r.Outcome, r.Summary = b.chainOutcome(steps, r.End), b.JournalSummary(last)
 	return r
 }
@@ -148,48 +143,14 @@ func (b Base) ordinal(n int64) string {
 	return b.Fmt("journal.ordinal."+suffix, b.Num(n))
 }
 
-// feedOutcome labels the feeds of one title by how many times and in which
-// feeds it was listed: "2 times: rutracker, rutor".
-func (b Base) feedOutcome(steps []JournalEntry) string {
-	var sources []string
-	for _, e := range steps {
-		if s, _ := e.Detail["source"].(string); s != "" && !slices.Contains(sources, s) {
-			sources = append(sources, s)
-		}
-	}
-	return b.Fmt("journal.row.feeds", b.times(int64(len(steps))), strings.Join(sources, ", "))
-}
-
-// feedSummary is the size the last feed lists and the earliest publication
-// of the feeds.
-func (b Base) feedSummary(steps []JournalEntry) []SummaryPair {
-	last := steps[len(steps)-1]
-	var out []SummaryPair
-	if v, ok := last.Detail["size"]; ok {
-		out = append(out, b.summaryPair(last, "size", last.typed("size", v)))
-	}
-	var first float64
-	for _, e := range steps {
-		if p, ok := e.Detail["published_at"].(float64); ok && (first == 0 || p < first) {
-			first = p
-		}
-	}
-	if first != 0 {
-		out = append(out, b.summaryPair(last, "first_published_at", last.typed("published_at", first)))
-	}
-	return out
-}
-
 // journalFamily is the kind of the group an entry of the kind belongs to:
-// "fetch", "probe", "feed", or "" for a kind that is never grouped.
+// "fetch", "probe", or "" for a kind that is never grouped.
 func journalFamily(kind string) string {
 	switch kind {
 	case "leased", "fetch_failed", "fetched":
 		return "fetch"
 	case "probe_wanted", "probe_leased", "probed":
 		return "probe"
-	case "feed":
-		return "feed"
 	}
 	return ""
 }
@@ -232,8 +193,6 @@ type journalGrouper struct {
 	fetch, probe journalChain
 	// wanted is the probe wants waiting for the next probe lease.
 	wanted []int
-	// feeds maps a title to its group among the run of feeds walked last.
-	feeds map[string]int
 }
 
 // groupJournal groups the indices of the entries, oldest first, at their
@@ -241,21 +200,15 @@ type journalGrouper struct {
 // past its open chain's continues the chain up to a fetch, a fetch failed
 // for good or a probe not to be retried; any other lease starts a chain.
 // A probe want joins the chain of the next probe lease, or else the wants
-// left at the end. A feed joins the feeds of its title since the last
-// entry of another kind.
+// left at the end.
 func groupJournal(es []JournalEntry, levels []Severity) [][]int {
 	g := journalGrouper{es: es, levels: levels}
 	for i, e := range es {
-		if e.Kind != "feed" {
-			g.feeds = nil
-		}
 		switch journalFamily(e.Kind) {
 		case "fetch":
 			g.step(&g.fetch, i)
 		case "probe":
 			g.probeStep(i)
-		case "feed":
-			g.feed(i)
 		default:
 			g.add(-1, i)
 		}
@@ -304,17 +257,4 @@ func (g *journalGrouper) probeStep(i int) {
 		slices.Sort(g.groups[g.probe.group])
 		g.wanted = nil
 	}
-}
-
-// feed adds the feed entry at i to the feeds of its title in the run.
-func (g *journalGrouper) feed(i int) {
-	title, _ := g.es[i].Detail["title"].(string)
-	if g.feeds == nil {
-		g.feeds = map[string]int{}
-	}
-	if grp, ok := g.feeds[title]; ok {
-		g.add(grp, i)
-		return
-	}
-	g.feeds[title] = g.add(-1, i)
 }

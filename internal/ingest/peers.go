@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"connectrpc.com/connect"
@@ -15,12 +16,16 @@ import (
 // peersBatch is how many sketches Peers merges in one transaction.
 const peersBatch = 500
 
-func (s *Service) HashKey(ctx context.Context, _ *connect.Request[sniffarrv1.HashKeyRequest]) (*connect.Response[sniffarrv1.HashKeyResponse], error) {
+func (s *Service) HashKey(ctx context.Context, req *connect.Request[sniffarrv1.HashKeyRequest]) (*connect.Response[sniffarrv1.HashKeyResponse], error) {
 	k, err := s.Store.HashKey(ctx)
 	if err != nil {
 		return nil, s.internal(ctx, "hash key", err)
 	}
-	id, err := s.Store.NodeID(ctx)
+	port := req.Msg.GetDhtPort()
+	if port > math.MaxUint16 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("dht port %d", port))
+	}
+	id, err := s.Store.NodeID(ctx, uint16(port))
 	if err != nil {
 		return nil, s.internal(ctx, "node id", err)
 	}

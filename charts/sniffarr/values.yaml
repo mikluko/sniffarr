@@ -27,6 +27,9 @@ waitForAPI:
 api:
   # Secret the container takes its environment from, such as SNIFFARR_CLASSIFY_API_KEY; none when empty.
   existingSecret: ""
+  nats:
+    # Opens the workers' listener of the NATS server the API embeds, on the container port and the <release>-api Service port nats, 4222, with SNIFFARR_NATS_PASSWORD from the key of that name in existingSecret, which it requires.
+    enabled: false
   networkPolicy:
     # Renders a NetworkPolicy admitting to the API port, 8080, only the release's own pods and from; the pod's other ports stay open.
     enabled: true

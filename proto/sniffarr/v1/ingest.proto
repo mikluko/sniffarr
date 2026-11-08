@@ -24,7 +24,7 @@ service IngestService {
   // them to a sketch, and the ID of the sniffing DHT node. The server
   // generates both once and keeps them for the life of its store, so
   // sketches from any client and any time merge and the node keeps its ID
-  // across restarts.
+  // across restarts, as long as it listens on the same port.
   rpc HashKey(HashKeyRequest) returns (HashKeyResponse);
   // Peers merges each sketch of the stream into the stored sketch of its
   // torrent and hour, and reports the totals when the client closes the
@@ -69,8 +69,8 @@ enum Source {
   // A grab or import Radarr or Sonarr reported; the queue serves these
   // first.
   SOURCE_ARR = 3;
-  // A release a tracker feed listed; the queue serves these after arr.
-  SOURCE_FEED = 4;
+  reserved 4;
+  reserved "SOURCE_FEED";
 }
 
 message FetchRequest {
@@ -137,7 +137,12 @@ message Task {
   bool peers = 2;
 }
 
-message HashKeyRequest {}
+message HashKeyRequest {
+  // The port the sniffing DHT node listens on. A port other than the one the
+  // node ID was last handed out with gets a new node ID; 0 keeps the stored
+  // one, as does a client that does not run the sniffing node.
+  uint32 dht_port = 1;
+}
 
 message HashKeyResponse {
   // The SipHash-2-4 key, 16 bytes: k0 is the first 8 in little-endian order,

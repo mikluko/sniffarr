@@ -67,9 +67,6 @@ type Config struct {
 	// ObtainSettings returns it; false leaves its meter and layer out of the
 	// data page.
 	Classifier bool
-	// Feeds is whether the API reads tracker feeds, as ObtainSettings
-	// returns it; false labels the feeds' priority as off.
-	Feeds bool
 	// JournalRetention is how long the API keeps a journal entry, as
 	// ObtainSettings returns it; 0 leaves it unsaid. Handler.Apply and
 	// Handler.Watch replace it while the UI runs.
@@ -150,7 +147,7 @@ func New(cfg Config) (*Handler, error) {
 	}
 	s := &server{cfg: cfg, ui: r}
 	h := &Handler{s: s}
-	h.Apply(Settings{Languages: cfg.Languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds, JournalRetention: cfg.JournalRetention, Latest: cfg.Latest, Notice: cfg.Notice})
+	h.Apply(Settings{Languages: cfg.Languages, Probes: cfg.Probes, Classifier: cfg.Classifier, JournalRetention: cfg.JournalRetention, Latest: cfg.Latest, Notice: cfg.Notice})
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", r.Static())
 	mux.HandleFunc("GET /{$}", s.data)
@@ -204,7 +201,7 @@ func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	b.Now = s.cfg.Now()
 	b.Seerr = s.cfg.SeerrURL
 	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
-	b.Probes, b.Classifier, b.Feeds = c.Probes, c.Classifier, c.Feeds
+	b.Probes, b.Classifier = c.Probes, c.Classifier
 	b.JournalRetention = c.JournalRetention
 	b.Latest, b.Notice = c.Latest, c.Notice
 	return b
@@ -253,14 +250,13 @@ var (
 	drops = map[sniffarrv1.Rejection]string{sniffarrv1.Rejection_REJECTION_ADULT: "adult", sniffarrv1.Rejection_REJECTION_SOFTWARE: "software",
 		sniffarrv1.Rejection_REJECTION_BOOK: "book", sniffarrv1.Rejection_REJECTION_COURSE: "course", sniffarrv1.Rejection_REJECTION_SCRIPT: "script",
 		sniffarrv1.Rejection_REJECTION_NO_MEDIA: "filetype", sniffarrv1.Rejection_REJECTION_SMALL: "size"}
-	discoveries = map[sniffarrv1.Source]string{sniffarrv1.Source_SOURCE_ANNOUNCE: "announce", sniffarrv1.Source_SOURCE_SAMPLE: "sample", sniffarrv1.Source_SOURCE_ARR: "arr",
-		sniffarrv1.Source_SOURCE_FEED: "feed"}
-	sorts = map[sniffarrv1.Sort]string{sniffarrv1.Sort_SORT_PEERS: "peers", sniffarrv1.Sort_SORT_LAST_SEEN: "last_seen", sniffarrv1.Sort_SORT_SIZE: "size",
+	discoveries = map[sniffarrv1.Source]string{sniffarrv1.Source_SOURCE_ANNOUNCE: "announce", sniffarrv1.Source_SOURCE_SAMPLE: "sample", sniffarrv1.Source_SOURCE_ARR: "arr"}
+	sorts       = map[sniffarrv1.Sort]string{sniffarrv1.Sort_SORT_PEERS: "peers", sniffarrv1.Sort_SORT_LAST_SEEN: "last_seen", sniffarrv1.Sort_SORT_SIZE: "size",
 		sniffarrv1.Sort_SORT_FIRST_SEEN: "first_seen"}
 	windows     = map[sniffarrv1.Window]string{sniffarrv1.Window_WINDOW_DAY: "24h", sniffarrv1.Window_WINDOW_WEEK: "7d", sniffarrv1.Window_WINDOW_MONTH: "30d"}
 	voices      = map[sniffarrv1.Voice]string{sniffarrv1.Voice_VOICE_UNSPECIFIED: "any", sniffarrv1.Voice_VOICE_LIKELY: "p50", sniffarrv1.Voice_VOICE_MARKER: "explicit"}
 	featureKeys = map[sniffarrv1.Feature]string{sniffarrv1.Feature_FEATURE_CLASSIFIER: "classifier", sniffarrv1.Feature_FEATURE_PROBES: "probes",
-		sniffarrv1.Feature_FEATURE_AUDIO: "audio", sniffarrv1.Feature_FEATURE_FEEDS: "feeds"}
+		sniffarrv1.Feature_FEATURE_AUDIO: "audio"}
 	tmdbMethods = map[sniffarrv1.TMDBLayer]string{sniffarrv1.TMDBLayer_TMDB_LAYER_SEARCH: "search", sniffarrv1.TMDBLayer_TMDB_LAYER_CLASSIFIER: "classifier",
 		sniffarrv1.TMDBLayer_TMDB_LAYER_ARR: "arr"}
 )

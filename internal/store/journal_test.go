@@ -508,9 +508,9 @@ func TestJournalQueue(t *testing.T) {
 	require.Equal(t, []string{"sighted/queued", "leased/fetch", "fetch_failed/no_peers", "sighted/revived"}, entries(t, s, hash(3)), "a revival is not queued too")
 
 	enqueueAt(t, q, at, Sample, 4)
-	enqueueAt(t, q, at, Feed, 4)
-	require.JSONEq(t, `{"from":"sample","to":"feed"}`, entry(t, s, hash(4), JournalSighted, "promoted").Detail)
 	enqueueAt(t, q, at, Announce, 4)
+	require.JSONEq(t, `{"from":"sample","to":"announce"}`, entry(t, s, hash(4), JournalSighted, "promoted").Detail)
+	enqueueAt(t, q, at, Sample, 4)
 	require.Equal(t, []string{"sighted/promoted"}, entries(t, s, hash(4)), "a later discovery does not promote")
 
 	tr := torrent(4, "Four.2024.1080p")
@@ -777,11 +777,8 @@ func TestJournalProbes(t *testing.T) {
 	require.JSONEq(t, `{"downloaded":3}`, entry(t, s, h, JournalProbed, ProbeUnknown).Detail)
 	require.Equal(t, []string{"fetched/stored", "probe_wanted/search", "probed/timeout", "probed/no_peers", "probed/tracks", "probed/unknown"}, entries(t, s, h))
 
-	require.NoError(t, s.JournalFeed(ctx, h, t0, "queued", Detail("source", "rutracker", "title", "Alien", "published_at", t0)))
-	require.JSONEq(t, `{"source":"rutracker","title":"Alien","published_at":`+unix(t0)+`}`, entry(t, s, h, JournalFeed, "queued").Detail)
-
 	require.NoError(t, s.WantProbe(ctx, []Hash{h}, ProbeWant{T: "movie", Query: "alien"}, t0.Add(25*time.Hour)))
-	require.Len(t, entries(t, s, h), 7, "a search does not want a probe done")
+	require.Len(t, entries(t, s, h), 6, "a search does not want a probe done")
 	n, _, err := s.RequestProbe(ctx, []Hash{h, hash(9)}, t0.Add(26*time.Hour))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)

@@ -31,10 +31,10 @@ func TestQueues(t *testing.T) {
 		}
 		return n
 	}
-	require.Equal(t, []int64{0, 2, 0, 0, 6}, tasks(TaskFetch))
-	require.Equal(t, []int64{1, 0, 0, 0, 0}, tasks(TaskPeers))
-	require.Equal(t, []int64{1, 0, 0, 0, 0}, tasks(TaskProbe))
-	require.Equal(t, 4, queues[TaskFetch].Levels[4].Priority)
+	require.Equal(t, []int64{0, 2, 0, 6}, tasks(TaskFetch))
+	require.Equal(t, []int64{1, 0, 0, 0}, tasks(TaskPeers))
+	require.Equal(t, []int64{1, 0, 0, 0}, tasks(TaskProbe))
+	require.Equal(t, 3, queues[TaskFetch].Levels[3].Priority)
 	require.True(t, queues[TaskFetch].Levels[0].Known, "nothing queued at P0 or ahead")
 	require.False(t, queues[TaskFetch].Levels[1].Known, "no pace yet")
 	require.Zero(t, queues[TaskFetch].PerSecond)
@@ -46,18 +46,18 @@ func TestQueues(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, 0.5, queues[TaskFetch].PerSecond, 1e-9)
 	require.Equal(t, 4*time.Second, queues[TaskFetch].Levels[1].ETA, "two fetches at 30 a minute")
-	require.Equal(t, 16*time.Second, queues[TaskFetch].Levels[4].ETA, "eight at P4 or ahead")
+	require.Equal(t, 16*time.Second, queues[TaskFetch].Levels[3].ETA, "eight at P3 or ahead")
 	require.False(t, queues[TaskPeers].Levels[0].Known, "a lookup goes at its own pace, not the fetches'")
-	require.False(t, queues[TaskProbe].Levels[4].Known, "a priority waits for those ahead")
+	require.False(t, queues[TaskProbe].Levels[3].Known, "a priority waits for those ahead")
 
 	q.Finished(TaskPeers, t0)
 	q.Finished(TaskProbe, t0.Add(30*time.Second))
 	q.Finished(TaskProbe, t0.Add(30*time.Second))
 	queues, err = q.Queues(ctx, t0.Add(time.Minute))
 	require.NoError(t, err)
-	require.Equal(t, time.Minute, queues[TaskPeers].Levels[4].ETA, "one lookup at one a minute")
+	require.Equal(t, time.Minute, queues[TaskPeers].Levels[3].ETA, "one lookup at one a minute")
 	require.Equal(t, 30*time.Second, queues[TaskProbe].Levels[0].ETA, "one probe at two a minute")
-	require.Equal(t, 16*time.Second, queues[TaskFetch].Levels[4].ETA, "the fetches' pace is theirs alone")
+	require.Equal(t, 16*time.Second, queues[TaskFetch].Levels[3].ETA, "the fetches' pace is theirs alone")
 
 	queues, err = q.Queues(ctx, t0.Add(time.Minute+PaceWindow))
 	require.NoError(t, err)

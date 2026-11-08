@@ -117,30 +117,29 @@ func (f titleSearch) SearchWorks(ctx context.Context, typ, query, lang string) (
 // with peers and the tops computed at now.
 func handler(t *testing.T, l Locales) http.Handler {
 	t.Helper()
-	return handlerWith(t, "ru", Config{Locales: l, Probes: true, Classifier: true, Feeds: true})
+	return handlerWith(t, "ru", Config{Locales: l, Probes: true, Classifier: true})
 }
 
 // handlerLangs is handler with the audio languages langs, a comma-separated
 // list, in the store and the UI alike; "" leaves the extension off.
 func handlerLangs(t *testing.T, l Locales, langs string) http.Handler {
 	t.Helper()
-	return handlerWith(t, langs, Config{Locales: l, Probes: true, Classifier: true, Feeds: true})
+	return handlerWith(t, langs, Config{Locales: l, Probes: true, Classifier: true})
 }
 
-// handlerWith is handlerLangs taking Locales, Probes, Classifier, Feeds,
-// and the Seerr, Radarr and Sonarr URLs from cfg; the features go to the
-// API too.
+// handlerWith is handlerLangs taking Locales, Probes, Classifier, and the
+// Seerr, Radarr and Sonarr URLs from cfg; the features go to the API too.
 func handlerWith(t *testing.T, langs string, cfg Config) http.Handler {
 	t.Helper()
 	h, _ := handlerTasks(t, langs, cfg)
 	return h
 }
 
-// feedListings is how many feeds listed hash(22), a torrent never stored,
-// each under a title of its own and so in a row of its own.
-const feedListings = 7
+// grabs is how many grabs Radarr reported of hash(22), a torrent never
+// stored, each in a row of its own.
+const grabs = 7
 
-// longJournal is how many times a feed listed hash(23), a torrent never
+// longJournal is how many grabs Radarr reported of hash(23), a torrent never
 // stored: a page of its journal and 3 more entries, on one day.
 const longJournal = ui.JournalPageSize + 3
 
@@ -202,12 +201,16 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 	require.NoError(t, err)
 	_, err = st.Reject(ctx, hash(20), rules.Small, "small", 1<<20, now)
 	require.NoError(t, err)
-	for i := range feedListings {
-		title := fmt.Sprintf("Listing.%d", i+1)
-		require.NoError(t, st.JournalFeed(ctx, hash(22), now.Add(time.Duration(i-feedListings)*time.Hour), "queued", map[string]any{"source": "rutor", "title": title}))
+	grab := func(h store.Hash, key string, at time.Time) {
+		t.Helper()
+		_, err := st.RecordArr(ctx, store.ArrEvent{App: store.AppRadarr, Event: store.EventGrab, Source: "history", Key: key, Hash: &h, Title: key, At: at}, at)
+		require.NoError(t, err)
+	}
+	for i := range grabs {
+		grab(hash(22), fmt.Sprintf("Grab.%d", i+1), now.Add(time.Duration(i-grabs)*time.Hour))
 	}
 	for i := range longJournal {
-		require.NoError(t, st.JournalFeed(ctx, hash(23), now.Add(time.Duration(i-longJournal)*time.Second), "already_queued", map[string]any{"source": "rutor", "title": "Long"}))
+		grab(hash(23), fmt.Sprintf("Long.%d", i+1), now.Add(time.Duration(i-longJournal)*time.Second))
 	}
 	require.NoError(t, st.AddTokens(ctx, now.Format(time.DateOnly), 250))
 	require.NoError(t, st.AddProbeTraffic(ctx, now.Format(time.DateOnly), store.ProbeTraffic{Rx: 61 << 30, Tx: 38 << 30}))
@@ -231,24 +234,21 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Task
 		tasks.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
 	}
 	tasks.Finished(store.TaskPeers, now.Add(-time.Minute))
-	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier, Feeds: cfg.Feeds,
+	h, err := New(Config{Browse: browse(t, st, tasks, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier,
 		Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, JournalRetention: 30 * 24 * time.Hour, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h, tasks
 }
 
-// browse serves BrowseService over st with the probes, classifier and
-// feeds, the last reading rutor, cfg turns on, behind the token "search"
-// in-process, and returns a client holding the token.
+// browse serves BrowseService over st with the probes and classifier cfg
+// turns on, behind the token "search" in-process, and returns a client
+// holding the token.
 func browse(t *testing.T, st *store.Store, tasks *store.Tasks, tags []string, cfg Config) sniffarrv1connect.BrowseServiceClient {
 	t.Helper()
 	mux := http.NewServeMux()
 	b := &search.Browser{Store: st, Tasks: tasks, TMDB: titleSearch{st}, Matcher: titleMatcher{st}, Log: slog.New(slog.DiscardHandler), DailyTokens: 1000, ProbeDailyBytes: 100 << 30,
 		Probes: cfg.Probes, Classifier: cfg.Classifier, Languages: tags, Now: func() time.Time { return now },
 		Counts: &search.Counts{Store: st, Now: func() time.Time { return now.Add(-7 * time.Minute) }, Interval: 5 * time.Minute}}
-	if cfg.Feeds {
-		b.Feeds = []string{"rutor"}
-	}
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(b))
 	var p http.Protocols
 	p.SetUnencryptedHTTP2(true)
@@ -639,13 +639,13 @@ func TestTorrentJournal(t *testing.T) {
 
 	frag := fragment(t, get(t, h, card+"/journal", "jlist"), "jlist")
 	require.True(t, strings.HasPrefix(strings.TrimSpace(frag), `<div class="jlist" id="jlist">`))
-	require.Equal(t, feedListings, rows(frag), "every row")
+	require.Equal(t, grabs, rows(frag), "every row")
 	require.NotContains(t, frag, "Show the whole journal")
 
 	w := get(t, h, card+"/journal", "")
 	require.Equal(t, http.StatusSeeOther, w.Code, "without htmx, the card with every row")
 	require.Equal(t, card+"?journal=all#journal", w.Header().Get("Location"))
-	require.Equal(t, feedListings, rows(page(t, get(t, h, card+"?journal=all", ""))))
+	require.Equal(t, grabs, rows(page(t, get(t, h, card+"?journal=all", ""))))
 
 	require.Equal(t, http.StatusNotFound, get(t, h, "/t/xyz/journal", "jlist").Code)
 }
@@ -655,7 +655,7 @@ func TestTorrentJournalPages(t *testing.T) {
 	card := "/t/" + hexOf(23)
 	more := regexp.MustCompile(`<div class="jfoot" id="jpage-(\d+)">`)
 
-	body := page(t, get(t, h, card, ""))
+	body := page(t, get(t, h, card+"?journal=all", ""))
 	require.Contains(t, body, "Showing the last 200 of 203 events", "a page of the journal, and how many it holds")
 	m := more.FindStringSubmatch(body)
 	require.NotNil(t, m, "a button for the page before")
@@ -665,7 +665,7 @@ func TestTorrentJournalPages(t *testing.T) {
 
 	frag := page(t, get(t, h, card+"/journal?before="+before+"&day="+day, "jpage-"+before))
 	require.False(t, strings.HasPrefix(frag, "<!doctype html>"), "the rows alone")
-	require.Equal(t, 1, strings.Count(frag, `<details class="jrow"`), "the older listings, in a row")
+	require.Equal(t, 3, strings.Count(frag, `<details class="jrow"`), "the older grabs, a row each")
 	require.NotContains(t, frag, `class="jday"`, "the day the rows above end on is not headed again")
 	require.NotContains(t, frag, `class="jfoot"`, "nothing older")
 	frag = page(t, get(t, h, card+"/journal?before="+before+"&day=2026-01-01", "jpage-"+before))
@@ -766,12 +766,12 @@ func TestProbesOff(t *testing.T) {
 // The data page's block of features, with every feature on and with every
 // one off, and the amber states of a feature on and not working.
 func TestFeatures(t *testing.T) {
-	h, tasks := handlerTasks(t, "ru", Config{Probes: true, Classifier: true, Feeds: true})
+	h, tasks := handlerTasks(t, "ru", Config{Probes: true, Classifier: true})
 	body := page(t, get(t, h, "/", ""))
 	for _, want := range []string{
 		`<span>Classifier</span>`, `<span>working</span>`, `25.0% of the daily limit`,
 		`<span class="dw"><i class="m"></i>no probers</span>`, "The probe queue grows: 0\u00a0tasks.",
-		`<span>on: ru</span>`, `<span>on: rutor</span>`, `>P2: feeds<`,
+		`<span>on: ru</span>`, `>P2: announced<`,
 	} {
 		require.Contains(t, body, want)
 	}
@@ -784,11 +784,10 @@ func TestFeatures(t *testing.T) {
 	for _, want := range []string{
 		`<span class="mu">off</span>`, "Turned on by SNIFFARR_CLASSIFY_API_KEY at start.",
 		"Turned on by the -probe flag at start.", "Turned on at start, by the languages in SNIFFARR_AUDIO_LANGUAGES.",
-		"Turned on at start, by the feeds in SNIFFARR_FEEDS.", `>P2: feeds (off)<`,
 	} {
 		require.Contains(t, body, want)
 	}
-	for _, s := range []string{`aria-label="Classifier: `, `/torrents?layer=classifier`, "Voice-over: ", `>P2: feeds<`} {
+	for _, s := range []string{`aria-label="Classifier: `, `/torrents?layer=classifier`, "Voice-over: "} {
 		require.NotContains(t, body, s)
 	}
 }
@@ -869,9 +868,9 @@ func TestData(t *testing.T) {
 	require.Contains(t, body, `<h3>Metadata fetches</h3><span class="mu">3 queued</span>`)
 	require.NotContains(t, body, `<h3>Probes`, "no probes queued and none done")
 	require.Contains(t, body, `<h3>Peer lookups</h3><span class="mu">0 queued</span>`, "none queued, one done")
-	require.Contains(t, body, `<i class="q1" style="flex-grow: 1"></i><i class="q4" style="flex-grow: 2"></i>`, "a segment per priority with tasks")
+	require.Contains(t, body, `<i class="q1" style="flex-grow: 1"></i><i class="q3" style="flex-grow: 2"></i>`, "a segment per priority with tasks")
 	require.Contains(t, body, "<td class=\"r\">1\u00a0min</td>", "one fetch at P1 at a pace of one a minute")
-	require.Contains(t, body, "<td class=\"r\">3\u00a0min</td>", "three at P4 or ahead")
+	require.Contains(t, body, "<td class=\"r\">3\u00a0min</td>", "three at P3 or ahead")
 	require.Contains(t, body, `<span class="mu">—</span>`, "nothing at P0")
 	require.NotContains(t, body, "Grafana")
 	frag := fragment(t, get(t, h, "/", "data"), "data")

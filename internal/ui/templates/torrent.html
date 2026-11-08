@@ -26,7 +26,9 @@
     <tr><th>{{$.T "card.peers"}}</th><td><b>{{$.Num .Peers.Week}}</b> {{$.T "win.7d_lc"}}<br><span class="mu">{{$.Num .Peers.Day}} {{$.T "win.24h_lc"}} · {{$.Num .Peers.Month}} {{$.T "win.30d_lc"}}</span></td></tr>
     <tr><th>{{$.T "col.first"}}</th><td>{{$.TimeFull .FirstSeen}}</td></tr>
     <tr><th>{{$.T "col.last"}}</th><td>{{$.TimeFull .LastSeen}}</td></tr>
+    {{- if .DiscoveredVia}}
     <tr><th>{{$.T "card.via"}}</th><td>{{$.T (concat "via." .DiscoveredVia)}}</td></tr>
+    {{- end}}
   </table>
   {{template "acts" (actsArgs $.Base (concat "/t/" .InfoHash) .Peers.Week .Matchable)}}
 </section>
@@ -134,7 +136,7 @@
   <div class="jstep">{{template "jtime" (jtimeArgs $v.Base .At)}}<span><b>{{$v.StepTitle $s}}</b> · <span{{with .Severity.Mark}} class="o-{{.}}"{{end}}>{{template "jmark" (jmarkArgs $v.Base .Severity)}}{{$v.T (concat "journal.outcome." .Kind "." .Outcome)}}</span>
     {{- if and ($r.Inline $i) .Details}}<br><span class="mu">{{range $k, $p := .Details}}{{if $k}} · {{end}}{{$p.Key}}: {{template "jval" $p}}{{end}}</span>{{end}}</span></div>
   {{- end}}
-  {{- with .KV}}
+  {{- with .Details}}
   <div class="jkv">{{range .}}<span>{{.Key}}</span><span>{{template "jval" .}}</span>{{end}}</div>
   {{- end}}
   {{- with .Tracks}}

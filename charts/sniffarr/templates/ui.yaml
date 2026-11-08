@@ -16,6 +16,7 @@ metadata:
     app.kubernetes.io/component: ui
 spec:
   replicas: {{ $v.replicas }}
+  {{- include "sniffarr.rollingUpdate" . | nindent 2 }}
   selector:
     matchLabels:
       {{- include "sniffarr.selector" (dict "root" . "component" "ui") | nindent 6 }}

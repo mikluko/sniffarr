@@ -42,10 +42,11 @@ go tool -modfile=tools/go.mod buf lint
 go generate ./...
 ```
 
-## Checking the node ports
+## Checking the external ports
 
 `hack/ports` checks, from a machine outside the cluster, a release's sniff
-and probes at the node ports of the chart's Services. It reads the ports and
+and probes at the node ports of the chart's Services, or at their pods'
+hostPorts where no such Service selects them. It reads the ports and
 the nodes' addresses with kubectl, and the sniff's node ID and the torrents
 probes seed from the API: `--url`, or else `kubectl port-forward` as for
 `hack/rpc`. It prints one line per check and exits 1 when any fails.
@@ -57,12 +58,12 @@ go run ./hack/ports --context saraksh -n sniffarr -addr 95.168.161.76 -seeds 16
 
 - The sniff answers a DHT ping at its UDP port with the stored node ID under
   the BEP 42 prefix of the node's address, and accepts TCP.
-- Other DHT nodes list the sniff at its node port, the port its queries leave
+- Other DHT nodes list the sniff at its port, the port its queries leave
   from as they see it.
 - Each probe accepts TCP on the same port number as UDP, refuses a torrent it
   does not hold, and serves some of the `-seeds` newest seeded torrents.
 - The DHT holds each of those torrents' peers at the probes' addresses only
-  at a probe's node port, the port it announces. The torrents are
+  at a probe's port, the port it announces. The torrents are
   those probed at least `-min-age` ago, 35 minutes by default, since a probe
   announces its seeds every 30 minutes.
 

@@ -124,7 +124,7 @@ button:disabled{cursor:default;opacity:.5;background:var(--background)}
 .qbar{display:flex;gap:2px;height:8px}
 .qbar i{min-width:3px}
 .q0{background:var(--ln)}.q1{background:color-mix(in srgb,var(--ln) 78%,var(--background))}.q2{background:color-mix(in srgb,var(--ln) 58%,var(--background))}
-.q3{background:color-mix(in srgb,var(--ln) 40%,var(--background))}.q4{background:color-mix(in srgb,var(--ln) 26%,var(--background))}
+.q3{background:color-mix(in srgb,var(--ln) 40%,var(--background))}
 .qcard .t td{vertical-align:middle}
 .qcard .t tr:last-child td{border-bottom:0}
 #data .badge{display:inline-flex;align-items:center;font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}
@@ -503,7 +503,7 @@ a.btn:hover{background:var(--muted);text-decoration:none}
   .g3 .gone{display:none}
 }
 
-/* journal: a row per event, chain of attempts or run of feeds, opened by
+/* journal: a row per event or chain of attempts, opened by
  * its <details>: time, what, how it ended with a square for a failure, the
  * main particulars; an open row lists its steps, particulars and tracks.
  * The card of a torrent the store keeps no row of says first what ended it. */

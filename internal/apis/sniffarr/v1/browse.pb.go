@@ -89,8 +89,6 @@ const (
 	Feature_FEATURE_PROBES Feature = 2
 	// Audio languages, whose signs in releases are counted and scored.
 	Feature_FEATURE_AUDIO Feature = 3
-	// Tracker feeds, whose releases are fetched at priority P2.
-	Feature_FEATURE_FEEDS Feature = 4
 )
 
 // Enum value maps for Feature.
@@ -100,14 +98,12 @@ var (
 		1: "FEATURE_CLASSIFIER",
 		2: "FEATURE_PROBES",
 		3: "FEATURE_AUDIO",
-		4: "FEATURE_FEEDS",
 	}
 	Feature_value = map[string]int32{
 		"FEATURE_UNSPECIFIED": 0,
 		"FEATURE_CLASSIFIER":  1,
 		"FEATURE_PROBES":      2,
 		"FEATURE_AUDIO":       3,
-		"FEATURE_FEEDS":       4,
 	}
 )
 
@@ -955,14 +951,13 @@ type FeatureState struct {
 	On      bool                   `protobuf:"varint,2,opt,name=on,proto3" json:"on,omitempty"`
 	// Whether the feature does its work now; false while it is off. The
 	// classifier does not while its daily token budget is spent, probes do
-	// not while Stats.probers is 0; audio and feeds do whenever they are on.
+	// not while Stats.probers is 0; audio does whenever it is on.
 	Works bool `protobuf:"varint,3,opt,name=works,proto3" json:"works,omitempty"`
 	// The command-line flag, "-probe", or the environment variable,
 	// "SNIFFARR_CLASSIFY_API_KEY", that turns the feature on.
 	Setting string `protobuf:"bytes,4,opt,name=setting,proto3" json:"setting,omitempty"`
 	// What the feature is on with: the audio languages, BCP-47 tags in the
-	// server's order, or the names of the feeds read; empty for the others
-	// and while it is off.
+	// server's order; empty for the others and while it is off.
 	Values        []string `protobuf:"bytes,5,rep,name=values,proto3" json:"values,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2353,11 +2348,10 @@ func (x *JournalResponse) GetOlder() int64 {
 // revived), leased (fetch), fetched (stored, rejected, duplicate),
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
 // classified (classifier, reuse, failed), matched (tmdb, classifier, arr,
-// earlier, none, error), arr (grab, import), feed (stored, queued, already_queued,
-// rejected), probe_wanted
-// (search, request), probe_leased (request, retry, search, background),
-// probed (tracks, unknown, no_peers, timeout), peers_wanted (request),
-// deleted (idle, expired).
+// earlier, none, error), arr (grab, import), probe_wanted (search,
+// request), probe_leased (request, retry, search, background), probed
+// (tracks, unknown, no_peers, timeout), peers_wanted (request), deleted
+// (idle, expired).
 type JournalEntry struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// When the event happened; for a grab or an import Radarr or Sonarr
@@ -3904,13 +3898,12 @@ const file_sniffarr_v1_browse_proto_rawDesc = "" +
 	"\rReleaseNotice\x12\x1e\n" +
 	"\x1aRELEASE_NOTICE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13RELEASE_NOTICE_LAZY\x10\x01\x12\x18\n" +
-	"\x14RELEASE_NOTICE_EAGER\x10\x02*t\n" +
+	"\x14RELEASE_NOTICE_EAGER\x10\x02*v\n" +
 	"\aFeature\x12\x17\n" +
 	"\x13FEATURE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12FEATURE_CLASSIFIER\x10\x01\x12\x12\n" +
 	"\x0eFEATURE_PROBES\x10\x02\x12\x11\n" +
-	"\rFEATURE_AUDIO\x10\x03\x12\x11\n" +
-	"\rFEATURE_FEEDS\x10\x04*d\n" +
+	"\rFEATURE_AUDIO\x10\x03\"\x04\b\x04\x10\x04*\rFEATURE_FEEDS*d\n" +
 	"\x04Sort\x12\x14\n" +
 	"\x10SORT_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +

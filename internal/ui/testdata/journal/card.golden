@@ -24,10 +24,6 @@ Oct 18, 2026, 21:05 +0s fetch [retry/normal] stored on the 2nd attempt | 14 fil
   details | discovered by: announce · files: 14 · leased: 2 times · name: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · queued: 20:59 · size: 24.8 GB
 Oct 18, 2026, 20:59 +0s sighted [normal/normal] queued | via announce
   details | discovered by: announce
-Oct 18, 2026, 20:58 +0s feed [normal/normal] 2 times: rutracker, rutor | 24.8 GB · first published 20:56
-  step Oct 18, 2026, 20:57 feed/queued [normal] | feed: rutracker · 24.8 GB · published: 20:56 | category: f-1457 · published: 20:56 · size: 24.8 GB · feed: rutracker · title: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · page: rutracker <https://rutracker.example/t/6543210>
-  step Oct 18, 2026, 20:58 feed/already_queued [normal] | feed: rutor · 24.8 GB · published: 20:58 | published: 20:58 · size: 24.8 GB · feed: rutor · title: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · page: rutor <https://rutor.example/torrent/987654>
-  details | published: 20:58 · size: 24.8 GB · feed: rutor · title: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · page: rutor <https://rutor.example/torrent/987654>
 == ru
 19.10.2026 00:07 +2h2m0s probe [normal/normal] дорожки прочитаны | русская 100% · 4 дорожки · скачано 4,0 МБ
   step 18.10.2026 23:05 probe_wanted/search [normal] | искали по: TMDB 693134 · запрос: dune part two · тип поиска: фильм | искали по: TMDB 693134 · запрос: dune part two · тип поиска: фильм
@@ -54,7 +50,3 @@ Oct 18, 2026, 20:58 +0s feed [normal/normal] 2 times: rutracker, rutor | 24.8 G
   details | обнаружена через: announce · файлов: 14 · выдана: 2 раза · название: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · в очереди с: 20:59 · размер: 24,8 ГБ
 18.10.2026 20:59 +0s sighted [normal/normal] поставлена в очередь | через announce
   details | обнаружена через: announce
-18.10.2026 20:58 +0s feed [normal/normal] 2 раза: rutracker, rutor | 24,8 ГБ · первая публикация 20:56
-  step 18.10.2026 20:57 feed/queued [normal] | фид: rutracker · 24,8 ГБ · опубликована: 20:56 | категория: f-1457 · опубликована: 20:56 · размер: 24,8 ГБ · фид: rutracker · заголовок: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · страница: rutracker <https://rutracker.example/t/6543210>
-  step 18.10.2026 20:58 feed/already_queued [normal] | фид: rutor · 24,8 ГБ · опубликована: 20:58 | опубликована: 20:58 · размер: 24,8 ГБ · фид: rutor · заголовок: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · страница: rutor <https://rutor.example/torrent/987654>
-  details | опубликована: 20:58 · размер: 24,8 ГБ · фид: rutor · заголовок: Игра на понижение.2015.WEB-DL.1080р.Open Matte.mkv · страница: rutor <https://rutor.example/torrent/987654>

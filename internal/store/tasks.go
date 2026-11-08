@@ -31,7 +31,6 @@ const (
 // them.
 const (
 	Arr      = "arr"
-	Feed     = "feed"
 	Announce = "announce"
 	Sample   = "sample"
 )
@@ -43,9 +42,8 @@ const (
 const (
 	PriorityRequest  = 0
 	PriorityArr      = 1
-	PriorityFeed     = 2
-	PriorityAnnounce = 3
-	PrioritySample   = 4
+	PriorityAnnounce = 2
+	PrioritySample   = 3
 )
 
 // Task is one leased task.
@@ -129,8 +127,6 @@ func priority(discovery string) int {
 	switch discovery {
 	case Arr:
 		return PriorityArr
-	case Feed:
-		return PriorityFeed
 	case Announce:
 		return PriorityAnnounce
 	}
@@ -141,8 +137,6 @@ func discovery(priority int) string {
 	switch {
 	case priority <= PriorityArr:
 		return Arr
-	case priority == PriorityFeed:
-		return Feed
 	case priority == PriorityAnnounce:
 		return Announce
 	}
@@ -151,7 +145,7 @@ func discovery(priority int) string {
 
 // Enqueue queues a fetch of every sighted hash not yet queued, and returns
 // how many it queued and how many it knew. A dead hash is queued only when
-// sighted by announce, arr or feed, which revives it. A queued hash sighted
+// sighted by announce or arr, which revives it. A queued hash sighted
 // by a discovery served before its own moves ahead to that discovery's
 // priority. The queue may outgrow MaxSize until the next Trim.
 func (q *Tasks) Enqueue(ctx context.Context, sightings []Sighting, now time.Time) (queued, known int, err error) {
@@ -204,7 +198,7 @@ func enqueueFetch(ctx context.Context, tx *sql.Tx, g Sighting, now time.Time) (S
 		return SightKnown, err
 	}
 	if dead {
-		if g.Discovery != Announce && g.Discovery != Arr && g.Discovery != Feed {
+		if g.Discovery != Announce && g.Discovery != Arr {
 			return SightKnown, nil
 		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM task_dead WHERE key = ?", deadKey(g.Hash[:])); err != nil {

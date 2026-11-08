@@ -18,6 +18,7 @@ import (
 
 	"sarak.sh/mikluko/sniffarr/internal/app"
 	"sarak.sh/mikluko/sniffarr/internal/app/api"
+	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/app/client"
 	"sarak.sh/mikluko/sniffarr/internal/app/db"
 	"sarak.sh/mikluko/sniffarr/internal/app/dht"
@@ -38,7 +39,7 @@ func main() {
 func options(cfg config, log *slog.Logger) []fx.Option {
 	opts := []fx.Option{fx.Supply(log), app.Logging, app.Telemetry}
 	if cfg.on.api {
-		opts = append(opts, fx.Supply(cfg.db, cfg.api), db.Module, api.Module)
+		opts = append(opts, fx.Supply(cfg.db, cfg.api, cfg.broker), db.Module, broker.Module, api.Module)
 	}
 	if cfg.on.clients() {
 		opts = append(opts, fx.Supply(cfg.client), client.Module)

@@ -60,7 +60,7 @@ func TestPeersEndToEnd(t *testing.T) {
 	res, err := client.HashKey(ctx, connect.NewRequest(&sniffarrv1.HashKeyRequest{}))
 	require.NoError(t, err)
 	require.Equal(t, key[:], res.Msg.GetKey(), "the client gets the store's key")
-	id, err := s.NodeID(ctx)
+	id, err := s.NodeID(ctx, 0)
 	require.NoError(t, err)
 	require.Equal(t, id[:], res.Msg.GetNodeId(), "and the store's node ID")
 

@@ -34,9 +34,6 @@ const (
 	JournalMatched = "matched"
 	// JournalArr is an event Radarr or Sonarr reported: grab, import.
 	JournalArr = "arr"
-	// JournalFeed is a tracker feed's first listing of an item: stored,
-	// queued, already_queued, rejected.
-	JournalFeed = "feed"
 	// JournalProbeWanted is a probe asked for: search, request.
 	JournalProbeWanted = "probe_wanted"
 	// JournalProbeLeased is a probe task handed to a prober: request,
@@ -62,7 +59,6 @@ var JournalOutcomes = map[string][]string{
 	JournalClassified:  {LayerClassifier, LayerReuse, "failed"},
 	JournalMatched:     {LayerTMDB, LayerClassifier, LayerArr, MatchEarlier, "none", "error"},
 	JournalArr:         {EventGrab, EventImport},
-	JournalFeed:        {"stored", "queued", "already_queued", "rejected"},
 	JournalProbeWanted: {"search", "request"},
 	JournalProbeLeased: {"request", "retry", "search", "background"},
 	JournalProbed:      {ProbeTracks, ProbeUnknown, ProbeNoPeers, ProbeTimeout},
@@ -430,11 +426,6 @@ func (s *Store) journalBefore(ctx context.Context, f JournalFilter, before int64
 	}, q, args...)
 	slices.Reverse(out)
 	return out, err
-}
-
-// JournalFeed records what a tracker feed's listing of the hash came to.
-func (s *Store) JournalFeed(ctx context.Context, h Hash, at time.Time, outcome string, detail map[string]any) error {
-	return s.tx(ctx, func(tx *sql.Tx) error { return journal(ctx, tx, h, at, JournalFeed, outcome, detail) })
 }
 
 // journalSweep selects, given a time and a limit, the oldest entries before

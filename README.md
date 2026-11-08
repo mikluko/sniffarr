@@ -44,7 +44,6 @@ component.
 - [API](docs/api.md): the ingest, browse and search services, and calling them from a shell
 - [Torznab](docs/torznab.md): the indexer [Prowlarr](https://prowlarr.com), [Radarr](https://radarr.video) and [Sonarr](https://sonarr.tv) search
 - [Radarr and Sonarr](docs/radarr-sonarr.md): their webhook and grab history as demand and as matches
-- [Feeds](docs/feeds.md): tracker feeds as a source of releases
 - [Web UI](docs/web-ui.md): the pages, their parameters and the language
 - [Configuration](docs/configuration.md): every flag and variable of every component
 - [Telemetry](docs/telemetry.md): metrics, traces and logs

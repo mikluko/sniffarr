@@ -28,8 +28,6 @@ type Settings struct {
 	Probes bool
 	// Classifier is whether it runs the classifier.
 	Classifier bool
-	// Feeds is whether it reads tracker feeds.
-	Feeds bool
 	// JournalRetention is how long its journal keeps an entry; 0 when it
 	// does not say.
 	JournalRetention time.Duration
@@ -82,8 +80,6 @@ func settingsOf(msg *sniffarrv1.SettingsResponse) (Settings, error) {
 		switch f.GetFeature() {
 		case sniffarrv1.Feature_FEATURE_CLASSIFIER:
 			out.Classifier = f.GetOn()
-		case sniffarrv1.Feature_FEATURE_FEEDS:
-			out.Feeds = f.GetOn()
 		}
 	}
 	return out, nil
@@ -108,7 +104,7 @@ func (h *Handler) Watch(ctx context.Context, interval time.Duration) {
 		}
 		if !reflect.DeepEqual(next, h.s.settings().Settings) {
 			h.Apply(next)
-			log.InfoContext(ctx, "settings changed", "languages", audio.Tags(next.Languages), "probes", next.Probes, "classifier", next.Classifier, "feeds", next.Feeds, "journal_retention", next.JournalRetention, "latest", next.Latest.Version, "notice", next.Notice)
+			log.InfoContext(ctx, "settings changed", "languages", audio.Tags(next.Languages), "probes", next.Probes, "classifier", next.Classifier, "journal_retention", next.JournalRetention, "latest", next.Latest.Version, "notice", next.Notice)
 		}
 	}
 }

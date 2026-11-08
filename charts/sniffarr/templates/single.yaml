@@ -142,6 +142,9 @@ spec:
             {{- with include "sniffarr.env" (dict "root" . "env" $env) | trim }}
             {{- . | nindent 12 }}
             {{- end }}
+            {{- with include "sniffarr.natsEnv" . | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
           {{- with $api.existingSecret }}
           envFrom:
             - secretRef:
@@ -150,6 +153,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            {{- if $api.nats.enabled }}
+            - name: nats
+              containerPort: 4222
+            {{- end }}
             {{- if and $ui.enabled (not $loopback) }}
             - name: ui
               containerPort: {{ include "sniffarr.uiPort" $ui.addr }}

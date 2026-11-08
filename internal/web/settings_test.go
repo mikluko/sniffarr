@@ -71,11 +71,10 @@ func TestObtainSettings(t *testing.T) {
 
 	api := &settingsAPI{failures: 2, tags: []string{"ru"}, probes: true, retention: time.Hour, features: []*sniffarrv1.FeatureState{
 		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, On: true},
-		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, On: true, Works: true, Values: []string{"rutor"}},
 	}}
 	got, err := ObtainSettings(ctx, api, time.Millisecond, log)
 	require.NoError(t, err)
-	require.Equal(t, Settings{Languages: russian, Probes: true, Classifier: true, Feeds: true, JournalRetention: time.Hour}, got, "on, whether working or not")
+	require.Equal(t, Settings{Languages: russian, Probes: true, Classifier: true, JournalRetention: time.Hour}, got, "on, whether working or not")
 	require.Equal(t, 3, api.calls, "two failures, then the answer")
 
 	api = &settingsAPI{}
@@ -83,7 +82,7 @@ func TestObtainSettings(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, got.Languages, "the extension is off")
 	require.False(t, got.Probes, "probes are off")
-	require.False(t, got.Classifier || got.Feeds, "an API that names no feature has them off")
+	require.False(t, got.Classifier, "an API that names no feature has them off")
 	require.Equal(t, 1, api.calls)
 
 	_, err = ObtainSettings(ctx, &settingsAPI{tags: []string{"ru", "xx"}}, time.Millisecond, nil)

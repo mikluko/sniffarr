@@ -44,10 +44,14 @@ func TestJudgeSniffID(t *testing.T) {
 
 func TestJudgeContacts(t *testing.T) {
 	require.Equal(t, statusSkip, judgeContacts(sniffT, nil).status)
-	require.Equal(t, statusOK, judgeContacts(sniffT, []netip.AddrPort{ap("95.168.161.76:30069")}).status)
-	r := judgeContacts(sniffT, []netip.AddrPort{ap("95.168.161.76:30069"), ap("95.168.161.76:42069")})
+	by := []netip.AddrPort{ap("192.0.2.1:1")}
+	require.Equal(t, statusOK, judgeContacts(sniffT, map[netip.AddrPort][]netip.AddrPort{ap("95.168.161.76:30069"): by}).status)
+	r := judgeContacts(sniffT, map[netip.AddrPort][]netip.AddrPort{
+		ap("95.168.161.76:30069"): by,
+		ap("95.168.161.76:42069"): {ap("192.0.2.1:1"), ap("95.168.161.76:30070")},
+	})
 	require.Equal(t, statusFail, r.status)
-	require.Contains(t, r.detail, "at 95.168.161.76:42069, not 95.168.161.76:30069")
+	require.Contains(t, r.detail, "at 95.168.161.76:42069 (by 2, 1 of them at 95.168.161.76), not 95.168.161.76:30069")
 }
 
 func TestJudgeProbe(t *testing.T) {
@@ -58,7 +62,7 @@ func TestJudgeProbe(t *testing.T) {
 	require.Equal(t, statusFail, judgeProbe(probe0, nil, true, 0, 3).status)
 	split := probe0
 	split.tcp = 30099
-	require.Contains(t, judgeProbe(split, nil, false, 0, 3).detail, "TCP NodePort 30099 differs from UDP 30070")
+	require.Contains(t, judgeProbe(split, nil, false, 0, 3).detail, "TCP port 30099 differs from UDP 30070")
 }
 
 func TestJudgeSeeds(t *testing.T) {
@@ -73,7 +77,7 @@ func TestJudgeSeeds(t *testing.T) {
 	require.Equal(t, statusOK, rs[0].status)
 	require.Equal(t, "announced at 95.168.161.76:30071 (probe-1), served by probe-1", rs[0].detail)
 	require.Equal(t, statusFail, rs[1].status)
-	require.Contains(t, rs[1].detail, "announced at 95.168.161.76:41173, no probe's NodePort")
+	require.Contains(t, rs[1].detail, "announced at 95.168.161.76:41173, no probe's port")
 	require.Equal(t, statusSkip, rs[2].status)
 
 	rs = judgeSeeds(seeds[2:], [][]netip.AddrPort{{ap("203.0.113.9:6881")}}, [][]target{nil}, probes)
@@ -105,7 +109,10 @@ func TestContacts(t *testing.T) {
 		return nil, errors.New("no reply")
 	}
 	got := contacts(t.Context(), find, []krpc.NodeInfo{ni(0x10, "192.0.2.1:1")}, target)
-	require.Equal(t, []netip.AddrPort{ap("95.168.161.76:30069"), ap("95.168.161.76:42069")}, got)
+	require.Equal(t, map[netip.AddrPort][]netip.AddrPort{
+		ap("95.168.161.76:30069"): {ap("192.0.2.9:1")},
+		ap("95.168.161.76:42069"): {ap("192.0.2.3:1")},
+	}, got)
 }
 
 func TestParse(t *testing.T) {
@@ -130,3 +137,9 @@ func TestParse(t *testing.T) {
 type nopWriter struct{}
 
 func (nopWriter) Write(b []byte) (int, error) { return len(b), nil }
+
+func TestShort(t *testing.T) {
+	h := [20]byte{0x12, 0x34, 19: 0xcd}
+	h[18] = 0xab
+	require.Equal(t, "1234..abcd", short(h))
+}

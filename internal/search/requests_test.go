@@ -106,11 +106,11 @@ func TestBrowserStatsQueue(t *testing.T) {
 	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
 	require.NoError(t, err)
 	q := res.Msg.GetQueueProbes().GetLevels()
-	require.Len(t, q, 5)
+	require.Len(t, q, 4)
 	require.Equal(t, int32(0), q[0].GetPriority())
 	require.Equal(t, int64(1), q[0].GetTasks())
 	require.Nil(t, q[0].GetEta(), "no pace yet")
-	require.Len(t, res.Msg.GetQueueFetches().GetLevels(), 5)
+	require.Len(t, res.Msg.GetQueueFetches().GetLevels(), 4)
 	require.NotNil(t, res.Msg.GetQueueFetches().GetLevels()[0].GetEta(), "nothing to wait for")
 
 	b.Tasks.Finished(store.TaskProbe, now.Add(-time.Minute))
@@ -118,7 +118,7 @@ func TestBrowserStatsQueue(t *testing.T) {
 	res, err = b.Stats(ctx, connect.NewRequest(&sniffarrv1.StatsRequest{}))
 	require.NoError(t, err)
 	require.InDelta(t, 2.0, res.Msg.GetQueueProbes().GetPerMinute(), 1e-9)
-	require.Equal(t, 30*time.Second, res.Msg.GetQueueProbes().GetLevels()[4].GetEta().AsDuration())
+	require.Equal(t, 30*time.Second, res.Msg.GetQueueProbes().GetLevels()[3].GetEta().AsDuration())
 	require.Zero(t, res.Msg.GetQueueLookups().GetPerMinute())
 }
 

@@ -55,11 +55,52 @@ func TestTargets(t *testing.T) {
 	}
 }
 
+// hostPortPodsJSON has the sniff on a hostPort with no Service, a probe pod
+// on a hostPort that its NodePort Service selects as well, and a fetch pod
+// on a hostPort, which is not checked.
+const hostPortPodsJSON = `{"items":[
+ {"metadata":{"name":"sniffarr-sniff-x","labels":{"app.kubernetes.io/component":"sniff"}},
+  "spec":{"nodeName":"bradbury","containers":[{"ports":[
+   {"protocol":"UDP","containerPort":42069,"hostPort":42069},{"protocol":"TCP","containerPort":42069,"hostPort":42069},
+   {"protocol":"TCP","containerPort":9464}]}]}},
+ {"metadata":{"name":"sniffarr-probe-1","labels":{"app.kubernetes.io/component":"probe","statefulset.kubernetes.io/pod-name":"sniffarr-probe-1"}},
+  "spec":{"nodeName":"hetzner","containers":[{"ports":[{"protocol":"UDP","hostPort":42070}]}]}},
+ {"metadata":{"name":"sniffarr-fetch-x","labels":{"app.kubernetes.io/component":"fetch"}},
+  "spec":{"nodeName":"bradbury","containers":[{"ports":[{"protocol":"UDP","hostPort":42071}]}]}}
+]}`
+
+func TestTargetsHostPort(t *testing.T) {
+	svcs := decode[serviceList](t, `{"items":[
+	 {"metadata":{"name":"sniffarr-probe-1","labels":{"app.kubernetes.io/component":"probe"}},
+	  "spec":{"type":"NodePort","selector":{"app.kubernetes.io/component":"probe","statefulset.kubernetes.io/pod-name":"sniffarr-probe-1"},
+	   "ports":[{"protocol":"TCP","nodePort":30071},{"protocol":"UDP","nodePort":30071}]}}]}`)
+	pods, nodes := decode[podList](t, hostPortPodsJSON), decode[nodeList](t, nodesJSON)
+	ts, err := targets("sniffarr", svcs, pods, nodes, netip.Addr{})
+	require.NoError(t, err)
+	require.Equal(t, []target{
+		{name: "probe-1", component: componentProbe, addr: netip.MustParseAddr("203.0.113.9"), udp: 30071, tcp: 30071},
+		{name: "sniff", component: componentSniff, addr: netip.MustParseAddr("95.168.161.76"), udp: 42069, tcp: 42069},
+	}, ts)
+
+	ts, err = targets("sniffarr", serviceList{}, pods, nodeList{}, netip.MustParseAddr("198.51.100.1"))
+	require.NoError(t, err)
+	require.Len(t, ts, 2)
+	for _, tg := range ts {
+		require.Equal(t, netip.MustParseAddr("198.51.100.1"), tg.addr, tg.name)
+	}
+}
+
 func TestTargetsErrors(t *testing.T) {
 	svcs, pods, nodes := decode[serviceList](t, servicesJSON), decode[podList](t, podsJSON), decode[nodeList](t, nodesJSON)
 
 	_, err := targets("sniffarr", serviceList{}, pods, nodes, netip.Addr{})
-	require.ErrorContains(t, err, "no NodePort service")
+	require.ErrorContains(t, err, "no NodePort Service or hostPort")
+
+	rolling := decode[podList](t, `{"items":[
+	 {"metadata":{"name":"a","labels":{"app.kubernetes.io/component":"sniff"}},"spec":{"nodeName":"bradbury","containers":[{"ports":[{"protocol":"UDP","hostPort":42069}]}]}},
+	 {"metadata":{"name":"b","labels":{"app.kubernetes.io/component":"sniff"}},"spec":{"nodeName":"bradbury","containers":[{"ports":[{"protocol":"UDP","hostPort":42069}]}]}}]}`)
+	_, err = targets("sniffarr", serviceList{}, rolling, nodes, netip.Addr{})
+	require.ErrorContains(t, err, "sniff: more than one pod with a hostPort")
 
 	private := decode[nodeList](t, `{"items":[{"metadata":{"name":"bradbury"},"status":{"addresses":[{"type":"InternalIP","address":"10.1.2.3"}]}},
 	 {"metadata":{"name":"hetzner"},"status":{"addresses":[{"type":"ExternalIP","address":"203.0.113.9"}]}}]}`)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -214,8 +215,9 @@ func TestBrowserJournal(t *testing.T) {
 	require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err), "a negative limit")
 
 	h = hash(12)
-	for range MaxJournalLimit + 1 {
-		require.NoError(t, b.Store.JournalFeed(ctx, h, now, "duplicate", nil))
+	for i := range MaxJournalLimit + 1 {
+		_, err := b.Store.RecordArr(ctx, store.ArrEvent{App: store.AppRadarr, Event: store.EventGrab, Key: strconv.Itoa(i), Hash: &h, At: now}, now)
+		require.NoError(t, err)
 	}
 	res, err = b.Journal(ctx, connect.NewRequest(&sniffarrv1.JournalRequest{Infohash: h[:], Limit: MaxJournalLimit + 1}))
 	require.NoError(t, err, "a limit above the most is no error")
@@ -373,17 +375,15 @@ func TestBrowserSettingsFeatures(t *testing.T) {
 		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, Setting: "SNIFFARR_CLASSIFY_API_KEY"},
 		{Feature: sniffarrv1.Feature_FEATURE_PROBES, Setting: "-probe"},
 		{Feature: sniffarrv1.Feature_FEATURE_AUDIO, Setting: "SNIFFARR_AUDIO_LANGUAGES"},
-		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, Setting: "SNIFFARR_FEEDS"},
 	}
 	require.Equal(t, off, features(&Browser{}), "every feature off, each with its setting")
 
 	b := browser(t)
-	b.Tasks, b.Classifier, b.Probes, b.Feeds = tasks(t), true, true, []string{"rutracker", "rutor"}
+	b.Tasks, b.Classifier, b.Probes = tasks(t), true, true
 	on := []state{
 		{Feature: sniffarrv1.Feature_FEATURE_CLASSIFIER, On: true, Works: true, Setting: "SNIFFARR_CLASSIFY_API_KEY"},
 		{Feature: sniffarrv1.Feature_FEATURE_PROBES, On: true, Setting: "-probe"},
 		{Feature: sniffarrv1.Feature_FEATURE_AUDIO, On: true, Works: true, Setting: "SNIFFARR_AUDIO_LANGUAGES", Values: []string{"ru"}},
-		{Feature: sniffarrv1.Feature_FEATURE_FEEDS, On: true, Works: true, Setting: "SNIFFARR_FEEDS", Values: []string{"rutracker", "rutor"}},
 	}
 	require.Equal(t, on, features(b), "probes do not work without a prober")
 

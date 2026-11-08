@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `-api` embeds a NATS server with JetStream, its store in `SNIFFARR_NATS_DIR`, `nats` beside `SNIFFARR_DB` by default, with the streams of sightings, fetch and probe orders by priority, and fetch and probe results.
+- With `SNIFFARR_NATS_PASSWORD`, the NATS server listens at `SNIFFARR_NATS_ADDR`, `:4222` by default, for the user `worker`, limited to publishing sightings and results and taking orders; the chart's `api.nats.enabled` opens it on the port and Service port `nats`, the password from `api.existingSecret`.
+
+### Changed
+
+- The queue has four priorities, P0 asked for in the web UI, P1 Radarr and Sonarr, P2 announced, P3 sampled; the data page and the levels of `BrowseService.Stats` show four, and queued tasks keep their order.
+- The sniff gets a new DHT node ID when its port changes, and once on the first start after the upgrade.
+
+### Fixed
+
+- The chart's Deployments switch to the Recreate strategy, by turning on `hostNetwork` or `hostPort`, without being deleted by hand.
+
+### Removed
+
+- **Breaking:** the tracker feeds, rutracker, nnmclub and rutor, with `SNIFFARR_FEEDS` and their settings, `Source.SOURCE_FEED` and `Feature.FEATURE_FEEDS`; a migration drops their tables and journal entries.
+- **Breaking:** `TYPESAFE_API_KEY`: set `SNIFFARR_CLASSIFY_API_KEY`.
+
 ## [0.44.3] - 2026-11-08
 
 ### Fixed

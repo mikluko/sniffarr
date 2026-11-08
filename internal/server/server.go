@@ -76,9 +76,6 @@ type Config struct {
 	// ClassifierSetting is the setting it names for it.
 	Classifier        bool
 	ClassifierSetting string
-	// Feeds are the names of the feeds read that BrowseService.Settings
-	// reports.
-	Feeds []string
 	// JournalRetention is how long the journal keeps an entry, which
 	// BrowseService.Settings reports.
 	JournalRetention time.Duration
@@ -121,7 +118,7 @@ func New(c Config) (http.Handler, error) {
 	))
 	mux.Handle(sniffarrv1connect.NewBrowseServiceHandler(
 		&search.Browser{Store: c.Store, Tasks: c.Tasks, TMDB: c.TMDB, Matcher: c.Matcher, Log: c.Log, DailyTokens: c.DailyTokens, ProbeDailyBytes: c.Probe.DailyBytes, Probes: c.Probes, Languages: audio.Tags(c.Languages), Counts: c.Counts,
-			Classifier: c.Classifier, ClassifierSetting: c.ClassifierSetting, Feeds: c.Feeds, JournalRetention: c.JournalRetention,
+			Classifier: c.Classifier, ClassifierSetting: c.ClassifierSetting, JournalRetention: c.JournalRetention,
 			Releases: c.Releases, ReleaseNotice: c.ReleaseNotice},
 		connect.WithInterceptors(otel),
 		connect.WithReadMaxBytes(MaxMessage),

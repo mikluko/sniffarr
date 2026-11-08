@@ -79,7 +79,7 @@ func boot(ctx context.Context, p nodeParams, n *sniff.Network) error {
 	)
 	if !p.Config.Network.Passive {
 		var err error
-		if id, err = sniff.ObtainNodeID(ctx, p.Ingest, sniff.DefaultBackoff, p.Log); err != nil {
+		if id, err = sniff.ObtainNodeID(ctx, p.Ingest, p.Config.Network.Port, sniff.DefaultBackoff, p.Log); err != nil {
 			return err
 		}
 		if p.Config.STUN != "" {

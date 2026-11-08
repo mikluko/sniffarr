@@ -417,7 +417,7 @@ type Torrent struct {
 	FileCount     int // files in the torrent
 	FirstSeen     time.Time
 	LastSeen      time.Time
-	DiscoveredVia string // "announce" | "sample" | "arr" | "feed"
+	DiscoveredVia string // "announce" | "sample" | "arr"; "" hides the row
 	TMDBQuery     string // cleaned title, used for TMDB/IMDb search links when not matched
 	Peers         PeerCounts
 
@@ -567,17 +567,15 @@ func (b Base) journalKey(kind, key string) string {
 // journalValue writes the typed value of the key of the entry and the page
 // it links to, "" for none: a moment by its clock alone on the entry's day in
 // the zone of Loc, else by TimeFull; an Infohash as its first 8 characters
-// linking to its card; a Link by its label; a list by commas, unlinked; an
-// object as "key value" by commas, a probability in audio as a percentage;
-// any other as journalScalar writes it.
+// linking to its card; a list by commas, unlinked; an object as "key value"
+// by commas, a probability in audio as a percentage; any other as
+// journalScalar writes it.
 func (b Base) journalValue(e JournalEntry, key string, v any) (string, string) {
 	switch x := v.(type) {
 	case time.Time:
 		return b.journalTime(e.At, x), ""
 	case Infohash:
 		return string(x[:8]), "/t/" + string(x)
-	case Link:
-		return x.Label, x.URL
 	case []any:
 		parts := make([]string, len(x))
 		for i, el := range x {
@@ -746,11 +744,11 @@ type DataPage struct {
 
 // FeatureKeys are the optional features in the order the data page lists
 // them; labels come from i18n ("feat.<key>").
-var FeatureKeys = []string{"classifier", "probes", "audio", "feeds"}
+var FeatureKeys = []string{"classifier", "probes", "audio"}
 
 // Feature is the state of an optional feature: whether it is On, whether it
 // Works now, the flag or variable Setting that turns it on, and the Values
-// it is on with, the audio languages or the feeds' names.
+// it is on with, the audio languages.
 type Feature struct {
 	Key     string
 	On      bool

@@ -50,6 +50,21 @@ capabilities:
 {{- end }}
 {{- end }}
 
+{{- /* sniffarr.natsEnv is SNIFFARR_NATS_PASSWORD from api.existingSecret while api.nats.enabled, else nothing. */}}
+{{- define "sniffarr.natsEnv" -}}
+{{- $api := .Values.api }}
+{{- if $api.nats.enabled }}
+{{- if not $api.existingSecret }}
+{{- fail "api.nats.enabled takes SNIFFARR_NATS_PASSWORD from api.existingSecret, which is empty" }}
+{{- end }}
+- name: SNIFFARR_NATS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $api.existingSecret }}
+      key: SNIFFARR_NATS_PASSWORD
+{{- end }}
+{{- end }}
+
 {{- /*
 sniffarr.waitAPI is the init container wait-api, sniffarr -wait-api against url, when
 waitForAPI.enabled, else nothing. It takes root and url.
@@ -337,6 +352,19 @@ spec:
 {{- end }}
 
 {{- /*
+sniffarr.rollingUpdate is the strategy of a Deployment that is not Recreate. It is rendered in
+full, Kubernetes' defaults included, so the release owns rollingUpdate under server-side apply
+and drops it on a switch to Recreate: a defaulted field nobody owns cannot be removed.
+*/}}
+{{- define "sniffarr.rollingUpdate" -}}
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 25%
+    maxUnavailable: 25%
+{{- end }}
+
+{{- /*
 sniffarr.dht is a Deployment of sniffarr with its DHT components, and the Service of its DHT
 port when v.service.enabled. It takes root, component, v (the component's values), sniff and
 fetch (the flags), url, and probe, the probe values for the probe component, which make it a
@@ -374,6 +402,8 @@ spec:
   {{- else if or $v.hostNetwork $v.hostPort }}
   strategy:
     type: Recreate
+  {{- else }}
+  {{- include "sniffarr.rollingUpdate" . | nindent 2 }}
   {{- end }}
   selector:
     matchLabels:

@@ -118,7 +118,7 @@ func TestRenderAll(t *testing.T) {
 				req.Header.Set("HX-Target", c.target)
 			}
 			b := r.Base(req, lang, "", []string{"ru"}, loc)
-			b.Now, b.Probes, b.Classifier, b.Feeds = now, true, true, true
+			b.Now, b.Probes, b.Classifier = now, true, true
 			b.Build = sampleBuild
 			b.JournalRetention = 30 * 24 * time.Hour
 			w := httptest.NewRecorder()
@@ -261,13 +261,12 @@ func TestRenderFeaturesOff(t *testing.T) {
 			}
 			off := []string{
 				`name="vl"`, `name="voice"`, `voice=`, b.T("d.voice") + ": ", "<th>" + b.T("top.audio") + "</th>", `<h3 class="gap">` + b.T("top.audio"), b.T("card.audio_mark"),
-				`act-probe`, b.T("act.probe_nopeers"), `aria-label="` + b.T("d.probes") + `: `, `<h3>` + b.T("q.probe") + `</h3>`, b.T("q.p1"), b.T("q.p4"),
+				`act-probe`, b.T("act.probe_nopeers"), `aria-label="` + b.T("d.probes") + `: `, `<h3>` + b.T("q.probe") + `</h3>`, b.T("q.p1"), b.T("q.p3"),
 				`aria-label="` + b.T("d.classifier") + `: `, `/torrents?layer=classifier`,
-				`P2: ` + b.T("q.p2") + `<`,
 			}
 			var on []string
 			if c.name == "data" {
-				on = []string{`P2: ` + b.T("q.p2_nofeeds") + `<`, b.T("feat.state.classifier.off"), b.Fmt("feat.how.probes", "-probe")}
+				on = []string{b.T("feat.state.classifier.off"), b.Fmt("feat.how.probes", "-probe")}
 			}
 			checkBody(t, lang+"/"+c.name, w.Body.String(), off, on)
 		}
@@ -329,7 +328,7 @@ func TestRenderFeaturesDegraded(t *testing.T) {
 			t.Errorf("all working: has %q", s)
 		}
 	}
-	for _, s := range []string{"82,6% суточного лимита", "включена: ru", "включены: rutracker, rutor", ">P2: фиды<"} {
+	for _, s := range []string{"82,6% суточного лимита", "включена: ru", ">P2: announce<"} {
 		if !strings.Contains(all, s) {
 			t.Errorf("all working: no %q", s)
 		}
@@ -699,8 +698,7 @@ func TestJournalDetail(t *testing.T) {
 			[]DetailPair{{"match made", "Nov 7, 2025, 09:20", ""}, {"matched by", "TMDB search", ""}}},
 		{"an earlier match in Russian", "ru", JournalEntry{Kind: "matched", Detail: map[string]any{"layer": "arr", "key_matched_at": 1762500000.0}},
 			[]DetailPair{{"сопоставлено", "07.11.2025 09:20", ""}, {"чем сопоставлено", "Radarr/Sonarr", ""}}},
-		{"feed", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker"}}, []DetailPair{{"feed", "rutracker", ""}}},
-		{"promoted", "ru", JournalEntry{Kind: "sighted", Detail: map[string]any{"from": "sample", "to": "feed"}}, []DetailPair{{"откуда", "sample", ""}, {"куда", "фид", ""}}},
+		{"promoted", "ru", JournalEntry{Kind: "sighted", Detail: map[string]any{"from": "sample", "to": "arr"}}, []DetailPair{{"откуда", "sample", ""}, {"куда", "Radarr/Sonarr", ""}}},
 		{"reuse", "en", JournalEntry{Kind: "classified", Detail: map[string]any{"from": "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"}},
 			[]DetailPair{{"kind taken from", "8f3c2a91", "/t/8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"}}},
 		{"reuse from what is no infohash", "en", JournalEntry{Kind: "classified", Detail: map[string]any{"from": "3c1e"}}, []DetailPair{{"kind taken from", "3c1e", ""}}},
@@ -721,12 +719,6 @@ func TestJournalDetail(t *testing.T) {
 			Detail: map[string]any{"lease_until": float64(time.Date(2026, 10, 18, 22, 30, 0, 0, time.UTC).Unix())}}, []DetailPair{{"leased until", "Oct 19, 00:30", ""}}},
 		{"an infohash under any key", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"sibling": "8F3C2A91D07E4B6C5A1E9F20B37D4C8E6A0F1B52"}},
 			[]DetailPair{{"sibling", "8f3c2a91", "/t/8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52"}}},
-		{"a tracker page by its source", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "rutracker", "url": "https://rutracker.org/forum/viewtopic.php?t=1"}},
-			[]DetailPair{{"feed", "rutracker", ""}, {"page", "rutracker", "https://rutracker.org/forum/viewtopic.php?t=1"}}},
-		{"a tracker page without a source", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"url": "https://rutor.info/t/1"}},
-			[]DetailPair{{"page", "https://rutor.info/t/1", "https://rutor.info/t/1"}}},
-		{"a page that is no web page", "en", JournalEntry{Kind: "feed", Detail: map[string]any{"source": "x", "url": "javascript:alert(1)"}},
-			[]DetailPair{{"feed", "x", ""}, {"page", "javascript:alert(1)", ""}}},
 	} {
 		got := base(c.lang).JournalDetail(c.e)
 		if !slices.Equal(got, c.want) {
@@ -965,7 +957,7 @@ func TestDataMarkup(t *testing.T) {
 		`<button type="button" class="ic" hx-get="/" hx-target="#data" hx-swap="morph:outerHTML" aria-label="Refresh" aria-describedby="refresh-tip">` + string(svg) + `</button>`,
 		`<span class="tipb" id="refresh-tip" role="tooltip">Refresh. Data as of Oct 20, 14:02, updated 3 min ago. The page refreshes itself every 30 seconds. The server recomputes the data every 5 min.</span>`,
 		`<span class="tip" tabindex="0" aria-label="P0: asked for in the UI"><span class="badge"><span class="sw q0"></span>P0</span><span class="tipb" aria-hidden="true">P0: asked for in the UI</span></span>`,
-		`<div class="qbar" role="img" aria-label="Probes: P0 1; P1 63; P4 2;"><i class="q0" style="flex-grow: 1"></i><i class="q1" style="flex-grow: 63"></i><i class="q4" style="flex-grow: 2"></i></div>`,
+		`<div class="qbar" role="img" aria-label="Probes: P0 1; P1 63; P3 2;"><i class="q0" style="flex-grow: 1"></i><i class="q1" style="flex-grow: 63"></i><i class="q3" style="flex-grow: 2"></i></div>`,
 		`<span class="xs dw">≈ 107.2% by 00:00 UTC</span>`,
 		`<span class="xs mu">≈ 79.0% by 00:00 UTC</span>`,
 		`<i style="width: 82.6%"></i><span class="proj" style="width: 100.0%"></span>`,
@@ -985,7 +977,7 @@ func TestDataMarkup(t *testing.T) {
 	if !strings.Contains(fresh, probe) {
 		t.Errorf("no probe meter %q", probe)
 	}
-	for _, want := range []string{">P1: Radarr and Sonarr, searches<", ">P4: sampled, background probes<"} {
+	for _, want := range []string{">P1: Radarr and Sonarr, searches<", ">P3: sampled, background probes<"} {
 		if !strings.Contains(fresh, want) {
 			t.Errorf("no %s while probes are on", want)
 		}
@@ -995,7 +987,7 @@ func TestDataMarkup(t *testing.T) {
 	if strings.Contains(off, probe) {
 		t.Error("the probe meter shows while probes are off")
 	}
-	for _, want := range []string{">P1: Radarr and Sonarr<", ">P4: sampled<"} {
+	for _, want := range []string{">P1: Radarr and Sonarr<", ">P3: sampled<"} {
 		if !strings.Contains(off, want) {
 			t.Errorf("no %s while probes are off", want)
 		}
@@ -1273,5 +1265,33 @@ func TestBadgeHasNoBorder(t *testing.T) {
 		if strings.Contains(rule, "#data .badge{") && (strings.Contains(rule, "border") || strings.Contains(rule, "padding")) {
 			t.Errorf("the badge rule draws a box: %s}", rule)
 		}
+	}
+}
+
+// A release whose discovery the API does not name has no discovery row.
+func TestRenderDiscoveryUnnamed(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/t/x", nil)
+	b := r.Base(req, "en", "", []string{"ru"}, time.UTC)
+	b.Now = time.Date(2026, 10, 20, 14, 5, 0, 0, time.UTC)
+	render := func(via string) string {
+		t.Helper()
+		p := SampleTorrent(b, false, "poster")
+		p.Torrent.DiscoveredVia = via
+		w := httptest.NewRecorder()
+		if err := r.Render(w, req, "torrent", p); err != nil {
+			t.Fatal(err)
+		}
+		return w.Body.String()
+	}
+	row := "<th>" + b.T("card.via") + "</th><td>" + b.T("via.announce") + "</td>"
+	if !strings.Contains(render("announce"), row) {
+		t.Errorf("no %q", row)
+	}
+	if strings.Contains(render(""), b.T("card.via")) {
+		t.Error("a discovery row for an unnamed discovery")
 	}
 }

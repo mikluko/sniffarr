@@ -18,6 +18,7 @@ import (
 
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
+	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
@@ -42,7 +43,15 @@ func TestGraph(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg, err := load(tt.args, env(tt.env...), io.Discard)
 			require.NoError(t, err)
-			require.NoError(t, fx.ValidateApp(options(cfg, slog.New(slog.DiscardHandler))...))
+			opts := options(cfg, slog.New(slog.DiscardHandler))
+			require.NoError(t, fx.ValidateApp(opts...))
+			var b *broker.Broker
+			err = fx.ValidateApp(append(opts, fx.Populate(&b))...)
+			if cfg.on.api {
+				require.NoError(t, err, "-api runs the NATS server")
+			} else {
+				require.ErrorContains(t, err, "missing type: *broker.Broker", "only -api runs the NATS server")
+			}
 		})
 	}
 }

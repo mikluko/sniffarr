@@ -31,7 +31,6 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.queue.lease_expiries`        | `{lease}`    |                                            |
 | `-api`     | `sniffarr.queue.evictions`             | `{infohash}` | `sniffarr.queue.eviction`                  |
 | `-api`     | `sniffarr.queue.dead`                  | `{infohash}` |                                            |
-| `-api`     | `sniffarr.feed.items`                  | `{item}`     | `sniffarr.feed.source`, `sniffarr.feed.outcome` |
 | `-api`     | `sniffarr.store.retention.deletions`   | `{torrent}`  | `sniffarr.store.retention.class`           |
 | `-api`     | `sniffarr.store.journal.deletions`     | `{entry}`    |                                            |
 | `-api`     | `sniffarr.ingest.results`              | `{result}`   | `sniffarr.fetch.outcome`                   |
@@ -69,9 +68,8 @@ counts are the `db.sql.connection.*` metrics.
 
 `sniffarr.fetch.outcome` is `torrent`, `no_peers` or `timeout`, and for a peer lookup
 `lookup` or `lookup_no_peers`;
-`sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` and `feed` too;
-`sniffarr.feed.outcome` is `stored`, `queued`, `rejected` or `duplicate`; `sniffarr.dht.query` is
-`sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
+`sniffarr.discovery` is `announce` or `sample`, and in the queue `arr` too;
+`sniffarr.dht.query` is `sample_infohashes` or `scrape`; `sniffarr.sighting.result` is
 `new` or `known`; `sniffarr.classify.error` is `permanent` or `transient`;
 `sniffarr.queue.eviction` is `age`, `size` or `no_peers`;
 `sniffarr.task.kind` is `fetch`, `peers` or `probe`;

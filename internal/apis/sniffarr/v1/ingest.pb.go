@@ -33,8 +33,6 @@ const (
 	// A grab or import Radarr or Sonarr reported; the queue serves these
 	// first.
 	Source_SOURCE_ARR Source = 3
-	// A release a tracker feed listed; the queue serves these after arr.
-	Source_SOURCE_FEED Source = 4
 )
 
 // Enum value maps for Source.
@@ -44,14 +42,12 @@ var (
 		1: "SOURCE_SAMPLE",
 		2: "SOURCE_ANNOUNCE",
 		3: "SOURCE_ARR",
-		4: "SOURCE_FEED",
 	}
 	Source_value = map[string]int32{
 		"SOURCE_UNSPECIFIED": 0,
 		"SOURCE_SAMPLE":      1,
 		"SOURCE_ANNOUNCE":    2,
 		"SOURCE_ARR":         3,
-		"SOURCE_FEED":        4,
 	}
 )
 
@@ -806,7 +802,11 @@ func (x *Task) GetPeers() bool {
 }
 
 type HashKeyRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The port the sniffing DHT node listens on. A port other than the one the
+	// node ID was last handed out with gets a new node ID; 0 keeps the stored
+	// one, as does a client that does not run the sniffing node.
+	DhtPort       uint32 `protobuf:"varint,1,opt,name=dht_port,json=dhtPort,proto3" json:"dht_port,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -839,6 +839,13 @@ func (x *HashKeyRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use HashKeyRequest.ProtoReflect.Descriptor instead.
 func (*HashKeyRequest) Descriptor() ([]byte, []int) {
 	return file_sniffarr_v1_ingest_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *HashKeyRequest) GetDhtPort() uint32 {
+	if x != nil {
+		return x.DhtPort
+	}
+	return 0
 }
 
 type HashKeyResponse struct {
@@ -1481,8 +1488,9 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x04task\x18\x01 \x01(\v2\x11.sniffarr.v1.TaskR\x04task\"8\n" +
 	"\x04Task\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x14\n" +
-	"\x05peers\x18\x02 \x01(\bR\x05peers\"\x10\n" +
-	"\x0eHashKeyRequest\"<\n" +
+	"\x05peers\x18\x02 \x01(\bR\x05peers\"+\n" +
+	"\x0eHashKeyRequest\x12\x19\n" +
+	"\bdht_port\x18\x01 \x01(\rR\adhtPort\"<\n" +
 	"\x0fHashKeyResponse\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\fR\x03key\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\fR\x06nodeId\"V\n" +
@@ -1516,14 +1524,13 @@ const file_sniffarr_v1_ingest_proto_rawDesc = "" +
 	"\x13ProbeResultResponse\"0\n" +
 	"\x12ProbeUploadRequest\x12\x1a\n" +
 	"\buploaded\x18\x01 \x01(\x03R\buploaded\"\x15\n" +
-	"\x13ProbeUploadResponse*i\n" +
+	"\x13ProbeUploadResponse*k\n" +
 	"\x06Source\x12\x16\n" +
 	"\x12SOURCE_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSOURCE_SAMPLE\x10\x01\x12\x13\n" +
 	"\x0fSOURCE_ANNOUNCE\x10\x02\x12\x0e\n" +
 	"\n" +
-	"SOURCE_ARR\x10\x03\x12\x0f\n" +
-	"\vSOURCE_FEED\x10\x04*M\n" +
+	"SOURCE_ARR\x10\x03\"\x04\b\x04\x10\x04*\vSOURCE_FEED*M\n" +
 	"\aFailure\x12\x17\n" +
 	"\x13FAILURE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10FAILURE_NO_PEERS\x10\x01\x12\x13\n" +

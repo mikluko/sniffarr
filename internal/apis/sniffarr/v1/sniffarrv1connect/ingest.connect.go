@@ -67,7 +67,7 @@ type IngestServiceClient interface {
 	// them to a sketch, and the ID of the sniffing DHT node. The server
 	// generates both once and keeps them for the life of its store, so
 	// sketches from any client and any time merge and the node keeps its ID
-	// across restarts.
+	// across restarts, as long as it listens on the same port.
 	HashKey(context.Context, *connect.Request[v1.HashKeyRequest]) (*connect.Response[v1.HashKeyResponse], error)
 	// Peers merges each sketch of the stream into the stored sketch of its
 	// torrent and hour, and reports the totals when the client closes the
@@ -203,7 +203,7 @@ type IngestServiceHandler interface {
 	// them to a sketch, and the ID of the sniffing DHT node. The server
 	// generates both once and keeps them for the life of its store, so
 	// sketches from any client and any time merge and the node keeps its ID
-	// across restarts.
+	// across restarts, as long as it listens on the same port.
 	HashKey(context.Context, *connect.Request[v1.HashKeyRequest]) (*connect.Response[v1.HashKeyResponse], error)
 	// Peers merges each sketch of the stream into the stored sketch of its
 	// torrent and hour, and reports the totals when the client closes the

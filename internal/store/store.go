@@ -71,11 +71,9 @@ type Store struct {
 	probes        *batcher.Batcher[*probeLease]
 	log           *slog.Logger
 
-	keyMu     sync.Mutex
-	key       sketch.Key
-	keySet    bool
-	nodeID    [20]byte
-	nodeIDSet bool
+	keyMu  sync.Mutex
+	key    sketch.Key
+	keySet bool
 }
 
 //go:embed migrations/*.sql

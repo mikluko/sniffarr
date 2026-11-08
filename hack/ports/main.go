@@ -1,8 +1,8 @@
 // Command ports checks from outside the cluster that the internet reaches
-// a sniffarr release's sniff and probes at their NodePorts, and that the
-// DHT knows them there. It reads the node ID and the seeded torrents from
-// the API, the ports and addresses from Kubernetes, and prints one line per
-// check, exiting 1 when any fails.
+// a sniffarr release's sniff and probes at their NodePorts or hostPorts, and
+// that the DHT knows them there. It reads the node ID and the seeded torrents
+// from the API, the ports and addresses from Kubernetes, and prints one line
+// per check, exiting 1 when any fails.
 package main
 
 import (

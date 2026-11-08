@@ -81,9 +81,6 @@ type Browser struct {
 	// ClassifierSetting is the setting Settings names for the classifier;
 	// SNIFFARR_CLASSIFY_API_KEY when empty.
 	ClassifierSetting string
-	// Feeds are the names of the feeds read that Settings reports; nil
-	// when none is.
-	Feeds []string
 	// JournalRetention is how long the journal keeps an entry, which
 	// Settings reports when above 0.
 	JournalRetention time.Duration
@@ -125,7 +122,6 @@ func (b *Browser) Settings(ctx context.Context, _ *connect.Request[sniffarrv1.Se
 		feature(sniffarrv1.Feature_FEATURE_CLASSIFIER, b.Classifier, !spent, cmp.Or(b.ClassifierSetting, "SNIFFARR_CLASSIFY_API_KEY"), nil),
 		feature(sniffarrv1.Feature_FEATURE_PROBES, b.Probes, b.probers() > 0, "-probe", nil),
 		feature(sniffarrv1.Feature_FEATURE_AUDIO, len(b.Languages) > 0, true, "SNIFFARR_AUDIO_LANGUAGES", b.Languages),
-		feature(sniffarrv1.Feature_FEATURE_FEEDS, len(b.Feeds) > 0, true, "SNIFFARR_FEEDS", b.Feeds),
 	}}
 	if b.JournalRetention > 0 {
 		res.JournalRetention = durationpb.New(b.JournalRetention)
@@ -177,7 +173,6 @@ var discoveries = map[string]sniffarrv1.Source{
 	"sample":   sniffarrv1.Source_SOURCE_SAMPLE,
 	"announce": sniffarrv1.Source_SOURCE_ANNOUNCE,
 	"arr":      sniffarrv1.Source_SOURCE_ARR,
-	"feed":     sniffarrv1.Source_SOURCE_FEED,
 }
 
 var rejections = map[rules.Reason]sniffarrv1.Rejection{

@@ -378,7 +378,7 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 		Audio:        []Audio{{Lang: "ru", Script: "cyrillic", Probability: fp(.88)}},
 		Rules:        []RuleHit{{"source.web", "WEB-DL"}, {"quality.1080p", "1080р"}},
 		Journal:      sampleJournal(b.Now.Add(-41*time.Hour), name),
-		JournalTotal: 14,
+		JournalTotal: 12,
 		Files:        FileList{InfoHash: "8f3c2a91d07e4b6c5a1e9f20b37d4c8e6a0f1b52", Files: shown, Stored: len(files), All: all},
 	}}
 }
@@ -390,10 +390,6 @@ func sampleJournal(at time.Time, name string) []JournalEntry {
 	sec := func(t time.Time) float64 { return float64(t.Unix()) }
 	const sibling = "3c1e5a07d94b28f6a1c0e7b35d29f48a6b0c7d13"
 	es := []JournalEntry{
-		{At: at.Add(-8 * time.Minute), Kind: "feed", Outcome: "queued", Detail: map[string]any{"source": "rutracker", "title": name, "url": "https://rutracker.example/t/6543210",
-			"category": "f-1457", "size": 26629001216.0, "published_at": sec(at.Add(-9 * time.Minute))}},
-		{At: at.Add(-7 * time.Minute), Kind: "feed", Outcome: "already_queued", Detail: map[string]any{"source": "rutor", "title": name, "url": "https://rutor.example/torrent/987654",
-			"size": 26629001216.0, "published_at": sec(at.Add(-7 * time.Minute))}},
 		{At: at.Add(-6 * time.Minute), Kind: "sighted", Outcome: "queued", Detail: map[string]any{"discovery": "announce"}},
 		{At: at.Add(-5 * time.Minute), Kind: "leased", Outcome: "fetch", Detail: map[string]any{"attempt": 1.0, "lease_until": sec(at.Add(-4 * time.Minute))}},
 		{At: at.Add(-3 * time.Minute), Kind: "fetch_failed", Outcome: "timeout", Detail: map[string]any{"attempt": 1.0, "retry_at": sec(at.Add(-2 * time.Minute)), "leases": 2.0}},
@@ -447,15 +443,13 @@ func SampleData(b Base) DataPage {
 		Queue: []TaskQueue{
 			{Kind: "fetch", Paced: true, Levels: []QueueLevel{{Priority: 0, Known: true},
 				{Priority: 1, Tasks: 14, ETA: 20 * time.Second, Known: true},
-				{Priority: 2, Tasks: 1486, ETA: 33 * time.Minute, Known: true},
-				{Priority: 3, Tasks: 48210, ETA: 18*time.Hour + 20*time.Minute, Known: true},
-				{Priority: 4, Tasks: 611392, ETA: 10*24*time.Hour + 4*time.Hour, Known: true}}},
-			{Kind: "peers", Levels: []QueueLevel{{Priority: 0, Tasks: 2}, {Priority: 1}, {Priority: 2}, {Priority: 3}, {Priority: 4}}},
+				{Priority: 2, Tasks: 49696, ETA: 18*time.Hour + 20*time.Minute, Known: true},
+				{Priority: 3, Tasks: 611392, ETA: 10*24*time.Hour + 4*time.Hour, Known: true}}},
+			{Kind: "peers", Levels: []QueueLevel{{Priority: 0, Tasks: 2}, {Priority: 1}, {Priority: 2}, {Priority: 3}}},
 			{Kind: "probe", Paced: true, Levels: []QueueLevel{{Priority: 0, Tasks: 1, ETA: 3 * time.Minute, Known: true},
 				{Priority: 1, Tasks: 63, ETA: 3*time.Hour + 10*time.Minute, Known: true},
 				{Priority: 2, ETA: 3*time.Hour + 10*time.Minute, Known: true},
-				{Priority: 3, ETA: 3*time.Hour + 10*time.Minute, Known: true},
-				{Priority: 4, Tasks: 2, ETA: 3*time.Hour + 16*time.Minute, Known: true}}},
+				{Priority: 3, Tasks: 2, ETA: 3*time.Hour + 16*time.Minute, Known: true}}},
 		},
 		Hourly: NewBarChart(hourly, hl, 12, true, 530),
 		Daily:  NewBarChart(daily, dl, 7, true, 14260),
@@ -471,7 +465,6 @@ func SampleFeatures(state string) []Feature {
 		{Key: "classifier", On: true, Works: true, Setting: "SNIFFARR_CLASSIFY_API_KEY"},
 		{Key: "probes", On: true, Works: true, Setting: "-probe"},
 		{Key: "audio", On: true, Works: true, Setting: "SNIFFARR_AUDIO_LANGUAGES", Values: []string{"ru"}},
-		{Key: "feeds", On: true, Works: true, Setting: "SNIFFARR_FEEDS", Values: []string{"rutracker", "rutor"}},
 	}
 	for i := range fs {
 		switch state {
@@ -488,7 +481,7 @@ func SampleFeatures(state string) []Feature {
 // in the state SampleFeatures names.
 func SampleFeatureBase(b Base, state string) Base {
 	on := state != "off"
-	b.Probes, b.Classifier, b.Feeds = on, on, on
+	b.Probes, b.Classifier = on, on
 	if !on {
 		b.VoiceLangs = nil
 	}
@@ -509,7 +502,7 @@ func SampleDataFeatures(b Base, state string) DataPage {
 		c.DoneDay, c.PaceDay = c.LimitDay, 0
 		probes := &p.Stats.Queue[2]
 		probes.Paced = false
-		for i, n := range []int64{55, 2090, 0, 0, 85} {
+		for i, n := range []int64{55, 2090, 0, 85} {
 			probes.Levels[i] = QueueLevel{Priority: i, Tasks: n}
 		}
 	}
