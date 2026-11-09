@@ -41,6 +41,12 @@
     <tbody>
       <tr><td>{{$.T "col.kind"}}</td><td>{{$.T (concat "kind." .Kind.Value)}}</td><td>{{$.T (concat "layer." .Kind.Layer)}}</td><td class="r">{{$.Prob .Kind.Confidence}}</td></tr>
       <tr><td>{{$.T "col.source"}}</td><td>{{$.T (concat "source." .Source.Value)}}</td><td>{{$.T (concat "layer." .Source.Layer)}}</td><td class="r">{{$.Prob .Source.Confidence}}</td></tr>
+      {{- if .HDR}}
+      <tr><td>{{$.T "col.hdr"}}</td><td>{{.HDR}}</td><td>{{$.T "layer.probe"}}</td><td class="r">—</td></tr>
+      {{- end}}
+      {{- if .Codec}}
+      <tr><td>{{$.T "col.codec"}}</td><td>{{.Codec}}</td><td>{{$.T "layer.probe"}}</td><td class="r">—</td></tr>
+      {{- end}}
     </tbody>
   </table>
   </div>

@@ -154,7 +154,7 @@ func (p *probeIngest) client(t *testing.T) sniffarrv1connect.IngestServiceClient
 func TestProberReportsTracks(t *testing.T) {
 	ingest := &probeIngest{tasks: []*sniffarrv1.ProbeTask{{Infohash: []byte{1, 19: 0}, MaxBytes: 64 << 20}}, results: make(chan *sniffarrv1.ProbeResultRequest, 1)}
 	src := &fakeProbeSource{got: make(chan int64, 1), probed: Probed{Path: "Coraline.2009.mkv", Format: container.Matroska, Downloaded: 16 << 20,
-		Tracks: []container.Track{{Kind: container.Audio, Language: "rus", Name: "Дубляж\xff", Codec: "A_AC3", Channels: 6}}}}
+		Tracks: []container.Track{{Kind: container.Audio, Language: "rus", Name: "Дубляж\xff", Codec: "A_AC3", Channels: 6, Default: true}}}}
 	p := NewProber(ProberConfig{Ingest: ingest.client(t), Workers: 1, Poll: time.Hour}, src)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -169,6 +169,7 @@ func TestProberReportsTracks(t *testing.T) {
 	require.Equal(t, sniffarrv1.TrackKind_TRACK_KIND_AUDIO, tr.GetKind())
 	require.Equal(t, "Дубляж�", tr.GetName(), "invalid UTF-8 is replaced")
 	require.EqualValues(t, 6, tr.GetChannels())
+	require.True(t, tr.GetDefault())
 }
 
 func TestProberID(t *testing.T) {

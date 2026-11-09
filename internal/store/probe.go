@@ -12,10 +12,12 @@ import (
 	"golang.org/x/text/language"
 
 	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/container"
+	"sarak.sh/mikluko/sniffarr/internal/names"
 )
 
-// LayerProbe decides an audio probability by the tracks a probe read in the
-// release's main video file.
+// LayerProbe decides an audio probability or a quality by the tracks a probe
+// read in the release's main video file.
 const LayerProbe = "probe"
 
 // Probe outcomes.
@@ -47,6 +49,8 @@ type Track struct {
 	Width, Height int
 	// HDR is "DV", "HDR10", "HLG" or "".
 	HDR string
+	// Default is the track's default flag in the container.
+	Default bool
 }
 
 // base is the track's language subtag, by LanguageBCP47 when it gives one;
@@ -361,11 +365,13 @@ func probed(ctx context.Context, tx *sql.Tx, id int64, p Probe, at time.Time) er
 }
 
 // ProbeDone records the probe of the stored release at the time, and
-// replaces its tracks. With the tracks read, each audio
+// replaces its tracks and, as probeVideo does, its quality, HDR and codec.
+// With the tracks read, each audio
 // language of Options gets probability 1 when an audio track is in it, and 0
 // when every audio track gives another language, over a marker unless the
 // release stores an audio file of its own. Its journal entry lists the first
-// journalTracks tracks, with tracks_total when there were more.
+// journalTracks tracks, with tracks_total when there were more, and the
+// quality the video track set.
 func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) error {
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		var id int64
@@ -383,13 +389,17 @@ func (s *Store) ProbeDone(ctx context.Context, h Hash, p Probe, at time.Time) er
 			return err
 		}
 		for i, t := range p.Tracks {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO probe_tracks (torrent_id, idx, kind, language, language_bcp47, name, codec, channels, width, height, hdr)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				id, i, t.Kind, t.Language, t.LanguageBCP47, t.Name, t.Codec, t.Channels, t.Width, t.Height, t.HDR); err != nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO probe_tracks (torrent_id, idx, kind, language, language_bcp47, name, codec, channels, width, height, hdr, is_default)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				id, i, t.Kind, t.Language, t.LanguageBCP47, t.Name, t.Codec, t.Channels, t.Width, t.Height, t.HDR, t.Default); err != nil {
 				return err
 			}
 		}
-		d := Detail("path", p.Path, "format", p.Format, "downloaded", p.Downloaded, "leases", manyLeases(p.Leases))
+		quality, err := probeVideo(ctx, tx, id, p.Tracks)
+		if err != nil {
+			return err
+		}
+		d := Detail("path", p.Path, "format", p.Format, "downloaded", p.Downloaded, "leases", manyLeases(p.Leases), "quality", quality)
 		if p.Outcome != ProbeTracks {
 			return journal(ctx, tx, h, at, JournalProbed, p.Outcome, d)
 		}
@@ -473,6 +483,66 @@ func probeAudio(ctx context.Context, tx *sql.Tx, id int64, lang string, tracks [
 	return nil
 }
 
+// probeVideo sets the HDR and codec of release id to those of the video
+// track of the tracks, and its quality to the track's by widthQuality under
+// layer LayerProbe, returning that quality; a release whose tracks give no
+// width gets back the quality of its name.
+func probeVideo(ctx context.Context, tx *sql.Tx, id int64, tracks []Track) (string, error) {
+	v, _ := videoTrack(tracks)
+	if q := widthQuality(v.Width); q != "" {
+		_, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET quality = ?, quality_layer = ?, hdr = ?, codec = ? WHERE id = ?",
+			q, LayerProbe, null(v.HDR), null(v.Codec), id)
+		return q, err
+	}
+	var name string
+	var layer sql.NullString
+	if err := tx.QueryRowContext(ctx, "SELECT name, quality_layer FROM torrent_releases WHERE id = ?", id).Scan(&name, &layer); err != nil {
+		return "", err
+	}
+	if layer.Valid {
+		if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET quality = ?, quality_layer = NULL WHERE id = ?", null(names.Parse(name).Quality), id); err != nil {
+			return "", err
+		}
+	}
+	_, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET hdr = ?, codec = ? WHERE id = ?", null(v.HDR), null(v.Codec), id)
+	return "", err
+}
+
+// videoTrack returns the video track of the tracks that carries the film:
+// the first default one of a codec that is not container.Picture, else the
+// first of such a codec; ok is false for none.
+func videoTrack(tracks []Track) (v Track, ok bool) {
+	for _, t := range tracks {
+		if t.Kind != "video" || container.Picture(t.Codec) {
+			continue
+		}
+		if t.Default {
+			return t, true
+		}
+		if !ok {
+			v, ok = t, true
+		}
+	}
+	return v, ok
+}
+
+// widthQuality is the quality of a video frame the width wide, "" for an
+// unknown width; by width alone, a frame cropped to a wider aspect keeps its
+// class.
+func widthQuality(width int) string {
+	switch {
+	case width <= 0:
+		return ""
+	case width >= 3200:
+		return names.Quality2160p
+	case width >= 1800:
+		return names.Quality1080p
+	case width >= 1200:
+		return names.Quality720p
+	}
+	return names.QualitySD
+}
+
 // audioExtensions are the file extensions of audio a release may carry
 // beside its video file, as SQL LIKE patterns.
 var audioExtensions = []string{"%.mka", "%.ac3", "%.eac3", "%.dts", "%.aac", "%.flac", "%.m4a", "%.mp3", "%.opus", "%.wav"}
@@ -529,13 +599,13 @@ func (s *Store) tracks(ctx context.Context, rs []Release) error {
 	return s.each(ctx, func(rows *sql.Rows) error {
 		var id int64
 		var t Track
-		if err := rows.Scan(&id, &t.Kind, &t.Language, &t.LanguageBCP47, &t.Name, &t.Codec, &t.Channels, &t.Width, &t.Height, &t.HDR); err != nil {
+		if err := rows.Scan(&id, &t.Kind, &t.Language, &t.LanguageBCP47, &t.Name, &t.Codec, &t.Channels, &t.Width, &t.Height, &t.HDR, &t.Default); err != nil {
 			return err
 		}
 		i := index[id]
 		rs[i].Tracks = append(rs[i].Tracks, t)
 		return nil
-	}, `SELECT torrent_id, kind, language, language_bcp47, name, codec, channels, width, height, hdr FROM probe_tracks
+	}, `SELECT torrent_id, kind, language, language_bcp47, name, codec, channels, width, height, hdr, is_default FROM probe_tracks
 		WHERE torrent_id IN (`+placeholders(len(ids))+`) ORDER BY torrent_id, idx`, int64Args(ids)...)
 }
 

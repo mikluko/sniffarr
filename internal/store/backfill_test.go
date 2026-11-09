@@ -212,6 +212,32 @@ func TestBackfillProbeOverMarkers(t *testing.T) {
 	requireAudio(t, mustGet(t, s, undetermined.Hash), 1, LayerRules)
 }
 
+func TestBackfillProbeVideo(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	read := insertQuality(t, s, 1, "Heat.1995.1080p", "1080p")
+	yearless := insertQuality(t, s, 2, "Brazil.2160p", "2160p")
+	unknown := insertQuality(t, s, 3, "Alien.1979.1080p", "1080p")
+	require.NoError(t, s.ProbeDone(ctx, read, Probe{Outcome: ProbeTracks, Tracks: []Track{
+		{Kind: "video", Codec: "jpeg", Width: 600}, {Kind: "video", Codec: "V_MPEGH/ISO/HEVC", Width: 3840, HDR: "HDR10"}}}, t0))
+	require.NoError(t, s.ProbeDone(ctx, yearless, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "video", Codec: "avc1", Width: 1920}}}, t0))
+	require.NoError(t, s.ProbeDone(ctx, unknown, Probe{Outcome: ProbeUnknown}, t0))
+	_, err := s.w.ExecContext(ctx, "UPDATE torrent_releases SET quality_layer = NULL, hdr = NULL, codec = NULL, quality = CASE WHEN name LIKE '%2160p' THEN '2160p' ELSE '1080p' END")
+	require.NoError(t, err, "probed before the video track set the quality")
+
+	got := map[string]Backfilled{}
+	require.NoError(t, s.Backfill(ctx, func(b Backfilled) { got[b.Name] = b }))
+	require.Equal(t, Backfilled{Name: "probe video", Rows: 2, Done: true}, got["probe video"])
+	require.Equal(t, []string{"2160p", "HDR10", "V_MPEGH/ISO/HEVC"}, video(t, s, read), "the track after the picture")
+	require.Equal(t, []string{"1080p", "", "avc1"}, video(t, s, yearless))
+	require.Equal(t, []string{"1080p", "", ""}, video(t, s, unknown))
+
+	_, err = s.w.ExecContext(ctx, "DELETE FROM state WHERE key = ?", featuresFilled)
+	require.NoError(t, err, "the features backfill runs again over the release without a year")
+	require.NoError(t, s.Backfill(ctx, nil))
+	require.Equal(t, []string{"1080p", "", "avc1"}, video(t, s, yearless), "the features backfill leaves the probe's quality")
+}
+
 func TestBackfillProbeAttempts(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)

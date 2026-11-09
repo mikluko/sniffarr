@@ -262,5 +262,5 @@ var trackKinds = map[container.Kind]sniffarrv1.TrackKind{
 func trackOf(t container.Track) *sniffarrv1.Track {
 	valid := func(s string) string { return strings.ToValidUTF8(s, "�") }
 	return &sniffarrv1.Track{Kind: trackKinds[t.Kind], Language: valid(t.Language), LanguageBcp47: valid(t.LanguageBCP47), Name: valid(t.Name),
-		Codec: valid(t.Codec), Channels: int32(t.Channels), Width: int32(t.Width), Height: int32(t.Height), Hdr: t.HDR}
+		Codec: valid(t.Codec), Channels: int32(t.Channels), Width: int32(t.Width), Height: int32(t.Height), Hdr: t.HDR, Default: t.Default}
 }

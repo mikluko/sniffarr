@@ -340,7 +340,7 @@ func trackOf(t *sniffarrv1.Track) store.Track {
 		sniffarrv1.TrackKind_TRACK_KIND_SUBTITLE: "subtitle",
 	}
 	return store.Track{Kind: kinds[t.GetKind()], Language: t.GetLanguage(), LanguageBCP47: t.GetLanguageBcp47(), Name: t.GetName(),
-		Codec: t.GetCodec(), Channels: int(t.GetChannels()), Width: int(t.GetWidth()), Height: int(t.GetHeight()), HDR: t.GetHdr()}
+		Codec: t.GetCodec(), Channels: int(t.GetChannels()), Width: int(t.GetWidth()), Height: int(t.GetHeight()), HDR: t.GetHdr(), Default: t.GetDefault()}
 }
 
 // day is the UTC day of t, as the store keys daily usage.

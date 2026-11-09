@@ -26,6 +26,7 @@ import (
 	sniffarrv1 "sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1"
 	"sarak.sh/mikluko/sniffarr/internal/apis/sniffarr/v1/sniffarrv1connect"
 	"sarak.sh/mikluko/sniffarr/internal/audio"
+	"sarak.sh/mikluko/sniffarr/internal/container"
 	"sarak.sh/mikluko/sniffarr/internal/latest"
 	"sarak.sh/mikluko/sniffarr/internal/names"
 	"sarak.sh/mikluko/sniffarr/internal/ui"
@@ -635,6 +636,8 @@ func (s *server) torrent(w http.ResponseWriter, req *http.Request) {
 		DiscoveredVia: discoveries[c.GetDiscovery()],
 		Kind:          ui.Answer{Value: uiOr(kinds, r.GetKind(), "other"), Layer: uiOr(kindLayers, r.GetLayer(), "none")},
 		Source:        ui.Answer{Value: uiOr(sources, r.GetSource(), "none"), Layer: "none"},
+		HDR:           r.GetHdr(),
+		Codec:         container.CodecFamily(r.GetCodec()),
 		Peers:         ui.PeerCounts{Day: c.GetPeers().GetDay(), Week: c.GetPeers().GetWeek(), Month: c.GetPeers().GetMonth()},
 		Work:          summary(c.GetWork()),
 		TMDB:          tmdbWork(r.GetTmdb()),

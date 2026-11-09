@@ -103,7 +103,9 @@ message Release {
   // The ID of the work the release's title is matched to, as
   // BrowseService's WorkSummary.id; empty while it is matched to none.
   string work = 21;
-  // The resolution the name gives; QUALITY_UNSPECIFIED when it gives none.
+  // The resolution of the release's probed video track, classed by its
+  // width, else the one the name gives; QUALITY_UNSPECIFIED when neither
+  // gives one.
   Quality quality = 22;
   // The season and episode the name gives, 0 when it gives none; a whole
   // season has no episode.
@@ -113,9 +115,15 @@ message Release {
   // declares them; empty while the file was not probed or the probe found
   // none.
   repeated Track tracks = 25;
+  // The dynamic range of the release's video track as a probe read it, as
+  // Track's hdr; empty for SDR or while no probe read a video track.
+  string hdr = 26;
+  // The codec of the release's video track as a probe read it, as Track's
+  // codec; empty while no probe read a video track.
+  string codec = 27;
 }
 
-// Quality is a release's resolution as its name gives it.
+// Quality is a release's resolution.
 enum Quality {
   QUALITY_UNSPECIFIED = 0;
   // 2160p, 4K or UHD.

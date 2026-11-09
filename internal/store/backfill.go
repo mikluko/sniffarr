@@ -56,6 +56,10 @@ const probeMarkersFilled = "probe_markers:"
 // attempts kept by releases probed before a read cleared them were cleared.
 const probeAttemptsFilled = "probe_attempts"
 
+// probeVideoFilled is the state key that records that the releases whose
+// tracks were read got the quality, HDR and codec of their video track.
+const probeVideoFilled = "probe_video"
+
 // Backfilled is the progress of one backfill within one Backfill call.
 type Backfilled struct {
 	Name string
@@ -69,7 +73,8 @@ type Backfilled struct {
 // backfills of stored torrents not yet done: the year, season, episode and
 // quality of those without a year or a quality, and the source of those
 // without one, from their names, no failed attempts for a release whose last
-// probe read it, as probed records, and, per language of
+// probe read it, as probed records, the quality, HDR and codec of a release
+// whose tracks were read, as probeVideo sets them, and, per language of
 // Options.Languages, a marker for every torrent whose name has the
 // language's audio.Language.Codes, no marker of the rules layer
 // that only a subtitle file's path gave, the mark and studios of every
@@ -91,6 +96,9 @@ func (s *Store) Backfill(ctx context.Context, progress func(Backfilled)) error {
 	}
 	if err := s.backfill(ctx, "probe attempts", probeAttemptsFilled, progress, s.probeAttemptsBatch); err != nil {
 		return fmt.Errorf("probe attempts: %w", err)
+	}
+	if err := s.backfill(ctx, "probe video", probeVideoFilled, progress, s.probeVideoBatch); err != nil {
+		return fmt.Errorf("probe video: %w", err)
 	}
 	for _, tag := range s.opts.Languages {
 		l, ok := audio.Lookup(tag)
@@ -216,7 +224,7 @@ func (s *Store) featuresBatch(ctx context.Context, after int64) (int, int64, fun
 	}
 	return len(batch), batch[len(batch)-1].id, func(tx *sql.Tx) error {
 		for _, r := range batch {
-			if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET year = ?, season = ?, episode = ?, quality = ? WHERE id = ?",
+			if _, err := tx.ExecContext(ctx, "UPDATE torrent_releases SET year = ?, season = ?, episode = ?, quality = CASE WHEN quality_layer IS NULL THEN ? ELSE quality END WHERE id = ?",
 				nullInt(r.p.Year), nullInt(r.p.Season), nullInt(r.p.Episode), null(r.p.Quality), r.id); err != nil {
 				return err
 			}
@@ -283,6 +291,48 @@ func (s *Store) probeAttemptsBatch(ctx context.Context, after int64) (int, int64
 	return len(ids), ids[len(ids)-1], func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, "UPDATE probe_releases SET attempts = 0, retry_at = NULL WHERE torrent_id IN ("+placeholders(len(ids))+")", int64Args(ids)...)
 		return err
+	}, nil
+}
+
+// probeVideoBatch reads the releases after the row ID after whose last probe
+// read their tracks, and sets their quality, HDR and codec as probeVideo
+// does.
+func (s *Store) probeVideoBatch(ctx context.Context, after int64) (int, int64, func(*sql.Tx) error, error) {
+	var ids []int64
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+		return nil
+	}, "SELECT torrent_id FROM probe_releases WHERE torrent_id > ? AND outcome = ? ORDER BY torrent_id LIMIT ?", after, ProbeTracks, s.backfillBatch); err != nil {
+		return 0, 0, nil, err
+	}
+	if len(ids) == 0 {
+		return 0, 0, nil, nil
+	}
+	tracks := map[int64][]Track{}
+	if err := s.each(ctx, func(rows *sql.Rows) error {
+		var id int64
+		var t Track
+		if err := rows.Scan(&id, &t.Codec, &t.Width, &t.HDR, &t.Default); err != nil {
+			return err
+		}
+		t.Kind = "video"
+		tracks[id] = append(tracks[id], t)
+		return nil
+	}, "SELECT torrent_id, codec, width, hdr, is_default FROM probe_tracks WHERE kind = 'video' AND torrent_id IN ("+placeholders(len(ids))+") ORDER BY torrent_id, idx",
+		int64Args(ids)...); err != nil {
+		return 0, 0, nil, err
+	}
+	return len(ids), ids[len(ids)-1], func(tx *sql.Tx) error {
+		for _, id := range ids {
+			if _, err := probeVideo(ctx, tx, id, tracks[id]); err != nil {
+				return err
+			}
+		}
+		return nil
 	}, nil
 }
 

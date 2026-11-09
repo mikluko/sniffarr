@@ -28,7 +28,8 @@ the task's `max_bytes` stops there, and the tracks stay unknown, as they do
 for a track list of more than 128 tracks, which the API takes from no
 fetcher either. Of each
 track it records the kind, the language as ISO 639-2 and as BCP-47, the
-name, the codec, an audio track's channels, and a video track's size and
+name, the codec, whether it is a default track (Matroska's FlagDefault,
+MP4's track enabled flag), an audio track's channels, and a video track's size and
 dynamic range: `DV` for a Dolby Vision configuration (Matroska's
 BlockAdditionMapping, MP4's `dvcC`, `dvvC` or `dvwC`), else `HLG` or
 `HDR10` by the transfer characteristics, or `HDR10` for mastering metadata.
@@ -80,7 +81,8 @@ before `-probe-timeout`). The release's journal records each request, once a
 day a search that ordered its probe, with the query, the first hand-out of
 each order with the piece data it may download and when the hold ends,
 and each outcome with the piece data downloaded, the first 32
-tracks read with how many there were when more, the times the order was
+tracks read with how many there were when more, the quality the video
+track set, the times the order was
 handed out when that was more than once and, for a failure, whether the
 attempts have run out and, when it waits out a backoff, when it is due
 again. A failed probe is due again after `SNIFFARR_PROBE_BACKOFF`, doubled
@@ -116,6 +118,19 @@ A probe handed out counts as `SNIFFARR_PROBE_MAX_BYTES` until its result
 reports what it downloaded. Orders at P3 stop at 75% of the day's bytes by
 default, `SNIFFARR_PROBE_SEARCH_RESERVE` leaving the rest for requested and
 searched ones.
+
+A probe that read the tracks gives the release the dynamic range and the
+codec of its video track: the first default video track, else the first
+video track, passing over those of an image codec (Matroska's `V_MJPEG`,
+MP4's `jpeg`, `mjpa`, `mjpb`, `png `, `gif `, `tiff` or `bmp `), which
+carry cover art. The track's width sets the release's quality under layer
+`probe`, over the one its name gives: 3200 pixels or more is `2160p`,
+1800 `1080p`, 1200 `720p`, and less `sd`, so a frame cropped to a wider
+aspect keeps its class. A video track without a width leaves the name's
+quality, and a probe that reads no video track gives it back and clears the
+dynamic range and codec. A release never probed has the name's quality and
+neither. The quality filters of the web UI and `BrowseService` take the
+release's quality, whichever set it.
 
 With the audio extension on, a probe that read the tracks sets the
 probability of an audio track in each configured language, under layer

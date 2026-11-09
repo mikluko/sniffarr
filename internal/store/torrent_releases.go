@@ -70,11 +70,16 @@ type Release struct {
 	// Match is the match of TitleKey when Options.TMDB is set.
 	Match Match
 	// Year, Season and Episode are 0 when the name gives none; Quality is
-	// one of names.Qualities, or "".
+	// one of names.Qualities, or "": that of the video track a probe read
+	// by its width, else the name's.
 	Year    int
 	Season  int
 	Episode int
 	Quality string
+	// HDR and Codec are those of the video track a probe read, "" while no
+	// probe read one.
+	HDR   string
+	Codec string
 	// PeersWeek is the torrent's distinct peers over the last 7 days, as
 	// ComputeTop last counted them.
 	PeersWeek int64
@@ -309,7 +314,8 @@ type Query struct {
 const releaseColumns = `t.id, t.infohash, t.name, t.size, t.file_count, coalesce(t.kind, ''), coalesce(t.kind_layer, ''),
 	coalesce(t.kind_confidence, 0), coalesce(t.source, ''), coalesce(t.source_confidence, 0),
 	t.classified_at IS NOT NULL, t.first_seen, t.last_seen, coalesce(t.title_key, ''), coalesce(t.work, 0),
-	coalesce(t.year, 0), coalesce(t.season, 0), coalesce(t.episode, 0), coalesce(t.quality, ''), t.peers_week`
+	coalesce(t.year, 0), coalesce(t.season, 0), coalesce(t.episode, 0), coalesce(t.quality, ''), t.peers_week,
+	coalesce(t.hdr, ''), coalesce(t.codec, '')`
 
 // Search returns releases matching q, best text match first, or most
 // recently seen first when q has no text.
@@ -424,7 +430,7 @@ func scanRelease(row interface{ Scan(...any) error }) (Release, error) {
 	var hash []byte
 	var first, last int64
 	err := row.Scan(&r.ID, &hash, &r.Name, &r.Size, &r.FileCount, &r.Kind, &r.KindLayer, &r.KindConfidence, &r.Source, &r.SourceConfidence,
-		&r.Classified, &first, &last, &r.TitleKey, &r.Work, &r.Year, &r.Season, &r.Episode, &r.Quality, &r.PeersWeek)
+		&r.Classified, &first, &last, &r.TitleKey, &r.Work, &r.Year, &r.Season, &r.Episode, &r.Quality, &r.PeersWeek, &r.HDR, &r.Codec)
 	if err != nil {
 		return Release{}, err
 	}

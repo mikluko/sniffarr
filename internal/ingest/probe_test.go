@@ -158,7 +158,7 @@ func TestProbeTaskBudget(t *testing.T) {
 
 	f.result(t, &sniffarrv1.ProbeResultRequest{Infohash: a[:], Downloaded: 16 << 20, Outcome: &sniffarrv1.ProbeResultRequest_File{File: &sniffarrv1.ProbedFile{
 		Path: "Alien.1979.1080p.mkv", Format: "matroska", Tracks: []*sniffarrv1.Track{
-			{Kind: sniffarrv1.TrackKind_TRACK_KIND_VIDEO, Codec: "V_MPEG4/ISO/AVC", Width: 1920, Height: 800},
+			{Kind: sniffarrv1.TrackKind_TRACK_KIND_VIDEO, Codec: "V_MPEG4/ISO/AVC", Width: 1920, Height: 800, Default: true},
 			{Kind: sniffarrv1.TrackKind_TRACK_KIND_AUDIO, Language: "rus", Name: "MVO", Codec: "A_AC3", Channels: 6},
 		}}}})
 	traffic, err := f.st.ProbeTraffic(ctx, f.today())
@@ -168,6 +168,8 @@ func TestProbeTaskBudget(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, r.Tracks, 2)
 	require.Equal(t, store.Track{Kind: "audio", Language: "rus", Name: "MVO", Codec: "A_AC3", Channels: 6}, r.Tracks[1])
+	require.True(t, r.Tracks[0].Default)
+	require.Equal(t, "V_MPEG4/ISO/AVC", r.Codec, "the video track's codec goes to the release")
 	require.Equal(t, store.LayerProbe, r.Audio[0].Layer)
 
 	f.result(t, timeout(b, 0))

@@ -375,6 +375,8 @@ func SampleTorrent(b Base, all bool, cs string) TorrentPage {
 		Work:  work, RankInWork: 1,
 		Kind:         Answer{Value: "movie", Layer: "classifier", Confidence: fp(.93)},
 		Source:       Answer{Value: "web", Layer: "rules"},
+		HDR:          "HDR10",
+		Codec:        "HEVC",
 		Audio:        []Audio{{Lang: "ru", Script: "cyrillic", Probability: fp(.88)}},
 		Rules:        []RuleHit{{"source.web", "WEB-DL"}, {"quality.1080p", "1080р"}},
 		Journal:      sampleJournal(b.Now.Add(-41*time.Hour), name),

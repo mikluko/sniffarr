@@ -25,6 +25,8 @@ message Track {
   // Video dynamic range: "DV", "HDR10" or "HLG"; empty for SDR, unknown,
   // or other kinds.
   string hdr = 9;
+  // Matroska's FlagDefault, or MP4's track enabled flag.
+  bool default = 10;
 }
 
 enum TrackKind {

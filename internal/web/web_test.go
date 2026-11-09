@@ -205,6 +205,8 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Prob
 	require.NoError(t, err)
 	_, err = st.Classify(ctx, r.ID, store.Classification{Source: "web", SourceConfidence: 0.8, Audio: map[string]float64{"ru": 0.7}}, now)
 	require.NoError(t, err)
+	require.NoError(t, st.ProbeDone(ctx, hash(5), store.Probe{Outcome: store.ProbeTracks, Tracks: []store.Track{
+		{Kind: "video", Codec: "hvc1", Width: 1920, Height: 800, HDR: "HDR10", Default: true}}}, now.Add(-2*time.Hour)))
 	_, err = st.Reject(ctx, hash(20), rules.Small, "small", 1<<20, now)
 	require.NoError(t, err)
 	grab := func(h store.Hash, key string, at time.Time) {
@@ -617,6 +619,10 @@ func TestTorrent(t *testing.T) {
 	body = page(t, get(t, h, "/t/"+hexOf(5), ""))
 	require.Contains(t, body, `<div class="tm-poster tm-none" aria-hidden="true">No poster</div>`, "matched without a poster")
 	require.Contains(t, body, `<tr><td>Source</td><td>remux</td><td>rules</td><td class="r">—</td></tr>`, "a source not classified is the rules'")
+	require.Contains(t, body, `<tr><td>HDR</td><td>HDR10</td><td>probe</td><td class="r">—</td></tr>`, "the probed video track's dynamic range")
+	require.Contains(t, body, `<tr><td>Codec</td><td>HEVC</td><td>probe</td><td class="r">—</td></tr>`, "its codec by family")
+	require.Contains(t, page(t, get(t, h, "/t/"+hexOf(5)+"?lang=ru", "")), `<tr><td>Кодек</td><td>HEVC</td><td>проба</td><td class="r">—</td></tr>`)
+	require.NotContains(t, page(t, get(t, h, "/t/"+hexOf(1), "")), "<td>HDR</td>", "no probe, no HDR")
 
 	body = page(t, get(t, h, "/t/"+hexOf(6), ""))
 	require.Contains(t, body, `<section class="tm tm-unmatched" aria-label="TMDB">`, "looked up and not found")

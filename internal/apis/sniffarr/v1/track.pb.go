@@ -94,7 +94,9 @@ type Track struct {
 	Height int32 `protobuf:"varint,8,opt,name=height,proto3" json:"height,omitempty"`
 	// Video dynamic range: "DV", "HDR10" or "HLG"; empty for SDR, unknown,
 	// or other kinds.
-	Hdr           string `protobuf:"bytes,9,opt,name=hdr,proto3" json:"hdr,omitempty"`
+	Hdr string `protobuf:"bytes,9,opt,name=hdr,proto3" json:"hdr,omitempty"`
+	// Matroska's FlagDefault, or MP4's track enabled flag.
+	Default       bool `protobuf:"varint,10,opt,name=default,proto3" json:"default,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -192,11 +194,18 @@ func (x *Track) GetHdr() string {
 	return ""
 }
 
+func (x *Track) GetDefault() bool {
+	if x != nil {
+		return x.Default
+	}
+	return false
+}
+
 var File_sniffarr_v1_track_proto protoreflect.FileDescriptor
 
 const file_sniffarr_v1_track_proto_rawDesc = "" +
 	"\n" +
-	"\x17sniffarr/v1/track.proto\x12\vsniffarr.v1\"\xfc\x01\n" +
+	"\x17sniffarr/v1/track.proto\x12\vsniffarr.v1\"\x96\x02\n" +
 	"\x05Track\x12*\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x16.sniffarr.v1.TrackKindR\x04kind\x12\x1a\n" +
 	"\blanguage\x18\x02 \x01(\tR\blanguage\x12%\n" +
@@ -206,7 +215,9 @@ const file_sniffarr_v1_track_proto_rawDesc = "" +
 	"\bchannels\x18\x06 \x01(\x05R\bchannels\x12\x14\n" +
 	"\x05width\x18\a \x01(\x05R\x05width\x12\x16\n" +
 	"\x06height\x18\b \x01(\x05R\x06height\x12\x10\n" +
-	"\x03hdr\x18\t \x01(\tR\x03hdr*l\n" +
+	"\x03hdr\x18\t \x01(\tR\x03hdr\x12\x18\n" +
+	"\adefault\x18\n" +
+	" \x01(\bR\adefault*l\n" +
 	"\tTrackKind\x12\x1a\n" +
 	"\x16TRACK_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10TRACK_KIND_VIDEO\x10\x01\x12\x14\n" +

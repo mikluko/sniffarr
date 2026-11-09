@@ -345,3 +345,95 @@ func TestProbeDoneResetsFailures(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, final, "the failures before a read do not count")
 }
+
+func TestWidthQuality(t *testing.T) {
+	for _, tc := range []struct {
+		width int
+		want  string
+	}{
+		{0, ""},
+		{720, "sd"},
+		{1199, "sd"},
+		{1200, "720p"},
+		{1280, "720p"},
+		{1800, "1080p"},
+		{1920, "1080p"},
+		{3200, "2160p"},
+		{3840, "2160p"},
+	} {
+		require.Equal(t, tc.want, widthQuality(tc.width), tc.width)
+	}
+}
+
+func TestVideoTrack(t *testing.T) {
+	audio := Track{Kind: "audio", Codec: "A_AC3", Default: true}
+	cover := Track{Kind: "video", Codec: "jpeg", Width: 600, Default: true}
+	first := Track{Kind: "video", Codec: "hvc1", Width: 1280}
+	second := Track{Kind: "video", Codec: "hvc1", Width: 1920, Default: true}
+	for _, tc := range []struct {
+		name   string
+		tracks []Track
+		want   Track
+		ok     bool
+	}{
+		{"none", []Track{audio}, Track{}, false},
+		{"a picture alone", []Track{cover}, Track{}, false},
+		{"the first without a default", []Track{audio, first, {Kind: "video", Codec: "avc1", Width: 720}}, first, true},
+		{"the default", []Track{cover, first, second}, second, true},
+	} {
+		got, ok := videoTrack(tc.tracks)
+		require.Equal(t, tc.ok, ok, tc.name)
+		require.Equal(t, tc.want, got, tc.name)
+	}
+}
+
+// insertQuality stores a release of the name with a video file and the
+// quality its name gives.
+func insertQuality(t *testing.T, s *Store, b byte, name, quality string) Hash {
+	t.Helper()
+	tr := torrent(b, name, name+".mkv")
+	tr.Quality = quality
+	_, _, err := s.Insert(context.Background(), tr)
+	require.NoError(t, err)
+	return tr.Hash
+}
+
+// video returns the quality, HDR and codec of the stored release of h.
+func video(t *testing.T, s *Store, h Hash) []string {
+	t.Helper()
+	r := mustGet(t, s, h)
+	return []string{r.Quality, r.HDR, r.Codec}
+}
+
+func TestProbeDoneVideo(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	cropped := insertQuality(t, s, 1, "Dune.2021.2160p", "2160p")
+	named := insertQuality(t, s, 2, "Heat.1995.1080p", "1080p")
+	unprobed := insertQuality(t, s, 3, "Alien.1979.1080p", "1080p")
+	widthless := insertQuality(t, s, 4, "Brazil.1985.1080p", "1080p")
+
+	require.NoError(t, s.ProbeDone(ctx, cropped, Probe{Outcome: ProbeTracks, Tracks: []Track{
+		{Kind: "video", Codec: "V_MPEGH/ISO/HEVC", Width: 3840, Height: 1600, HDR: "DV", Default: true}}}, t0))
+	require.NoError(t, s.ProbeDone(ctx, named, Probe{Outcome: ProbeTracks, Tracks: []Track{
+		{Kind: "video", Codec: "avc1", Width: 1280, Height: 534}}}, t0))
+	require.NoError(t, s.ProbeDone(ctx, widthless, Probe{Outcome: ProbeTracks, Tracks: []Track{{Kind: "video", Codec: "V_MS/VFW/FOURCC"}}}, t0))
+
+	require.Equal(t, []string{"2160p", "DV", "V_MPEGH/ISO/HEVC"}, video(t, s, cropped), "a cropped frame keeps its class")
+	require.Equal(t, []string{"720p", "", "avc1"}, video(t, s, named), "the probe's quality wins over the name's")
+	require.Equal(t, []string{"1080p", "", ""}, video(t, s, unprobed))
+	require.Equal(t, []string{"1080p", "", "V_MS/VFW/FOURCC"}, video(t, s, widthless), "a track without a width leaves the name's quality")
+	require.True(t, mustGet(t, s, cropped).Tracks[0].Default)
+
+	got, err := s.Journal(ctx, named, 10)
+	require.NoError(t, err)
+	require.Contains(t, got[len(got)-1].Detail, `"quality":"720p"`)
+
+	rs, _, err := s.Page(ctx, Browse{Quality: "720p", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, rs, 1)
+	require.Equal(t, named, rs[0].Hash, "the quality filter takes the probe's")
+
+	require.NoError(t, s.ProbeDone(ctx, named, Probe{Outcome: ProbeUnknown}, t0.Add(time.Hour)))
+	require.Equal(t, []string{"1080p", "", ""}, video(t, s, named), "a probe that read no tracks gives back the name's quality")
+}

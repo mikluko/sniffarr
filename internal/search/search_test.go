@@ -39,6 +39,15 @@ func TestSearchSeason(t *testing.T) {
 	}
 }
 
+func TestReleaseVideo(t *testing.T) {
+	r := release(store.Release{Quality: "720p", HDR: "HDR10", Codec: "hvc1",
+		Tracks: []store.Track{{Kind: "video", Codec: "hvc1", Width: 1280, HDR: "HDR10", Default: true}}}, "en")
+	require.Equal(t, sniffarrv1.Quality_QUALITY_720P, r.GetQuality())
+	require.Equal(t, "HDR10", r.GetHdr())
+	require.Equal(t, "hvc1", r.GetCodec())
+	require.True(t, r.GetTracks()[0].GetDefault())
+}
+
 func TestWorkID(t *testing.T) {
 	require.Equal(t, "m348", WorkID(store.Work{TMDBID: 348, Details: store.Details{Type: store.TypeMovie}}))
 	require.Equal(t, "tv1399", WorkID(store.Work{TMDBID: 1399, Details: store.Details{Type: store.TypeTV}}))

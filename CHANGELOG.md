@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The metrics `sniffarr.source.requests` and `sniffarr.source.listings` count the requests to each Torznab source by `sniffarr.source.result` and its listings by `sniffarr.source.outcome`.
 - The chart's `api.serviceAccountTokens` projects service account tokens with the audiences it names into the api pod, each at `/var/run/secrets/tokens/<name>`.
 - The `-seed-idle` flag, 15 minutes by default and rendered from the chart's `probe.idle`, caps how long a probed torrent no connected peer needs is seeded without uploading.
+- A release's card shows the dynamic range and the codec family of the video track a probe read, which `Release.hdr` and `Release.codec` carry, and stored releases get them at the first start.
 
 ### Changed
 
@@ -41,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Torznab search orders no probe of a release without peers.
 - The projection of the current hour, day and week on the data page weighs the period's pace so far against the count over the same length of time ending now, the period's weight rising from none at its start to three quarters halfway and all at its end, from the period's first moment.
 - A probed torrent no connected peer needs at the first check after the probe is removed, counted in `sniffarr.seed.removals` as `useless`, and one no peer has needed and that has uploaded nothing for `-seed-idle` is removed as `idle`.
+- The quality of a probed release is its video track's by the frame's width, `2160p` from 3200 pixels, `1080p` from 1800, `720p` from 1200 and `sd` below, over the one its name gives, and stored releases get theirs at the first start.
 
 ### Fixed
 

@@ -210,6 +210,7 @@ func TestJournalDetail(t *testing.T) {
 			"tracks": []any{"video::hevc", "audio:rus:eac3", "subtitle:eng:subrip", "other:x:y"}}},
 			[]DetailPair{{"вероятность звуковой дорожки", "русская 88%", ""}, {"скачано", "4,0\u00a0МБ", ""}, {"попытки исчерпаны", "нет", ""},
 				{"дорожки", "видео hevc, звук rus eac3, субтитры eng subrip, other x y", ""}}},
+		{"probed quality", "ru", JournalEntry{Kind: "probed", Detail: map[string]any{"quality": "sd"}}, []DetailPair{{"качество", "SD", ""}}},
 		{"a codec with colons", "en", JournalEntry{Kind: "probed", Detail: map[string]any{"tracks": []any{"audio:eng:A:B"}}}, []DetailPair{{"tracks", "audio eng A:B", ""}}},
 		{"stored", "en", JournalEntry{Kind: "fetched", Detail: map[string]any{"kind": "movie", "kind_layer": "reuse", "discovery": "announce", "size": 26629001216.0, "leases": 3.0}},
 			[]DetailPair{{"discovered by", "announce", ""}, {"kind", "movie", ""}, {"kind decided by", "same title", ""}, {"leased", "3 times", ""}, {"size", "24.8\u00a0GB", ""}}},

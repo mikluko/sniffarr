@@ -258,6 +258,8 @@ func release(r store.Release, lang string) *sniffarrv1.Release {
 		Quality:          qualities[r.Quality],
 		Season:           int32(r.Season),
 		Episode:          int32(r.Episode),
+		Hdr:              r.HDR,
+		Codec:            r.Codec,
 	}
 	if w := r.Match.Work; w != nil {
 		out.Work = WorkID(*w)
@@ -279,7 +281,7 @@ func release(r store.Release, lang string) *sniffarrv1.Release {
 	}
 	for _, t := range r.Tracks {
 		out.Tracks = append(out.Tracks, &sniffarrv1.Track{Kind: trackKinds[t.Kind], Language: t.Language, LanguageBcp47: t.LanguageBCP47, Name: t.Name,
-			Codec: t.Codec, Channels: int32(t.Channels), Width: int32(t.Width), Height: int32(t.Height), Hdr: t.HDR})
+			Codec: t.Codec, Channels: int32(t.Channels), Width: int32(t.Width), Height: int32(t.Height), Hdr: t.HDR, Default: t.Default})
 	}
 	return out
 }

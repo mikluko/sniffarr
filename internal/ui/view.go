@@ -429,6 +429,8 @@ type Torrent struct {
 
 	Kind   Answer
 	Source Answer
+	HDR    string  // the probed video track's "DV" | "HDR10" | "HLG"; "" hides the row
+	Codec  string  // the probed video track's codec family, as container.CodecFamily names it; "" hides the row
 	Audio  []Audio // card shows every configured language; missing ones render as "—"
 	Rules  []RuleHit
 
@@ -502,6 +504,7 @@ var journalValues = map[string]string{
 	"arr.app":           "journal.app.",
 	"matched.layer":     "journal.matchlayer.",
 	"probe_wanted.t":    "journal.searchtype.",
+	"probed.quality":    "quality.",
 }
 
 // journalAliases maps a message key a value would take to the key of the

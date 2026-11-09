@@ -65,7 +65,8 @@ error and a 404 included, carries the header `Server: sniffarr/<version>`
   the layer that decided its kind, whether the classifier has examined it, its audio
   entries with their marks, its quality, season and episode, its work as
   `work`, `m348` or `tv1399`, the work's IDs, the probed `tracks` of its
-  main video file, and `tmdb`, a `TMDBWork`: what TMDB knows of the
+  main video file with the `hdr` and `codec` of its video track, and
+  `tmdb`, a `TMDBWork`: what TMDB knows of the
   work its title is matched to, with the title, overview and genres in the
   request's `lang`, `ru` or `en` (`en` when empty), falling back to the other
   language and the title to the original; absent while the title was never

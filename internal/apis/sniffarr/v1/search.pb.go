@@ -22,7 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Quality is a release's resolution as its name gives it.
+// Quality is a release's resolution.
 type Quality int32
 
 const (
@@ -619,7 +619,9 @@ type Release struct {
 	// The ID of the work the release's title is matched to, as
 	// BrowseService's WorkSummary.id; empty while it is matched to none.
 	Work string `protobuf:"bytes,21,opt,name=work,proto3" json:"work,omitempty"`
-	// The resolution the name gives; QUALITY_UNSPECIFIED when it gives none.
+	// The resolution of the release's probed video track, classed by its
+	// width, else the one the name gives; QUALITY_UNSPECIFIED when neither
+	// gives one.
 	Quality Quality `protobuf:"varint,22,opt,name=quality,proto3,enum=sniffarr.v1.Quality" json:"quality,omitempty"`
 	// The season and episode the name gives, 0 when it gives none; a whole
 	// season has no episode.
@@ -628,7 +630,13 @@ type Release struct {
 	// The tracks of the release's main video file, as its container header
 	// declares them; empty while the file was not probed or the probe found
 	// none.
-	Tracks        []*Track `protobuf:"bytes,25,rep,name=tracks,proto3" json:"tracks,omitempty"`
+	Tracks []*Track `protobuf:"bytes,25,rep,name=tracks,proto3" json:"tracks,omitempty"`
+	// The dynamic range of the release's video track as a probe read it, as
+	// Track's hdr; empty for SDR or while no probe read a video track.
+	Hdr string `protobuf:"bytes,26,opt,name=hdr,proto3" json:"hdr,omitempty"`
+	// The codec of the release's video track as a probe read it, as Track's
+	// codec; empty while no probe read a video track.
+	Codec         string `protobuf:"bytes,27,opt,name=codec,proto3" json:"codec,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -829,6 +837,20 @@ func (x *Release) GetTracks() []*Track {
 		return x.Tracks
 	}
 	return nil
+}
+
+func (x *Release) GetHdr() string {
+	if x != nil {
+		return x.Hdr
+	}
+	return ""
+}
+
+func (x *Release) GetCodec() string {
+	if x != nil {
+		return x.Codec
+	}
+	return ""
 }
 
 // ExternalId is a work's ID with one provider: "tmdb", "imdb", "tvdb" or
@@ -1219,7 +1241,7 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04lang\x18\x02 \x01(\tR\x04lang\"=\n" +
 	"\vGetResponse\x12.\n" +
-	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xa7\a\n" +
+	"\arelease\x18\x01 \x01(\v2\x14.sniffarr.v1.ReleaseR\arelease\"\xcf\a\n" +
 	"\aRelease\x12\x1a\n" +
 	"\binfohash\x18\x01 \x01(\fR\binfohash\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1251,7 +1273,9 @@ const file_sniffarr_v1_search_proto_rawDesc = "" +
 	"\aquality\x18\x16 \x01(\x0e2\x14.sniffarr.v1.QualityR\aquality\x12\x16\n" +
 	"\x06season\x18\x17 \x01(\x05R\x06season\x12\x18\n" +
 	"\aepisode\x18\x18 \x01(\x05R\aepisode\x12*\n" +
-	"\x06tracks\x18\x19 \x03(\v2\x12.sniffarr.v1.TrackR\x06tracksJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
+	"\x06tracks\x18\x19 \x03(\v2\x12.sniffarr.v1.TrackR\x06tracks\x12\x10\n" +
+	"\x03hdr\x18\x1a \x01(\tR\x03hdr\x12\x14\n" +
+	"\x05codec\x18\x1b \x01(\tR\x05codecJ\x04\b\x06\x10\aR\rrussian_audio\"8\n" +
 	"\n" +
 	"ExternalId\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x0e\n" +
