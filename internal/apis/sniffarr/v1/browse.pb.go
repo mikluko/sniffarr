@@ -2348,10 +2348,10 @@ func (x *JournalResponse) GetOlder() int64 {
 // revived), leased (fetch), fetched (stored, rejected, duplicate),
 // fetch_failed (no_peers, timeout, dropped), evicted (aged, oversize),
 // classified (classifier, reuse, failed), matched (tmdb, classifier, arr,
-// earlier, none, error), arr (grab, import), probe_wanted (search,
-// request), probe_leased (request, retry, search, background), probed
-// (tracks, unknown, no_peers, timeout), peers_wanted (request), deleted
-// (idle, expired).
+// earlier, none, error), arr (grab, import), listed (stored, queued,
+// rejected), probe_wanted (search, request), probe_leased (request, retry,
+// search, background), probed (tracks, unknown, no_peers, timeout),
+// peers_wanted (request), deleted (idle, expired).
 type JournalEntry struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// When the event happened; for a grab or an import Radarr or Sonarr

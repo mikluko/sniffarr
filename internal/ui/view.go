@@ -567,15 +567,17 @@ func (b Base) journalKey(kind, key string) string {
 // journalValue writes the typed value of the key of the entry and the page
 // it links to, "" for none: a moment by its clock alone on the entry's day in
 // the zone of Loc, else by TimeFull; an Infohash as its first 8 characters
-// linking to its card; a list by commas, unlinked; an object as "key value"
-// by commas, a probability in audio as a percentage; any other as
-// journalScalar writes it.
+// linking to its card; a Link by its label; a list by commas, unlinked; an
+// object as "key value" by commas, a probability in audio as a percentage;
+// any other as journalScalar writes it.
 func (b Base) journalValue(e JournalEntry, key string, v any) (string, string) {
 	switch x := v.(type) {
 	case time.Time:
 		return b.journalTime(e.At, x), ""
 	case Infohash:
 		return string(x[:8]), "/t/" + string(x)
+	case Link:
+		return x.Label, x.URL
 	case []any:
 		parts := make([]string, len(x))
 		for i, el := range x {

@@ -312,7 +312,7 @@ func TestMigrateModules(t *testing.T) {
 	for _, name := range []string{"torrent_releases", "torrent_releases_fts", "torrent_files", "torrent_audio", "task_dead", "task_backlog",
 		"ingest_rejected", "ingest_token_usage", "stat_peers_by_hour", "stat_peers_by_day", "stat_top", "tmdb_works", "tmdb_ids", "state",
 		"torrent_releases_fts_data", "torrent_releases_fts_idx", "torrent_releases_fts_docsize", "torrent_releases_fts_config", "torrent_journal",
-		"stat_top_history"} {
+		"stat_top_history", "torznab_listings"} {
 		require.Contains(t, names, "table "+name)
 	}
 	for _, name := range names {
@@ -329,6 +329,7 @@ func TestMigrateModules(t *testing.T) {
 		"tmdb_matches_work", "torrent_releases_idle", "torrent_releases_counts", "torrent_releases_first_seen", "ingest_rejected_reason",
 		"arr_events_work", "arr_events_infohash", "arr_events_latest",
 		"torrent_journal_infohash", "torrent_journal_at", "torrent_journal_kind", "stat_top_history_work",
+		"torznab_listings_infohash", "torznab_listings_listed_at",
 	}
 	var gotIndexes []string
 	require.NoError(t, s.each(ctx, func(rows *sql.Rows) error {
@@ -348,7 +349,7 @@ func TestMigrateModules(t *testing.T) {
 	}
 	var version int
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT version FROM schema_migrations WHERE component = 'store'").Scan(&version))
-	require.Equal(t, 33, version)
+	require.Equal(t, 34, version)
 	var kept []byte
 	require.NoError(t, db.R.QueryRowContext(ctx, "SELECT value FROM state WHERE key = 'peer_hash_key'").Scan(&kept))
 	require.Equal(t, []byte{0}, kept, "the settings rows move to state")

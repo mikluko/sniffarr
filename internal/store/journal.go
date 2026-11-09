@@ -36,6 +36,9 @@ const (
 	JournalMatched = "matched"
 	// JournalArr is an event Radarr or Sonarr reported: grab, import.
 	JournalArr = "arr"
+	// JournalListed is a Torznab source's first listing of a hash: stored,
+	// queued, rejected.
+	JournalListed = "listed"
 	// JournalProbeWanted is a probe asked for: search, request.
 	JournalProbeWanted = "probe_wanted"
 	// JournalProbeLeased is a probe task handed to a prober: request,
@@ -61,6 +64,7 @@ var JournalOutcomes = map[string][]string{
 	JournalClassified:  {LayerClassifier, LayerReuse, "failed"},
 	JournalMatched:     {LayerTMDB, LayerClassifier, LayerArr, MatchEarlier, "none", "error"},
 	JournalArr:         {EventGrab, EventImport},
+	JournalListed:      {"stored", "queued", "rejected"},
 	JournalProbeWanted: {"search", "request"},
 	JournalProbeLeased: {"request", "retry", "search", "background"},
 	JournalProbed:      {ProbeTracks, ProbeUnknown, ProbeNoPeers, ProbeTimeout},
