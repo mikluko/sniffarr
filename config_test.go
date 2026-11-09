@@ -26,6 +26,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	sniffer "sarak.sh/mikluko/sniffarr/internal/sniff"
+	"sarak.sh/mikluko/sniffarr/internal/sources"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 	"sarak.sh/mikluko/sniffarr/internal/stun"
 	"sarak.sh/mikluko/sniffarr/internal/tmdb"
@@ -305,6 +306,39 @@ func TestLoadAPI(t *testing.T) {
 		{name: "arr url without key", env: with("SNIFFARR_SONARR_URL", "http://sonarr:8989"), err: "SNIFFARR_SONARR_URL or SNIFFARR_SONARR_API_URL, and SNIFFARR_SONARR_API_KEY: set a URL with the key or neither"},
 		{name: "arr key without url", env: with("SNIFFARR_RADARR_API_KEY", "rk"), err: "SNIFFARR_RADARR_URL or SNIFFARR_RADARR_API_URL, and SNIFFARR_RADARR_API_KEY: set a URL with the key or neither"},
 		{name: "arr url not http", env: with("SNIFFARR_RADARR_URL", "radarr:7878", "SNIFFARR_RADARR_API_KEY", "rk"), err: "SNIFFARR_RADARR_URL: want an http or https URL"},
+		{name: "sources", env: with("SNIFFARR_SOURCES", "spidarr, jackett_1", "SNIFFARR_SOURCES_INTERVAL", "5m",
+			"SNIFFARR_SOURCE_SPIDARR_URL", "http://spidarr.spidarr:8080/api", "SNIFFARR_SOURCE_SPIDARR_TOKEN_FILE", "/var/run/secrets/tokens/spidarr",
+			"SNIFFARR_SOURCE_JACKETT_1_URL", "https://jackett.example.com/api/v2.0/indexers/x/results/torznab/", "SNIFFARR_SOURCE_JACKETT_1_API_KEY", "jk",
+			"SNIFFARR_SOURCE_JACKETT_1_MODE", "active", "SNIFFARR_SOURCE_UNLISTED_URL", "not read"),
+			want: func(a *api.Config, _ *db.Config) {
+				a.Sources = []sources.Source{
+					{Name: "spidarr", URL: "http://spidarr.spidarr:8080/api", TokenFile: "/var/run/secrets/tokens/spidarr", Mode: sources.Passive},
+					{Name: "jackett_1", URL: "https://jackett.example.com/api/v2.0/indexers/x/results/torznab/", APIKey: "jk", Mode: sources.Active},
+				}
+				a.SourcesInterval = 5 * time.Minute
+			}},
+		{name: "a source without credentials", env: with("SNIFFARR_SOURCES", "open", "SNIFFARR_SOURCE_OPEN_URL", "http://open/api"),
+			want: func(a *api.Config, _ *db.Config) {
+				a.Sources = []sources.Source{{Name: "open", URL: "http://open/api", Mode: sources.Passive}}
+				a.SourcesInterval = sources.DefaultInterval
+			}},
+		{name: "sources empty", env: with("SNIFFARR_SOURCES", " , ", "SNIFFARR_SOURCES_INTERVAL", "x"), want: func(*api.Config, *db.Config) {}},
+		{name: "a source without a URL", env: with("SNIFFARR_SOURCES", "spidarr"), err: "SNIFFARR_SOURCE_SPIDARR_URL is not set"},
+		{name: "a source URL not http", env: with("SNIFFARR_SOURCES", "spidarr", "SNIFFARR_SOURCE_SPIDARR_URL", "spidarr:8080"),
+			err: "SNIFFARR_SOURCE_SPIDARR_URL: want an http or https URL"},
+		{name: "a source name in capitals", env: with("SNIFFARR_SOURCES", "Spidarr"),
+			err: `SNIFFARR_SOURCES: "Spidarr" is not a source name: want lower-case letters, digits and _, a letter first`},
+		{name: "a source name with a dash", env: with("SNIFFARR_SOURCES", "spid-arr"),
+			err: `SNIFFARR_SOURCES: "spid-arr" is not a source name: want lower-case letters, digits and _, a letter first`},
+		{name: "a source name with a digit first", env: with("SNIFFARR_SOURCES", "1x"),
+			err: `SNIFFARR_SOURCES: "1x" is not a source name: want lower-case letters, digits and _, a letter first`},
+		{name: "a source named twice", env: with("SNIFFARR_SOURCES", "a,a", "SNIFFARR_SOURCE_A_URL", "http://a/api"), err: `SNIFFARR_SOURCES: "a" is named twice`},
+		{name: "a source with both credentials", env: with("SNIFFARR_SOURCES", "a", "SNIFFARR_SOURCE_A_URL", "http://a/api", "SNIFFARR_SOURCE_A_API_KEY", "k",
+			"SNIFFARR_SOURCE_A_TOKEN_FILE", "/t"), err: "SNIFFARR_SOURCE_A_API_KEY and SNIFFARR_SOURCE_A_TOKEN_FILE are both set: set one"},
+		{name: "a source mode not known", env: with("SNIFFARR_SOURCES", "a", "SNIFFARR_SOURCE_A_URL", "http://a/api", "SNIFFARR_SOURCE_A_MODE", "search"),
+			err: `SNIFFARR_SOURCE_A_MODE: want passive or active, got "search"`},
+		{name: "sources interval zero", env: with("SNIFFARR_SOURCES", "a", "SNIFFARR_SOURCE_A_URL", "http://a/api", "SNIFFARR_SOURCES_INTERVAL", "0"),
+			err: "SNIFFARR_SOURCES_INTERVAL: want a positive duration"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

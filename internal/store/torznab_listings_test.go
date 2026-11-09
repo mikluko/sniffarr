@@ -66,11 +66,15 @@ func TestSweepListings(t *testing.T) {
 func TestJournalListed(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
-	require.NoError(t, s.JournalListed(ctx, hash(1), t0, "queued", Detail("source", "spidarr", "title", "Alien")))
+	require.NoError(t, s.JournalListed(ctx, hash(1), t0, "queued", Detail("source", "spidarr", "title", "Alien", "categories", []int{2040, 2000})))
+	require.NoError(t, s.JournalListed(ctx, hash(2), t0, "stored", Detail("source", "spidarr", "categories", []int(nil))))
 	got, err := s.Journal(ctx, hash(1), 10)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, JournalListed, got[0].Kind)
 	require.Equal(t, "queued", got[0].Outcome)
-	require.JSONEq(t, `{"source":"spidarr","title":"Alien"}`, got[0].Detail)
+	require.JSONEq(t, `{"source":"spidarr","title":"Alien","categories":[2040,2000]}`, got[0].Detail)
+	got, err = s.Journal(ctx, hash(2), 10)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"source":"spidarr"}`, got[0].Detail, "no categories are left out")
 }

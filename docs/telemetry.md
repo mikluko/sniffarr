@@ -47,6 +47,8 @@ counts are the `db.sql.connection.*` metrics.
 | `-api`     | `sniffarr.search.lazy.titles`          | `{title}`    | `sniffarr.search.lazy.result`              |
 | `-api`     | `sniffarr.arr.events`                  | `{event}`    | `sniffarr.arr.app`, `sniffarr.arr.event`, `sniffarr.arr.source` |
 | `-api`     | `sniffarr.arr.outcomes`                | `{event}`    | `sniffarr.arr.app`, `sniffarr.arr.outcome` |
+| `-api`     | `sniffarr.source.requests`             | `{request}`  | `sniffarr.source.name`, `sniffarr.source.result` |
+| `-api`     | `sniffarr.source.listings`             | `{listing}`  | `sniffarr.source.name`, `sniffarr.source.outcome` |
 | `-api`     | `sniffarr.probe.tasks`                 | `{task}`     | `sniffarr.probe.priority`                  |
 | `-api`     | `sniffarr.probe.results`               | `{result}`   | `sniffarr.probe.outcome`                   |
 | `-api`     | `sniffarr.probe.downloaded`            | `By`         |                                            |
@@ -91,6 +93,12 @@ or `import`; `sniffarr.arr.source` is `webhook` or `history`;
 `sniffarr.arr.outcome` is `matched` (the stored release got the work),
 `queued` (the infohash was queued), `unknown` (no infohash, no work, or a
 rejected torrent) or `duplicate` (recorded before);
+`sniffarr.source.name` is a Torznab source's name in `SNIFFARR_SOURCES`;
+`sniffarr.source.result` is `ok` (a feed), `refused` (a Newznab error, as
+for credentials the source does not take) or `failed` (no answer, a status
+other than 2xx, or an answer that is neither); `sniffarr.source.outcome` is
+`stored`, `queued`, `rejected` or `duplicate` (recorded before), a listing
+without an infohash counted in none;
 `sniffarr.probe.priority` is `search` or `background`;
 `sniffarr.probe.outcome` is `tracks`, `unknown`, `no_peers` or `timeout`;
 `sniffarr.seed.reason` is `ratio` (uploaded as much as downloaded), `age`

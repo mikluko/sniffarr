@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The metric `sniffarr.typesafe.requests` counts the requests to the classifier endpoint, retries included, by `sniffarr.typesafe.status`.
 - `SNIFFARR_UI_LANGUAGES` lists the web UI's languages, `en` and `ru`, in the order of the language switch, the first the default.
 - With `SNIFFARR_NATS_URL`, the NATS server `-api` embeds connects to that upstream server as a leaf node, with `SNIFFARR_NATS_PASSWORD` or the `.creds` file `SNIFFARR_NATS_CREDS`, its streams kept in its own JetStream domain, `sniffarr`.
+- The API polls the Torznab sources `SNIFFARR_SOURCES` names, in order, each with `SNIFFARR_SOURCE_<NAME>_URL`, an API key or a bearer token file, and a mode, `passive` or `active`, for their latest listings every `SNIFFARR_SOURCES_INTERVAL`, 15 minutes by default, and records each listing.
+- The infohash of a Torznab source's listing the store lacks is queued at P2 under the discovery `torznab`, which the torrent's card shows as Torznab, and the source's first listing of it is journaled as `listed`.
+- The metrics `sniffarr.source.requests` and `sniffarr.source.listings` count the requests to each Torznab source by `sniffarr.source.result` and its listings by `sniffarr.source.outcome`.
 
 ### Changed
 

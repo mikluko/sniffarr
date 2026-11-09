@@ -5,7 +5,7 @@ of them in one process; with none on, it exits with a usage error. It runs
 until SIGINT or SIGTERM.
 
 - `-api` is the centre of a work queue. It queues the infohashes sniffers
-  sight, hands them out as fetch tasks, stores the metadata that comes back
+  sight and [Torznab sources](sources.md) list, hands them out as fetch tasks, stores the metadata that comes back
   in SQLite, classifies stored torrents with the classifier, and serves the
   search API and the Torznab indexer. It is the only
   component that touches the database.
@@ -35,8 +35,8 @@ The queue holds three kinds of task: the fetch of an infohash's metadata,
 the lookup of a stored release's peers and the probe of its tracks. It
 serves them by priority: the lookups and probes asked for in the web UI
 first, then the infohashes Radarr or Sonarr grabbed and the probes of
-releases a search returned, then announced infohashes before sampled
-ones, then the oldest first. Fetchers take fetches and lookups,
+releases a search returned, then announced infohashes and those Torznab
+sources listed before sampled ones, then the oldest first. Fetchers take fetches and lookups,
 and probers take probes. Fetches and lookups are orders on the NATS stream
 `FETCH_ORDERS` and probes on `PROBE_ORDERS`, described below, and survive
 restarts with them. The API pulls the orders 32 at a time from each
@@ -52,8 +52,9 @@ is retried after a backoff, by a message scheduled on
 `sniffarr.orders.fetch.retry.<infohash>` that the server publishes as the
 order at its time, and dropped after a few attempts. A dropped infohash is
 kept out of the queue for a while, a shorter one when it had no peers, then
-forgotten. It is not rejected: an announce or a Radarr or Sonarr event queues
-it again at once, and a sample once it is forgotten. An announce of an
+forgotten. It is not rejected: an announce, a Radarr or Sonarr event or a
+Torznab source's first listing queues it again at once, and a sample once it
+is forgotten. An announce of an
 infohash whose sample waits orders it again at the announce's priority; the
 first of the two orders a fetcher takes is fetched, and the other is dropped
 when it comes out while the first is held, and otherwise fetched again to no
@@ -65,14 +66,15 @@ row per event, most in the transaction of the change it records: ordered,
 as queued or, for a dead infohash, revived, handed out once per attempt and
 per order, failed for no peers or a timeout, with the times the attempt was
 handed out when that was more than once, and dropped, for an infohash
-sighted by announce or Radarr or Sonarr; metadata fetched and stored, with
+sighted by announce, Radarr or Sonarr, or a Torznab source; metadata fetched and stored, with
 when its order was queued and the times its attempt was handed out when that
 was more than once, rejected or already stored;
 a classification by the classifier, with who asked for it, a kind copied from a release
 of the same title key, and a classification that failed; a title lookup's
 match, no match or error, with who asked for it, and the earlier match of its
 title key a release takes as it is stored; the grabs and imports Radarr and
-Sonarr report; the probes wanted, started, with when the
+Sonarr report; its first listing by each Torznab source, journaled after it
+is recorded, in a transaction of its own; the probes wanted, started, with when the
 lease ends, and done; and its deletion. The queue's events of an infohash
 only ever sampled are left out: the journal of a sampled infohash begins with
 its metadata. What repeats without changing is left out too: a lease of the
@@ -297,7 +299,10 @@ under the same `Nats-Msg-Id`, and take scheduled messages on
 `sniffarr.orders.probe.retry.<infohash>`, a later one on the same subject
 replacing the one pending; a consumer of each order subject delivers at most
 1024 orders not acknowledged, and one neither acknowledged nor marked in
-progress again after 2 minutes. Only the API publishes and consumes the
+progress again after 2 minutes. A fetch order names the discovery it was
+ordered for in the header `Sniffarr-Discovery`, which its retries keep, and
+the torrent its fetch stores takes that discovery; an order without the
+header serves its priority's. Only the API publishes and consumes the
 fetch and probe orders; no component publishes the results yet.
 The server listens on no port and has no monitoring port, and the
 API's user connects in process only. Its JetStream domain is `sniffarr`.

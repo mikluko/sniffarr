@@ -1,7 +1,8 @@
 // Package api is the API component: the ingest, search and browse services,
 // the intake of the sightings stream, the Torznab indexer and the Radarr and
 // Sonarr webhook over the store, with the classify and TMDB workers, the
-// imports of the Radarr and Sonarr histories, the store's one-time backfills
+// imports of the Radarr and Sonarr histories, the polls of the Torznab
+// sources' latest listings, the store's one-time backfills
 // and maintenance, the WAL's truncation, the rollup of peer sketches, the
 // tops of works, the counts of the browse service and the daily check of the
 // latest release.
@@ -30,6 +31,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	"sarak.sh/mikluko/sniffarr/internal/server"
+	"sarak.sh/mikluko/sniffarr/internal/sources"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 	"sarak.sh/mikluko/sniffarr/internal/tmdb"
 	"sarak.sh/mikluko/sniffarr/internal/version"
@@ -101,7 +103,15 @@ type Config struct {
 	// ReleaseNotice is how far behind that release a stable build is before
 	// the web UI announces it.
 	ReleaseNotice version.Policy
+	// Sources are the Torznab sources polled for their latest listings, in
+	// their configured order; SourcesInterval is how often each is polled,
+	// sources.DefaultInterval when zero.
+	Sources         []sources.Source
+	SourcesInterval time.Duration
 }
+
+// sourceTimeout bounds one request to a Torznab source.
+const sourceTimeout = time.Minute
 
 // ArrHistory is where a Radarr or Sonarr serves its API, URL the root of
 // its v3 API; a zero one imports no history.
@@ -358,11 +368,19 @@ func work(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, db *d
 		hist := &arr.History{App: name, URL: h.URL, APIKey: h.APIKey, HTTP: &http.Client{Timeout: arrTimeout}, Recorder: rec, Log: log}
 		app.Go(lc, sd, log, name+" history", hist.Run)
 	}
+	if len(cfg.Sources) > 0 {
+		lrec := &sources.Recorder{Store: s, Fetches: ing, Log: log}
+		for _, src := range cfg.Sources {
+			p := &sources.Poller{Client: &sources.Client{Source: src, HTTP: &http.Client{Timeout: sourceTimeout}}, Recorder: lrec, Interval: cfg.SourcesInterval, Log: log}
+			app.Go(lc, sd, log, src.Name+" source", p.Run)
+		}
+	}
 }
 
 // maintain forgets the dead hashes whose time is up,
 // deletes the torrents not seen within retention, or within idle for those
-// with no TMDB work, and the journal entries older than journal.
+// with no TMDB work, the Torznab listings not listed within retention, and
+// the journal entries older than journal.
 func maintain(ctx context.Context, s *store.Store, retention, idle, journal time.Duration, log *slog.Logger) {
 	now := time.Now()
 	if n, err := s.ExpireDead(ctx, now); err != nil && !errors.Is(err, context.Canceled) {
@@ -376,6 +394,11 @@ func maintain(ctx context.Context, s *store.Store, retention, idle, journal time
 	}
 	if sw != (store.Swept{}) {
 		log.Info("swept store", "idle", sw.Idle, "expired", sw.Expired)
+	}
+	if n, err := s.SweepListings(ctx, now.Add(-retention), sweepBatch); err != nil && !errors.Is(err, context.Canceled) {
+		log.ErrorContext(ctx, "sweep listings", "err", err)
+	} else if n > 0 {
+		log.Info("swept listings", "listings", n)
 	}
 	n, err := s.SweepJournal(ctx, now.Add(-journal), sweepBatch)
 	if err != nil && !errors.Is(err, context.Canceled) {

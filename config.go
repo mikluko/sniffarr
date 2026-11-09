@@ -29,6 +29,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/rules"
 	"sarak.sh/mikluko/sniffarr/internal/search"
 	sniffer "sarak.sh/mikluko/sniffarr/internal/sniff"
+	"sarak.sh/mikluko/sniffarr/internal/sources"
 	"sarak.sh/mikluko/sniffarr/internal/store"
 	"sarak.sh/mikluko/sniffarr/internal/stun"
 	"sarak.sh/mikluko/sniffarr/internal/tmdb"
@@ -349,6 +350,9 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 	if a.ReleaseCheck, a.ReleaseNotice, err = releaseCheck(getenv("SNIFFARR_RELEASE_CHECK")); err != nil {
 		return a, d, err
 	}
+	if a.Sources, a.SourcesInterval, err = loadSources(getenv); err != nil {
+		return a, d, err
+	}
 	if a.TMDBKey = getenv("TMDB_API_KEY"); a.TMDBKey == "" {
 		a.TMDBKey = libtmdb.DefaultKey()
 	}
@@ -433,6 +437,69 @@ func loadProbe(getenv func(string) string) (ingest.ProbeConfig, error) {
 	}
 	p.Backoff, err = duration(getenv, "SNIFFARR_PROBE_BACKOFF", ingest.DefaultProbeBackoff)
 	return p, err
+}
+
+// loadSources reads SNIFFARR_SOURCES, the comma-separated names of the
+// Torznab sources in their order, each one's settings under
+// SNIFFARR_SOURCE_<NAME>_, and, with any source, SNIFFARR_SOURCES_INTERVAL.
+func loadSources(getenv func(string) string) ([]sources.Source, time.Duration, error) {
+	var out []sources.Source
+	seen := map[string]bool{}
+	for _, name := range strings.Split(getenv("SNIFFARR_SOURCES"), ",") {
+		name = strings.TrimSpace(name)
+		switch {
+		case name == "":
+			continue
+		case !sourceName(name):
+			return nil, 0, fmt.Errorf("SNIFFARR_SOURCES: %q is not a source name: want lower-case letters, digits and _, a letter first", name)
+		case seen[name]:
+			return nil, 0, fmt.Errorf("SNIFFARR_SOURCES: %q is named twice", name)
+		}
+		seen[name] = true
+		src, err := loadSource(getenv, name)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, src)
+	}
+	if len(out) == 0 {
+		return nil, 0, nil
+	}
+	interval, err := duration(getenv, "SNIFFARR_SOURCES_INTERVAL", sources.DefaultInterval)
+	return out, interval, err
+}
+
+// loadSource reads the source's URL, required, its credentials, an API key
+// or a token file but not both, and its mode, passive by default.
+func loadSource(getenv func(string) string, name string) (sources.Source, error) {
+	prefix := "SNIFFARR_SOURCE_" + strings.ToUpper(name) + "_"
+	s := sources.Source{Name: name, APIKey: getenv(prefix + "API_KEY"), TokenFile: getenv(prefix + "TOKEN_FILE"), Mode: or(getenv(prefix+"MODE"), sources.Passive)}
+	var err error
+	switch s.URL, err = rootURL(getenv, prefix+"URL"); {
+	case err != nil:
+		return s, err
+	case s.URL == "":
+		return s, fmt.Errorf("%sURL is not set", prefix)
+	case s.APIKey != "" && s.TokenFile != "":
+		return s, fmt.Errorf("%sAPI_KEY and %sTOKEN_FILE are both set: set one", prefix, prefix)
+	case s.Mode != sources.Passive && s.Mode != sources.Active:
+		return s, fmt.Errorf("%sMODE: want passive or active, got %q", prefix, s.Mode)
+	}
+	return s, nil
+}
+
+// sourceName reports whether s names a source: lower-case letters, digits
+// and _, a letter first, so that it reads in a variable's name.
+func sourceName(s string) bool {
+	for i, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case i > 0 && (r >= '0' && r <= '9' || r == '_'):
+		default:
+			return false
+		}
+	}
+	return s != ""
 }
 
 // arrHistory reads where the app's v3 API is: SNIFFARR_<app>_API_URL, or

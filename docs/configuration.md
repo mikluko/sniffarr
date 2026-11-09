@@ -41,7 +41,7 @@ the same to each.
 | `SNIFFARR_QUEUE_DEAD_FOR`          | `168h`           | How long an infohash dropped after its last attempt stays out                                                          |
 | `SNIFFARR_QUEUE_NO_PEERS_FOR`      | `24h`            | How long an infohash dropped for having no peers stays out                                                             |
 | `SNIFFARR_STORE_MAX_FILES`         | `20`             | Files stored per torrent, the largest ones                                                                             |
-| `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen                                                                   |
+| `SNIFFARR_RETENTION`               | `2160h`          | How long a stored torrent is kept without being seen, and a Torznab source's listing without being listed again       |
 | `SNIFFARR_RETENTION_IDLE`          | `168h`           | How long a stored torrent with no TMDB work is kept without being seen                                                 |
 | `SNIFFARR_RETENTION_JOURNAL`       | `720h`           | How long a torrent's journal entries are kept                                                                          |
 | `SNIFFARR_STATS_INTERVAL`          | `5m`             | How often the counts of `Stats` and `Home` are recomputed                                                              |
@@ -88,6 +88,21 @@ expired, unseen for 90 days, has lost the start of its trail. Once an hour it
 unions the hour sketches older than 8 days into day sketches and deletes the
 day sketches older than 65 days, and every 10 minutes, and once at start, it
 recomputes the tops of works and every torrent's peers over the last 7 days.
+
+### Torznab sources
+
+The API polls the Torznab sources `SNIFFARR_SOURCES` names for their latest
+listings; see [Torznab sources](sources.md). `<NAME>` is a source's name in
+upper case.
+
+| Variable                           | Default   | Meaning                                                                                              |
+| ---------------------------------- | --------- | ---------------------------------------------------------------------------------------------------- |
+| `SNIFFARR_SOURCES`                 |           | Comma-separated names of the Torznab sources, in order, each of lower-case letters, digits and `_`, a letter first; empty polls none |
+| `SNIFFARR_SOURCES_INTERVAL`        | `15m`     | How often each source is polled                                                                      |
+| `SNIFFARR_SOURCE_<NAME>_URL`       |           | The source's Torznab endpoint, such as `http://spidarr.spidarr:8080/api`; required                   |
+| `SNIFFARR_SOURCE_<NAME>_API_KEY`   |           | Key sent as the `apikey` parameter; refused with `SNIFFARR_SOURCE_<NAME>_TOKEN_FILE`                  |
+| `SNIFFARR_SOURCE_<NAME>_TOKEN_FILE` |         | Path of a file whose token is sent as `Authorization: Bearer <token>`, read for every request         |
+| `SNIFFARR_SOURCE_<NAME>_MODE`      | `passive` | `passive` or `active`; both are polled alike, and neither is searched                                |
 
 ## `-ui`
 

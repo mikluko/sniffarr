@@ -174,6 +174,10 @@ func Detail(kv ...any) map[string]any {
 			if len(x) == 0 {
 				continue
 			}
+		case []int:
+			if len(x) == 0 {
+				continue
+			}
 		}
 		d[kv[i].(string)] = v
 	}
