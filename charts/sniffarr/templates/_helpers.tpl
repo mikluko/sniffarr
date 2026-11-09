@@ -239,9 +239,10 @@ values.
 {{- end }}
 
 {{- /*
-sniffarr.dataVolumes are the volumes of a pod running -api: tmp, data per api.persistence and
-the litestream ConfigMap when enabled. It takes root, claim, the name of the claim the chart
-creates, and template, true when a StatefulSet's claim template is data and none is rendered here.
+sniffarr.dataVolumes are the volumes of a pod running -api: tmp, data per api.persistence, the
+litestream ConfigMap when enabled, and tokens, the projected api.serviceAccountTokens, when any.
+It takes root, claim, the name of the claim the chart creates, and template, true when a
+StatefulSet's claim template is data and none is rendered here.
 */}}
 {{- define "sniffarr.dataVolumes" -}}
 {{- $p := .root.Values.api.persistence }}
@@ -268,6 +269,26 @@ creates, and template, true when a StatefulSet's claim template is data and none
 - name: litestream-config
   configMap:
     name: {{ required "api.litestream.existingConfigMap is required when litestream is enabled" $ls.existingConfigMap }}
+{{- end }}
+{{- with .root.Values.api.serviceAccountTokens }}
+- name: tokens
+  projected:
+    sources:
+      {{- range . }}
+      - serviceAccountToken:
+          path: {{ required "api.serviceAccountTokens: every token needs a name" .name }}
+          audience: {{ required (printf "api.serviceAccountTokens: the token %s needs an audience" .name) .audience }}
+          expirationSeconds: {{ .expirationSeconds | default 3600 }}
+      {{- end }}
+{{- end }}
+{{- end }}
+
+{{- /* sniffarr.tokensMount mounts the volume tokens at /var/run/secrets/tokens when api.serviceAccountTokens has any. */}}
+{{- define "sniffarr.tokensMount" -}}
+{{- if .Values.api.serviceAccountTokens }}
+- name: tokens
+  mountPath: /var/run/secrets/tokens
+  readOnly: true
 {{- end }}
 {{- end }}
 

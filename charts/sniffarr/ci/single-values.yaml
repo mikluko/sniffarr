@@ -11,6 +11,10 @@ api:
   existingSecret: sniffarr-tokens
   env:
     SNIFFARR_AUDIO_LANGUAGES: ru,en
+  serviceAccountTokens:
+    - name: spidarr
+      audience: spidarr
+      expirationSeconds: 7200
   persistence:
     type: pvc
     size: 20Gi

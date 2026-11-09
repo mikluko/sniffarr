@@ -14,6 +14,24 @@ such as `SNIFFARR_CLASSIFY_API_KEY`, `SNIFFARR_TORZNAB_TOKEN` and
 `api.litestream.enabled`, `api.litestream.existingConfigMap` is required.
 The store of the API's embedded NATS server is `/data/nats`, on the API's
 volume.
+
+`api.serviceAccountTokens` projects tokens of the pod's service account into
+the api pod, each at `/var/run/secrets/tokens/<name>` with the audience it
+names, valid for `expirationSeconds`, 3600 by default, and renewed by the
+kubelet before they expire. A [Torznab source](sources.md) that takes such a
+token reads it from its token file:
+
+```yaml
+api:
+  env:
+    SNIFFARR_SOURCES: spidarr
+    SNIFFARR_SOURCE_SPIDARR_URL: http://spidarr.spidarr:8080/api
+    SNIFFARR_SOURCE_SPIDARR_TOKEN_FILE: /var/run/secrets/tokens/spidarr
+  serviceAccountTokens:
+    - name: spidarr
+      audience: spidarr
+```
+
 Every value is described in [`values.yaml`](../charts/sniffarr/values.yaml).
 
 With `api.networkPolicy.enabled`, true by default, a NetworkPolicy

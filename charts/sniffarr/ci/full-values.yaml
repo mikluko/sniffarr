@@ -3,6 +3,12 @@ api:
   env:
     SNIFFARR_CLASSIFY_SEARCH_RESERVE: 40
     SNIFFARR_SCRIPTS: Latin,Cyrillic,Greek
+    SNIFFARR_SOURCES: spidarr
+    SNIFFARR_SOURCE_SPIDARR_URL: http://spidarr.spidarr:8080/api
+    SNIFFARR_SOURCE_SPIDARR_TOKEN_FILE: /var/run/secrets/tokens/spidarr
+  serviceAccountTokens:
+    - name: spidarr
+      audience: spidarr
   persistence:
     type: hostPath
     hostPath:

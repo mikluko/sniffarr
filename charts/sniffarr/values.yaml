@@ -34,6 +34,9 @@ api:
     from: []
   # Extra environment variables, name to value.
   env: {}
+  # Service account tokens projected into the api pod, each at /var/run/secrets/tokens/<name>: name, audience, and expirationSeconds, 3600 when unset;
+  # point a Torznab source at one with SNIFFARR_SOURCE_<NAME>_TOKEN_FILE in env.
+  serviceAccountTokens: []
   persistence:
     # Volume of /data: emptyDir, hostPath or pvc.
     type: emptyDir
