@@ -16,6 +16,7 @@ the same to each.
 | `-wait-api`          | off     | Poll `SNIFFARR_URL` every 2s and exit once its `Server` header names this binary's version; runs alone, without the flags above |
 | `-log-level`         | `info`  | Level to log at: `debug`, `info`, `warn` or `error`                                                                 |
 | `SNIFFARR_LOG_LEVEL` |         | The level when `-log-level` is not given; the flag wins when both are set                                           |
+| `-pprof`             |         | Address to serve the Go runtime's profiles on, under `/debug/pprof/`, such as `127.0.0.1:6060`; empty serves none   |
 | `SNIFFARR_URL`       |         | Base URL of the API, such as `http://sniffarr-api:8080`; required by `-ui`, `-sniff`, `-fetch` and `-wait-api` without `-api`, and must be unset with it |
 
 ## `-api`

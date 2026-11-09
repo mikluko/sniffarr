@@ -39,6 +39,9 @@ func main() {
 // options is the fx graph of the components cfg switches on.
 func options(cfg config, log *slog.Logger) []fx.Option {
 	opts := []fx.Option{fx.Supply(log), app.Logging, app.Telemetry, fx.StartTimeout(startTimeout(cfg.on))}
+	if cfg.pprof != "" {
+		opts = append(opts, app.Profiling(cfg.pprof))
+	}
 	if cfg.on.api {
 		opts = append(opts, fx.Supply(cfg.db, cfg.api, cfg.broker), db.Module, broker.Module, api.Module)
 	}

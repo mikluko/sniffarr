@@ -61,6 +61,8 @@ type config struct {
 	sniff    sniff.Config
 	fetch    fetch.Config
 	logLevel slog.Level
+	// pprof is -pprof: the address the profiles are served on, "" for none.
+	pprof string
 	// waitAPI is -wait-api: wait for the API at client.URL to serve this
 	// release, and run nothing else.
 	waitAPI bool
@@ -119,6 +121,7 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	fs.DurationVar(&probeTimeout, "probe-timeout", probeTimeout, "how long one probe may take, from looking for peers to the tracks")
 	fs.Var(&seedMaxSize, "seed-max-size", "piece data kept for seeding, such as 200GiB; the oldest torrents go first beyond it")
 	fs.DurationVar(&seedMaxAge, "seed-max-age", seedMaxAge, "how long a probed torrent is seeded at most")
+	fs.StringVar(&c.pprof, "pprof", "", "address to serve the Go runtime's profiles on, under /debug/pprof/, such as 127.0.0.1:6060; empty serves none")
 	fs.TextVar(&c.logLevel, "log-level", slog.LevelInfo, "level to log at: debug, info, warn or error; SNIFFARR_LOG_LEVEL when not given")
 	if err := fs.Parse(args); err != nil {
 		return c, err
