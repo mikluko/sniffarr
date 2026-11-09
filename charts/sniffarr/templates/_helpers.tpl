@@ -300,6 +300,7 @@ StatefulSet's claim template is data and none is rendered here.
 - {{ printf "-probe-timeout=%v" .timeout | quote }}
 - {{ printf "-seed-max-size=%v" .maxSize | quote }}
 - {{ printf "-seed-max-age=%v" .maxAge | quote }}
+- {{ printf "-seed-idle=%v" .idle | quote }}
 {{- end }}
 
 {{- /* sniffarr.seedsType is probe.persistence.type, checked. */}}

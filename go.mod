@@ -5,6 +5,7 @@ go 1.27.3
 require (
 	connectrpc.com/connect v1.21.1
 	connectrpc.com/otelconnect v0.12.0
+	github.com/RoaringBitmap/roaring/v2 v2.16.0
 	github.com/anacrolix/dht/v2 v2.24.1-0.20260924041734-a9c967f9d68b
 	github.com/anacrolix/generics v0.2.0
 	github.com/anacrolix/torrent v1.61.1-0.20261108082052-e93a3fc0da93
@@ -33,7 +34,6 @@ require (
 
 require (
 	connectrpc.com/connect/v2 v2.0.2 // indirect
-	github.com/RoaringBitmap/roaring/v2 v2.16.0 // indirect
 	github.com/XSAM/otelsql v0.44.0 // indirect
 	github.com/anacrolix/btree v0.1.1 // indirect
 	github.com/anacrolix/chansync v0.8.0 // indirect

@@ -114,14 +114,14 @@ func TestLoadComponents(t *testing.T) {
 		{name: "port with an offset", args: []string{"-fetch", "-port", "30070", "-port-offset", "2"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 			require.Equal(t, 30072, c.dht.Network.Port, "a StatefulSet pod's index added to the port")
 		}},
-		{name: "fetch with probes", args: []string{"-fetch", "-probe", "-probe-dir", "/var/lib/sniffarr", "-probers", "2", "-probe-timeout", "5m", "-seed-max-size", "50GiB", "-seed-max-age", "72h"},
+		{name: "fetch with probes", args: []string{"-fetch", "-probe", "-probe-dir", "/var/lib/sniffarr", "-probers", "2", "-probe-timeout", "5m", "-seed-max-size", "50GiB", "-seed-max-age", "72h", "-seed-idle", "5m"},
 			env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
-				require.Equal(t, sniffer.SeederConfig{Dir: "/var/lib/sniffarr", MaxBytes: 50 << 30, MaxAge: 72 * time.Hour}, c.dht.Network.Seed)
+				require.Equal(t, sniffer.SeederConfig{Dir: "/var/lib/sniffarr", MaxBytes: 50 << 30, MaxAge: 72 * time.Hour, Idle: 5 * time.Minute}, c.dht.Network.Seed)
 				require.False(t, c.dht.TempSeed)
 				require.Equal(t, fetch.Config{Workers: sniffer.DefaultFetchers, Probe: true, Probers: 2, ProbeTimeout: 5 * time.Minute}, c.fetch)
 			}},
 		{name: "probe defaults", args: []string{"-fetch", "-probe"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
-			require.Equal(t, sniffer.SeederConfig{MaxBytes: sniffer.DefaultSeedMaxBytes, MaxAge: sniffer.DefaultSeedMaxAge}, c.dht.Network.Seed)
+			require.Equal(t, sniffer.SeederConfig{MaxBytes: sniffer.DefaultSeedMaxBytes, MaxAge: sniffer.DefaultSeedMaxAge, Idle: sniffer.DefaultSeedIdle}, c.dht.Network.Seed)
 			require.True(t, c.dht.TempSeed, "no -probe-dir: a temporary directory")
 			require.Equal(t, fetch.Config{Workers: sniffer.DefaultFetchers, Probe: true, Probers: sniffer.DefaultProbers, ProbeTimeout: sniffer.DefaultProbeTimeout}, c.fetch)
 		}},
@@ -133,6 +133,7 @@ func TestLoadComponents(t *testing.T) {
 		{name: "probe dir without probe", args: []string{"-fetch", "-probe-dir", "/var/lib/sniffarr"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-probe-dir: probes are off without -probe"},
 		{name: "probers without probe", args: []string{"-fetch", "-probers", "2"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-probers: probes are off without -probe"},
 		{name: "seed age without probe", args: []string{"-fetch", "-seed-max-age", "0s"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-seed-max-age: probes are off without -probe"},
+		{name: "seed idle without probe", args: []string{"-fetch", "-seed-idle", "5m"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-seed-idle: probes are off without -probe"},
 		{name: "probe dir without fetch", args: []string{"-sniff", "-probe", "-probe-dir", "/var/lib/sniffarr"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, err: "-probe-dir: probes are taken by -fetch, which is off"},
 		{name: "probe without fetch", args: []string{"-sniff", "-probe"}, env: []string{"SNIFFARR_URL", "http://api:8080"}, want: func(t *testing.T, c config) {
 			require.Equal(t, sniffer.SeederConfig{}, c.dht.Network.Seed, "a node that does not fetch seeds nothing")
@@ -140,7 +141,8 @@ func TestLoadComponents(t *testing.T) {
 		}},
 		{name: "seed size in decimal units", args: []string{"-fetch", "-probe", "-seed-max-size", "10GB"}, err: `invalid value "10GB" for flag -seed-max-size`},
 		{name: "zero probers", args: []string{"-fetch", "-probe", "-probers", "0"}, err: "-probers: want a positive integer"},
-		{name: "zero seed age", args: []string{"-fetch", "-probe", "-seed-max-age", "0s"}, err: "-probe-timeout and -seed-max-age: want positive durations"},
+		{name: "zero seed age", args: []string{"-fetch", "-probe", "-seed-max-age", "0s"}, err: "-probe-timeout, -seed-max-age and -seed-idle: want positive durations"},
+		{name: "zero seed idle", args: []string{"-fetch", "-probe", "-seed-idle", "0s"}, err: "-probe-timeout, -seed-max-age and -seed-idle: want positive durations"},
 		{name: "api with probes", args: []string{"-api", "-probe"}, env: apiEnv, want: func(t *testing.T, c config) {
 			require.True(t, c.api.Probes)
 		}},

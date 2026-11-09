@@ -136,8 +136,15 @@ itself on the DHT for the torrent every 30 minutes. The fetcher removes a
 torrent and deletes its pieces once it has uploaded as much as it
 downloaded; before that, once it has been seeded for `-seed-max-age`, or,
 oldest first, while the torrents kept hold more than `-seed-max-size` of
-piece data. It looks every minute, and tells the API by `ProbeUpload` what
+piece data. A probe holds only the head of the file, which few peers lack,
+so the fetcher also removes a torrent that no connected peer needs at the
+first look after the probe, and one that no peer has needed and that has
+uploaded nothing for `-seed-idle`. A peer needs the torrent while its
+bitfield lacks a piece the fetcher has complete; a peer with every piece
+never does. It looks every minute, and tells the API by `ProbeUpload` what
 the torrents uploaded since the last look; a report the API refuses goes
 with the next. The seeded torrents, what each downloaded and uploaded, and
-which pieces are complete survive a restart when it is `-probe-dir`.
-Metadata fetches upload nothing.
+which pieces are complete survive a restart when it is `-probe-dir`; a
+torrent restored at a restart, its peers yet to connect, starts its
+`-seed-idle` anew and is not judged at the first look. Metadata fetches
+upload nothing.

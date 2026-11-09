@@ -102,4 +102,7 @@ without an infohash counted in none;
 `sniffarr.probe.priority` is `search` or `background`;
 `sniffarr.probe.outcome` is `tracks`, `unknown`, `no_peers` or `timeout`;
 `sniffarr.seed.reason` is `ratio` (uploaded as much as downloaded), `age`
-or `size`, the last two removals before the ratio.
+(seeded for `-seed-max-age`), `useless` (no connected peer needed it at the
+first check after the probe), `idle` (no peer needed it and it uploaded
+nothing for `-seed-idle`) or `size` (oldest beyond `-seed-max-size`), all but
+`ratio` removals before the ratio.

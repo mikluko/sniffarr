@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The infohash of a Torznab source's listing the store lacks is queued at P2 under the discovery `torznab`, which the torrent's card shows as Torznab, and the source's first listing of it is journaled as `listed`.
 - The metrics `sniffarr.source.requests` and `sniffarr.source.listings` count the requests to each Torznab source by `sniffarr.source.result` and its listings by `sniffarr.source.outcome`.
 - The chart's `api.serviceAccountTokens` projects service account tokens with the audiences it names into the api pod, each at `/var/run/secrets/tokens/<name>`.
+- The `-seed-idle` flag, 15 minutes by default and rendered from the chart's `probe.idle`, caps how long a probed torrent no connected peer needs is seeded without uploading.
 
 ### Changed
 
@@ -39,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RequestProbe` journals every request, and orders the probe of a release without peers at once.
 - A Torznab search orders no probe of a release without peers.
 - The projection of the current hour, day and week on the data page weighs the period's pace so far against the count over the same length of time ending now, the period's weight rising from none at its start to three quarters halfway and all at its end, from the period's first moment.
+- A probed torrent no connected peer needs at the first check after the probe is removed, counted in `sniffarr.seed.removals` as `useless`, and one no peer has needed and that has uploaded nothing for `-seed-idle` is removed as `idle`.
 
 ### Fixed
 

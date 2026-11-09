@@ -129,6 +129,39 @@ func TestProbeDownloadsTheHeadAndSeeds(t *testing.T) {
 	require.Zero(t, again.Downloaded, "a seeded torrent's pieces are not downloaded again")
 }
 
+func TestClientSeedIsNeededByAPeerLackingItsPieces(t *testing.T) {
+	const pieceLength = 1 << 14
+	h, peer := dataSeed(t, "Coraline.2009.2160p.mkv", testMKV(16*pieceLength), pieceLength)
+	port := freePort(t)
+	n := started(t, NetworkConfig{Port: port, Passive: true, FetchTimeout: 10 * time.Second, Seed: SeederConfig{Dir: t.TempDir()}}, [20]byte{})
+	n.swarm = peerSwarm{swarm: n.swarm, peer: peer.Addr.(netip.AddrPort)}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, err := n.Probe(ctx, h, 4*pieceLength)
+	require.NoError(t, err)
+	n.seeder.mu.Lock()
+	seed := n.seeder.entries[0].t
+	n.seeder.mu.Unlock()
+	require.False(t, seed.needed(), "the one peer has every piece")
+
+	ours, ok := n.client.Torrent(metainfo.Hash(h))
+	require.True(t, ok)
+	c := torrent.NewDefaultClientConfig()
+	c.DefaultStorage = storage.NewFileOpts(storage.NewFileClientOpts{ClientBaseDir: t.TempDir(), PieceCompletion: storage.NewMapPieceCompletion()})
+	c.DisableIPv6 = true
+	c.ListenHost = func(string) string { return "127.0.0.1" }
+	c.ListenPort = 0
+	c.NoDHT = true
+	c.NoDefaultPortForwarding = true
+	cl, err := torrent.NewClient(c)
+	require.NoError(t, err)
+	t.Cleanup(func() { cl.Close() })
+	leecher, _ := cl.AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: metainfo.Hash(h), InfoBytes: ours.Metainfo().InfoBytes})
+	leecher.DownloadPieces(15, 16)
+	leecher.AddPeers([]torrent.PeerInfo{{Addr: netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(port))}})
+	require.Eventually(t, seed.needed, 10*time.Second, 50*time.Millisecond, "a peer wanting the last piece lacks the head")
+}
+
 // announceRecorder records the port and impliedPort of each announce.
 type announceRecorder struct {
 	torrent.DhtServer

@@ -77,8 +77,9 @@ so it needs no open port.
 With `probe.enabled`, the API's container renders `-probe`, and
 `<release>-probe` is a StatefulSet of `probe.replicas`
 fetchers that probe too, rendering `-probe`, `-probe-dir=/seeds` and `probe`'s
-`probers`, `timeout`, `maxSize` and `maxAge` as `-probers`, `-probe-timeout`,
-`-seed-max-size` and `-seed-max-age`; its pod settings are `fetch`'s, and its
+`probers`, `timeout`, `maxSize`, `maxAge` and `idle` as `-probers`,
+`-probe-timeout`, `-seed-max-size`, `-seed-max-age` and `-seed-idle`; its pod
+settings are `fetch`'s, and its
 `url` falls back to `fetch.url`, then `sniff.url`. `/seeds` is
 `probe.persistence`: an `emptyDir`, a claim per replica,
 `seeds-<release>-probe-<n>`, or a `hostPath` with a directory per pod under

@@ -135,9 +135,11 @@ upper case.
 | `-probe-timeout` | `10m`   | How long one probe may take, from looking for peers to the tracks |
 | `-seed-max-size` | `200GiB` | Piece data kept for seeding, units as `SNIFFARR_PROBE_MAX_BYTES`; the oldest torrents go first beyond it |
 | `-seed-max-age`  | `168h`  | How long a probed torrent is seeded at most            |
+| `-seed-idle`     | `15m`   | How long a probed torrent no connected peer needs is seeded without uploading |
 
-`-probe-dir`, `-probers`, `-probe-timeout`, `-seed-max-size` and
-`-seed-max-age` need `-probe`; given without it, sniffarr refuses to start.
+`-probe-dir`, `-probers`, `-probe-timeout`, `-seed-max-size`,
+`-seed-max-age` and `-seed-idle` need `-probe`; given without it, sniffarr
+refuses to start.
 
 With `-upnp` the node asks the gateways it finds on the local network to
 forward the port it listens on, TCP and UDP. Without `-sniff` the node is

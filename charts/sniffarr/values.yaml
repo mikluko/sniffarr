@@ -248,6 +248,8 @@ probe:
   maxSize: 200GiB
   # How long a probed torrent is seeded at most, rendered as -seed-max-age.
   maxAge: 168h
+  # How long a probed torrent no connected peer needs is seeded without uploading, rendered as -seed-idle.
+  idle: 15m
   persistence:
     # Volume of /seeds: emptyDir, hostPath or pvc, a claim per replica, seeds-<release>-probe-<n>; in single mode the claim is <release>-seeds.
     type: emptyDir

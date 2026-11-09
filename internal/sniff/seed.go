@@ -28,6 +28,8 @@ const (
 	DefaultSeedMaxBytes = 200 << 30
 	// DefaultSeedMaxAge is the default SeederConfig.MaxAge.
 	DefaultSeedMaxAge = 7 * 24 * time.Hour
+	// DefaultSeedIdle is the default SeederConfig.Idle.
+	DefaultSeedIdle = 15 * time.Minute
 )
 
 const (
@@ -39,15 +41,20 @@ const (
 
 // Why a Seeder removes a torrent.
 const (
-	seedRatio = "ratio"
-	seedAge   = "age"
-	seedSize  = "size"
+	seedRatio   = "ratio"
+	seedAge     = "age"
+	seedSize    = "size"
+	seedUseless = "useless"
+	seedIdle    = "idle"
 )
 
 // seedTorrent is a torrent a Seeder keeps in its swarm.
 type seedTorrent interface {
 	// uploaded is the piece data uploaded since the torrent was opened.
 	uploaded() int64
+	// needed reports whether some connected peer lacks a piece the torrent
+	// has complete.
+	needed() bool
 	// announce announces the client on the DHT as a peer of the torrent and
 	// connects to the peers the DHT names.
 	announce()
@@ -72,10 +79,13 @@ type seedEntry struct {
 	// downloaded is the piece data downloaded, uploadedBefore what was
 	// uploaded before the torrent was opened this time.
 	downloaded, uploadedBefore int64
-	t                          seedTorrent
+	// fresh holds until the first check after Add; active is when a peer
+	// last needed the torrent or it last uploaded, or when it was added or
+	// restored.
+	fresh  bool
+	active time.Time
+	t      seedTorrent
 }
-
-func (e *seedEntry) uploaded() int64 { return e.uploadedBefore + e.t.uploaded() }
 
 // SeederConfig tunes a Seeder. Zero fields take the default named in their
 // doc.
@@ -87,6 +97,9 @@ type SeederConfig struct {
 	MaxBytes int64
 	// MaxAge caps how long a torrent is seeded; DefaultSeedMaxAge.
 	MaxAge time.Duration
+	// Idle caps how long a torrent no connected peer needs is seeded
+	// without uploading; DefaultSeedIdle.
+	Idle time.Duration
 	// Ingest, when set, is told by ProbeUpload what the torrents uploaded,
 	// once a minute.
 	Ingest sniffarrv1connect.IngestServiceClient
@@ -99,8 +112,9 @@ type SeederConfig struct {
 
 // Seeder keeps torrents a probe downloaded pieces of in their swarms until
 // each has uploaded as much as it downloaded, removing it then, or earlier
-// once it is MaxAge old or the oldest beyond MaxBytes. It is safe for
-// concurrent use.
+// once it is MaxAge old, when no connected peer needs it at the first check
+// after Add or for Idle without an upload, or when it is the oldest beyond
+// MaxBytes. It is safe for concurrent use.
 type Seeder struct {
 	cfg SeederConfig
 
@@ -120,6 +134,7 @@ func NewSeeder(cfg SeederConfig) *Seeder {
 		cfg.MaxBytes = DefaultSeedMaxBytes
 	}
 	orDefault(&cfg.MaxAge, DefaultSeedMaxAge)
+	orDefault(&cfg.Idle, DefaultSeedIdle)
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
@@ -173,7 +188,9 @@ func (s *Seeder) infoPath(h Hash) string {
 
 // Restore reopens with open the torrents the state file lists, keeping what
 // they uploaded before. A torrent that fails to open is forgotten; a
-// missing state file restores none.
+// missing state file restores none. A restored torrent starts its Idle at
+// the restore and, its peers yet to connect, is not judged at the first
+// check as an added one is.
 func (s *Seeder) Restore(open seedOpener) error {
 	b, err := os.ReadFile(s.statePath())
 	if errors.Is(err, fs.ErrNotExist) {
@@ -188,6 +205,7 @@ func (s *Seeder) Restore(open seedOpener) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := s.cfg.Now()
 	for _, st := range states {
 		raw, err := hex.DecodeString(st.Infohash)
 		if err != nil || len(raw) != len(Hash{}) {
@@ -204,7 +222,7 @@ func (s *Seeder) Restore(open seedOpener) error {
 			_ = os.Remove(s.infoPath(h))
 			continue
 		}
-		s.entries = append(s.entries, &seedEntry{hash: h, added: st.Added, downloaded: st.Downloaded, uploadedBefore: st.Uploaded, t: t})
+		s.entries = append(s.entries, &seedEntry{hash: h, added: st.Added, downloaded: st.Downloaded, uploadedBefore: st.Uploaded, active: now, t: t})
 		s.reported[h] = st.Uploaded
 	}
 	slices.SortStableFunc(s.entries, func(a, b *seedEntry) int { return a.added.Compare(b.added) })
@@ -213,14 +231,17 @@ func (s *Seeder) Restore(open seedOpener) error {
 
 // Add seeds t, of which downloaded bytes of piece data were downloaded,
 // keeping its info dictionary for Restore. A torrent seeded already gets
-// the bytes added.
+// the bytes added and t in place of the one it had, and is judged at the
+// next check as an added one is.
 func (s *Seeder) Add(ctx context.Context, h Hash, t seedTorrent, downloaded int64, info []byte) error {
 	s.downloaded.Add(ctx, downloaded)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := s.cfg.Now()
 	for _, e := range s.entries {
 		if e.hash == h {
 			e.downloaded += downloaded
+			e.t, e.fresh, e.active = t, true, now
 			return s.saveLocked()
 		}
 	}
@@ -230,7 +251,7 @@ func (s *Seeder) Add(ctx context.Context, h Hash, t seedTorrent, downloaded int6
 	if err := os.WriteFile(s.infoPath(h), info, 0o644); err != nil {
 		return err
 	}
-	s.entries = append(s.entries, &seedEntry{hash: h, added: s.cfg.Now(), downloaded: downloaded, t: t})
+	s.entries = append(s.entries, &seedEntry{hash: h, added: now, downloaded: downloaded, fresh: true, active: now, t: t})
 	return s.saveLocked()
 }
 
@@ -241,23 +262,63 @@ func (s *Seeder) Has(h Hash) bool {
 	return slices.ContainsFunc(s.entries, func(e *seedEntry) bool { return e.hash == h })
 }
 
+// seedActivity is what a check reads of a seeded torrent.
+type seedActivity struct {
+	uploaded int64
+	needed   bool
+}
+
+// read returns the activity of each torrent seeded, by entry, reading the
+// torrents without holding the mutex.
+func (s *Seeder) read() map[*seedEntry]seedActivity {
+	type seen struct {
+		e      *seedEntry
+		t      seedTorrent
+		before int64
+	}
+	s.mu.Lock()
+	seeds := make([]seen, len(s.entries))
+	for i, e := range s.entries {
+		seeds[i] = seen{e: e, t: e.t, before: e.uploadedBefore}
+	}
+	s.mu.Unlock()
+	read := make(map[*seedEntry]seedActivity, len(seeds))
+	for _, sd := range seeds {
+		read[sd.e] = seedActivity{uploaded: sd.before + sd.t.uploaded(), needed: sd.t.needed()}
+	}
+	return read
+}
+
 // check removes the torrents plan says to, saves the state, and returns
-// the upload since the last check, which it also counts.
+// the upload since the last check, which it also counts. A torrent added
+// while it reads the torrents is kept, as one a peer needs.
 func (s *Seeder) check(ctx context.Context) int64 {
+	read := s.read()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := s.cfg.Now()
 	var uploaded int64
 	status := make([]seedStatus, len(s.entries))
 	for i, e := range s.entries {
-		up := e.uploaded()
-		if d := up - s.reported[e.hash]; d > 0 {
+		a, ok := read[e]
+		if !ok {
+			status[i] = seedStatus{added: e.added, downloaded: e.downloaded, uploaded: s.reported[e.hash], needed: true, active: now}
+			continue
+		}
+		d := a.uploaded - s.reported[e.hash]
+		if d > 0 {
 			s.uploaded.Add(ctx, d)
 			uploaded += d
 		}
-		s.reported[e.hash] = up
-		status[i] = seedStatus{added: e.added, downloaded: e.downloaded, uploaded: up}
+		s.reported[e.hash] = a.uploaded
+		if a.needed || d > 0 {
+			e.active = now
+		}
+		status[i] = seedStatus{added: e.added, downloaded: e.downloaded, uploaded: a.uploaded,
+			fresh: e.fresh, needed: a.needed, active: e.active}
+		e.fresh = false
 	}
-	why := plan(status, s.cfg.Now(), s.cfg.MaxBytes, s.cfg.MaxAge)
+	why := plan(status, now, s.cfg)
 	kept := s.entries[:0]
 	for i, e := range s.entries {
 		if why[i] == "" {
@@ -332,11 +393,12 @@ func (s *Seeder) Run(ctx context.Context) error {
 	}
 }
 
-// saveLocked writes the state file, replacing it whole.
+// saveLocked writes the state file, replacing it whole, with the upload
+// each torrent reached at the last check.
 func (s *Seeder) saveLocked() error {
 	states := make([]seedState, len(s.entries))
 	for i, e := range s.entries {
-		states[i] = seedState{Infohash: hex.EncodeToString(e.hash[:]), Added: e.added, Downloaded: e.downloaded, Uploaded: e.uploaded()}
+		states[i] = seedState{Infohash: hex.EncodeToString(e.hash[:]), Added: e.added, Downloaded: e.downloaded, Uploaded: s.reported[e.hash]}
 	}
 	b, err := json.Marshal(states)
 	if err != nil {
@@ -356,28 +418,38 @@ func (s *Seeder) saveLocked() error {
 type seedStatus struct {
 	added                time.Time
 	downloaded, uploaded int64
+	// fresh marks the first check after Add, needed a connected peer
+	// lacking a piece the torrent has, and active when a peer last needed
+	// it or it last uploaded.
+	fresh, needed bool
+	active        time.Time
 }
 
 // plan returns, for each torrent of seeds in the order they were added,
 // why to remove it at now, or "" to keep it: seedRatio once it uploaded as
-// much as it downloaded, else seedAge once older than maxAge, else
-// seedSize while the torrents kept, oldest first, download more than
-// maxBytes.
-func plan(seeds []seedStatus, now time.Time, maxBytes int64, maxAge time.Duration) []string {
+// much as it downloaded, else seedAge once older than cfg.MaxAge, else
+// seedUseless when fresh and not needed, else seedIdle once inactive for
+// cfg.Idle, else seedSize while the torrents kept, oldest first, download
+// more than cfg.MaxBytes.
+func plan(seeds []seedStatus, now time.Time, cfg SeederConfig) []string {
 	why := make([]string, len(seeds))
 	var kept int64
 	for i, st := range seeds {
 		switch {
 		case st.uploaded >= st.downloaded:
 			why[i] = seedRatio
-		case now.Sub(st.added) >= maxAge:
+		case now.Sub(st.added) >= cfg.MaxAge:
 			why[i] = seedAge
+		case st.fresh && !st.needed:
+			why[i] = seedUseless
+		case now.Sub(st.active) >= cfg.Idle:
+			why[i] = seedIdle
 		default:
 			kept += st.downloaded
 		}
 	}
 	for i, st := range seeds {
-		if kept <= maxBytes {
+		if kept <= cfg.MaxBytes {
 			break
 		}
 		if why[i] == "" {

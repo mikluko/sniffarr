@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/RoaringBitmap/roaring/v2"
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -50,7 +51,7 @@ func (n *Network) openSeeds() error {
 			return nil, errors.New("info does not match the infohash")
 		}
 		t.CancelPieces(0, t.NumPieces())
-		return clientSeed{t: t, n: n, h: h}, nil
+		return n.clientSeed(t, h), nil
 	})
 }
 
@@ -118,7 +119,7 @@ func (n *Network) Probe(ctx context.Context, h Hash, maxBytes int64) (Probed, er
 	t.CancelPieces(0, t.NumPieces())
 	probed := Probed{Path: files[i].Path, Downloaded: r.downloaded}
 	if r.downloaded > 0 {
-		if serr := n.seeder.Add(ctx, h, clientSeed{t: t, n: n, h: h}, r.downloaded, t.Metainfo().InfoBytes); serr != nil {
+		if serr := n.seeder.Add(ctx, h, n.clientSeed(t, h), r.downloaded, t.Metainfo().InfoBytes); serr != nil {
 			n.seeder.cfg.Log.Warn("seed", "err", serr)
 		} else {
 			keep = true
@@ -172,11 +173,42 @@ type clientSeed struct {
 	t *torrent.Torrent
 	n *Network
 	h Hash
+	// have is the pieces t had complete when the clientSeed was made.
+	have *roaring.Bitmap
+}
+
+// clientSeed returns the clientSeed of t, of h, with the pieces t has
+// complete now; it takes the client's lock once per piece.
+func (n *Network) clientSeed(t *torrent.Torrent, h Hash) clientSeed {
+	have := roaring.New()
+	for i := range t.NumPieces() {
+		if t.Piece(i).State().Complete {
+			have.Add(uint32(i))
+		}
+	}
+	have.RunOptimize()
+	return clientSeed{t: t, n: n, h: h, have: have}
 }
 
 func (s clientSeed) uploaded() int64 {
 	st := s.t.Stats()
 	return st.BytesWrittenData.Int64()
+}
+
+func (s clientSeed) needed() bool {
+	if s.have.IsEmpty() {
+		return false
+	}
+	pieces, have := s.t.NumPieces(), s.have.GetCardinality()
+	for _, pc := range s.t.PeerConns() {
+		if pc.Stats().RemotePieceCount >= pieces {
+			continue
+		}
+		if pc.PeerPieces().AndCardinality(s.have) < have {
+			return true
+		}
+	}
+	return false
 }
 
 func (s clientSeed) announce() {
