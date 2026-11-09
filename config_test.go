@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	libtmdb "sarak.sh/mikluko/libarr/tmdb"
 	"sarak.sh/mikluko/sniffarr/internal/app/api"
 	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/app/client"
@@ -208,7 +209,7 @@ func TestLoadAPI(t *testing.T) {
 	required := []string{"SNIFFARR_DB", "/data/sniffarr.db"}
 	with := func(kv ...string) []string { return append(append([]string{}, required...), kv...) }
 	defaults := func() (api.Config, db.Config) {
-		return api.Config{Addr: ":8080", TMDBKey: tmdb.DefaultKey, ClassifyConcurrency: 4,
+		return api.Config{Addr: ":8080", TMDBKey: libtmdb.DefaultKey(), ClassifyConcurrency: 4,
 				DailyTokens: classify.DefaultDailyTokens, SearchReserve: classify.DefaultSearchReserve, LazyMax: search.DefaultLazyMax, LazyWait: search.DefaultLazyWait,
 				LazyTMDB: search.DefaultLazyTMDB, TMDBConcurrency: tmdb.DefaultConcurrency, TMDBRate: tmdb.DefaultRate, TMDBRetry: tmdb.DefaultRetry,
 				Lease: orders.DefaultLease, Attempts: ingest.DefaultAttempts, Backoff: ingest.DefaultBackoff, DeadFor: store.DefaultDeadFor, NoPeersFor: store.DefaultNoPeersFor,

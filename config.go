@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	libtmdb "sarak.sh/mikluko/libarr/tmdb"
 	"sarak.sh/mikluko/sniffarr/internal/app/api"
 	"sarak.sh/mikluko/sniffarr/internal/app/broker"
 	"sarak.sh/mikluko/sniffarr/internal/app/client"
@@ -349,7 +350,7 @@ func loadAPI(lookup func(string) (string, bool)) (api.Config, db.Config, error) 
 		return a, d, err
 	}
 	if a.TMDBKey = getenv("TMDB_API_KEY"); a.TMDBKey == "" {
-		a.TMDBKey = tmdb.DefaultKey
+		a.TMDBKey = libtmdb.DefaultKey()
 	}
 	d.Store.TMDB = a.TMDBKey != ""
 	d.Store.Languages = audio.Tags(a.Languages)

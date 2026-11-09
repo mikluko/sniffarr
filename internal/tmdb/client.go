@@ -51,10 +51,6 @@ type Client struct {
 	traced   *http.Client
 }
 
-// DefaultKey is the TMDB read access token sniffarr ships with; a non-empty
-// TMDB_API_KEY overrides it.
-const DefaultKey = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJlMGMwZjVhNmI1ZTU5NTc3Mjg3NTQ5ZDI0NzlmYWEwYSIsIm5iZiI6MTc5MjQ3NTcwOC45MTkwMDAxLCJzdWIiOiI2YWQ3MDIzYzg4YzI5ODYwNTNiZWQ5YzMiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.GzOo3vXlML2qXMF6DydhMkag0X9LGg7Ydk5e733IS9I"
-
 // NewClient returns a client of the production API for the key, at most rps
 // requests a second.
 func NewClient(key string, rps int) *Client {
