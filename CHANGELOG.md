@@ -12,10 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The metric `sniffarr.dht.sample_queries` counts the `sample_infohashes` queries the sniff sends, by `sniffarr.dht.outcome`: `answered`, `timeout` or `error`.
 - The classifier reads the name of a torrent of unknown kind with Jev in two steps, the prefix to drop and then the title and kind, and a release's card shows the prefix and title it read among the rule hits as `jev.prefix` and `jev.title`.
 - The metric `sniffarr.typesafe.requests` counts the requests to the classifier endpoint, retries included, by `sniffarr.typesafe.status`.
+- `SNIFFARR_UI_LANGUAGES` lists the web UI's languages, `en` and `ru`, in the order of the language switch, the first the default.
 - With `SNIFFARR_NATS_URL`, the NATS server `-api` embeds connects to that upstream server as a leaf node, with `SNIFFARR_NATS_PASSWORD` or the `.creds` file `SNIFFARR_NATS_CREDS`, its streams kept in its own JetStream domain, `sniffarr`.
 
 ### Changed
 
+- **Breaking:** the web UI is in English alone, with no language switch, unless `SNIFFARR_UI_LANGUAGES` lists more languages; `en,ru` restores both.
 - **Breaking:** `SNIFFARR_NATS_PASSWORD` is the password of the leaf node's user at `SNIFFARR_NATS_URL`, refused without it.
 - `IngestService.Sight` publishes the sightings to the API's sightings stream, from which the API queues them in batches, announced ones first, and `SightResponse.known` counts the repeats the stream drops within 5 minutes, not the queued infohashes.
 - **Breaking:** `IngestService.Sight` refuses `SOURCE_ARR`.

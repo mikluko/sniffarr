@@ -95,6 +95,7 @@ recomputes the tops of works and every torrent's peers over the last 7 days.
 | -------------------------- | ------- | ------------------------------------------------------------------------------------ |
 | `SNIFFARR_UI_ADDR`         | `:8081` | Listen address                                                                       |
 | `SNIFFARR_OIDC_ISSUER`     |         | OpenID Connect issuer whose userinfo gives the UI a person's locale; empty asks none |
+| `SNIFFARR_UI_LANGUAGES`   | `en`    | UI languages, comma-separated, of `en` and `ru`, in the switch's order, the first the default; `C` and `POSIX` are `en`; one language shows no switch |
 | `SNIFFARR_SEERR_URL`       |         | Base URL of a Seerr the title and release cards link a matched title to; empty links none |
 | `SNIFFARR_RADARR_URL`      |         | Root URL of a Radarr the title and release cards link a matched movie to; empty links none |
 | `SNIFFARR_SONARR_URL`      |         | Root URL of a Sonarr the title and release cards link a matched series to; empty links none |

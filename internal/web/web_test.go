@@ -250,8 +250,12 @@ func handlerTasks(t *testing.T, langs string, cfg Config) (*Handler, *store.Prob
 		fetches.Finished(store.TaskFetch, now.Add(-time.Duration(i+1)*time.Minute))
 	}
 	fetches.Finished(store.TaskPeers, now.Add(-time.Minute))
+	uiLangs := cfg.UILanguages
+	if uiLangs == nil {
+		uiLangs = ui.Languages
+	}
 	h, err := New(Config{Browse: browse(t, st, probers, fetches, probes, audio.Tags(languages), cfg), Languages: languages, Probes: cfg.Probes, Classifier: cfg.Classifier,
-		Locales: cfg.Locales, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, JournalRetention: 30 * 24 * time.Hour, Now: func() time.Time { return now }})
+		Locales: cfg.Locales, UILanguages: uiLangs, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Location: time.UTC, JournalRetention: 30 * 24 * time.Hour, Now: func() time.Time { return now }})
 	require.NoError(t, err)
 	return h, probers
 }
@@ -991,6 +995,18 @@ func TestLanguage(t *testing.T) {
 	require.Contains(t, page(t, get(t, h, "/", "", "Cookie", "lang=en", TokenHeader, "ru-token")), `<html lang="en">`, "the cookie beats the person's locale")
 	require.Contains(t, page(t, get(t, h, "/?lang=en", "", "Cookie", "lang=ru")), `<html lang="en">`, "the pick beats the cookie")
 	require.Empty(t, get(t, h, "/", "", "Cookie", "lang=ru").Result().Cookies(), "no cookie without a pick")
+}
+
+func TestOneUILanguage(t *testing.T) {
+	h := handlerWith(t, "ru", Config{Locales: locales{}, UILanguages: []string{"ru"}})
+	w := get(t, h, "/?lang=en", "", TokenHeader, "other")
+	body := page(t, w)
+	require.Contains(t, body, `<html lang="ru">`, "the one language, whatever is asked")
+	require.NotContains(t, body, `class="langs"`, "no switcher")
+	h = handlerWith(t, "ru", Config{UILanguages: []string{}})
+	body = page(t, get(t, h, "/?lang=ru", ""))
+	require.Contains(t, body, `<html lang="en">`, "none configured is English alone")
+	require.NotContains(t, body, `class="langs"`)
 }
 
 func TestNoLanguages(t *testing.T) {

@@ -31,6 +31,7 @@ import (
 	"sarak.sh/mikluko/sniffarr/internal/store"
 	"sarak.sh/mikluko/sniffarr/internal/stun"
 	"sarak.sh/mikluko/sniffarr/internal/tmdb"
+	webui "sarak.sh/mikluko/sniffarr/internal/ui"
 	"sarak.sh/mikluko/sniffarr/internal/version"
 )
 
@@ -172,6 +173,9 @@ func load(args []string, lookup func(string) (string, bool), output io.Writer) (
 	}
 	if c.on.ui {
 		c.ui = ui.Config{Addr: or(getenv("SNIFFARR_UI_ADDR"), defaultUIAddr), OIDCIssuer: getenv("SNIFFARR_OIDC_ISSUER"), SeerrURL: getenv("SNIFFARR_SEERR_URL")}
+		if c.ui.Languages, err = webui.ParseLanguages(getenv("SNIFFARR_UI_LANGUAGES")); err != nil {
+			return c, fmt.Errorf("SNIFFARR_UI_LANGUAGES: %w", err)
+		}
 		if c.ui.RadarrURL, err = rootURL(getenv, "SNIFFARR_RADARR_URL"); err != nil {
 			return c, err
 		}

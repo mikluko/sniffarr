@@ -28,6 +28,9 @@ type Config struct {
 	// SeerrURL is the base URL of a Seerr the cards link titles to; empty
 	// links none.
 	SeerrURL string
+	// Languages are the UI's languages in the switcher's order, the
+	// default first.
+	Languages []string
 	// RadarrURL and SonarrURL are the root URLs of the Radarr and Sonarr
 	// the cards link movies and series to; empty links none.
 	RadarrURL, SonarrURL string
@@ -53,7 +56,7 @@ func serve(lc fx.Lifecycle, sd fx.Shutdowner, log *slog.Logger, cfg Config, brow
 			return err
 		}
 		wc := web.Config{Browse: browse, Languages: settings.Languages, Probes: settings.Probes, Classifier: settings.Classifier, JournalRetention: settings.JournalRetention, Latest: settings.Latest, Notice: settings.Notice,
-			SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Log: log}
+			UILanguages: cfg.Languages, SeerrURL: cfg.SeerrURL, RadarrURL: cfg.RadarrURL, SonarrURL: cfg.SonarrURL, Log: log}
 		if cfg.OIDCIssuer != "" {
 			wc.Locales = userinfo.New(cfg.OIDCIssuer, &http.Client{Timeout: 10 * time.Second}, localeTTL)
 		}

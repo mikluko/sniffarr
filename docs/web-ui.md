@@ -38,7 +38,9 @@ for how a build gets its version.
 | Any other route     | 404, with a page naming the path asked for and a link home; a `GET` of a movie, series or release the API does not know answers the same |
 
 The header has the logo, which leads to the data page, the tabs Torrents and
-Top, and the language switch, on one line down to 320 px. The data page and a
+Top, and, with more than one language in `SNIFFARR_UI_LANGUAGES`, the
+language switch, on one line down to 320 px. With one language there is no
+switch and every page is in that language. The data page and a
 movie or series select no tab; a release's card selects Torrents. A movie or
 series has a back link to the page the visitor came from, "Top movies" or "Top
 series" from the top, "Back to results" from the torrents list, "Back to the

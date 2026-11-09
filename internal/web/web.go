@@ -79,6 +79,9 @@ type Config struct {
 	// Notice is how far behind Latest a stable build is before it is
 	// announced, as ObtainSettings returns it.
 	Notice version.Policy
+	// UILanguages are the UI's languages in the switcher's order, the
+	// default first; none is ui.DefaultLanguages.
+	UILanguages []string
 	// Locales tells the locale of the person an access token was issued to;
 	// when nil, the language is only the one picked on the page.
 	Locales Locales
@@ -139,6 +142,9 @@ func New(cfg Config) (*Handler, error) {
 	if cfg.Location == nil {
 		cfg.Location = time.Local
 	}
+	if len(cfg.UILanguages) == 0 {
+		cfg.UILanguages = ui.DefaultLanguages
+	}
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
 	}
@@ -193,13 +199,14 @@ func (s *server) locale(req *http.Request) string {
 
 // lang resolves the language of the page, setting the cookie of a pick.
 func (s *server) lang(w http.ResponseWriter, req *http.Request) string {
-	return ui.Lang(w, req, s.locale(req))
+	return ui.Lang(w, req, s.cfg.UILanguages, s.locale(req))
 }
 
 func (s *server) base(req *http.Request, lang, nav string) ui.Base {
 	c := s.settings()
 	b := s.ui.Base(req, lang, nav, c.tags, libui.Zone(req, s.cfg.Location))
 	b.Now = s.cfg.Now()
+	b.Langs = s.cfg.UILanguages
 	b.Seerr = s.cfg.SeerrURL
 	b.Radarr, b.Sonarr = s.cfg.RadarrURL, s.cfg.SonarrURL
 	b.Probes, b.Classifier = c.Probes, c.Classifier

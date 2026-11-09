@@ -471,6 +471,7 @@ func headerMarkup(t *testing.T, lang, nav string) string {
 	}
 	req := httptest.NewRequest("GET", "/x", nil)
 	b := r.Base(req, lang, nav, nil, time.UTC)
+	b.Langs = Languages
 	w := httptest.NewRecorder()
 	if err := r.Render(w, req, "notfound", NotFoundPage{Base: b, Asked: "/x"}); err != nil {
 		t.Fatal(err)

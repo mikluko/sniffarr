@@ -37,9 +37,9 @@
 </body>
 </html>
 
-{{define "langs"}}<span class="langs">
+{{define "langs"}}{{if gt (len .Langs) 1}}<span class="langs">
   {{- range $l := .Langs}}{{if eq $l $.Lang}}<b>{{$l}}</b>{{else}}<a href="{{$.LangURL $l}}">{{$l}}</a>{{end}}{{end -}}
-</span>{{end}}
+</span>{{end}}{{end}}
 
 
 {{/* Dub cell of one release: per configured language the mark, else the probability, else "—".

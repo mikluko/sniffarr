@@ -76,23 +76,25 @@ func TestLoadComponents(t *testing.T) {
 		{name: "api and ui in one process", args: []string{"-api", "-ui"}, env: apiEnv, want: func(t *testing.T, c config) {
 			require.Equal(t, components{api: true, ui: true}, c.on)
 			require.Nil(t, c.client.URL, "memconn")
-			require.Equal(t, ui.Config{Addr: defaultUIAddr}, c.ui)
+			require.Equal(t, ui.Config{Addr: defaultUIAddr, Languages: []string{"en"}}, c.ui)
 		}},
 		{name: "api with a URL", args: []string{"-api", "-ui"}, env: append(apiEnv, "SNIFFARR_URL", "http://api:8080"), err: "SNIFFARR_URL is set, but -api serves the API in this process: unset it"},
-		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_SEERR_URL", "https://seerr.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx"},
+		{name: "ui alone", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_ADDR", ":9001", "SNIFFARR_OIDC_ISSUER", "https://id.example.com", "SNIFFARR_SEERR_URL", "https://seerr.example.com", "SNIFFARR_AUDIO_LANGUAGES", "xx", "SNIFFARR_UI_LANGUAGES", "ru,en"},
 			want: func(t *testing.T, c config) {
 				require.Equal(t, client.Config{URL: &url.URL{Scheme: "http", Host: "api:8080"}}, c.client)
-				require.Equal(t, ui.Config{Addr: ":9001", OIDCIssuer: "https://id.example.com", SeerrURL: "https://seerr.example.com"}, c.ui)
+				require.Equal(t, ui.Config{Addr: ":9001", OIDCIssuer: "https://id.example.com", SeerrURL: "https://seerr.example.com", Languages: []string{"ru", "en"}}, c.ui)
 				require.Equal(t, api.Config{}, c.api, "the API's variables are not read, the unknown audio language among them")
 				require.Equal(t, db.Config{}, c.db)
 				require.Equal(t, broker.Config{}, c.broker)
 			}},
 		{name: "ui with Radarr and Sonarr", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_RADARR_URL", "https://radarr.example.com", "SNIFFARR_SONARR_URL", "https://example.com/sonarr/"},
 			want: func(t *testing.T, c config) {
-				require.Equal(t, ui.Config{Addr: defaultUIAddr, RadarrURL: "https://radarr.example.com", SonarrURL: "https://example.com/sonarr/"}, c.ui, "no API key: the UI only links them")
+				require.Equal(t, ui.Config{Addr: defaultUIAddr, Languages: []string{"en"}, RadarrURL: "https://radarr.example.com", SonarrURL: "https://example.com/sonarr/"}, c.ui, "no API key: the UI only links them")
 			}},
 		{name: "ui with a Sonarr that is not a URL", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_SONARR_URL", "sonarr:8989"},
 			err: "SNIFFARR_SONARR_URL: want an http or https URL"},
+		{name: "ui with a language it has no messages in", args: []string{"-ui"}, env: []string{"SNIFFARR_URL", "http://api:8080", "SNIFFARR_UI_LANGUAGES", "en,de"},
+			err: `SNIFFARR_UI_LANGUAGES: UI language "de": not one of en, ru`},
 		{name: "ui without a URL", args: []string{"-ui"}, err: "SNIFFARR_URL is not set"},
 		{name: "sniff and fetch", args: []string{"-sniff", "-fetch"}, env: []string{"SNIFFARR_URL", "https://api.example.com"}, want: func(t *testing.T, c config) {
 			require.Equal(t, components{sniff: true, fetch: true}, c.on)

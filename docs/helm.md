@@ -79,7 +79,7 @@ StatefulSet's headless Service is `<release>-probe`.
 With `ui.enabled`, `<release>-ui` runs `sniffarr -ui`, with `ui.replicas`
 replicas, behind the Service `<release>-ui` on `ui.service.port` (8081).
 `ui.addr` is `SNIFFARR_UI_ADDR`, and `ui.env` carries the rest of the UI's
-variables, `SNIFFARR_OIDC_ISSUER`, `SNIFFARR_SEERR_URL`,
+variables, `SNIFFARR_OIDC_ISSUER`, `SNIFFARR_UI_LANGUAGES`, `SNIFFARR_SEERR_URL`,
 `SNIFFARR_RADARR_URL` and `SNIFFARR_SONARR_URL`. `ui.extraContainers` and `ui.extraVolumes` add an
 authenticating proxy to the pod, and `ui.service.targetPort` names its port.
 With `ui.addr` on a loopback address, such as `127.0.0.1:8081`, the UI is

@@ -19,7 +19,7 @@ import (
 // {{.T "key"}}, {{$.Num .N}}, ...
 type Base struct {
 	libui.Locale
-	Langs      []string        // switcher entries
+	Langs      []string        // switcher entries; fewer than two show no switcher
 	Nav        string          // "torrents" | "top" select that header tab; "data" is the logo's page, which selects none; "" is any other
 	VoiceLangs []string        // the API's dubbing languages, e.g. ["ru"]; none hides the voice filter, columns and card rows
 	Seerr      string          // base URL of a Seerr the cards link titles to; "" links none

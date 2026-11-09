@@ -199,41 +199,24 @@ func New() (*Renderer, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.msgs, err = libui.LoadMessages(i18n, langs); err != nil {
+	if r.msgs, err = libui.LoadMessages(i18n, Languages); err != nil {
 		return nil, err
 	}
 	return r, nil
 }
 
-// langs are the languages of the UI, the default first.
-var langs = []string{"en", "ru"}
-
-// Base builds the common page model for a request.
+// Base builds the common page model for a request, with no language
+// switcher; the caller sets Base.Langs for one.
 //
 //	lang: from Lang(); nav: "data" | "torrents" | "top" | "".
 func (r *Renderer) Base(req *http.Request, lang, nav string, voiceLangs []string, loc *time.Location) Base {
 	if _, ok := r.msgs[lang]; !ok {
-		lang = langs[0]
+		lang = Languages[0]
 	}
 	return Base{
 		Locale: libui.Locale{Lang: lang, Path: req.URL.RequestURI(), Loc: loc, Now: time.Now(), Messages: r.msgs[lang]},
-		Langs:  []string{"ru", "en"}, Nav: nav, VoiceLangs: voiceLangs, Build: version.Get(),
+		Nav:    nav, VoiceLangs: voiceLangs, Build: version.Get(),
 	}
-}
-
-// Lang resolves the UI language as libarr's ui.Lang does, falling back on
-// userLocale, the signed-in person's locale: one starting with "ru" is
-// "ru"; "C", "POSIX" and one starting with "en" are "en".
-func Lang(w http.ResponseWriter, req *http.Request, userLocale string) string {
-	return libui.Lang(w, req, langs, func(*http.Request) string {
-		switch l := strings.ToLower(userLocale); {
-		case strings.HasPrefix(l, "ru"):
-			return "ru"
-		case userLocale == "C", userLocale == "POSIX", strings.HasPrefix(l, "en"):
-			return "en"
-		}
-		return ""
-	})
 }
 
 // Render writes the full page, or only the fragment htmx asked for:
