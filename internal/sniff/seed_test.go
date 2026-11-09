@@ -2,6 +2,8 @@ package sniff
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -107,16 +109,22 @@ func TestSeederUselessAndIdle(t *testing.T) {
 	restored := NewSeeder(SeederConfig{Dir: dir, Idle: 15 * time.Minute, Now: clock})
 	again := &fakeSeed{}
 	again.unneeded.Store(true)
-	require.NoError(t, restored.Restore(func(Hash, []byte) (seedTorrent, error) { return again, nil }))
+	require.NoError(t, restored.Restore(func(Hash, []byte) (seedTorrent, error) { return again, nil }, keepAll(t)))
 	restored.check(ctx)
 	require.False(t, again.removed.Load(), "a restored torrent's peers have yet to connect")
 	now = now.Add(15 * time.Minute)
 	restored.check(ctx)
 	require.True(t, again.removed.Load(), "the idle window starts at the restore")
 
+	require.Equal(t, map[string]int64{seedUseless: 1, seedIdle: 1}, removals(t, reader))
+}
+
+// removals returns sniffarr.seed.removals by reason.
+func removals(t *testing.T, reader sdkmetric.Reader) map[string]int64 {
+	t.Helper()
 	var rm metricdata.ResourceMetrics
-	require.NoError(t, reader.Collect(ctx, &rm))
-	removals := map[string]int64{}
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	byReason := map[string]int64{}
 	for _, sm := range rm.ScopeMetrics {
 		for _, m := range sm.Metrics {
 			if m.Name != "sniffarr.seed.removals" {
@@ -124,11 +132,19 @@ func TestSeederUselessAndIdle(t *testing.T) {
 			}
 			for _, p := range m.Data.(metricdata.Sum[int64]).DataPoints {
 				r, _ := p.Attributes.Value("sniffarr.seed.reason")
-				removals[r.AsString()] = p.Value
+				byReason[r.AsString()] = p.Value
 			}
 		}
 	}
-	require.Equal(t, map[string]int64{seedUseless: 1, seedIdle: 1}, removals)
+	return byReason
+}
+
+// keepAll is a seedDiscarder that fails the test when called.
+func keepAll(t *testing.T) seedDiscarder {
+	return func(h Hash, _ []byte) error {
+		t.Errorf("discarded %x", h)
+		return nil
+	}
 }
 
 func TestSeederReAddIsJudgedAnew(t *testing.T) {
@@ -175,7 +191,7 @@ func TestSeederRatioAndRestore(t *testing.T) {
 	require.NoError(t, restored.Restore(func(h Hash, info []byte) (seedTorrent, error) {
 		opened = append(opened, string(info))
 		return b2, nil
-	}))
+	}, keepAll(t)))
 	require.Equal(t, []string{"info b"}, opened)
 	b2.up.Store(149)
 	restored.check(ctx)
@@ -211,9 +227,64 @@ func TestSeederRestoreForgetsWhatFailsToOpen(t *testing.T) {
 	s := NewSeeder(SeederConfig{Dir: dir})
 	require.NoError(t, s.Add(ctx, Hash{1}, &fakeSeed{}, 10, []byte("info")))
 	restored := NewSeeder(SeederConfig{Dir: dir})
-	require.NoError(t, restored.Restore(func(Hash, []byte) (seedTorrent, error) { return nil, os.ErrInvalid }))
+	require.NoError(t, restored.Restore(func(Hash, []byte) (seedTorrent, error) { return nil, os.ErrInvalid }, keepAll(t)))
 	require.False(t, restored.Has(Hash{1}))
-	require.NoError(t, NewSeeder(SeederConfig{Dir: t.TempDir()}).Restore(nil), "no state file restores none")
+	require.NoError(t, NewSeeder(SeederConfig{Dir: t.TempDir()}).Restore(nil, nil), "no state file restores none")
+}
+
+func TestSeederRestoreDiscardsWhatPlanRemoves(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	hash := func(n byte) string { return hex.EncodeToString([]byte{n, 19: 0}) }
+	info := func(n byte) []byte { return []byte{'i', n} }
+	states := []seedState{
+		{Infohash: hash(4), Added: now.Add(-time.Hour), Downloaded: 100, Uploaded: 10},
+		{Infohash: hash(1), Added: now.Add(-25 * time.Hour), Downloaded: 100},
+		{Infohash: hash(2), Added: now.Add(-3 * time.Hour), Downloaded: 100, Uploaded: 100},
+		{Infohash: hash(3), Added: now.Add(-2 * time.Hour), Downloaded: 200},
+		{Infohash: hash(6), Added: now.Add(-48 * time.Hour), Downloaded: 10},
+	}
+	b, err := json.Marshal(states)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "seeds.json"), b, 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "info"), 0o755))
+	for _, n := range []byte{1, 2, 3, 4} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "info", hash(n)), info(n), 0o644))
+	}
+
+	reader := sdkmetric.NewManualReader()
+	s := NewSeeder(SeederConfig{Dir: dir, MaxBytes: 250, MaxAge: 24 * time.Hour, Idle: 15 * time.Minute,
+		Now: func() time.Time { return now }, Meter: sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))})
+	kept := &fakeSeed{}
+	kept.unneeded.Store(true)
+	opened := map[Hash][]byte{}
+	discarded := map[Hash][]byte{}
+	require.NoError(t, s.Restore(func(h Hash, info []byte) (seedTorrent, error) {
+		opened[h] = info
+		return kept, nil
+	}, func(h Hash, info []byte) error {
+		discarded[h] = info
+		return nil
+	}))
+
+	require.Equal(t, map[Hash][]byte{{4}: info(4)}, opened, "only the kept one is opened")
+	require.Equal(t, map[Hash][]byte{{1}: info(1), {2}: info(2), {3}: info(3), {6}: nil}, discarded,
+		"past its age, at ratio 1, the oldest beyond the cap, and one without info")
+	require.Equal(t, map[string]int64{seedAge: 2, seedRatio: 1, seedSize: 1}, removals(t, reader))
+	for _, n := range []byte{1, 2, 3} {
+		_, err := os.Stat(filepath.Join(dir, "info", hash(n)))
+		require.ErrorIs(t, err, os.ErrNotExist, "the info of %d is deleted", n)
+	}
+	require.FileExists(t, filepath.Join(dir, "info", hash(4)))
+
+	b, err = os.ReadFile(filepath.Join(dir, "seeds.json"))
+	require.NoError(t, err)
+	var saved []seedState
+	require.NoError(t, json.Unmarshal(b, &saved))
+	require.Equal(t, []seedState{states[0]}, saved)
+
+	s.check(context.Background())
+	require.False(t, kept.removed.Load(), "restored, its peers have yet to connect")
 }
 
 // uploadIngest records what ProbeUpload is told, refusing while down.
@@ -273,7 +344,7 @@ func TestSeederReportsUpload(t *testing.T) {
 	require.NoError(t, restored.Restore(func(h Hash, _ []byte) (seedTorrent, error) {
 		seeds[h] = &fakeSeed{}
 		return seeds[h], nil
-	}))
+	}, keepAll(t)))
 	seeds[Hash{1}].up.Store(10)
 	restored.report(ctx, restored.check(ctx))
 	require.Equal(t, []int64{150, 50, 10}, ingest.uploaded, "the upload before the restart is not reported again")

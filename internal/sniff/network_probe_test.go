@@ -129,6 +129,39 @@ func TestProbeDownloadsTheHeadAndSeeds(t *testing.T) {
 	require.Zero(t, again.Downloaded, "a seeded torrent's pieces are not downloaded again")
 }
 
+func TestStartDiscardsTheSeedsPastTheirLimits(t *testing.T) {
+	const pieceLength = 1 << 14
+	h, peer := dataSeed(t, "Coraline.2009.2160p.mkv", testMKV(16*pieceLength), pieceLength)
+	dir := t.TempDir()
+	n := started(t, NetworkConfig{Port: freePort(t), Passive: true, FetchTimeout: 10 * time.Second, Seed: SeederConfig{Dir: dir}}, [20]byte{})
+	n.swarm = peerSwarm{swarm: n.swarm, peer: peer.Addr.(netip.AddrPort)}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, err := n.Probe(ctx, h, 4*pieceLength)
+	require.NoError(t, err)
+	key := metainfo.PieceKey{InfoHash: metainfo.Hash(h), Index: 0}
+	c, err := n.completion.Get(key)
+	require.NoError(t, err)
+	require.True(t, c.Ok && c.Complete, "the probed piece is complete")
+	n.seeder.mu.Lock()
+	n.seeder.entries[0].fresh = false
+	n.seeder.mu.Unlock()
+	n.Close()
+	data := filepath.Join(dir, "data", metainfo.Hash(h).HexString())
+	require.DirExists(t, data, "kept at the stop")
+
+	again := started(t, NetworkConfig{Port: freePort(t), Passive: true, FetchTimeout: 10 * time.Second, Seed: SeederConfig{Dir: dir, MaxAge: time.Nanosecond}}, [20]byte{})
+	require.False(t, again.seeder.Has(h))
+	_, ok := again.client.Torrent(metainfo.Hash(h))
+	require.False(t, ok, "discarded without being opened")
+	require.NoDirExists(t, data)
+	_, err = os.Stat(filepath.Join(dir, "info", metainfo.Hash(h).HexString()))
+	require.ErrorIs(t, err, os.ErrNotExist)
+	c, err = again.completion.Get(key)
+	require.NoError(t, err)
+	require.False(t, c.Ok, "the piece completion is cleared")
+}
+
 func TestClientSeedIsNeededByAPeerLackingItsPieces(t *testing.T) {
 	const pieceLength = 1 << 14
 	h, peer := dataSeed(t, "Coraline.2009.2160p.mkv", testMKV(16*pieceLength), pieceLength)

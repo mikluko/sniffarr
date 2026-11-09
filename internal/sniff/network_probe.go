@@ -12,6 +12,7 @@ import (
 	"github.com/RoaringBitmap/roaring/v2"
 	g "github.com/anacrolix/generics"
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/bencode"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 
@@ -44,15 +45,33 @@ func (n *Network) openSeeds() error {
 		PieceCompletion: pc,
 		UsePartFiles:    g.Some(false),
 	})
-	return n.seeder.Restore(func(h Hash, info []byte) (seedTorrent, error) {
-		t, _ := n.client.AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: metainfo.Hash(h), InfoBytes: info, Storage: n.seedStorage})
-		if t.Info() == nil {
-			n.dropSeed(t, h)
-			return nil, errors.New("info does not match the infohash")
-		}
-		t.CancelPieces(0, t.NumPieces())
-		return n.clientSeed(t, h), nil
-	})
+	return n.seeder.Restore(n.openSeed, n.discardSeed)
+}
+
+// openSeed adds the probed torrent of h with the info dictionary info to
+// the client, wanting none of its pieces.
+func (n *Network) openSeed(h Hash, info []byte) (seedTorrent, error) {
+	t, _ := n.client.AddTorrentOpt(torrent.AddTorrentOpts{InfoHash: metainfo.Hash(h), InfoBytes: info, Storage: n.seedStorage})
+	if t.Info() == nil {
+		_ = n.dropSeed(t, h)
+		return nil, errors.New("info does not match the infohash")
+	}
+	t.CancelPieces(0, t.NumPieces())
+	return n.clientSeed(t, h), nil
+}
+
+// discardSeed deletes the data and piece completion of the probed torrent
+// of h, which the client does not have, reading its pieces from the info
+// dictionary info; nil info leaves the piece completion.
+func (n *Network) discardSeed(h Hash, info []byte) error {
+	if info == nil {
+		return n.deleteSeed(h, 0)
+	}
+	var mi metainfo.Info
+	if err := bencode.Unmarshal(info, &mi); err != nil {
+		return errors.Join(fmt.Errorf("info: %w", err), n.deleteSeed(h, 0))
+	}
+	return n.deleteSeed(h, mi.NumPieces())
 }
 
 // dropSeed drops the probed torrent t of h and deletes its data and piece
@@ -63,6 +82,12 @@ func (n *Network) dropSeed(t *torrent.Torrent, h Hash) error {
 		pieces = t.NumPieces()
 	}
 	t.Drop()
+	return n.deleteSeed(h, pieces)
+}
+
+// deleteSeed deletes the data of the probed torrent of h and the piece
+// completion of its first pieces pieces.
+func (n *Network) deleteSeed(h Hash, pieces int) error {
 	var errs []error
 	for i := range pieces {
 		errs = append(errs, n.completion.Set(metainfo.PieceKey{InfoHash: metainfo.Hash(h), Index: i}, g.None[bool]()))

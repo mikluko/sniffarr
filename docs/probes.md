@@ -146,5 +146,6 @@ the torrents uploaded since the last look; a report the API refuses goes
 with the next. The seeded torrents, what each downloaded and uploaded, and
 which pieces are complete survive a restart when it is `-probe-dir`; a
 torrent restored at a restart, its peers yet to connect, starts its
-`-seed-idle` anew and is not judged at the first look. Metadata fetches
-upload nothing.
+`-seed-idle` anew and is not judged at the first look. A torrent past its
+ratio, `-seed-max-age` or `-seed-max-size` at the restart has its pieces
+deleted without being reopened. Metadata fetches upload nothing.

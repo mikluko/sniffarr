@@ -65,6 +65,10 @@ type seedTorrent interface {
 // seedOpener opens a torrent of the info dictionary for seeding again.
 type seedOpener func(h Hash, info []byte) (seedTorrent, error)
 
+// seedDiscarder deletes the data and piece completion of a torrent never
+// opened, of the info dictionary, nil when its info could not be read.
+type seedDiscarder func(h Hash, info []byte) error
+
 // seedState is a seeded torrent as the state file keeps it.
 type seedState struct {
 	Infohash   string    `json:"infohash"`
@@ -187,11 +191,13 @@ func (s *Seeder) infoPath(h Hash) string {
 }
 
 // Restore reopens with open the torrents the state file lists, keeping what
-// they uploaded before. A torrent that fails to open is forgotten; a
-// missing state file restores none. A restored torrent starts its Idle at
-// the restore and, its peers yet to connect, is not judged at the first
-// check as an added one is.
-func (s *Seeder) Restore(open seedOpener) error {
+// they uploaded before, and deletes with discard, unopened, those plan
+// removes by ratio, MaxAge or MaxBytes. A torrent that fails to open is
+// forgotten; a missing state file restores none. A restored torrent starts
+// its Idle at the restore and, its peers yet to connect, is not judged at
+// the first check as an added one is. It is called before Add, Run and
+// check.
+func (s *Seeder) Restore(open seedOpener, discard seedDiscarder) error {
 	b, err := os.ReadFile(s.statePath())
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -203,16 +209,41 @@ func (s *Seeder) Restore(open seedOpener) error {
 	if err := json.Unmarshal(b, &states); err != nil {
 		return fmt.Errorf("%s: %w", s.statePath(), err)
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := s.cfg.Now()
+	type restored struct {
+		h  Hash
+		st seedState
+	}
+	seeds := make([]restored, 0, len(states))
 	for _, st := range states {
 		raw, err := hex.DecodeString(st.Infohash)
 		if err != nil || len(raw) != len(Hash{}) {
 			continue
 		}
-		h := Hash(raw)
+		seeds = append(seeds, restored{h: Hash(raw), st: st})
+	}
+	slices.SortStableFunc(seeds, func(a, b restored) int { return a.st.Added.Compare(b.st.Added) })
+	now := s.cfg.Now()
+	status := make([]seedStatus, len(seeds))
+	for i, sd := range seeds {
+		status[i] = seedStatus{added: sd.st.Added, downloaded: sd.st.Downloaded, uploaded: sd.st.Uploaded, active: now}
+	}
+	why := plan(status, now, s.cfg)
+	var entries []*seedEntry
+	reported := map[Hash]int64{}
+	for i, sd := range seeds {
+		h, st := sd.h, sd.st
 		info, err := os.ReadFile(s.infoPath(h))
+		if why[i] != "" {
+			if err != nil {
+				info = nil
+			}
+			if err := errors.Join(err, discard(h, info)); err != nil {
+				s.cfg.Log.Warn("seed not discarded", "infohash", st.Infohash, "err", err)
+			}
+			_ = os.Remove(s.infoPath(h))
+			s.removed(context.Background(), h, why[i], st.Downloaded, st.Uploaded)
+			continue
+		}
 		var t seedTorrent
 		if err == nil {
 			t, err = open(h, info)
@@ -222,10 +253,12 @@ func (s *Seeder) Restore(open seedOpener) error {
 			_ = os.Remove(s.infoPath(h))
 			continue
 		}
-		s.entries = append(s.entries, &seedEntry{hash: h, added: st.Added, downloaded: st.Downloaded, uploadedBefore: st.Uploaded, active: now, t: t})
-		s.reported[h] = st.Uploaded
+		entries = append(entries, &seedEntry{hash: h, added: st.Added, downloaded: st.Downloaded, uploadedBefore: st.Uploaded, active: now, t: t})
+		reported[h] = st.Uploaded
 	}
-	slices.SortStableFunc(s.entries, func(a, b *seedEntry) int { return a.added.Compare(b.added) })
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.entries, s.reported = entries, reported
 	return s.saveLocked()
 }
 
@@ -325,9 +358,7 @@ func (s *Seeder) check(ctx context.Context) int64 {
 			kept = append(kept, e)
 			continue
 		}
-		s.removals.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.seed.reason", why[i])))
-		s.cfg.Log.Debug("seed removed", "infohash", hex.EncodeToString(e.hash[:]), "reason", why[i],
-			"downloaded", e.downloaded, "uploaded", status[i].uploaded)
+		s.removed(ctx, e.hash, why[i], e.downloaded, status[i].uploaded)
 		if err := e.t.remove(); err != nil {
 			s.cfg.Log.Warn("remove seed", "infohash", hex.EncodeToString(e.hash[:]), "err", err)
 		}
@@ -340,6 +371,13 @@ func (s *Seeder) check(ctx context.Context) int64 {
 		s.cfg.Log.Warn("save seeds", "err", err)
 	}
 	return uploaded
+}
+
+// removed counts and logs the removal of the torrent of h for why.
+func (s *Seeder) removed(ctx context.Context, h Hash, why string, downloaded, uploaded int64) {
+	s.removals.Add(ctx, 1, metric.WithAttributes(attribute.String("sniffarr.seed.reason", why)))
+	s.cfg.Log.Debug("seed removed", "infohash", hex.EncodeToString(h[:]), "reason", why,
+		"downloaded", downloaded, "uploaded", uploaded)
 }
 
 // report tells Ingest of uploaded, and of what earlier reports failed to
